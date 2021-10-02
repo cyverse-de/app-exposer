@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -220,7 +221,7 @@ func (i *Internal) LogsHandler(c echo.Context) error {
 		return err
 	}
 
-	logReadCloser, err := podLogs.Stream()
+	logReadCloser, err := podLogs.Stream(context.TODO())
 	if err != nil {
 		return err
 	}
@@ -257,7 +258,7 @@ func (i *Internal) getPods(externalID string) ([]retPod, error) {
 
 	returnedPods := []retPod{}
 
-	podlist, err := i.clientset.CoreV1().Pods(i.ViceNamespace).List(listoptions)
+	podlist, err := i.clientset.CoreV1().Pods(i.ViceNamespace).List(context.TODO(), listoptions)
 	if err != nil {
 		return nil, err
 	}

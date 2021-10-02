@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -8,8 +9,8 @@ import (
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
-	"github.com/pkg/errors"
 	"github.com/cyverse-de/model"
+	"github.com/pkg/errors"
 	v1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -42,8 +43,11 @@ func (i *Internal) countJobsForUser(username string) (int, error) {
 		LabelSelector: set.AsSelector().String(),
 	}
 
+	// use context.TODO() as the context for now.
+	ctx := context.TODO()
+
 	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
-	deplist, err := depclient.List(listoptions)
+	deplist, err := depclient.List(ctx, listoptions)
 	if err != nil {
 		return 0, err
 	}
