@@ -6,9 +6,8 @@ import (
 
 	"github.com/cyverse-de/model"
 	apiv1 "k8s.io/api/core/v1"
-	extv1beta1 "k8s.io/api/extensions/v1beta1"
+	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // IngressName returns the name of the ingress created for the running VICE
@@ -19,9 +18,9 @@ func IngressName(userID, invocationID string) string {
 
 // getIngress assembles and returns the Ingress needed for the VICE analysis.
 // It does not call the k8s API.
-func (i *Internal) getIngress(job *model.Job, svc *apiv1.Service) (*extv1beta1.Ingress, error) {
+func (i *Internal) getIngress(job *model.Job, svc *apiv1.Service) (*netv1.Ingress, error) {
 	var (
-		rules       []extv1beta1.IngressRule
+		rules       []netv1.IngressRule
 		defaultPort int32
 	)
 
@@ -45,32 +44,42 @@ func (i *Internal) getIngress(job *model.Job, svc *apiv1.Service) (*extv1beta1.I
 
 	// default backend, should point at the VICE default backend, which redirects
 	// users to the loading page.
-	defaultBackend := &extv1beta1.IngressBackend{
-		ServiceName: i.ViceDefaultBackendService,
-		ServicePort: intstr.FromInt(i.ViceDefaultBackendServicePort),
+	defaultBackend := &netv1.IngressBackend{
+		Service: &netv1.IngressServiceBackend{
+			Name: i.ViceDefaultBackendService,
+			Port: netv1.ServiceBackendPort{
+				Number: int32(i.ViceDefaultBackendServicePort),
+			},
+		},
 	}
 
 	// Backend for the service, not the default backend
-	backend := &extv1beta1.IngressBackend{
-		ServiceName: svc.Name,
-		ServicePort: intstr.FromInt(int(defaultPort)),
+	backend := &netv1.IngressBackend{
+		Service: &netv1.IngressServiceBackend{
+			Name: svc.Name,
+			Port: netv1.ServiceBackendPort{
+				Number: defaultPort,
+			},
+		},
 	}
 
 	// Add the rule to pass along requests to the Service's proxy port.
-	rules = append(rules, extv1beta1.IngressRule{
+	pathTytpe := netv1.PathTypeImplementationSpecific
+	rules = append(rules, netv1.IngressRule{
 		Host: ingressName,
-		IngressRuleValue: extv1beta1.IngressRuleValue{
-			HTTP: &extv1beta1.HTTPIngressRuleValue{
-				Paths: []extv1beta1.HTTPIngressPath{
+		IngressRuleValue: netv1.IngressRuleValue{
+			HTTP: &netv1.HTTPIngressRuleValue{
+				Paths: []netv1.HTTPIngressPath{
 					{
-						Backend: *backend, // service backend, not the default backend
+						PathType: &pathTytpe,
+						Backend:  *backend, // service backend, not the default backend
 					},
 				},
 			},
 		},
 	})
 
-	return &extv1beta1.Ingress{
+	return &netv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: job.InvocationID,
 			Annotations: map[string]string{
@@ -78,9 +87,9 @@ func (i *Internal) getIngress(job *model.Job, svc *apiv1.Service) (*extv1beta1.I
 			},
 			Labels: labels,
 		},
-		Spec: extv1beta1.IngressSpec{
-			Backend: defaultBackend, // default backend, not the service backend
-			Rules:   rules,
+		Spec: netv1.IngressSpec{
+			DefaultBackend: defaultBackend, // default backend, not the service backend
+			Rules:          rules,
 		},
 	}, nil
 }

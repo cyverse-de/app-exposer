@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -218,7 +219,7 @@ func (i *Internal) doFileTransfer(externalID, reqpath, kind string, async bool) 
 		"external-id": externalID,
 	})
 
-	svclist, err := svcclient.List(metav1.ListOptions{
+	svclist, err := svcclient.List(context.TODO(), metav1.ListOptions{
 		LabelSelector: set.AsSelector().String(),
 	})
 	if err != nil {

@@ -1,6 +1,8 @@
 package external
 
 import (
+	"context"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	typed_corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -32,44 +34,50 @@ type Endpointer struct {
 // Create uses the Kubernetes API to add a new Endpoint to the indicated
 // namespace.
 func (e *Endpointer) Create(opts *EndpointOptions) (*v1.Endpoints, error) {
-	return e.ept.Create(&v1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      opts.Name,
-			Namespace: opts.Namespace,
-		},
-		Subsets: []v1.EndpointSubset{
-			{
-				Addresses: []v1.EndpointAddress{{IP: opts.IP}},
-				Ports:     []v1.EndpointPort{{Port: opts.Port}},
+	return e.ept.Create(
+		context.TODO(),
+		&v1.Endpoints{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      opts.Name,
+				Namespace: opts.Namespace,
+			},
+			Subsets: []v1.EndpointSubset{
+				{
+					Addresses: []v1.EndpointAddress{{IP: opts.IP}},
+					Ports:     []v1.EndpointPort{{Port: opts.Port}},
+				},
 			},
 		},
-	})
+		metav1.CreateOptions{})
 }
 
 // Get returns a *v1.Endpoints for an existing Endpoints configuration in K8s.
 func (e *Endpointer) Get(name string) (*v1.Endpoints, error) {
-	return e.ept.Get(name, metav1.GetOptions{})
+	return e.ept.Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // Update applies updates to an existing set of Endpoints in K8s.
 func (e *Endpointer) Update(opts *EndpointOptions) (*v1.Endpoints, error) {
-	return e.ept.Update(&v1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      opts.Name,
-			Namespace: opts.Namespace,
-		},
-		Subsets: []v1.EndpointSubset{
-			{
-				Addresses: []v1.EndpointAddress{{IP: opts.IP}},
-				Ports:     []v1.EndpointPort{{Port: opts.Port}},
+	return e.ept.Update(
+		context.TODO(),
+		&v1.Endpoints{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      opts.Name,
+				Namespace: opts.Namespace,
+			},
+			Subsets: []v1.EndpointSubset{
+				{
+					Addresses: []v1.EndpointAddress{{IP: opts.IP}},
+					Ports:     []v1.EndpointPort{{Port: opts.Port}},
+				},
 			},
 		},
-	})
+		metav1.UpdateOptions{})
 }
 
 // Delete removes an Endpoints object from K8s.
 func (e *Endpointer) Delete(name string) error {
-	return e.ept.Delete(name, &metav1.DeleteOptions{})
+	return e.ept.Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // NewEndpointer returns a newly instantiated *Endpointer.

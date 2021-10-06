@@ -29,7 +29,7 @@ func New(cs kubernetes.Interface, namespace, ingressClass string) *External {
 		namespace:          namespace,
 		ServiceController:  NewServicer(cs.CoreV1().Services(namespace)),
 		EndpointController: NewEndpointer(cs.CoreV1().Endpoints(namespace)),
-		IngressController:  NewIngresser(cs.ExtensionsV1beta1().Ingresses(namespace), ingressClass),
+		IngressController:  NewIngresser(cs.NetworkingV1().Ingresses(namespace), ingressClass),
 	}
 }
 
@@ -444,8 +444,8 @@ func (e *External) CreateIngressHandler(c echo.Context) error {
 	returnOpts := &IngressOptions{
 		Name:      ing.Name,
 		Namespace: ing.Namespace,
-		Service:   ing.Spec.Backend.ServiceName,
-		Port:      ing.Spec.Backend.ServicePort.IntValue(),
+		Service:   ing.Spec.DefaultBackend.Service.Name,
+		Port:      int(ing.Spec.DefaultBackend.Service.Port.Number),
 	}
 
 	return c.JSON(http.StatusOK, returnOpts)
@@ -504,8 +504,8 @@ func (e *External) UpdateIngressHandler(c echo.Context) error {
 	returnOpts := &IngressOptions{
 		Name:      ing.Name,
 		Namespace: ing.Namespace,
-		Service:   ing.Spec.Backend.ServiceName,
-		Port:      ing.Spec.Backend.ServicePort.IntValue(),
+		Service:   ing.Spec.DefaultBackend.Service.Name,
+		Port:      int(ing.Spec.DefaultBackend.Service.Port.Number),
 	}
 
 	return c.JSON(http.StatusOK, returnOpts)
@@ -544,8 +544,8 @@ func (e *External) GetIngressHandler(c echo.Context) error {
 	returnOpts := &IngressOptions{
 		Name:      ing.Name,
 		Namespace: ing.Namespace,
-		Service:   ing.Spec.Backend.ServiceName,
-		Port:      ing.Spec.Backend.ServicePort.IntValue(),
+		Service:   ing.Spec.DefaultBackend.Service.Name,
+		Port:      int(ing.Spec.DefaultBackend.Service.Port.Number),
 	}
 
 	return c.JSON(http.StatusOK, returnOpts)

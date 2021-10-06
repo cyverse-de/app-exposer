@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -13,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	extv1b1 "k8s.io/api/extensions/v1beta1"
+	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -63,7 +64,7 @@ func getListOptions(customLabels map[string]string, missingLabels []string) meta
 func (i *Internal) deploymentList(namespace string, customLabels map[string]string, missingLabels []string) (*v1.DeploymentList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 
-	depList, err := i.clientset.AppsV1().Deployments(namespace).List(listOptions)
+	depList, err := i.clientset.AppsV1().Deployments(namespace).List(context.TODO(), listOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +75,7 @@ func (i *Internal) deploymentList(namespace string, customLabels map[string]stri
 func (i *Internal) podList(namespace string, customLabels map[string]string, missingLabels []string) (*corev1.PodList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 
-	podList, err := i.clientset.CoreV1().Pods(namespace).List(listOptions)
+	podList, err := i.clientset.CoreV1().Pods(namespace).List(context.TODO(), listOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +86,7 @@ func (i *Internal) podList(namespace string, customLabels map[string]string, mis
 func (i *Internal) configmapsList(namespace string, customLabels map[string]string, missingLabels []string) (*corev1.ConfigMapList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 
-	cfgList, err := i.clientset.CoreV1().ConfigMaps(namespace).List(listOptions)
+	cfgList, err := i.clientset.CoreV1().ConfigMaps(namespace).List(context.TODO(), listOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +97,7 @@ func (i *Internal) configmapsList(namespace string, customLabels map[string]stri
 func (i *Internal) serviceList(namespace string, customLabels map[string]string, missingLabels []string) (*corev1.ServiceList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 
-	svcList, err := i.clientset.CoreV1().Services(namespace).List(listOptions)
+	svcList, err := i.clientset.CoreV1().Services(namespace).List(context.TODO(), listOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -104,10 +105,11 @@ func (i *Internal) serviceList(namespace string, customLabels map[string]string,
 	return svcList, nil
 }
 
-func (i *Internal) ingressList(namespace string, customLabels map[string]string, missingLabels []string) (*extv1b1.IngressList, error) {
+func (i *Internal) ingressList(namespace string, customLabels map[string]string, missingLabels []string) (*netv1.IngressList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 
-	ingList, err := i.clientset.ExtensionsV1beta1().Ingresses(namespace).List(listOptions)
+	client := i.clientset.NetworkingV1().Ingresses(namespace)
+	ingList, err := client.List(context.TODO(), listOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -303,11 +305,11 @@ func serviceInfo(svc *corev1.Service) *ServiceInfo {
 // IngressInfo contains useful Ingress VICE info.
 type IngressInfo struct {
 	MetaInfo
-	DefaultBackend string                `json:"defaultBackend"`
-	Rules          []extv1b1.IngressRule `json:"rules"`
+	DefaultBackend string              `json:"defaultBackend"`
+	Rules          []netv1.IngressRule `json:"rules"`
 }
 
-func ingressInfo(ingress *extv1b1.Ingress) *IngressInfo {
+func ingressInfo(ingress *netv1.Ingress) *IngressInfo {
 	labels := ingress.GetObjectMeta().GetLabels()
 
 	return &IngressInfo{
@@ -325,8 +327,8 @@ func ingressInfo(ingress *extv1b1.Ingress) *IngressInfo {
 		Rules: ingress.Spec.Rules,
 		DefaultBackend: fmt.Sprintf(
 			"%s:%d",
-			ingress.Spec.Backend.ServiceName,
-			ingress.Spec.Backend.ServicePort.IntValue(),
+			ingress.Spec.DefaultBackend.Service.Name,
+			ingress.Spec.DefaultBackend.Service.Port.Number,
 		),
 	}
 }
@@ -729,7 +731,7 @@ func (i *Internal) relabelDeployments() []error {
 		}
 
 		deployment.SetLabels(existingLabels)
-		_, err = i.clientset.AppsV1().Deployments(i.ViceNamespace).Update(&deployment)
+		_, err = i.clientset.AppsV1().Deployments(i.ViceNamespace).Update(context.TODO(), &deployment, metav1.UpdateOptions{})
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -766,7 +768,7 @@ func (i *Internal) relabelConfigMaps() []error {
 		}
 
 		configmap.SetLabels(existingLabels)
-		_, err = i.clientset.CoreV1().ConfigMaps(i.ViceNamespace).Update(&configmap)
+		_, err = i.clientset.CoreV1().ConfigMaps(i.ViceNamespace).Update(context.TODO(), &configmap, metav1.UpdateOptions{})
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -803,7 +805,7 @@ func (i *Internal) relabelServices() []error {
 		}
 
 		service.SetLabels(existingLabels)
-		_, err = i.clientset.CoreV1().Services(i.ViceNamespace).Update(&service)
+		_, err = i.clientset.CoreV1().Services(i.ViceNamespace).Update(context.TODO(), &service, metav1.UpdateOptions{})
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -840,7 +842,8 @@ func (i *Internal) relabelIngresses() []error {
 		}
 
 		ingress.SetLabels(existingLabels)
-		_, err = i.clientset.ExtensionsV1beta1().Ingresses(i.ViceNamespace).Update(&ingress)
+		client := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
+		_, err = client.Update(context.TODO(), &ingress, metav1.UpdateOptions{})
 		if err != nil {
 			errors = append(errors, err)
 		}

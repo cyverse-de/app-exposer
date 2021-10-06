@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -149,17 +150,18 @@ func (i *Internal) UpsertExcludesConfigMap(job *model.Job) error {
 		return err
 	}
 
+	ctx := context.TODO()
 	cmclient := i.clientset.CoreV1().ConfigMaps(i.ViceNamespace)
 
-	_, err = cmclient.Get(excludesConfigMapName(job), metav1.GetOptions{})
+	_, err = cmclient.Get(ctx, excludesConfigMapName(job), metav1.GetOptions{})
 	if err != nil {
 		log.Info(err)
-		_, err = cmclient.Create(excludesCM)
+		_, err = cmclient.Create(ctx, excludesCM, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err = cmclient.Update(excludesCM)
+		_, err = cmclient.Update(ctx, excludesCM, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
@@ -177,16 +179,17 @@ func (i *Internal) UpsertInputPathListConfigMap(job *model.Job) error {
 		return err
 	}
 
+	ctx := context.TODO()
 	cmclient := i.clientset.CoreV1().ConfigMaps(i.ViceNamespace)
 
-	_, err = cmclient.Get(inputPathListConfigMapName(job), metav1.GetOptions{})
+	_, err = cmclient.Get(ctx, inputPathListConfigMapName(job), metav1.GetOptions{})
 	if err != nil {
-		_, err = cmclient.Create(inputCM)
+		_, err = cmclient.Create(ctx, inputCM, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err = cmclient.Update(inputCM)
+		_, err = cmclient.Update(ctx, inputCM, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
@@ -204,15 +207,17 @@ func (i *Internal) UpsertDeployment(job *model.Job) error {
 		return err
 	}
 
+	ctx := context.TODO()
 	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
-	_, err = depclient.Get(job.InvocationID, metav1.GetOptions{})
+
+	_, err = depclient.Get(ctx, job.InvocationID, metav1.GetOptions{})
 	if err != nil {
-		_, err = depclient.Create(deployment)
+		_, err = depclient.Create(ctx, deployment, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err = depclient.Update(deployment)
+		_, err = depclient.Update(ctx, deployment, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
@@ -233,14 +238,14 @@ func (i *Internal) UpsertDeployment(job *model.Job) error {
 		pvclient := i.clientset.CoreV1().PersistentVolumes()
 
 		for _, volume := range volumes {
-			_, err = pvclient.Get(volume.GetName(), metav1.GetOptions{})
+			_, err = pvclient.Get(ctx, volume.GetName(), metav1.GetOptions{})
 			if err != nil {
-				_, err = pvclient.Create(volume)
+				_, err = pvclient.Create(ctx, volume, metav1.CreateOptions{})
 				if err != nil {
 					return err
 				}
 			} else {
-				_, err = pvclient.Update(volume)
+				_, err = pvclient.Update(ctx, volume, metav1.UpdateOptions{})
 				if err != nil {
 					return err
 				}
@@ -252,14 +257,14 @@ func (i *Internal) UpsertDeployment(job *model.Job) error {
 		pvcclient := i.clientset.CoreV1().PersistentVolumeClaims(i.ViceNamespace)
 
 		for _, volumeClaim := range volumeclaims {
-			_, err = pvcclient.Get(volumeClaim.GetName(), metav1.GetOptions{})
+			_, err = pvcclient.Get(ctx, volumeClaim.GetName(), metav1.GetOptions{})
 			if err != nil {
-				_, err = pvcclient.Create(volumeClaim)
+				_, err = pvcclient.Create(ctx, volumeClaim, metav1.CreateOptions{})
 				if err != nil {
 					return err
 				}
 			} else {
-				_, err = pvcclient.Update(volumeClaim)
+				_, err = pvcclient.Update(ctx, volumeClaim, metav1.UpdateOptions{})
 				if err != nil {
 					return err
 				}
@@ -273,9 +278,9 @@ func (i *Internal) UpsertDeployment(job *model.Job) error {
 		return err
 	}
 	svcclient := i.clientset.CoreV1().Services(i.ViceNamespace)
-	_, err = svcclient.Get(job.InvocationID, metav1.GetOptions{})
+	_, err = svcclient.Get(ctx, job.InvocationID, metav1.GetOptions{})
 	if err != nil {
-		_, err = svcclient.Create(svc)
+		_, err = svcclient.Create(ctx, svc, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -287,10 +292,10 @@ func (i *Internal) UpsertDeployment(job *model.Job) error {
 		return err
 	}
 
-	ingressclient := i.clientset.ExtensionsV1beta1().Ingresses(i.ViceNamespace)
-	_, err = ingressclient.Get(ingress.Name, metav1.GetOptions{})
+	ingressclient := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
+	_, err = ingressclient.Get(ctx, ingress.Name, metav1.GetOptions{})
 	if err != nil {
-		_, err = ingressclient.Create(ingress)
+		_, err = ingressclient.Create(ctx, ingress, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -392,41 +397,44 @@ func (i *Internal) doExit(externalID string) error {
 		LabelSelector: set.AsSelector().String(),
 	}
 
+	// Use context.TODO() as the context for now.
+	ctx := context.TODO()
+
 	// Delete the ingress
-	ingressclient := i.clientset.ExtensionsV1beta1().Ingresses(i.ViceNamespace)
-	ingresslist, err := ingressclient.List(listoptions)
+	ingressclient := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
+	ingresslist, err := ingressclient.List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
 
 	for _, ingress := range ingresslist.Items {
-		if err = ingressclient.Delete(ingress.Name, &metav1.DeleteOptions{}); err != nil {
+		if err = ingressclient.Delete(ctx, ingress.Name, metav1.DeleteOptions{}); err != nil {
 			log.Error(err)
 		}
 	}
 
 	// Delete the service
 	svcclient := i.clientset.CoreV1().Services(i.ViceNamespace)
-	svclist, err := svcclient.List(listoptions)
+	svclist, err := svcclient.List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
 
 	for _, svc := range svclist.Items {
-		if err = svcclient.Delete(svc.Name, &metav1.DeleteOptions{}); err != nil {
+		if err = svcclient.Delete(ctx, svc.Name, metav1.DeleteOptions{}); err != nil {
 			log.Error(err)
 		}
 	}
 
 	// Delete the deployment
 	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
-	deplist, err := depclient.List(listoptions)
+	deplist, err := depclient.List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
 
 	for _, dep := range deplist.Items {
-		if err = depclient.Delete(dep.Name, &metav1.DeleteOptions{}); err != nil {
+		if err = depclient.Delete(ctx, dep.Name, metav1.DeleteOptions{}); err != nil {
 			log.Error(err)
 		}
 	}
@@ -435,20 +443,20 @@ func (i *Internal) doExit(externalID string) error {
 	// Delete persistent volume claims.
 	// This will automatically delete persistent volumes associated with them.
 	pvcclient := i.clientset.CoreV1().PersistentVolumeClaims(i.ViceNamespace)
-	pvclist, err := pvcclient.List(listoptions)
+	pvclist, err := pvcclient.List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
 
 	for _, pvc := range pvclist.Items {
-		if err = pvcclient.Delete(pvc.Name, &metav1.DeleteOptions{}); err != nil {
+		if err = pvcclient.Delete(ctx, pvc.Name, metav1.DeleteOptions{}); err != nil {
 			log.Error(err)
 		}
 	}
 
 	// Delete the input files list and the excludes list config maps
 	cmclient := i.clientset.CoreV1().ConfigMaps(i.ViceNamespace)
-	cmlist, err := cmclient.List(listoptions)
+	cmlist, err := cmclient.List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
@@ -457,7 +465,7 @@ func (i *Internal) doExit(externalID string) error {
 
 	for _, cm := range cmlist.Items {
 		log.Infof("deleting configmap %s for %s", cm.Name, externalID)
-		if err = cmclient.Delete(cm.Name, &metav1.DeleteOptions{}); err != nil {
+		if err = cmclient.Delete(ctx, cm.Name, metav1.DeleteOptions{}); err != nil {
 			log.Error(err)
 		}
 	}
@@ -493,8 +501,8 @@ func (i *Internal) AdminExitHandler(c echo.Context) error {
 // getIDFromHost returns the external ID for the running VICE app, which
 // is assumed to be the same as the name of the ingress.
 func (i *Internal) getIDFromHost(host string) (string, error) {
-	ingressclient := i.clientset.ExtensionsV1beta1().Ingresses(i.ViceNamespace)
-	ingresslist, err := ingressclient.List(metav1.ListOptions{})
+	ingressclient := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
+	ingresslist, err := ingressclient.List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -557,9 +565,12 @@ func (i *Internal) URLReadyHandler(c echo.Context) error {
 		LabelSelector: set.AsSelector().String(),
 	}
 
+	// Use context.TODO() as the context for now.
+	ctx := context.TODO()
+
 	// check the service existence
 	svcclient := i.clientset.CoreV1().Services(i.ViceNamespace)
-	svclist, err := svcclient.List(listoptions)
+	svclist, err := svcclient.List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
@@ -569,7 +580,7 @@ func (i *Internal) URLReadyHandler(c echo.Context) error {
 
 	// Check pod status through the deployment
 	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
-	deplist, err := depclient.List(listoptions)
+	deplist, err := depclient.List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
@@ -636,9 +647,12 @@ func (i *Internal) AdminURLReadyHandler(c echo.Context) error {
 		LabelSelector: set.AsSelector().String(),
 	}
 
+	// use context.TODO() as the context for now
+	ctx := context.TODO()
+
 	// check the service existence
 	svcclient := i.clientset.CoreV1().Services(i.ViceNamespace)
-	svclist, err := svcclient.List(listoptions)
+	svclist, err := svcclient.List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
@@ -648,7 +662,7 @@ func (i *Internal) AdminURLReadyHandler(c echo.Context) error {
 
 	// Check pod status through the deployment
 	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
-	deplist, err := depclient.List(listoptions)
+	deplist, err := depclient.List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
