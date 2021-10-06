@@ -2,6 +2,18 @@ module github.com/cyverse-de/app-exposer
 
 go 1.12
 
+replace github.com/cyverse-de/app-exposer/apps => ./apps
+
+replace github.com/cyverse-de/app-exposer/common => ./common
+
+replace github.com/cyverse-de/app-exposer/external => ./external
+
+replace github.com/cyverse-de/app-exposer/instantlaunches => ./instantlaunches
+
+replace github.com/cyverse-de/app-exposer/internal => ./internal
+
+replace github.com/cyverse-de/app-exposer/permissions => ./permissions
+
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/cyverse-de/configurate v0.0.0-20190318152107-8f767cb828d9
