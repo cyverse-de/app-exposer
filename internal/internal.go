@@ -454,6 +454,20 @@ func (i *Internal) doExit(externalID string) error {
 		}
 	}
 
+	// Persistent volumes with "Retain" reclaim policy should be deleted manually
+	// Persistent volumes created via CSI Driver only supports "Retain" reclaim policy
+	pvclient := i.clientset.CoreV1().PersistentVolumes()
+	pvlist, err := pvclient.List(ctx, listoptions)
+	if err != nil {
+		return err
+	}
+
+	for _, pv := range pvlist.Items {
+		if err = pvclient.Delete(ctx, pv.Name, metav1.DeleteOptions{}); err != nil {
+			log.Error(err)
+		}
+	}
+
 	// Delete the input files list and the excludes list config maps
 	cmclient := i.clientset.CoreV1().ConfigMaps(i.ViceNamespace)
 	cmlist, err := cmclient.List(ctx, listoptions)
