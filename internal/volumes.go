@@ -204,7 +204,7 @@ func (i *Internal) getPersistentVolumes(job *model.Job) ([]*apiv1.PersistentVolu
 				AccessModes: []apiv1.PersistentVolumeAccessMode{
 					apiv1.ReadWriteMany,
 				},
-				PersistentVolumeReclaimPolicy: apiv1.PersistentVolumeReclaimDelete,
+				PersistentVolumeReclaimPolicy: apiv1.PersistentVolumeReclaimRetain,
 				StorageClassName:              csiDriverStorageClassName,
 				PersistentVolumeSource: apiv1.PersistentVolumeSource{
 					CSI: &apiv1.CSIPersistentVolumeSource{
@@ -244,7 +244,7 @@ func (i *Internal) getPersistentVolumes(job *model.Job) ([]*apiv1.PersistentVolu
 					AccessModes: []apiv1.PersistentVolumeAccessMode{
 						apiv1.ReadWriteMany,
 					},
-					PersistentVolumeReclaimPolicy: apiv1.PersistentVolumeReclaimDelete,
+					PersistentVolumeReclaimPolicy: apiv1.PersistentVolumeReclaimRetain,
 					StorageClassName:              csiDriverStorageClassName,
 					PersistentVolumeSource: apiv1.PersistentVolumeSource{
 						CSI: &apiv1.CSIPersistentVolumeSource{
