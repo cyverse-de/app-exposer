@@ -130,41 +130,6 @@ func (i *Internal) viceProxyCommand(job *model.Job) []string {
 	return output
 }
 
-func cpuResourceRequest(job *model.Job) float32 {
-	if job.Steps[0].Component.Container.MinCPUCores != 0 {
-		return job.Steps[0].Component.Container.MinCPUCores
-	}
-	return 1
-}
-
-func cpuResourceLimit(job *model.Job) float32 {
-	if job.Steps[0].Component.Container.MaxCPUCores != 0 {
-		return job.Steps[0].Component.Container.MaxCPUCores
-	}
-	return 4
-}
-
-func memResourceRequest(job *model.Job) int64 {
-	if job.Steps[0].Component.Container.MinMemoryLimit != 0 {
-		return job.Steps[0].Component.Container.MinMemoryLimit
-	}
-	return 2 * gibibyte
-}
-
-func memResourceLimit(job *model.Job) int64 {
-	if job.Steps[0].Component.Container.MemoryLimit != 0 {
-		return job.Steps[0].Component.Container.MemoryLimit
-	}
-	return 8 * gibibyte
-}
-
-func storageRequest(job *model.Job) int64 {
-	if job.Steps[0].Component.Container.MinDiskSpace != 0 {
-		return job.Steps[0].Component.Container.MinDiskSpace
-	}
-	return 16 * gibibyte
-}
-
 var (
 	defaultCPUResourceRequest, _ = resourcev1.ParseQuantity("1000m")
 	defaultMemResourceRequest, _ = resourcev1.ParseQuantity("2Gi")
@@ -172,6 +137,97 @@ var (
 	defaultCPUResourceLimit, _   = resourcev1.ParseQuantity("4000m")
 	defaultMemResourceLimit, _   = resourcev1.ParseQuantity("8Gi")
 )
+
+func cpuResourceRequest(job *model.Job) resourcev1.Quantity {
+	var (
+		value resourcev1.Quantity
+		err   error
+	)
+
+	value = defaultCPUResourceRequest
+
+	if job.Steps[0].Component.Container.MinCPUCores != 0 {
+		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%fm", job.Steps[0].Component.Container.MinCPUCores*1000))
+		if err != nil {
+			log.Warn(err)
+			value = defaultCPUResourceRequest
+		}
+	}
+
+	return value
+}
+
+func cpuResourceLimit(job *model.Job) resourcev1.Quantity {
+	var (
+		value resourcev1.Quantity
+		err   error
+	)
+
+	value = defaultCPUResourceLimit
+
+	if job.Steps[0].Component.Container.MaxCPUCores != 0 {
+		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%fm", job.Steps[0].Component.Container.MaxCPUCores*1000))
+		if err != nil {
+			log.Warn(err)
+			value = defaultCPUResourceLimit
+		}
+	}
+	return value
+}
+
+func memResourceRequest(job *model.Job) resourcev1.Quantity {
+	var (
+		value resourcev1.Quantity
+		err   error
+	)
+
+	value = defaultMemResourceRequest
+
+	if job.Steps[0].Component.Container.MinMemoryLimit != 0 {
+		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", job.Steps[0].Component.Container.MinMemoryLimit))
+		if err != nil {
+			log.Warn(err)
+			value = defaultMemResourceRequest
+		}
+	}
+	return value
+}
+
+func memResourceLimit(job *model.Job) resourcev1.Quantity {
+	var (
+		value resourcev1.Quantity
+		err   error
+	)
+
+	value = defaultMemResourceLimit
+
+	if job.Steps[0].Component.Container.MemoryLimit != 0 {
+		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", job.Steps[0].Component.Container.MemoryLimit))
+		if err != nil {
+			log.Warn(err)
+			value = defaultMemResourceLimit
+		}
+	}
+	return value
+}
+
+func storageRequest(job *model.Job) resourcev1.Quantity {
+	var (
+		value resourcev1.Quantity
+		err   error
+	)
+
+	value = defaultStorageRequest
+
+	if job.Steps[0].Component.Container.MinDiskSpace != 0 {
+		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", job.Steps[0].Component.Container.MinDiskSpace))
+		if err != nil {
+			log.Warn(err)
+			value = defaultStorageRequest
+		}
+	}
+	return value
+}
 
 // initContainers returns a []apiv1.Container used for the InitContainers in
 // the VICE app Deployment resource.
@@ -256,23 +312,9 @@ func (i *Internal) defineAnalysisContainer(job *model.Job) apiv1.Container {
 		},
 	)
 
-	cpuRequest, err := resourcev1.ParseQuantity(fmt.Sprintf("%fm", cpuResourceRequest(job)*1000))
-	if err != nil {
-		log.Warn(err)
-		cpuRequest = defaultCPUResourceRequest
-	}
-
-	memRequest, err := resourcev1.ParseQuantity(fmt.Sprintf("%d", memResourceRequest(job)))
-	if err != nil {
-		log.Warn(err)
-		memRequest = defaultMemResourceRequest
-	}
-
-	storageRequest, err := resourcev1.ParseQuantity(fmt.Sprintf("%d", storageRequest(job)))
-	if err != nil {
-		log.Warn(err)
-		storageRequest = defaultStorageRequest
-	}
+	cpuRequest := cpuResourceRequest(job)
+	memRequest := memResourceRequest(job)
+	storageRequest := storageRequest(job)
 
 	requests := apiv1.ResourceList{
 		apiv1.ResourceCPU:              cpuRequest,     // job contains # cores
@@ -280,17 +322,8 @@ func (i *Internal) defineAnalysisContainer(job *model.Job) apiv1.Container {
 		apiv1.ResourceEphemeralStorage: storageRequest, // job contains # bytes storage
 	}
 
-	cpuLimit, err := resourcev1.ParseQuantity(fmt.Sprintf("%fm", cpuResourceLimit(job)*1000))
-	if err != nil {
-		log.Warn(err)
-		cpuLimit = defaultCPUResourceLimit
-	}
-
-	memLimit, err := resourcev1.ParseQuantity(fmt.Sprintf("%d", memResourceLimit(job)))
-	if err != nil {
-		log.Warn(err)
-		memLimit = defaultMemResourceLimit
-	}
+	cpuLimit := cpuResourceLimit(job)
+	memLimit := memResourceLimit(job)
 
 	limits := apiv1.ResourceList{
 		apiv1.ResourceCPU:    cpuLimit, //job contains # cores
