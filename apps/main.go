@@ -133,3 +133,14 @@ func (a *Apps) GetUserID(username string) (string, error) {
 	err := a.DB.QueryRow(userByUsername, username).Scan(&id)
 	return id, err
 }
+
+const setMillicoresStmt = `
+	UPDATE jobs
+	SET millicores_reserved = $2
+	WHERE id = $1;
+`
+
+func (a *Apps) SetMillicoresReserved(analysisID string, millicores int) error {
+	_, err := a.DB.Exec(setMillicoresStmt, analysisID, millicores)
+	return err
+}
