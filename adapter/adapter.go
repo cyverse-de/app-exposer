@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/cyverse-de/jex-adapter/logging"
+	"github.com/cyverse-de/jex-adapter/millicores"
 	"github.com/cyverse-de/jex-adapter/types"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
@@ -22,17 +23,19 @@ var log = logging.Log.WithFields(logrus.Fields{"package": "adapter"})
 type JEXAdapter struct {
 	cfg          *viper.Viper
 	client       *messaging.Client
+	detector     *millicores.Detector
 	amqpURI      string
 	exchangeName string
 }
 
 // New returns a *JEXAdapter
-func New(cfg *viper.Viper, amqpURI, exchangeName string) *JEXAdapter {
+func New(cfg *viper.Viper, detector *millicores.Detector, amqpURI, exchangeName string) *JEXAdapter {
 
 	return &JEXAdapter{
 		cfg:          cfg,
 		amqpURI:      amqpURI,
 		exchangeName: exchangeName,
+		detector:     detector,
 	}
 }
 
@@ -131,6 +134,17 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	if err != nil {
 		log.Error(err)
 		amqpError(err)
+		return err
+	}
+
+	millicoresReserved, err := j.detector.NumberReserved(job)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	if err = j.detector.StoreMillicoresReserved(c.Request().Context(), job, millicoresReserved); err != nil {
+		log.Error(err)
 		return err
 	}
 
