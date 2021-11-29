@@ -101,12 +101,13 @@ func New(cfg *viper.Viper, detector *millicores.Detector, messenger Messenger) *
 	}
 }
 
-func (j *JEXAdapter) Routes(router types.Router) {
+func (j *JEXAdapter) Routes(router types.Router) types.Router {
 	router.GET("", j.HomeHandler)
 	router.GET("/", j.HomeHandler)
 	router.POST("", j.LaunchHandler)
 	router.POST("/", j.LaunchHandler)
 	router.DELETE("/stop/:invocation_id", j.StopHandler)
+	return router
 }
 
 func (j *JEXAdapter) HomeHandler(c echo.Context) error {

@@ -1,8 +1,10 @@
 package adapter
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/cyverse-de/jex-adapter/db"
@@ -13,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/cyverse-de/model.v4"
 
-	_ "github.com/proullon/ramsql/driver"
+	"github.com/DATA-DOG/go-sqlmock"
 )
 
 func getTestConfig() *viper.Viper {
@@ -22,28 +24,6 @@ func getTestConfig() *viper.Viper {
 	cfg.Set("condor.filter_files", "output-last-stderr")
 	cfg.Set("irods.base", "/iplant/home")
 	return cfg
-}
-
-func getTestDatabaseConn(t *testing.T) *sqlx.DB {
-	db, err := sqlx.Open("ramsql", "TestDatabase")
-	if err != nil {
-		t.Fatalf("error opening test database: %s\n", err)
-	}
-	defer db.Close()
-
-	batch := []string{
-		`CREATE TABLE jobs (id VARCHAR(36) PRIMARY KEY, millicores INT);`,
-		`INSERT INTO jobs (id) VALUES ('c654e8bb-d535-4f7a-bd0f-aff0f0c189b1');`,
-	}
-
-	for _, b := range batch {
-		_, err = db.Exec(b)
-		if err != nil {
-			t.Fatalf("error executing sql command: %s\n", err)
-		}
-	}
-
-	return db
 }
 
 type TestMessenger struct{}
@@ -56,17 +36,28 @@ func (t *TestMessenger) Launch(job *model.Job) error {
 	return nil
 }
 
-func initTestAdapter(t *testing.T) *JEXAdapter {
-	cfg := getTestConfig()
-	msger := &TestMessenger{}
-	dbconn := getTestDatabaseConn(t)
-	dbase := db.New(dbconn)
-	detector := millicores.New(dbase, 4000.0)
-	a := New(cfg, detector, msger)
-	return a
+var a *JEXAdapter
+var mock sqlmock.Sqlmock
+
+func initTestAdapter(t *testing.T) (*JEXAdapter, sqlmock.Sqlmock) {
+	if a == nil || mock == nil {
+		var err error
+		var mockconn *sql.DB
+		cfg := getTestConfig()
+		msger := &TestMessenger{}
+		mockconn, mock, err = sqlmock.New()
+		if err != nil {
+			t.Fatalf("error opening mocked database connection: %s", err)
+		}
+		dbconn := sqlx.NewDb(mockconn, "postgres")
+		dbase := db.New(dbconn)
+		detector := millicores.New(dbase, 4000.0)
+		a = New(cfg, detector, msger)
+	}
+	return a, mock
 }
 func TestHomeHandler(t *testing.T) {
-	a := initTestAdapter(t)
+	a, _ := initTestAdapter(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -76,5 +67,39 @@ func TestHomeHandler(t *testing.T) {
 
 	if assert.NoError(t, a.HomeHandler(c)) {
 		assert.Equal(t, rec.Body.String(), "Welcome to the JEX.\n")
+	}
+}
+
+func TestStopAdapter(t *testing.T) {
+	a, _ := initTestAdapter(t)
+
+	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	rec := httptest.NewRecorder()
+
+	e := echo.New()
+	c := e.NewContext(req, rec)
+	c.SetPath("/stop/:invocation_id")
+	c.SetParamNames("invocation_id")
+	c.SetParamValues("c654e8bb-d535-4f7a-bd0f-aff0f0c189b1")
+
+	if assert.NoError(t, a.StopHandler(c)) {
+		assert.Equal(t, rec.Code, http.StatusOK)
+	}
+}
+
+func TestLaunchHandler(t *testing.T) {
+	a, mock := initTestAdapter(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(testCondorLaunchJSON))
+	rec := httptest.NewRecorder()
+
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	mock.ExpectExec("UPDATE jobs").WillReturnResult(sqlmock.NewResult(1, 1))
+
+	if assert.NoError(t, a.LaunchHandler(c)) {
+		assert.Equal(t, rec.Code, http.StatusOK)
+		assert.NoError(t, mock.ExpectationsWereMet())
 	}
 }
