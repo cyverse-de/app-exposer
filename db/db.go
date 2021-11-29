@@ -26,7 +26,12 @@ func New(db DatabaseAccessor) *Database {
 }
 
 func (d *Database) SetMillicoresReserved(context context.Context, externalID string, millicoresReserved float64) error {
-	const stmt = `UPDATE jobs j SET millicores_reserved = $2 WHERE id = ( SELECT job_id FROM job_steps WHERE external_id = $1 );`
+	const stmt = `
+		UPDATE jobs 
+		SET millicores_reserved = $2 
+		FROM ( SELECT job_id FROM job_steps WHERE external_id = $2 ) AS sub 
+		WHERE jobs.id = sub.job_id;
+	`
 	_, err := d.db.ExecContext(context, stmt, externalID, millicoresReserved)
 	return err
 }
