@@ -129,6 +129,26 @@ func (i *Internal) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
 	}
 }
 
+func (i *Internal) getSharedPathMapping(job *model.Job) IRODSFSPathMapping {
+	// mount a single collection for shared data
+	zone, err := i.getIRODSZone(job.UserHome)
+	if err != nil {
+		return IRODSFSPathMapping{}
+	}
+
+	sharedHomeFullPath := fmt.Sprintf("/%s/home/shared", zone)
+	sharedHome := "/home/shared"
+
+	return IRODSFSPathMapping{
+		IRODSPath:      sharedHomeFullPath,
+		MappingPath:    sharedHome,
+		ResourceType:   "dir",
+		ReadOnly:       true,
+		CreateDir:      false,
+		IgnoreNotExist: true,
+	}
+}
+
 func (i *Internal) getCSIInputOutputVolumeLabels(job *model.Job) (map[string]string, error) {
 	labels, err := i.labelsFromJob(job)
 	if err != nil {
@@ -177,6 +197,10 @@ func (i *Internal) getPersistentVolumes(job *model.Job) ([]*apiv1.PersistentVolu
 			homePathMapping := i.getHomePathMapping(job)
 			homePathMappings = append(homePathMappings, homePathMapping)
 		}
+
+		// shared path
+		sharedPathMapping := i.getSharedPathMapping(job)
+		homePathMappings = append(homePathMappings, sharedPathMapping)
 
 		homePathMappingsJsonBytes, err := json.Marshal(homePathMappings)
 		if err != nil {
