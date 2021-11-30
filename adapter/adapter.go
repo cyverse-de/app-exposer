@@ -117,7 +117,7 @@ func (j *JEXAdapter) HomeHandler(c echo.Context) error {
 func (j *JEXAdapter) StopHandler(c echo.Context) error {
 	var err error
 
-	log.Infof("Request received:\n%#v\n", c.Request())
+	log := log.WithFields(logrus.Fields{"context": "stop app"})
 
 	invID := c.Param("invocation_id")
 	if invID == "" {
@@ -126,15 +126,17 @@ func (j *JEXAdapter) StopHandler(c echo.Context) error {
 		return err
 	}
 
-	log.Infof("Invocation ID is %s\n", invID)
+	log = log.WithFields(logrus.Fields{"external_id": invID})
 
-	log.Info("Sending stop request")
+	log.Debug("starting sending stop message")
 	err = j.messenger.Stop(invID)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
-	log.Info("Done sending stop request")
+	log.Debug("Done sending stop message")
+
+	log.Info("sent stop message")
 
 	return c.NoContent(http.StatusOK)
 }
