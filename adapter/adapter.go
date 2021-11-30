@@ -102,11 +102,19 @@ func New(cfg *viper.Viper, detector *millicores.Detector, messenger Messenger) *
 }
 
 func (j *JEXAdapter) Routes(router types.Router) types.Router {
+	log := log.WithFields(logrus.Fields{"context": "adding routes"})
+
 	router.GET("", j.HomeHandler)
 	router.GET("/", j.HomeHandler)
+	log.Info("added handler for GET /")
+
 	router.POST("", j.LaunchHandler)
 	router.POST("/", j.LaunchHandler)
+	log.Info("added handler for POST /")
+
 	router.DELETE("/stop/:invocation_id", j.StopHandler)
+	log.Info("added handler for DELETE /stop/:invocation_id")
+
 	return router
 }
 
