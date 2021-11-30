@@ -107,14 +107,14 @@ func TestLaunchHandler(t *testing.T) {
 func TestCondorLaunchDefaultMillicores(t *testing.T) {
 	a, mock := initTestAdapter(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(testCondorLaunchJSON))
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(testCondorCustomLaunchJSON))
 	rec := httptest.NewRecorder()
 
 	e := echo.New()
 	c := e.NewContext(req, rec)
 
 	mock.ExpectExec("UPDATE jobs").
-		WithArgs("07b04ce2-7757-4b21-9e15-0b4c2f44be26", 4000.0).
+		WithArgs("07b04ce2-7757-4b21-9e15-0b4c2f44be26", 64000.0).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	if assert.NoError(t, a.LaunchHandler(c)) {
