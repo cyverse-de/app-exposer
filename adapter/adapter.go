@@ -142,33 +142,49 @@ func (j *JEXAdapter) StopHandler(c echo.Context) error {
 func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	request := c.Request()
 
+	log := log.WithFields(logrus.Fields{"context": "app launch"})
+
+	log.Debug("reading request body")
 	bodyBytes, err := ioutil.ReadAll(request.Body)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
+	log.Debug("done reading request body")
 
+	log.Debug("parsing request body JSON")
 	job, err := model.NewFromData(j.cfg, bodyBytes)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
+	log.Debug("done parsing request body JSON")
 
+	log = log.WithFields(logrus.Fields{"external_id": job.InvocationID})
+
+	log.Debug("sending launch message")
 	if err = j.messenger.Launch(job); err != nil {
 		log.Error(err)
 		return err
 	}
+	log.Debug("done sending launch message")
 
+	log.Debug("finding number of millicores reserved")
 	millicoresReserved, err := j.detector.NumberReserved(job)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
+	log.Debug("done finding number of millicores reserved")
 
+	log.Debug("storing millicores reserved")
 	if err = j.detector.StoreMillicoresReserved(c.Request().Context(), job, millicoresReserved); err != nil {
 		log.Error(err)
 		return err
 	}
+	log.Debug("done storing millicores reserved")
+
+	log.Infof("launched with %f millicores reserved", millicoresReserved)
 
 	return c.NoContent(http.StatusOK)
 }
