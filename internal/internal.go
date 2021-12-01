@@ -340,7 +340,6 @@ func getMillicoresFromDeployment(deployment *appsv1.Deployment) (int, error) {
 	log.Debugf("%d millicores reservation found", millicores)
 
 	return millicores, nil
-
 }
 
 // LaunchAppHandler is the HTTP handler that orchestrates the launching of a VICE analysis inside
