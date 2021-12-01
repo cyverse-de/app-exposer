@@ -15,7 +15,7 @@ import (
 )
 
 // One gibibyte.
-const gibibyte = 1024 * 1024 * 1024
+//const gibibyte = 1024 * 1024 * 1024
 
 // analysisPorts returns a list of container ports needed by the VICE analysis.
 func analysisPorts(step *model.Step) []apiv1.ContainerPort {
