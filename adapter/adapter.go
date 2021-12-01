@@ -66,12 +66,12 @@ func (a *AMQPMessenger) Launch(job *model.Job) error {
 		false,
 		true,
 	)
-	defer s.Close()
-
 	if err != nil {
 		amqpError(err)
+		s.Close()
 		return err
 	}
+	defer s.Close()
 
 	if launchJSON, err = json.Marshal(messaging.NewLaunchRequest(job)); err != nil {
 		return err
