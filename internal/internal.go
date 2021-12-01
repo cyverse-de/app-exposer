@@ -314,10 +314,10 @@ func tryForAnalysisID(job *model.Job, maxAttempts int, apps *apps.Apps) (string,
 	return "", fmt.Errorf("failed to find analysis ID after %d attempts", maxAttempts)
 }
 
-func getMillicoresFromDeployment(deployment *appsv1.Deployment) (int, error) {
+func getMillicoresFromDeployment(deployment *appsv1.Deployment) (float64, error) {
 	var (
 		analysisContainer *apiv1.Container
-		millicores        int
+		millicores        float64
 	)
 	containers := deployment.Spec.Template.Spec.Containers
 
@@ -335,7 +335,7 @@ func getMillicoresFromDeployment(deployment *appsv1.Deployment) (int, error) {
 		return 0, errors.New("could not find the analysis container in the deployment")
 	}
 
-	millicores = analysisContainer.Resources.Limits[apiv1.ResourceCPU].ToUnstructured().(int)
+	millicores = analysisContainer.Resources.Limits[apiv1.ResourceCPU].ToUnstructured().(float64)
 
 	log.Debugf("%d millicores reservation found", millicores)
 
