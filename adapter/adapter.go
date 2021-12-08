@@ -192,7 +192,7 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 		log.Error(err)
 		return err
 	}
-	log.Debug("done storing %f millicores reserved for %s", millicoresReserved, job.InvocationID)
+	log.Debugf("done storing %f millicores reserved for %s", millicoresReserved, job.InvocationID)
 
 	log.Infof("launched with %f millicores reserved", millicoresReserved)
 
