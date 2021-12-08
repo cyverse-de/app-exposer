@@ -187,12 +187,12 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	}
 	log.Debug("done finding number of millicores reserved")
 
-	log.Debug("storing millicores reserved")
+	log.Debugf("storing %f millicores reserved for %s", millicoresReserved, job.InvocationID)
 	if err = j.detector.StoreMillicoresReserved(c.Request().Context(), job, millicoresReserved); err != nil {
 		log.Error(err)
 		return err
 	}
-	log.Debug("done storing millicores reserved")
+	log.Debug("done storing %f millicores reserved for %s", millicoresReserved, job.InvocationID)
 
 	log.Infof("launched with %f millicores reserved", millicoresReserved)
 
