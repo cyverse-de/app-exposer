@@ -34,12 +34,15 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 
 	const stmt = `
 		UPDATE jobs 
-		SET millicores_reserved = $2::int
+		SET millicores_reserved = $2
 		FROM ( SELECT job_id FROM job_steps WHERE external_id = $1 ) AS sub 
 		WHERE jobs.id = sub.job_id;
 	`
 
-	result, err := d.db.ExecContext(context, stmt, externalID, millicoresReserved)
+	converted := int64(millicoresReserved)
+	log.Debugf("converted millicores values %d", converted)
+
+	result, err := d.db.ExecContext(context, stmt, externalID, converted)
 	if err != nil {
 		log.Error(err)
 		return err
