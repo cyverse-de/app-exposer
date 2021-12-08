@@ -43,7 +43,7 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 	converted := int64(millicoresReserved)
 	log.Debugf("converted millicores values %d", converted)
 
-	time.Sleep(30 + time.Second)
+	time.Sleep(30 * time.Second)
 
 	result, err := d.db.ExecContext(context, stmt, externalID, converted)
 	if err != nil {
