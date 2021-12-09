@@ -31,6 +31,11 @@ func New(db DatabaseAccessor) *Database {
 }
 
 func (d *Database) SetMillicoresReserved(context context.Context, externalID string, millicoresReserved float64) error {
+	var (
+		err   error
+		jobID string
+	)
+
 	log = log.WithFields(logrus.Fields{"context": "set millicores reserved", "externalID": externalID, "millicoresReserved": millicoresReserved})
 
 	const stmt = `
@@ -39,6 +44,21 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 		FROM ( SELECT job_id FROM job_steps WHERE external_id = $1 ) AS sub 
 		WHERE jobs.id = sub.job_id;
 	`
+
+	const jobIDQuery = `
+		SELECT job_id
+		FROM job_steps
+		WHERE external_id = $1;
+	`
+
+	log.Debug("looking up job ID")
+	if err = d.db.QueryRowxContext(context, jobIDQuery, externalID).Scan(&jobID); err != nil {
+		log.Error(err)
+		return err
+	}
+	log.Debug("done looking up job ID")
+
+	log.Infof("job ID is %s", jobID)
 
 	converted := int64(millicoresReserved)
 	log.Debugf("converted millicores values %d", converted)
