@@ -30,33 +30,6 @@ func New(db DatabaseAccessor) *Database {
 	}
 }
 
-func (d *Database) HasAnalysisID(context context.Context, externalID string) (bool, error) {
-	var (
-		err   error
-		jobID string
-		hasID bool
-	)
-
-	const jobIDQuery = `
-		SELECT job_id
-		FROM job_steps
-		WHERE external_id = $1
-	`
-
-	if err = d.db.QueryRowxContext(context, jobIDQuery, externalID).Scan(&jobID); err != nil {
-		if err == sql.ErrNoRows {
-			hasID = false
-		} else {
-			return false, err
-		}
-	} else {
-		hasID = true
-	}
-
-	return hasID, nil
-
-}
-
 func (d *Database) SetMillicoresReserved(context context.Context, externalID string, millicoresReserved float64) error {
 	var (
 		err   error
