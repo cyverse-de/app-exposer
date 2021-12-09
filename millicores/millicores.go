@@ -23,10 +23,14 @@ func New(db *db.Database, defaultNumber float64) *Detector {
 // and if it's not found there it uses the defaults.
 func (d *Detector) NumberReserved(job *model.Job) (float64, error) {
 	var reserved float64
-	if job.Steps[0].Component.Container.MaxCPUCores != 0.0 {
-		reserved = float64(job.Steps[0].Component.Container.MaxCPUCores * 1000)
-	} else {
-		reserved = d.defaultNumber
+
+	for _, step := range job.Steps {
+		if step.Component.Container.MaxCPUCores != 0.0 {
+			reserved = reserved + float64(step.Component.Container.MaxCPUCores*1000)
+		} else {
+			reserved = reserved + d.defaultNumber
+		}
+
 	}
 	return reserved, nil
 }
