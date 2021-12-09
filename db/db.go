@@ -41,8 +41,7 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 	const stmt = `
 		UPDATE jobs 
 		SET millicores_reserved = $2
-		FROM ( SELECT job_id FROM job_steps WHERE external_id = $1 ) AS sub 
-		WHERE jobs.id = sub.job_id;
+		WHERE jobs.id = $1
 	`
 
 	const jobIDQuery = `
@@ -50,11 +49,17 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 		FROM job_steps
 		WHERE external_id = $1;
 	`
-
 	log.Debug("looking up job ID")
-	if err = d.db.QueryRowxContext(context, jobIDQuery, externalID).Scan(&jobID); err != nil {
-		log.Error(err)
-		return err
+	for i := 0; i < 30; i++ {
+		if err = d.db.QueryRowxContext(context, jobIDQuery, externalID).Scan(&jobID); err != nil {
+			if err == sql.ErrNoRows {
+				time.Sleep(2 * time.Second)
+				continue
+			} else {
+				log.Error(err)
+				return err
+			}
+		}
 	}
 	log.Debug("done looking up job ID")
 
@@ -63,9 +68,7 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 	converted := int64(millicoresReserved)
 	log.Debugf("converted millicores values %d", converted)
 
-	time.Sleep(30 * time.Second)
-
-	result, err := d.db.ExecContext(context, stmt, externalID, converted)
+	result, err := d.db.ExecContext(context, stmt, jobID, converted)
 	if err != nil {
 		log.Error(err)
 		return err
