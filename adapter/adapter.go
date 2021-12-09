@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -9,6 +10,7 @@ import (
 	"github.com/cyverse-de/jex-adapter/logging"
 	"github.com/cyverse-de/jex-adapter/millicores"
 	"github.com/cyverse-de/jex-adapter/types"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -85,11 +87,21 @@ func (a *AMQPMessenger) Launch(job *model.Job) error {
 	return nil
 }
 
+type millicoresJob struct {
+	ID                 uuid.UUID
+	Job                model.Job
+	MillicoresReserved float64
+}
+
 // JEXAdapter contains the application state for jex-adapter.
 type JEXAdapter struct {
 	cfg       *viper.Viper
 	detector  *millicores.Detector
 	messenger Messenger
+	jobs      map[string]bool
+	addJob    chan millicoresJob
+	jobDone   chan uuid.UUID
+	exit      chan bool
 }
 
 // New returns a *JEXAdapter
@@ -98,7 +110,53 @@ func New(cfg *viper.Viper, detector *millicores.Detector, messenger Messenger) *
 		cfg:       cfg,
 		messenger: messenger,
 		detector:  detector,
+		addJob:    make(chan millicoresJob),
+		jobDone:   make(chan uuid.UUID),
+		exit:      make(chan bool),
+		jobs:      map[string]bool{},
 	}
+}
+
+func (j *JEXAdapter) Run() {
+	for {
+		select {
+		case mj := <-j.addJob:
+			j.jobs[mj.ID.String()] = true
+			go func(mj millicoresJob) {
+				var err error
+
+				log.Debugf("storing %f millicores reserved for %s", mj.MillicoresReserved, mj.Job.InvocationID)
+				if err = j.detector.StoreMillicoresReserved(context.Background(), &mj.Job, mj.MillicoresReserved); err != nil {
+					log.Error(err)
+				}
+				log.Debugf("done storing %f millicores reserved for %s", mj.MillicoresReserved, mj.Job.InvocationID)
+
+				j.jobDone <- mj.ID
+			}(mj)
+
+		case doneJobID := <-j.jobDone:
+			delete(j.jobs, doneJobID.String())
+
+		case <-j.exit:
+			break
+		}
+	}
+}
+
+func (j *JEXAdapter) StoreMillicoresReserved(job model.Job, millicoresReserved float64) error {
+	newjob := millicoresJob{
+		ID:                 uuid.New(),
+		Job:                job,
+		MillicoresReserved: millicoresReserved,
+	}
+
+	j.addJob <- newjob
+
+	return nil
+}
+
+func (j *JEXAdapter) Finish() {
+	j.exit <- true
 }
 
 func (j *JEXAdapter) Routes(router types.Router) types.Router {
@@ -187,12 +245,12 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	}
 	log.Debug("done finding number of millicores reserved")
 
-	log.Debugf("storing %f millicores reserved for %s", millicoresReserved, job.InvocationID)
-	if err = j.detector.StoreMillicoresReserved(c.Request().Context(), job, millicoresReserved); err != nil {
+	log.Debug("before asynchronous StoreMillicoresReserved call")
+	if err = j.StoreMillicoresReserved(*job, millicoresReserved); err != nil {
 		log.Error(err)
 		return err
 	}
-	log.Debugf("done storing %f millicores reserved for %s", millicoresReserved, job.InvocationID)
+	log.Debug("after asynchronous StoreMillicoresReserved call")
 
 	log.Infof("launched with %f millicores reserved", millicoresReserved)
 
