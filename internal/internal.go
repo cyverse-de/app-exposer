@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -307,6 +308,8 @@ func getMillicoresFromDeployment(deployment *appsv1.Deployment) (float64, error)
 	var (
 		analysisContainer *apiv1.Container
 		millicores        float64
+		millicoresString  string
+		err               error
 	)
 	containers := deployment.Spec.Template.Spec.Containers
 
@@ -324,7 +327,12 @@ func getMillicoresFromDeployment(deployment *appsv1.Deployment) (float64, error)
 		return 0, errors.New("could not find the analysis container in the deployment")
 	}
 
-	millicores = analysisContainer.Resources.Limits[apiv1.ResourceCPU].ToUnstructured().(float64)
+	millicoresString = analysisContainer.Resources.Limits[apiv1.ResourceCPU].ToUnstructured().(string)
+
+	millicores, err = strconv.ParseFloat(millicoresString, 64)
+	if err != nil {
+		return 0, err
+	}
 
 	log.Debugf("%d millicores reservation found", millicores)
 
