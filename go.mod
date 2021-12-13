@@ -8,6 +8,7 @@ require (
 	github.com/cyverse-de/messaging v8.2.0+incompatible
 	github.com/cyverse-de/model v0.0.0-20210921001837-2d6c66c37bc8
 	github.com/google/go-cmp v0.5.6
+	github.com/google/uuid v1.3.0
 	github.com/gosimple/slug v1.10.0
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/labstack/echo/v4 v4.6.1

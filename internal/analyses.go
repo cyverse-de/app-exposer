@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/labstack/echo/v4"
 )
 
@@ -15,9 +14,7 @@ func (i *Internal) AsyncDataHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "external-id not set")
 	}
 
-	apps := apps.NewApps(i.db, i.UserSuffix)
-
-	analysisID, err := apps.GetAnalysisIDByExternalID(externalID)
+	analysisID, err := i.apps.GetAnalysisIDByExternalID(externalID)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -40,7 +37,7 @@ func (i *Internal) AsyncDataHandler(c echo.Context) error {
 	userID := labels["user-id"]
 
 	subdomain := IngressName(userID, externalID)
-	ipAddr, err := apps.GetUserIP(userID)
+	ipAddr, err := i.apps.GetUserIP(userID)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -57,8 +54,7 @@ func (i *Internal) AsyncDataHandler(c echo.Context) error {
 // only returns the first result, since VICE analyses only have a single step in
 // the database.
 func (i *Internal) getExternalIDByAnalysisID(analysisID string) (string, error) {
-	apps := apps.NewApps(i.db, i.UserSuffix)
-	username, _, err := apps.GetUserByAnalysisID(analysisID)
+	username, _, err := i.apps.GetUserByAnalysisID(analysisID)
 	if err != nil {
 		return "", err
 	}

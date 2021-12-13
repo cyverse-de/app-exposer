@@ -564,8 +564,7 @@ func (i *Internal) DescribeAnalysisHandler(c echo.Context) error {
 	// Since some usernames don't come through the labelling process unscathed, we have to use
 	// the user ID.
 	fixedUser := i.fixUsername(user)
-	a := apps.NewApps(i.db, i.UserSuffix)
-	_, err := a.GetUserID(fixedUser)
+	_, err := i.apps.GetUserID(fixedUser)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("user %s not found", fixedUser))
@@ -590,7 +589,7 @@ func (i *Internal) DescribeAnalysisHandler(c echo.Context) error {
 	// is set in the database.
 	if len(listing.Deployments) > 0 {
 		externalID := listing.Deployments[0].ExternalID
-		analysisID, err := a.GetAnalysisIDByExternalID(externalID)
+		analysisID, err := i.apps.GetAnalysisIDByExternalID(externalID)
 		if err != nil {
 			return err
 		}
@@ -624,8 +623,7 @@ func (i *Internal) FilterableResourcesHandler(c echo.Context) error {
 	// Since some usernames don't come through the labelling process unscathed, we have to use
 	// the user ID.
 	user = i.fixUsername(user)
-	a := apps.NewApps(i.db, i.UserSuffix)
-	userID, err := a.GetUserID(user)
+	userID, err := i.apps.GetUserID(user)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("user %s not found", user))
@@ -707,8 +705,6 @@ func (i *Internal) relabelDeployments() []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
 
-	a := apps.NewApps(i.db, i.UserSuffix)
-
 	deployments, err := i.deploymentList(i.ViceNamespace, filter, []string{"subdomain"})
 	if err != nil {
 		errors = append(errors, err)
@@ -720,12 +716,12 @@ func (i *Internal) relabelDeployments() []error {
 
 		existingLabels = populateSubdomain(existingLabels)
 
-		existingLabels, err = populateLoginIP(a, existingLabels)
+		existingLabels, err = populateLoginIP(i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
 
-		existingLabels, err = populateAnalysisID(a, existingLabels)
+		existingLabels, err = populateAnalysisID(i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -744,8 +740,6 @@ func (i *Internal) relabelConfigMaps() []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
 
-	a := apps.NewApps(i.db, i.UserSuffix)
-
 	cms, err := i.configmapsList(i.ViceNamespace, filter, []string{"subdomain"})
 	if err != nil {
 		errors = append(errors, err)
@@ -757,12 +751,12 @@ func (i *Internal) relabelConfigMaps() []error {
 
 		existingLabels = populateSubdomain(existingLabels)
 
-		existingLabels, err = populateLoginIP(a, existingLabels)
+		existingLabels, err = populateLoginIP(i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
 
-		existingLabels, err = populateAnalysisID(a, existingLabels)
+		existingLabels, err = populateAnalysisID(i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -781,8 +775,6 @@ func (i *Internal) relabelServices() []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
 
-	a := apps.NewApps(i.db, i.UserSuffix)
-
 	svcs, err := i.serviceList(i.ViceNamespace, filter, []string{"subdomain"})
 	if err != nil {
 		errors = append(errors, err)
@@ -794,12 +786,12 @@ func (i *Internal) relabelServices() []error {
 
 		existingLabels = populateSubdomain(existingLabels)
 
-		existingLabels, err = populateLoginIP(a, existingLabels)
+		existingLabels, err = populateLoginIP(i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
 
-		existingLabels, err = populateAnalysisID(a, existingLabels)
+		existingLabels, err = populateAnalysisID(i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -818,8 +810,6 @@ func (i *Internal) relabelIngresses() []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
 
-	a := apps.NewApps(i.db, i.UserSuffix)
-
 	ingresses, err := i.ingressList(i.ViceNamespace, filter, []string{"subdomain"})
 	if err != nil {
 		errors = append(errors, err)
@@ -831,12 +821,12 @@ func (i *Internal) relabelIngresses() []error {
 
 		existingLabels = populateSubdomain(existingLabels)
 
-		existingLabels, err = populateLoginIP(a, existingLabels)
+		existingLabels, err = populateLoginIP(i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
 
-		existingLabels, err = populateAnalysisID(a, existingLabels)
+		existingLabels, err = populateAnalysisID(i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}

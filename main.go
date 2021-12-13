@@ -12,6 +12,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
+	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/configurate"
 	"github.com/pkg/errors"
@@ -216,7 +217,10 @@ func main() {
 		KeycloakClientSecret:          cfg.GetString("keycloak.client-secret"),
 	}
 
-	app := NewExposerApp(exposerInit, *ingressClass, clientset)
+	a := apps.NewApps(db, *userSuffix)
+	go a.Run()
+	defer a.Finish()
+	app := NewExposerApp(exposerInit, *ingressClass, clientset, a)
 	log.Printf("listening on port %d", *listenPort)
 	app.internal.MonitorVICEEvents()
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", strconv.Itoa(*listenPort)), app.router))

@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 
+	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/external"
 	"github.com/cyverse-de/app-exposer/instantlaunches"
@@ -57,7 +58,7 @@ type ExposerAppInit struct {
 }
 
 // NewExposerApp creates and returns a newly instantiated *ExposerApp.
-func NewExposerApp(init *ExposerAppInit, ingressClass string, cs kubernetes.Interface) *ExposerApp {
+func NewExposerApp(init *ExposerAppInit, ingressClass string, cs kubernetes.Interface, apps *apps.Apps) *ExposerApp {
 	internalInit := &internal.Init{
 		ViceNamespace:                 init.ViceNamespace,
 		PorklockImage:                 init.PorklockImage,
@@ -86,7 +87,7 @@ func NewExposerApp(init *ExposerAppInit, ingressClass string, cs kubernetes.Inte
 
 	app := &ExposerApp{
 		external:  external.New(cs, init.Namespace, ingressClass),
-		internal:  internal.New(internalInit, init.db, cs),
+		internal:  internal.New(internalInit, init.db, cs, apps),
 		namespace: init.Namespace,
 		clientset: cs,
 		router:    echo.New(),

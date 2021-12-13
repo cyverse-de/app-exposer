@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/cyverse-de/model"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
-	"github.com/cyverse-de/model"
 	v1 "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -61,7 +61,7 @@ func setupInternal(t *testing.T, objs []runtime.Object) (*Internal, sqlmock.Sqlm
 
 	client := fake.NewSimpleClientset(objs...)
 
-	internal := New(testConfig, sqlxMockDB, client)
+	internal := New(testConfig, sqlxMockDB, client, nil)
 	return internal, mock
 }
 

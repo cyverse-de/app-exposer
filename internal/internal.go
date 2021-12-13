@@ -98,10 +98,11 @@ type Internal struct {
 	clientset       kubernetes.Interface
 	db              *sqlx.DB
 	statusPublisher AnalysisStatusPublisher
+	apps            *apps.Apps
 }
 
 // New creates a new *Internal.
-func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface) *Internal {
+func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, apps *apps.Apps) *Internal {
 	return &Internal{
 		Init:      *init,
 		db:        db,
@@ -109,6 +110,7 @@ func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface) *Internal {
 		statusPublisher: &JSLPublisher{
 			statusURL: init.JobStatusURL,
 		},
+		apps: apps,
 	}
 }
 
@@ -123,8 +125,7 @@ func (i *Internal) labelsFromJob(job *model.Job) (map[string]string, error) {
 		stringmax = len(name) - 1
 	}
 
-	a := apps.NewApps(i.db, i.UserSuffix)
-	ipAddr, err := a.GetUserIP(job.UserID)
+	ipAddr, err := i.apps.GetUserIP(job.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -302,18 +303,6 @@ func (i *Internal) UpsertDeployment(deployment *appsv1.Deployment, job *model.Jo
 	return nil
 }
 
-func tryForAnalysisID(job *model.Job, maxAttempts int, apps *apps.Apps) (string, error) {
-	for i := 0; i < maxAttempts; i++ {
-		analysisID, err := apps.GetAnalysisIDByExternalID(job.InvocationID)
-		if err != nil {
-			time.Sleep(1 * time.Second)
-		} else {
-			return analysisID, nil
-		}
-	}
-	return "", fmt.Errorf("failed to find analysis ID after %d attempts", maxAttempts)
-}
-
 func getMillicoresFromDeployment(deployment *appsv1.Deployment) (float64, error) {
 	var (
 		analysisContainer *apiv1.Container
@@ -352,7 +341,6 @@ func (i *Internal) LaunchAppHandler(c echo.Context) error {
 	)
 
 	job = &model.Job{}
-	apps := apps.NewApps(i.db, i.UserSuffix)
 
 	if err = c.Bind(job); err != nil {
 		return err
@@ -380,17 +368,12 @@ func (i *Internal) LaunchAppHandler(c echo.Context) error {
 		return err
 	}
 
-	analysisID, err := tryForAnalysisID(job, 15, apps)
-	if err != nil {
-		return err
-	}
-
 	millicores, err := getMillicoresFromDeployment(deployment)
 	if err != nil {
 		return err
 	}
 
-	if err = apps.SetMillicoresReserved(analysisID, millicores); err != nil {
+	if err = i.apps.SetMillicoresReserved(job, millicores); err != nil {
 		return err
 	}
 
@@ -608,8 +591,7 @@ func (i *Internal) URLReadyHandler(c echo.Context) error {
 	// Since some usernames don't come through the labelling process unscathed, we have to use
 	// the user ID.
 	fixedUser := i.fixUsername(user)
-	a := apps.NewApps(i.db, i.UserSuffix)
-	_, err := a.GetUserID(fixedUser)
+	_, err := i.apps.GetUserID(fixedUser)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("user %s not found", fixedUser))
@@ -666,7 +648,7 @@ func (i *Internal) URLReadyHandler(c echo.Context) error {
 		"ready": ingressExists && serviceExists && podReady,
 	}
 
-	analysisID, err := a.GetAnalysisIDByExternalID(id)
+	analysisID, err := i.apps.GetAnalysisIDByExternalID(id)
 	if err != nil {
 		return err
 	}
@@ -896,9 +878,7 @@ func (i *Internal) AdminTimeLimitUpdateHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}
 
-	apps := apps.NewApps(i.db, i.UserSuffix)
-
-	user, _, err = apps.GetUserByAnalysisID(id)
+	user, _, err = i.apps.GetUserByAnalysisID(id)
 	if err != nil {
 		return err
 	}
@@ -934,10 +914,8 @@ func (i *Internal) GetTimeLimitHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}
 
-	apps := apps.NewApps(i.db, i.UserSuffix)
-
 	// Could use this to get the username, but we need to not break other services.
-	_, userID, err = apps.GetUserByAnalysisID(analysisID)
+	_, userID, err = i.apps.GetUserByAnalysisID(analysisID)
 	if err != nil {
 		return err
 	}
@@ -967,10 +945,8 @@ func (i *Internal) AdminGetTimeLimitHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}
 
-	apps := apps.NewApps(i.db, i.UserSuffix)
-
 	// Could use this to get the username, but we need to not break other services.
-	_, userID, err = apps.GetUserByAnalysisID(analysisID)
+	_, userID, err = i.apps.GetUserByAnalysisID(analysisID)
 	if err != nil {
 		return err
 	}

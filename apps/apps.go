@@ -2,15 +2,33 @@ package apps
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
+	"time"
 
+	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/model"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/sirupsen/logrus"
 )
+
+var log = common.Log.WithFields(logrus.Fields{"package": "apps"})
+
+type millicoresJob struct {
+	ID                 uuid.UUID
+	Job                model.Job
+	MillicoresReserved float64
+}
 
 // Apps provides an API for accessing information about apps.
 type Apps struct {
 	DB         *sqlx.DB
 	UserSuffix string
+	addJob     chan millicoresJob
+	jobDone    chan uuid.UUID
+	exit       chan bool
+	jobs       map[string]bool
 }
 
 // NewApps allocates a new *Apps instance.
@@ -18,7 +36,41 @@ func NewApps(db *sqlx.DB, userSuffix string) *Apps {
 	return &Apps{
 		DB:         db,
 		UserSuffix: userSuffix,
+		addJob:     make(chan millicoresJob),
+		jobDone:    make(chan uuid.UUID),
+		exit:       make(chan bool),
+		jobs:       map[string]bool{},
 	}
+}
+
+func (a *Apps) Run() {
+	for {
+		select {
+		case mj := <-a.addJob:
+			a.jobs[mj.ID.String()] = true
+			go func(mj millicoresJob) {
+				var err error
+
+				log.Debugf("storing %f millicores reserved for %s", mj.MillicoresReserved, mj.Job.InvocationID)
+				if err = a.storeMillicoresInternal(&mj.Job, mj.MillicoresReserved); err != nil {
+					log.Error(err)
+				}
+				log.Debugf("done storing %f millicores reserved for %s", mj.MillicoresReserved, mj.Job.InvocationID)
+
+				a.jobDone <- mj.ID
+			}(mj)
+
+		case doneJobID := <-a.jobDone:
+			delete(a.jobs, doneJobID.String())
+
+		case <-a.exit:
+			break
+		}
+	}
+}
+
+func (a *Apps) Finish() {
+	a.exit <- true
 }
 
 const analysisIDByExternalIDQuery = `
@@ -140,7 +192,44 @@ const setMillicoresStmt = `
 	WHERE id = $1;
 `
 
-func (a *Apps) SetMillicoresReserved(analysisID string, millicores float64) error {
+func (a *Apps) setMillicoresReserved(analysisID string, millicores float64) error {
 	_, err := a.DB.Exec(setMillicoresStmt, analysisID, millicores)
 	return err
+}
+
+func (a *Apps) tryForAnalysisID(job *model.Job, maxAttempts int) (string, error) {
+	for i := 0; i < maxAttempts; i++ {
+		analysisID, err := a.GetAnalysisIDByExternalID(job.InvocationID)
+		if err != nil {
+			time.Sleep(1 * time.Second)
+		} else {
+			return analysisID, nil
+		}
+	}
+	return "", fmt.Errorf("failed to find analysis ID after %d attempts", maxAttempts)
+}
+
+func (a *Apps) storeMillicoresInternal(job *model.Job, millicores float64) error {
+	analysisID, err := a.tryForAnalysisID(job, 30)
+	if err != nil {
+		return err
+	}
+
+	if err = a.setMillicoresReserved(analysisID, millicores); err != nil {
+		return err
+	}
+
+	return err
+}
+
+func (a *Apps) SetMillicoresReserved(job *model.Job, millicores float64) error {
+	newjob := millicoresJob{
+		ID:                 uuid.New(),
+		Job:                *job,
+		MillicoresReserved: millicores,
+	}
+
+	a.addJob <- newjob
+
+	return nil
 }

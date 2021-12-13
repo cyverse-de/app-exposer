@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/model"
 	"github.com/pkg/errors"
@@ -53,7 +52,6 @@ func (i *Internal) countJobsForUser(username string) (int, error) {
 	}
 
 	countedDeployments := []v1.Deployment{}
-	a := apps.NewApps(i.db, i.UserSuffix)
 
 	for _, deployment := range deplist.Items {
 		var (
@@ -69,7 +67,7 @@ func (i *Internal) countJobsForUser(username string) (int, error) {
 			continue
 		}
 
-		if analysisID, err = a.GetAnalysisIDByExternalID(externalID); err != nil {
+		if analysisID, err = i.apps.GetAnalysisIDByExternalID(externalID); err != nil {
 			// If we failed to get it from the database, count it because it
 			// shouldn't be running.
 			log.Error(err)
@@ -77,7 +75,7 @@ func (i *Internal) countJobsForUser(username string) (int, error) {
 			continue
 		}
 
-		analysisStatus, err = a.GetAnalysisStatus(analysisID)
+		analysisStatus, err = i.apps.GetAnalysisStatus(analysisID)
 		if err != nil {
 			// If we failed to get the status, then something is horribly wrong.
 			// Count the analysis.

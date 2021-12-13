@@ -23,7 +23,7 @@ func TestNewExposerApp(t *testing.T) {
 		ViceNamespace: "",
 	}
 
-	testapp := NewExposerApp(testinit, "linkerd", testcs)
+	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
 
 	if testapp.namespace != expectedNS {
 		t.Errorf("namespace was %s, not %s", testapp.namespace, expectedNS)
@@ -55,7 +55,7 @@ func TestCreateService(t *testing.T) {
 		ViceNamespace: "",
 	}
 
-	testapp := NewExposerApp(testinit, "linkerd", testcs)
+	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
 
 	expectedOpts := &external.ServiceOptions{
 		TargetPort: 60000,
@@ -114,7 +114,7 @@ func createAppLoadService(ns, name string) (*ExposerApp, error) {
 		ViceNamespace: "",
 	}
 
-	testapp := NewExposerApp(testinit, "linkerd", testcs)
+	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
 
 	createOpts := &external.ServiceOptions{
 		TargetPort: 40000,
@@ -292,7 +292,7 @@ func TestCreateEndpoint(t *testing.T) {
 		ViceNamespace: "",
 	}
 
-	testapp := NewExposerApp(testinit, "linkerd", testcs)
+	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
 
 	expectedOpts := &external.EndpointOptions{
 		IP:   expectedIP,
@@ -345,7 +345,7 @@ func createAppLoadEndpoint(ns, name string) (*ExposerApp, error) {
 		Namespace:     ns,
 		ViceNamespace: "",
 	}
-	testapp := NewExposerApp(testinit, "linkerd", testcs)
+	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
 
 	createOpts := &external.EndpointOptions{
 		IP:   "1.1.1.1",
@@ -516,7 +516,7 @@ func TestCreateIngress(t *testing.T) {
 		ViceNamespace: "",
 	}
 
-	testapp := NewExposerApp(testinit, "linkerd", testcs)
+	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
 
 	expectedOpts := &external.IngressOptions{
 		Service: expectedService,
@@ -569,7 +569,7 @@ func createAppLoadIngress(ns, name string) (*ExposerApp, error) {
 		Namespace:     ns,
 		ViceNamespace: "",
 	}
-	testapp := NewExposerApp(testinit, "linkerd", testcs)
+	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
 
 	createOpts := &external.IngressOptions{
 		Service: "test-service",
