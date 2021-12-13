@@ -18,6 +18,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cyverse-de/model"
+	appsv1 "k8s.io/api/apps/v1"
+	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
@@ -201,12 +203,8 @@ func (i *Internal) UpsertInputPathListConfigMap(job *model.Job) error {
 // UpsertDeployment uses the Job passed in to assemble a Deployment for the
 // VICE analysis. If then uses the k8s API to create the Deployment if it does
 // not already exist or to update it if it does.
-func (i *Internal) UpsertDeployment(job *model.Job) error {
-	deployment, err := i.getDeployment(job)
-	if err != nil {
-		return err
-	}
-
+func (i *Internal) UpsertDeployment(deployment *appsv1.Deployment, job *model.Job) error {
+	var err error
 	ctx := context.TODO()
 	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
 
@@ -304,6 +302,46 @@ func (i *Internal) UpsertDeployment(job *model.Job) error {
 	return nil
 }
 
+func tryForAnalysisID(job *model.Job, maxAttempts int, apps *apps.Apps) (string, error) {
+	for i := 0; i < maxAttempts; i++ {
+		analysisID, err := apps.GetAnalysisIDByExternalID(job.InvocationID)
+		if err != nil {
+			time.Sleep(1 * time.Second)
+		} else {
+			return analysisID, nil
+		}
+	}
+	return "", fmt.Errorf("failed to find analysis ID after %d attempts", maxAttempts)
+}
+
+func getMillicoresFromDeployment(deployment *appsv1.Deployment) (float64, error) {
+	var (
+		analysisContainer *apiv1.Container
+		millicores        float64
+	)
+	containers := deployment.Spec.Template.Spec.Containers
+
+	found := false
+
+	for _, container := range containers {
+		if container.Name == analysisContainerName {
+			analysisContainer = &container
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return 0, errors.New("could not find the analysis container in the deployment")
+	}
+
+	millicores = analysisContainer.Resources.Limits[apiv1.ResourceCPU].ToUnstructured().(float64)
+
+	log.Debugf("%d millicores reservation found", millicores)
+
+	return millicores, nil
+}
+
 // LaunchAppHandler is the HTTP handler that orchestrates the launching of a VICE analysis inside
 // the k8s cluster. This get passed to the router to be associated with a route. The Job
 // is passed in as the body of the request.
@@ -314,6 +352,7 @@ func (i *Internal) LaunchAppHandler(c echo.Context) error {
 	)
 
 	job = &model.Job{}
+	apps := apps.NewApps(i.db, i.UserSuffix)
 
 	if err = c.Bind(job); err != nil {
 		return err
@@ -336,8 +375,27 @@ func (i *Internal) LaunchAppHandler(c echo.Context) error {
 		return err
 	}
 
+	deployment, err := i.getDeployment(job)
+	if err != nil {
+		return err
+	}
+
+	analysisID, err := tryForAnalysisID(job, 15, apps)
+	if err != nil {
+		return err
+	}
+
+	millicores, err := getMillicoresFromDeployment(deployment)
+	if err != nil {
+		return err
+	}
+
+	if err = apps.SetMillicoresReserved(analysisID, millicores); err != nil {
+		return err
+	}
+
 	// Create the deployment for the job.
-	if err = i.UpsertDeployment(job); err != nil {
+	if err = i.UpsertDeployment(deployment, job); err != nil {
 		return err
 	}
 

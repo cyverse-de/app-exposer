@@ -186,7 +186,7 @@ func (i *Internal) getPersistentVolumes(job *model.Job) ([]*apiv1.PersistentVolu
 		ioPathMappings = append(ioPathMappings, outputPathMapping)
 
 		// convert pathMappings into json
-		ioPathMappingsJsonBytes, err := json.Marshal(ioPathMappings)
+		ioPathMappingsJSONBytes, err := json.Marshal(ioPathMappings)
 		if err != nil {
 			return nil, err
 		}
@@ -202,7 +202,7 @@ func (i *Internal) getPersistentVolumes(job *model.Job) ([]*apiv1.PersistentVolu
 		sharedPathMapping := i.getSharedPathMapping(job)
 		homePathMappings = append(homePathMappings, sharedPathMapping)
 
-		homePathMappingsJsonBytes, err := json.Marshal(homePathMappings)
+		homePathMappingsJSONBytes, err := json.Marshal(homePathMappings)
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +236,7 @@ func (i *Internal) getPersistentVolumes(job *model.Job) ([]*apiv1.PersistentVolu
 						VolumeHandle: i.getCSIInputOutputVolumeHandle(job),
 						VolumeAttributes: map[string]string{
 							"client":            "irodsfuse",
-							"path_mapping_json": string(ioPathMappingsJsonBytes),
+							"path_mapping_json": string(ioPathMappingsJSONBytes),
 							// use proxy access
 							"clientUser": job.Submitter,
 							"uid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
@@ -276,7 +276,7 @@ func (i *Internal) getPersistentVolumes(job *model.Job) ([]*apiv1.PersistentVolu
 							VolumeHandle: i.getCSIHomeVolumeHandle(job),
 							VolumeAttributes: map[string]string{
 								"client":            "irodsfuse",
-								"path_mapping_json": string(homePathMappingsJsonBytes),
+								"path_mapping_json": string(homePathMappingsJSONBytes),
 								// use proxy access
 								"clientUser": job.Submitter,
 								"uid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
