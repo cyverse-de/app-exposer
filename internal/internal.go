@@ -334,7 +334,9 @@ func getMillicoresFromDeployment(deployment *appsv1.Deployment) (float64, error)
 		return 0, err
 	}
 
-	log.Debugf("%d millicores reservation found", millicores)
+	millicores = millicores * 1000 // We specify cores/cpus in the submissions, so multiply by 1000 for millicores.
+
+	log.Debugf("%f millicores reservation found", millicores)
 
 	return millicores, nil
 }
