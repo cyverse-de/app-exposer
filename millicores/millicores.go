@@ -3,39 +3,58 @@ package millicores
 import (
 	"context"
 
+	"github.com/cockroachdb/apd"
 	"github.com/cyverse-de/jex-adapter/db"
 	"gopkg.in/cyverse-de/model.v4"
 )
 
 type Detector struct {
-	defaultNumber float64
+	defaultNumber *apd.Decimal
 	db            *db.Database
 }
 
-func New(db *db.Database, defaultNumber float64) *Detector {
-	return &Detector{
-		defaultNumber: defaultNumber,
-		db:            db,
+func New(db *db.Database, defaultNumber float64) (*Detector, error) {
+	var defNum *apd.Decimal
+	var err error
+
+	defNum, err = apd.New(0, 0).SetFloat64(defaultNumber)
+	if err != nil {
+		return nil, err
 	}
+	return &Detector{
+		defaultNumber: defNum,
+		db:            db,
+	}, nil
 }
 
 // NumberReserved scans the job to figure out the number of millicores reserved,
 // and if it's not found there it uses the defaults.
-func (d *Detector) NumberReserved(job *model.Job) (float64, error) {
-	var reserved float64
+func (d *Detector) NumberReserved(job *model.Job) (*apd.Decimal, error) {
+	var reserved *apd.Decimal
+	var err error
 
 	for _, step := range job.Steps {
 		if step.Component.Container.MaxCPUCores != 0.0 {
-			reserved = reserved + float64(step.Component.Container.MaxCPUCores*1000)
+			reserved, err = apd.New(0, 0).SetFloat64((float64(step.Component.Container.MaxCPUCores)))
+			if err != nil {
+				return nil, err
+			}
+			millisPerCPU := apd.New(1000, 0)
+			_, err = apd.BaseContext.WithPrecision(15).Mul(reserved, reserved, millisPerCPU)
+			if err != nil {
+				return nil, err
+			}
 		} else {
-			reserved = reserved + d.defaultNumber
+			_, err = apd.BaseContext.WithPrecision(15).Add(reserved, reserved, d.defaultNumber)
+			if err != nil {
+				return nil, err
+			}
 		}
-
 	}
 	return reserved, nil
 }
 
-func (d *Detector) StoreMillicoresReserved(context context.Context, job *model.Job, millicoresReserved float64) error {
+func (d *Detector) StoreMillicoresReserved(context context.Context, job *model.Job, millicoresReserved *apd.Decimal) error {
 	externalID := job.InvocationID
 	err := d.db.SetMillicoresReserved(context, externalID, millicoresReserved)
 	return err
