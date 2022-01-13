@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/cockroachdb/apd"
 	"github.com/cyverse-de/jex-adapter/logging"
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
@@ -30,13 +31,13 @@ func New(db DatabaseAccessor) *Database {
 	}
 }
 
-func (d *Database) SetMillicoresReserved(context context.Context, externalID string, millicoresReserved float64) error {
+func (d *Database) SetMillicoresReserved(context context.Context, externalID string, millicoresReserved *apd.Decimal) error {
 	var (
 		err   error
 		jobID string
 	)
 
-	log = log.WithFields(logrus.Fields{"context": "set millicores reserved", "externalID": externalID, "millicoresReserved": millicoresReserved})
+	log = log.WithFields(logrus.Fields{"context": "set millicores reserved", "externalID": externalID, "millicoresReserved": millicoresReserved.String()})
 
 	const stmt = `
 		UPDATE jobs 
@@ -65,7 +66,10 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 
 	log.Infof("job ID is %s", jobID)
 
-	converted := int64(millicoresReserved)
+	converted, err := millicoresReserved.Int64()
+	if err != nil {
+		return err
+	}
 	log.Debugf("converted millicores values %d", converted)
 
 	result, err := d.db.ExecContext(context, stmt, jobID, converted)
