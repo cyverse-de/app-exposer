@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/cockroachdb/apd"
 	"github.com/cyverse-de/jex-adapter/logging"
 	"github.com/cyverse-de/jex-adapter/millicores"
 	"github.com/cyverse-de/jex-adapter/types"
@@ -90,7 +91,7 @@ func (a *AMQPMessenger) Launch(job *model.Job) error {
 type millicoresJob struct {
 	ID                 uuid.UUID
 	Job                model.Job
-	MillicoresReserved float64
+	MillicoresReserved *apd.Decimal
 }
 
 // JEXAdapter contains the application state for jex-adapter.
@@ -143,7 +144,7 @@ func (j *JEXAdapter) Run() {
 	}
 }
 
-func (j *JEXAdapter) StoreMillicoresReserved(job model.Job, millicoresReserved float64) error {
+func (j *JEXAdapter) StoreMillicoresReserved(job model.Job, millicoresReserved *apd.Decimal) error {
 	newjob := millicoresJob{
 		ID:                 uuid.New(),
 		Job:                job,

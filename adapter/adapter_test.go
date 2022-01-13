@@ -51,7 +51,10 @@ func initTestAdapter(t *testing.T) (*JEXAdapter, sqlmock.Sqlmock) {
 		}
 		dbconn := sqlx.NewDb(mockconn, "postgres")
 		dbase := db.New(dbconn)
-		detector := millicores.New(dbase, 4000.0)
+		detector, err := millicores.New(dbase, 4000.0)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
 		a = New(cfg, detector, msger)
 	}
 	return a, mock
