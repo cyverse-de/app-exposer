@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/apd"
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/permissions"
@@ -304,10 +304,10 @@ func (i *Internal) UpsertDeployment(deployment *appsv1.Deployment, job *model.Jo
 	return nil
 }
 
-func getMillicoresFromDeployment(deployment *appsv1.Deployment) (float64, error) {
+func getMillicoresFromDeployment(deployment *appsv1.Deployment) (*apd.Decimal, error) {
 	var (
 		analysisContainer *apiv1.Container
-		millicores        float64
+		millicores        *apd.Decimal
 		millicoresString  string
 		err               error
 	)
@@ -324,19 +324,24 @@ func getMillicoresFromDeployment(deployment *appsv1.Deployment) (float64, error)
 	}
 
 	if !found {
-		return 0, errors.New("could not find the analysis container in the deployment")
+		return nil, errors.New("could not find the analysis container in the deployment")
 	}
 
 	millicoresString = analysisContainer.Resources.Limits[apiv1.ResourceCPU].ToUnstructured().(string)
 
-	millicores, err = strconv.ParseFloat(millicoresString, 64)
+	millicores, _, err = apd.NewFromString(millicoresString)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	millicores = millicores * 1000 // We specify cores/cpus in the submissions, so multiply by 1000 for millicores.
+	millicoresPerCPU := apd.New(1000, 0)
 
-	log.Debugf("%f millicores reservation found", millicores)
+	_, err = apd.BaseContext.Mul(millicores, millicores, millicoresPerCPU)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debugf("%s millicores reservation found", millicores.String())
 
 	return millicores, nil
 }
