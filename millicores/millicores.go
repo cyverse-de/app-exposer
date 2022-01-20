@@ -34,13 +34,14 @@ func New(db *db.Database, defaultNumber float64) (*Detector, error) {
 // NumberReserved scans the job to figure out the number of millicores reserved,
 // and if it's not found there it uses the defaults.
 func (d *Detector) NumberReserved(job *model.Job) (*apd.Decimal, error) {
-	var reserved *apd.Decimal
 	var err error
+
+	reserved := apd.New(0, 0)
 	log := log.WithFields(logrus.Fields{"context": "number reserved"})
 
 	for _, step := range job.Steps {
 		if step.Component.Container.MaxCPUCores != 0.0 {
-			reserved, err = apd.New(0, 0).SetFloat64((float64(step.Component.Container.MaxCPUCores)))
+			reserved, err = reserved.SetFloat64((float64(step.Component.Container.MaxCPUCores)))
 			if err != nil {
 				return nil, err
 			}
