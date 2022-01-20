@@ -5,8 +5,12 @@ import (
 
 	"github.com/cockroachdb/apd"
 	"github.com/cyverse-de/jex-adapter/db"
+	"github.com/cyverse-de/jex-adapter/logging"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/cyverse-de/model.v4"
 )
+
+var log = logging.Log.WithFields(logrus.Fields{"package": "millicores"})
 
 type Detector struct {
 	defaultNumber *apd.Decimal
@@ -32,6 +36,7 @@ func New(db *db.Database, defaultNumber float64) (*Detector, error) {
 func (d *Detector) NumberReserved(job *model.Job) (*apd.Decimal, error) {
 	var reserved *apd.Decimal
 	var err error
+	log := log.WithFields(logrus.Fields{"context": "number reserved"})
 
 	for _, step := range job.Steps {
 		if step.Component.Container.MaxCPUCores != 0.0 {
@@ -45,6 +50,7 @@ func (d *Detector) NumberReserved(job *model.Job) (*apd.Decimal, error) {
 				return nil, err
 			}
 		} else {
+			log.Debugf("reserved %s, default %s", reserved.String(), d.defaultNumber.String())
 			_, err = apd.BaseContext.WithPrecision(15).Add(reserved, reserved, d.defaultNumber)
 			if err != nil {
 				return nil, err
