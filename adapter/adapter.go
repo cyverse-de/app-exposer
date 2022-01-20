@@ -126,11 +126,11 @@ func (j *JEXAdapter) Run() {
 			go func(mj millicoresJob) {
 				var err error
 
-				log.Debugf("storing %f millicores reserved for %s", mj.MillicoresReserved, mj.Job.InvocationID)
+				log.Infof("storing %s millicores reserved for %s", mj.MillicoresReserved.String(), mj.Job.InvocationID)
 				if err = j.detector.StoreMillicoresReserved(context.Background(), &mj.Job, mj.MillicoresReserved); err != nil {
 					log.Error(err)
 				}
-				log.Debugf("done storing %f millicores reserved for %s", mj.MillicoresReserved, mj.Job.InvocationID)
+				log.Infof("done storing %s millicores reserved for %s", mj.MillicoresReserved.String(), mj.Job.InvocationID)
 
 				j.jobDone <- mj.ID
 			}(mj)
