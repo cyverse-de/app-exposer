@@ -56,6 +56,8 @@ spec:
           - "$(APP_EXPOSER_NAMESPACE)"
           - --user-suffix
           - "@$(USER_SUFFIX)"
+          - --log-level
+          - debug
         env:
           - name: APP_EXPOSER_NAMESPACE
             valueFrom:
