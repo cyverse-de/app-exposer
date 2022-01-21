@@ -16,7 +16,7 @@ var (
 	defaultStorageCapacity, _ = resourcev1.ParseQuantity("5Gi")
 )
 
-// PathMapping ...
+// IRODSFSPathMapping defines a single path mapping that can be used by the iRODS CSI driver to create a mount point.
 type IRODSFSPathMapping struct {
 	IRODSPath      string `yaml:"irods_path" json:"irods_path"`
 	MappingPath    string `yaml:"mapping_path" json:"mapping_path"`

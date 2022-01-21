@@ -175,6 +175,7 @@ FROM instant_launches il
 	JOIN users ilu ON il.added_by = ilu.id
 `
 
+// FullListInstantLaunches returns a full listing of instant launches.
 func (a *App) FullListInstantLaunches() ([]FullInstantLaunch, error) {
 	all := []FullInstantLaunch{}
 	err := a.DB.Select(&all, fullListInstantLaunchesQuery)
@@ -452,6 +453,9 @@ const listPublicQLsQuery = `
 	WHERE u.username = $1 OR ( ql.is_public = true AND a.is_public = true)
 `
 
+// ListViablePublicQuickLaunches returns a listing of quick launches that the user is permitted to run. This list
+// includes quick launches that were created by the authenticated user and public quick launches for which the
+// corresponding app is also public.
 func (a *App) ListViablePublicQuickLaunches(user string) ([]QuickLaunch, error) {
 	l := []QuickLaunch{}
 	err := a.DB.Select(&l, listPublicQLsQuery, user)

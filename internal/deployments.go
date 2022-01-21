@@ -303,7 +303,7 @@ func (i *Internal) workingDirPrepContainer(job *model.Job) (apiv1.Container, err
 
 	// Build the init container spec.
 	initContainer := apiv1.Container{
-		Name:            fileTransfersInitContainerName,
+		Name:            workingDirInitContainerName,
 		Image:           fmt.Sprintf("%s:%s", i.PorklockImage, i.PorklockTag),
 		Command:         workingDirInitCommand,
 		ImagePullPolicy: apiv1.PullPolicy(apiv1.PullAlways),
