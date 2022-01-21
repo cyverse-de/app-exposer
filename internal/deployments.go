@@ -283,13 +283,7 @@ func (i *Internal) inputStagingContainer(job *model.Job) apiv1.Container {
 // It may seem odd to use the file transfer image to initialize the working directory when no files are actually
 // being transferred, but it works. We use it for a couple of different reasons. First, we need a Unix shell and
 // it has one. Second, it's already set up so that we can configure it in a way that avoids image pull rate limits.
-func (i *Internal) workingDirPrepContainer(job *model.Job) (apiv1.Container, error) {
-
-	// Determine the iRODS zone name.
-	zone, err := i.getIRODSZone(job.UserHome)
-	if err != nil {
-		return apiv1.Container{}, err
-	}
+func (i *Internal) workingDirPrepContainer(job *model.Job) apiv1.Container {
 
 	// Build the command used to initialize the working directory.
 	workingDirInitCommand := []string{
@@ -297,7 +291,7 @@ func (i *Internal) workingDirPrepContainer(job *model.Job) (apiv1.Container, err
 		"-c",
 		strings.Join([]string{
 			fmt.Sprintf("ln -s \"%s\" .", csiDriverLocalMountPath),
-			fmt.Sprintf("ln -s \"/%s/home\" .", zone),
+			fmt.Sprintf("ln -s \"/%s/home\" .", i.IRODSZone),
 		}, " && "),
 	}
 
@@ -336,7 +330,7 @@ func (i *Internal) workingDirPrepContainer(job *model.Job) (apiv1.Container, err
 		},
 	}
 
-	return initContainer, nil
+	return initContainer
 }
 
 // workingDirMountPath returns the path to the directory containing file inputs.
@@ -346,20 +340,16 @@ func workingDirMountPath(job *model.Job) string {
 
 // initContainers returns a []apiv1.Container used for the InitContainers in
 // the VICE app Deployment resource.
-func (i *Internal) initContainers(job *model.Job) ([]apiv1.Container, error) {
+func (i *Internal) initContainers(job *model.Job) []apiv1.Container {
 	output := []apiv1.Container{}
 
 	if !i.UseCSIDriver {
 		output = append(output, i.inputStagingContainer(job))
 	} else {
-		workingDirInitContainer, err := i.workingDirPrepContainer(job)
-		if err != nil {
-			return output, err
-		}
-		output = append(output, workingDirInitContainer)
+		output = append(output, i.workingDirPrepContainer(job))
 	}
 
-	return output, nil
+	return output
 }
 
 func gpuEnabled(job *model.Job) bool {
@@ -435,13 +425,9 @@ func (i *Internal) defineAnalysisContainer(job *model.Job) apiv1.Container {
 			MountPath: workingDirMountPath(job),
 			ReadOnly:  false,
 		})
-		persistentVolumeMounts, err := i.getPersistentVolumeMounts(job)
-		if err != nil {
-			log.Warn(err)
-		} else {
-			for _, persistentVolumeMount := range persistentVolumeMounts {
-				volumeMounts = append(volumeMounts, *persistentVolumeMount)
-			}
+		persistentVolumeMounts := i.getPersistentVolumeMounts(job)
+		for _, persistentVolumeMount := range persistentVolumeMounts {
+			volumeMounts = append(volumeMounts, *persistentVolumeMount)
 		}
 	} else {
 		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
@@ -676,12 +662,6 @@ func (i *Internal) getDeployment(job *model.Job) (*appsv1.Deployment, error) {
 		})
 	}
 
-	// Get the list of init containers.
-	initContainers, err := i.initContainers(job)
-	if err != nil {
-		return nil, err
-	}
-
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   job.InvocationID,
@@ -702,7 +682,7 @@ func (i *Internal) getDeployment(job *model.Job) (*appsv1.Deployment, error) {
 					Hostname:                     IngressName(job.UserID, job.InvocationID),
 					RestartPolicy:                apiv1.RestartPolicy("Always"),
 					Volumes:                      i.deploymentVolumes(job),
-					InitContainers:               initContainers,
+					InitContainers:               i.initContainers(job),
 					Containers:                   i.deploymentContainers(job),
 					ImagePullSecrets:             i.imagePullSecrets(job),
 					AutomountServiceAccountToken: &autoMount,

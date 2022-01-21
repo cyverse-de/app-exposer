@@ -90,6 +90,7 @@ type Init struct {
 	KeycloakRealm                 string
 	KeycloakClientID              string
 	KeycloakClientSecret          string
+	IRODSZone                     string
 }
 
 // Internal contains information and operations for launching VICE apps inside the

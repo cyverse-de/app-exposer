@@ -120,6 +120,12 @@ func main() {
 		log.Fatal(errors.Wrap(err, "Can't parse k8s.frontend.base in the config file"))
 	}
 
+	// Make sure that the iRODS zone isn't empty.
+	zone := cfg.GetString("irods.zone")
+	if zone == "" {
+		log.Fatal("The iRODS zone must be specified in the config file")
+	}
+
 	// Print error and exit if *kubeconfig is not empty and doesn't actually
 	// exist. If *kubeconfig is blank, then the app may be running inside the
 	// cluster, so let things proceed.
@@ -215,6 +221,7 @@ func main() {
 		KeycloakRealm:                 cfg.GetString("keycloak.realm"),
 		KeycloakClientID:              cfg.GetString("keycloak.client-id"),
 		KeycloakClientSecret:          cfg.GetString("keycloak.client-secret"),
+		IRODSZone:                     zone,
 	}
 
 	a := apps.NewApps(db, *userSuffix)
