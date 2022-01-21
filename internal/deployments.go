@@ -54,6 +54,14 @@ func (i *Internal) deploymentVolumes(job *model.Job) []apiv1.Volume {
 	}
 
 	if i.UseCSIDriver {
+		output = append(output,
+			apiv1.Volume{
+				Name: workingDirVolumeName,
+				VolumeSource: apiv1.VolumeSource{
+					EmptyDir: &apiv1.EmptyDirVolumeSource{},
+				},
+			},
+		)
 		volumeSources, err := i.getPersistentVolumeSources(job)
 		if err != nil {
 			log.Warn(err)
@@ -229,46 +237,116 @@ func storageRequest(job *model.Job) resourcev1.Quantity {
 	return value
 }
 
+// inputStagingContainer returns the init container to be used for staging input files. This init container
+// is only used when iRODS CSI driver integration is disabled.
+func (i *Internal) inputStagingContainer(job *model.Job) apiv1.Container {
+	return apiv1.Container{
+		Name:            fileTransfersInitContainerName,
+		Image:           fmt.Sprintf("%s:%s", i.PorklockImage, i.PorklockTag),
+		Command:         append(fileTransferCommand(job), "--no-service"),
+		ImagePullPolicy: apiv1.PullPolicy(apiv1.PullAlways),
+		WorkingDir:      inputPathListMountPath,
+		VolumeMounts:    i.fileTransfersVolumeMounts(job),
+		Ports: []apiv1.ContainerPort{
+			{
+				Name:          fileTransfersPortName,
+				ContainerPort: fileTransfersPort,
+				Protocol:      apiv1.Protocol("TCP"),
+			},
+		},
+		SecurityContext: &apiv1.SecurityContext{
+			RunAsUser:  int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+			RunAsGroup: int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+			Capabilities: &apiv1.Capabilities{
+				Drop: []apiv1.Capability{
+					"SETPCAP",
+					"AUDIT_WRITE",
+					"KILL",
+					"SETGID",
+					"SETUID",
+					"NET_BIND_SERVICE",
+					"SYS_CHROOT",
+					"SETFCAP",
+					"FSETID",
+					"NET_RAW",
+					"MKNOD",
+				},
+			},
+		},
+	}
+}
+
+// workingDirPrepContainer returns the init container to be used for preparing the working directory volume
+// for use within the VICE analysis. This init container is only used when iRODS CSI driver integration is
+// enabled.
+//
+// It may seem odd to use the file transfer image to initialize the working directory when no files are actually
+// being transferred, but it works. We use it for a couple of different reasons. First, we need a Unix shell and
+// it has one. Second, it's already set up so that we can configure it in a way that avoids image pull rate limits.
+func (i *Internal) workingDirPrepContainer(job *model.Job) apiv1.Container {
+
+	// Build the command used to initialize the working directory.
+	workingDirInitCommand := []string{
+		"bash",
+		"-c",
+		strings.Join([]string{
+			fmt.Sprintf("ln -s \"%s\" .", csiDriverLocalMountPath),
+			fmt.Sprintf("ln -s \"/%s/home\" .", i.IRODSZone),
+		}, " && "),
+	}
+
+	// Build the init container spec.
+	initContainer := apiv1.Container{
+		Name:            workingDirInitContainerName,
+		Image:           fmt.Sprintf("%s:%s", i.PorklockImage, i.PorklockTag),
+		Command:         workingDirInitCommand,
+		ImagePullPolicy: apiv1.PullPolicy(apiv1.PullAlways),
+		WorkingDir:      workingDirInitContainerMountPath,
+		VolumeMounts: []apiv1.VolumeMount{
+			{
+				Name:      workingDirVolumeName,
+				MountPath: workingDirInitContainerMountPath,
+				ReadOnly:  false,
+			},
+		},
+		SecurityContext: &apiv1.SecurityContext{
+			RunAsUser:  int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+			RunAsGroup: int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+			Capabilities: &apiv1.Capabilities{
+				Drop: []apiv1.Capability{
+					"SETPCAP",
+					"AUDIT_WRITE",
+					"KILL",
+					"SETGID",
+					"SETUID",
+					"NET_BIND_SERVICE",
+					"SYS_CHROOT",
+					"SETFCAP",
+					"FSETID",
+					"NET_RAW",
+					"MKNOD",
+				},
+			},
+		},
+	}
+
+	return initContainer
+}
+
+// workingDirMountPath returns the path to the directory containing file inputs.
+func workingDirMountPath(job *model.Job) string {
+	return job.Steps[0].Component.Container.WorkingDirectory()
+}
+
 // initContainers returns a []apiv1.Container used for the InitContainers in
 // the VICE app Deployment resource.
 func (i *Internal) initContainers(job *model.Job) []apiv1.Container {
 	output := []apiv1.Container{}
 
 	if !i.UseCSIDriver {
-		output = append(output, apiv1.Container{
-			Name:            fileTransfersInitContainerName,
-			Image:           fmt.Sprintf("%s:%s", i.PorklockImage, i.PorklockTag),
-			Command:         append(fileTransferCommand(job), "--no-service"),
-			ImagePullPolicy: apiv1.PullPolicy(apiv1.PullAlways),
-			WorkingDir:      inputPathListMountPath,
-			VolumeMounts:    i.fileTransfersVolumeMounts(job),
-			Ports: []apiv1.ContainerPort{
-				{
-					Name:          fileTransfersPortName,
-					ContainerPort: fileTransfersPort,
-					Protocol:      apiv1.Protocol("TCP"),
-				},
-			},
-			SecurityContext: &apiv1.SecurityContext{
-				RunAsUser:  int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-				RunAsGroup: int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-				Capabilities: &apiv1.Capabilities{
-					Drop: []apiv1.Capability{
-						"SETPCAP",
-						"AUDIT_WRITE",
-						"KILL",
-						"SETGID",
-						"SETUID",
-						"NET_BIND_SERVICE",
-						"SYS_CHROOT",
-						"SETFCAP",
-						"FSETID",
-						"NET_RAW",
-						"MKNOD",
-					},
-				},
-			},
-		})
+		output = append(output, i.inputStagingContainer(job))
+	} else {
+		output = append(output, i.workingDirPrepContainer(job))
 	}
 
 	return output
@@ -342,18 +420,19 @@ func (i *Internal) defineAnalysisContainer(job *model.Job) apiv1.Container {
 
 	volumeMounts := []apiv1.VolumeMount{}
 	if i.UseCSIDriver {
-		persistentVolumeMounts, err := i.getPersistentVolumeMounts(job)
-		if err != nil {
-			log.Warn(err)
-		} else {
-			for _, persistentVolumeMount := range persistentVolumeMounts {
-				volumeMounts = append(volumeMounts, *persistentVolumeMount)
-			}
+		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
+			Name:      workingDirVolumeName,
+			MountPath: workingDirMountPath(job),
+			ReadOnly:  false,
+		})
+		persistentVolumeMounts := i.getPersistentVolumeMounts(job)
+		for _, persistentVolumeMount := range persistentVolumeMounts {
+			volumeMounts = append(volumeMounts, *persistentVolumeMount)
 		}
 	} else {
 		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
 			Name:      fileTransfersVolumeName,
-			MountPath: fileTransfersMountPath(job),
+			MountPath: workingDirMountPath(job),
 			ReadOnly:  false,
 		})
 	}
@@ -544,6 +623,7 @@ func (i *Internal) getDeployment(job *model.Job) (*appsv1.Deployment, error) {
 
 	autoMount := false
 
+	// Add the tolerations to use by default.
 	tolerations := []apiv1.Toleration{
 		{
 			Key:      viceTolerationKey,
@@ -553,6 +633,7 @@ func (i *Internal) getDeployment(job *model.Job) (*appsv1.Deployment, error) {
 		},
 	}
 
+	// Add the node selector requirements to use by default.
 	nodeSelectorRequirements := []apiv1.NodeSelectorRequirement{
 		{
 			Key:      viceAffinityKey,
@@ -563,6 +644,7 @@ func (i *Internal) getDeployment(job *model.Job) (*appsv1.Deployment, error) {
 		},
 	}
 
+	// Add the tolerations and node selector requirements for jobs that require a GPU.
 	if gpuEnabled(job) {
 		tolerations = append(tolerations, apiv1.Toleration{
 			Key:      gpuTolerationKey,

@@ -155,6 +155,7 @@ type UserInstantLaunchMapping struct {
 	Mapping InstantLaunchMapping `json:"mapping" db:"mapping"`
 }
 
+// QuickLaunch describes an app with a set of pre-filled parameter values.
 type QuickLaunch struct {
 	ID          string         `json:"id" db:"id"`
 	Creator     string         `json:"creator" db:"creator"`

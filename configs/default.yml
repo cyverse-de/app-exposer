@@ -11,6 +11,9 @@ interapps:
   proxy:
     tag: latest
 
+irods:
+  zone: iplant
+
 k8s:
   frontend:
     base: "https://cyverse.run"

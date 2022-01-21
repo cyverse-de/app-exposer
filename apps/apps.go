@@ -44,6 +44,7 @@ func NewApps(db *sqlx.DB, userSuffix string) *Apps {
 	}
 }
 
+// Run runs the goroutine for storing millicores reserved for new jobs.
 func (a *Apps) Run() {
 	for {
 		select {
@@ -70,6 +71,7 @@ func (a *Apps) Run() {
 	}
 }
 
+// Finish exits the goroutine for storing millicores reserved for new jobs.
 func (a *Apps) Finish() {
 	a.exit <- true
 }
@@ -227,6 +229,7 @@ func (a *Apps) storeMillicoresInternal(job *model.Job, millicores *apd.Decimal) 
 	return err
 }
 
+// SetMillicoresReserved updates the number of millicores reserved for a single job.
 func (a *Apps) SetMillicoresReserved(job *model.Job, millicores *apd.Decimal) error {
 	newjob := millicoresJob{
 		ID:                 uuid.New(),

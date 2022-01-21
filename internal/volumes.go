@@ -16,7 +16,7 @@ var (
 	defaultStorageCapacity, _ = resourcev1.ParseQuantity("5Gi")
 )
 
-// PathMapping ...
+// IRODSFSPathMapping defines a single path mapping that can be used by the iRODS CSI driver to create a mount point.
 type IRODSFSPathMapping struct {
 	IRODSPath      string `yaml:"irods_path" json:"irods_path"`
 	MappingPath    string `yaml:"mapping_path" json:"mapping_path"`
@@ -111,12 +111,7 @@ func (i *Internal) getOutputPathMapping(job *model.Job) IRODSFSPathMapping {
 
 func (i *Internal) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
 	// mount a single collection for home
-	zone, err := i.getIRODSZone(job.UserHome)
-	if err != nil {
-		return IRODSFSPathMapping{}
-	}
-
-	userHome := strings.TrimPrefix(job.UserHome, fmt.Sprintf("/%s", zone))
+	userHome := strings.TrimPrefix(job.UserHome, fmt.Sprintf("/%s", i.IRODSZone))
 	userHome = strings.TrimSuffix(userHome, "/")
 
 	return IRODSFSPathMapping{
@@ -131,12 +126,7 @@ func (i *Internal) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
 
 func (i *Internal) getSharedPathMapping(job *model.Job) IRODSFSPathMapping {
 	// mount a single collection for shared data
-	zone, err := i.getIRODSZone(job.UserHome)
-	if err != nil {
-		return IRODSFSPathMapping{}
-	}
-
-	sharedHomeFullPath := fmt.Sprintf("/%s/home/shared", zone)
+	sharedHomeFullPath := fmt.Sprintf("/%s/home/shared", i.IRODSZone)
 	sharedHome := "/home/shared"
 
 	return IRODSFSPathMapping{
@@ -404,7 +394,7 @@ func (i *Internal) getPersistentVolumeSources(job *model.Job) ([]*apiv1.Volume, 
 
 // getPersistentVolumeMounts returns the volume mount for the VICE analysis. It does
 // not call the k8s API.
-func (i *Internal) getPersistentVolumeMounts(job *model.Job) ([]*apiv1.VolumeMount, error) {
+func (i *Internal) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMount {
 	if i.UseCSIDriver {
 		volumeMounts := []*apiv1.VolumeMount{}
 
@@ -415,37 +405,14 @@ func (i *Internal) getPersistentVolumeMounts(job *model.Job) ([]*apiv1.VolumeMou
 
 		volumeMounts = append(volumeMounts, ioVolumeMount)
 
-		if job.UserHome != "" {
-			zone, err := i.getIRODSZone(job.UserHome)
-			if err == nil {
-				homeVolumeMount := &apiv1.VolumeMount{
-					Name:      i.getCSIHomeVolumeClaimName(job),
-					MountPath: fmt.Sprintf("/%s", zone),
-				}
-
-				volumeMounts = append(volumeMounts, homeVolumeMount)
-			}
+		homeVolumeMount := &apiv1.VolumeMount{
+			Name:      i.getCSIHomeVolumeClaimName(job),
+			MountPath: fmt.Sprintf("/%s", i.IRODSZone),
 		}
+		volumeMounts = append(volumeMounts, homeVolumeMount)
 
-		return volumeMounts, nil
+		return volumeMounts
 	}
 
-	return nil, nil
-}
-
-// getIRODSZone returns the zone of the iRODS path
-func (i *Internal) getIRODSZone(p string) (string, error) {
-	if len(p) < 1 {
-		return "", fmt.Errorf("failed to extract Zone from path - %s", p)
-	}
-
-	if p[0] != '/' {
-		return "", fmt.Errorf("failed to extract Zone from path - %s", p)
-	}
-
-	parts := strings.Split(p[1:], "/")
-	if len(parts) >= 1 {
-		return parts[0], nil
-	}
-	return "", fmt.Errorf("failed to extract Zone from path - %s", p)
+	return nil
 }

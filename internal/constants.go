@@ -17,10 +17,16 @@ const (
 	csiDriverOutputVolumeMountPath            = "/output"
 	csiDriverLocalMountPath                   = "/data"
 
+	// The file transfers volume serves as the working directory when IRODS CSI Driver integration is disabled.
 	fileTransfersVolumeName        = "input-files"
 	fileTransfersContainerName     = "input-files"
 	fileTransfersInitContainerName = "input-files-init"
 	fileTransfersInputsMountPath   = "/input-files"
+
+	// The working directory volume serves as the working directory when IRODS CSI Driver integration is enabled.
+	workingDirVolumeName             = "working-dir"
+	workingDirInitContainerName      = "working-dir-init"
+	workingDirInitContainerMountPath = "/working-dir"
 
 	viceProxyContainerName = "vice-proxy"
 	viceProxyPort          = int32(60002)

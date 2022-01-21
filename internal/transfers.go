@@ -43,11 +43,6 @@ type transferResponse struct {
 	Kind   string `json:"kind"`
 }
 
-// fileTransferMountPath returns the path to the directory containing file inputs.
-func fileTransfersMountPath(job *model.Job) string {
-	return job.Steps[0].Component.Container.WorkingDirectory()
-}
-
 // fileTransferCommand returns a []string containing the command to fire up the vice-file-transfers service.
 func fileTransferCommand(job *model.Job) []string {
 	retval := []string{

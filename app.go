@@ -55,6 +55,7 @@ type ExposerAppInit struct {
 	KeycloakRealm                 string
 	KeycloakClientID              string
 	KeycloakClientSecret          string
+	IRODSZone                     string
 }
 
 // NewExposerApp creates and returns a newly instantiated *ExposerApp.
@@ -83,6 +84,7 @@ func NewExposerApp(init *ExposerAppInit, ingressClass string, cs kubernetes.Inte
 		KeycloakRealm:                 init.KeycloakRealm,
 		KeycloakClientID:              init.KeycloakClientID,
 		KeycloakClientSecret:          init.KeycloakClientSecret,
+		IRODSZone:                     init.IRODSZone,
 	}
 
 	app := &ExposerApp{

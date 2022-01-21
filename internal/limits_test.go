@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/model"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
@@ -61,7 +62,9 @@ func setupInternal(t *testing.T, objs []runtime.Object) (*Internal, sqlmock.Sqlm
 
 	client := fake.NewSimpleClientset(objs...)
 
-	internal := New(testConfig, sqlxMockDB, client, nil)
+	apps := apps.NewApps(sqlxMockDB, "@iplantcollaborative.org")
+
+	internal := New(testConfig, sqlxMockDB, client, apps)
 	return internal, mock
 }
 
