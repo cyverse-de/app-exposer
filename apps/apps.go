@@ -52,11 +52,11 @@ func (a *Apps) Run() {
 			go func(mj millicoresJob) {
 				var err error
 
-				log.Debugf("storing %f millicores reserved for %s", mj.MillicoresReserved, mj.Job.InvocationID)
+				log.Debugf("storing %s millicores reserved for %s", mj.MillicoresReserved.String(), mj.Job.InvocationID)
 				if err = a.storeMillicoresInternal(&mj.Job, mj.MillicoresReserved); err != nil {
 					log.Error(err)
 				}
-				log.Debugf("done storing %f millicores reserved for %s", mj.MillicoresReserved, mj.Job.InvocationID)
+				log.Debugf("done storing %s millicores reserved for %s", mj.MillicoresReserved.String(), mj.Job.InvocationID)
 
 				a.jobDone <- mj.ID
 			}(mj)
