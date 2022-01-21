@@ -296,8 +296,8 @@ func (i *Internal) workingDirPrepContainer(job *model.Job) (apiv1.Container, err
 		"bash",
 		"-c",
 		strings.Join([]string{
-			fmt.Sprintf("ln -s \"%s\" \"%s/\"", csiDriverLocalMountPath, workingDirInitContainerMountPath),
-			fmt.Sprintf("ln -s \"/%s/home\" \"%s/\"", zone, workingDirInitContainerMountPath),
+			fmt.Sprintf("ln -s \"%s\" .", csiDriverLocalMountPath),
+			fmt.Sprintf("ln -s \"/%s/home\" .", zone),
 		}, " && "),
 	}
 
@@ -307,7 +307,7 @@ func (i *Internal) workingDirPrepContainer(job *model.Job) (apiv1.Container, err
 		Image:           fmt.Sprintf("%s:%s", i.PorklockImage, i.PorklockTag),
 		Command:         workingDirInitCommand,
 		ImagePullPolicy: apiv1.PullPolicy(apiv1.PullAlways),
-		WorkingDir:      inputPathListMountPath,
+		WorkingDir:      workingDirInitContainerMountPath,
 		VolumeMounts: []apiv1.VolumeMount{
 			{
 				Name:      workingDirVolumeName,
