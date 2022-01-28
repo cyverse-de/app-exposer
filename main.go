@@ -229,6 +229,5 @@ func main() {
 	defer a.Finish()
 	app := NewExposerApp(exposerInit, *ingressClass, clientset, a)
 	log.Printf("listening on port %d", *listenPort)
-	app.internal.MonitorVICEEvents()
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", strconv.Itoa(*listenPort)), app.router))
 }
