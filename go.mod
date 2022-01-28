@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
-	github.com/cockroachdb/apd v1.1.0 // indirect
+	github.com/cockroachdb/apd v1.1.0
 	github.com/cyverse-de/configurate v0.0.0-20210914212501-fc18b48e00a9
 	github.com/cyverse-de/messaging v8.2.0+incompatible
 	github.com/cyverse-de/model v0.0.0-20210921001837-2d6c66c37bc8
