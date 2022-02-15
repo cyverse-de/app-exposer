@@ -133,7 +133,7 @@ func (i *Internal) getSharedPathMapping(job *model.Job) IRODSFSPathMapping {
 		IRODSPath:      sharedHomeFullPath,
 		MappingPath:    sharedHome,
 		ResourceType:   "dir",
-		ReadOnly:       true,
+		ReadOnly:       false,
 		CreateDir:      false,
 		IgnoreNotExist: true,
 	}
