@@ -6,8 +6,8 @@ import (
 	"github.com/cockroachdb/apd"
 	"github.com/cyverse-de/jex-adapter/db"
 	"github.com/cyverse-de/jex-adapter/logging"
+	"github.com/cyverse-de/model"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/cyverse-de/model.v4"
 )
 
 var log = logging.Log.WithFields(logrus.Fields{"package": "millicores"})
