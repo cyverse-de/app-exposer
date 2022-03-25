@@ -9,9 +9,12 @@ import (
 	"github.com/cyverse-de/jex-adapter/logging"
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
 )
 
 var log = logging.Log.WithFields(logrus.Fields{"package": "db"})
+
+const otelName = "github.com/cyverse-de/jex-adapter/db"
 
 // DatabaseAccessor is an interface for iteracting with a database. Its main
 // reason for existing is to abstract out whether a transaction is being used.
@@ -37,6 +40,9 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 		jobID string
 	)
 
+	ctx, span := otel.Tracer(otelName).Start(context, "SetMillicoresReserved")
+	defer span.End()
+
 	log = log.WithFields(logrus.Fields{"context": "set millicores reserved", "externalID": externalID, "millicoresReserved": millicoresReserved.String()})
 
 	const stmt = `
@@ -52,7 +58,7 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 	`
 	log.Debug("looking up job ID")
 	for i := 0; i < 30; i++ {
-		if err = d.db.QueryRowxContext(context, jobIDQuery, externalID).Scan(&jobID); err != nil {
+		if err = d.db.QueryRowxContext(ctx, jobIDQuery, externalID).Scan(&jobID); err != nil {
 			if err == sql.ErrNoRows {
 				time.Sleep(2 * time.Second)
 				continue
@@ -72,7 +78,7 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 	}
 	log.Debugf("converted millicores values %d", converted)
 
-	result, err := d.db.ExecContext(context, stmt, jobID, converted)
+	result, err := d.db.ExecContext(ctx, stmt, jobID, converted)
 	if err != nil {
 		log.Error(err)
 		return err
