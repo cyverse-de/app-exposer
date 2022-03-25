@@ -18,13 +18,16 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/streadway/amqp"
+	"go.opentelemetry.io/otel"
 )
 
 var log = logging.Log.WithFields(logrus.Fields{"package": "adapter"})
 
+const otelName = "github.com/cyverse-de/jex-adapter/adapter"
+
 type Messenger interface {
-	Launch(job *model.Job) error
-	Stop(id string) error
+	Launch(context context.Context, job *model.Job) error
+	Stop(context context.Context, id string) error
 }
 
 func amqpError(err error) {
@@ -46,19 +49,22 @@ func NewAMQPMessenger(exchange string, client *messaging.Client) *AMQPMessenger 
 	}
 }
 
-func (a *AMQPMessenger) Stop(id string) error {
-	err := a.client.SendStopRequest(id, "root", "because I said to")
+func (a *AMQPMessenger) Stop(context context.Context, id string) error {
+	err := a.client.SendStopRequestContext(context, id, "root", "because I said to")
 	if err != nil {
 		amqpError(err)
 	}
 	return err
 }
 
-func (a *AMQPMessenger) Launch(job *model.Job) error {
+func (a *AMQPMessenger) Launch(context context.Context, job *model.Job) error {
 	var (
 		err        error
 		launchJSON []byte
 	)
+
+	ctx, span := otel.Tracer(otelName).Start(context, "Launch")
+	defer span.End()
 
 	// This is included just for the side effect of creating the stop
 	// queue before the job launches, otherwise some stop requests can be missed.
@@ -80,7 +86,7 @@ func (a *AMQPMessenger) Launch(job *model.Job) error {
 		return err
 	}
 
-	if err = a.client.Publish(messaging.LaunchesKey, launchJSON); err != nil {
+	if err = a.client.PublishContext(ctx, messaging.LaunchesKey, launchJSON); err != nil {
 		amqpError(err)
 		return err
 	}
@@ -124,10 +130,13 @@ func (j *JEXAdapter) Run() {
 		case mj := <-j.addJob:
 			j.jobs[mj.ID.String()] = true
 			go func(mj millicoresJob) {
+				ctx, span := otel.Tracer(otelName).Start(context.Background(), "millicores iteration")
+				defer span.End()
+
 				var err error
 
 				log.Infof("storing %s millicores reserved for %s", mj.MillicoresReserved.String(), mj.Job.InvocationID)
-				if err = j.detector.StoreMillicoresReserved(context.Background(), &mj.Job, mj.MillicoresReserved); err != nil {
+				if err = j.detector.StoreMillicoresReserved(ctx, &mj.Job, mj.MillicoresReserved); err != nil {
 					log.Error(err)
 				}
 				log.Infof("done storing %s millicores reserved for %s", mj.MillicoresReserved.String(), mj.Job.InvocationID)
@@ -184,6 +193,8 @@ func (j *JEXAdapter) HomeHandler(c echo.Context) error {
 func (j *JEXAdapter) StopHandler(c echo.Context) error {
 	var err error
 
+	context := c.Request().Context()
+
 	log := log.WithFields(logrus.Fields{"context": "stop app"})
 
 	invID := c.Param("invocation_id")
@@ -196,7 +207,7 @@ func (j *JEXAdapter) StopHandler(c echo.Context) error {
 	log = log.WithFields(logrus.Fields{"external_id": invID})
 
 	log.Debug("starting sending stop message")
-	err = j.messenger.Stop(invID)
+	err = j.messenger.Stop(context, invID)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -210,6 +221,7 @@ func (j *JEXAdapter) StopHandler(c echo.Context) error {
 
 func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	request := c.Request()
+	context := request.Context()
 
 	log := log.WithFields(logrus.Fields{"context": "app launch"})
 
@@ -232,7 +244,7 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	log = log.WithFields(logrus.Fields{"external_id": job.InvocationID})
 
 	log.Debug("sending launch message")
-	if err = j.messenger.Launch(job); err != nil {
+	if err = j.messenger.Launch(context, job); err != nil {
 		log.Error(err)
 		return err
 	}
