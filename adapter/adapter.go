@@ -11,13 +11,13 @@ import (
 	"github.com/cyverse-de/jex-adapter/logging"
 	"github.com/cyverse-de/jex-adapter/millicores"
 	"github.com/cyverse-de/jex-adapter/types"
+	"github.com/cyverse-de/messaging/v9"
+	"github.com/cyverse-de/model"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/streadway/amqp"
-	"gopkg.in/cyverse-de/messaging.v6"
-	"gopkg.in/cyverse-de/model.v4"
 )
 
 var log = logging.Log.WithFields(logrus.Fields{"package": "adapter"})
