@@ -9,11 +9,11 @@ import (
 
 	"github.com/cyverse-de/jex-adapter/db"
 	"github.com/cyverse-de/jex-adapter/millicores"
+	"github.com/cyverse-de/model"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/cyverse-de/model.v4"
 
 	"github.com/DATA-DOG/go-sqlmock"
 )
