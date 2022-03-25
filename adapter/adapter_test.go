@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
@@ -28,11 +29,11 @@ func getTestConfig() *viper.Viper {
 
 type TestMessenger struct{}
 
-func (t *TestMessenger) Stop(id string) error {
+func (t *TestMessenger) Stop(context context.Context, id string) error {
 	return nil
 }
 
-func (t *TestMessenger) Launch(job *model.Job) error {
+func (t *TestMessenger) Launch(context context.Context, job *model.Job) error {
 	return nil
 }
 
