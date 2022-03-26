@@ -49,6 +49,8 @@ func (e *External) CreateServiceHandler(c echo.Context) error {
 		err     error
 	)
 
+	ctx := c.Request().Context()
+
 	service = c.Param("name")
 	if service == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing service name in the URL")
@@ -76,7 +78,7 @@ func (e *External) CreateServiceHandler(c echo.Context) error {
 
 	log.Printf("CreateService: namespace for service %s will be %s", service, opts.Namespace)
 
-	svc, err := e.ServiceController.Create(opts)
+	svc, err := e.ServiceController.Create(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -109,6 +111,7 @@ func (e *External) UpdateServiceHandler(c echo.Context) error {
 		service string
 		err     error
 	)
+	ctx := c.Request().Context()
 
 	service = c.Param("name")
 	if service == "" {
@@ -137,7 +140,7 @@ func (e *External) UpdateServiceHandler(c echo.Context) error {
 
 	log.Printf("UpdateService: namespace for %s will be %s", service, opts.Namespace)
 
-	svc, err := e.ServiceController.Update(opts)
+	svc, err := e.ServiceController.Update(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -168,6 +171,7 @@ func (e *External) UpdateServiceHandler(c echo.Context) error {
 //
 // The namespace of the Service comes from the daemon configuration setting.
 func (e *External) GetServiceHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	var service string = c.Param("name")
 	if service == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing service name in the URL")
@@ -175,7 +179,7 @@ func (e *External) GetServiceHandler(c echo.Context) error {
 
 	log.Printf("GetService: getting info for service %s", service)
 
-	svc, err := e.ServiceController.Get(service)
+	svc, err := e.ServiceController.Get(ctx, service)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
@@ -197,6 +201,7 @@ func (e *External) GetServiceHandler(c echo.Context) error {
 // Expects no body in the request and returns no body in the response. Returns
 // a 200 status if you try to delete a Service that doesn't exist.
 func (e *External) DeleteServiceHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	var service string = c.Param("name")
 	if service == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing service name in the URL")
@@ -204,7 +209,7 @@ func (e *External) DeleteServiceHandler(c echo.Context) error {
 
 	log.Printf("DeleteService: deleting service %s", service)
 
-	err := e.ServiceController.Delete(service)
+	err := e.ServiceController.Delete(ctx, service)
 	if err != nil {
 		log.Error(err) // Repeated deletions shouldn't return errors.
 	}
@@ -227,6 +232,7 @@ func (e *External) CreateEndpointHandler(c echo.Context) error {
 		endpoint string
 		err      error
 	)
+	ctx := c.Request().Context()
 
 	endpoint = c.Param("name")
 	if endpoint == "" {
@@ -255,7 +261,7 @@ func (e *External) CreateEndpointHandler(c echo.Context) error {
 
 	log.Printf("CreateEndpoint: namespace for endpoint %s will be %s", endpoint, opts.Namespace)
 
-	ept, err := e.EndpointController.Create(opts)
+	ept, err := e.EndpointController.Create(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -284,6 +290,7 @@ func (e *External) CreateEndpointHandler(c echo.Context) error {
 // the namespace comes from the daemon-wide configuration value.
 func (e *External) UpdateEndpointHandler(c echo.Context) error {
 	var err error
+	ctx := c.Request().Context()
 
 	endpoint := c.Param("name")
 
@@ -313,7 +320,7 @@ func (e *External) UpdateEndpointHandler(c echo.Context) error {
 
 	log.Printf("UpdateEndpoint: namespace for endpoint %s should be %s", endpoint, opts.Namespace)
 
-	ept, err := e.EndpointController.Update(opts)
+	ept, err := e.EndpointController.Update(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -348,6 +355,7 @@ func (e *External) GetEndpointHandler(c echo.Context) error {
 		endpoint string
 		err      error
 	)
+	ctx := c.Request().Context()
 
 	endpoint = c.Param("name")
 	if endpoint == "" {
@@ -356,7 +364,7 @@ func (e *External) GetEndpointHandler(c echo.Context) error {
 
 	log.Printf("GetEndpoint: getting info on endpoint %s", endpoint)
 
-	ept, err := e.EndpointController.Get(endpoint)
+	ept, err := e.EndpointController.Get(ctx, endpoint)
 	if err != nil {
 		return err
 	}
@@ -382,10 +390,11 @@ func (e *External) DeleteEndpointHandler(c echo.Context) error {
 	if endpoint == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing endpoint name in the URL")
 	}
+	ctx := c.Request().Context()
 
 	log.Printf("DeleteEndpoint: deleting endpoint %s", endpoint)
 
-	err := e.EndpointController.Delete(endpoint)
+	err := e.EndpointController.Delete(ctx, endpoint)
 	if err != nil {
 		log.Error(err) // Repeated Deletion requests shouldn't return errors.
 	}
@@ -407,6 +416,7 @@ func (e *External) CreateIngressHandler(c echo.Context) error {
 	var ingress string
 	var err error
 
+	ctx := c.Request().Context()
 	ingress = c.Param("name")
 	if ingress == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing ingress name in the URL")
@@ -434,7 +444,7 @@ func (e *External) CreateIngressHandler(c echo.Context) error {
 
 	log.Printf("CreateIngress: namespace for ingress %s will be %s", ingress, opts.Namespace)
 
-	ing, err := e.IngressController.Create(opts)
+	ing, err := e.IngressController.Create(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -467,6 +477,8 @@ func (e *External) UpdateIngressHandler(c echo.Context) error {
 		err     error
 	)
 
+	ctx := c.Request().Context()
+
 	ingress = c.Param("name")
 	if ingress == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing ingress name in the URL")
@@ -494,7 +506,7 @@ func (e *External) UpdateIngressHandler(c echo.Context) error {
 
 	log.Printf("UpdateIngress: namespace for ingress %s should be %s", ingress, opts.Namespace)
 
-	ing, err := e.IngressController.Update(opts)
+	ing, err := e.IngressController.Update(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -527,6 +539,8 @@ func (e *External) GetIngressHandler(c echo.Context) error {
 		err     error
 	)
 
+	ctx := c.Request().Context()
+
 	ingress = c.Param("name")
 	if ingress == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing ingress name in the URL")
@@ -534,7 +548,7 @@ func (e *External) GetIngressHandler(c echo.Context) error {
 
 	log.Printf("GetIngress: getting ingress %s", ingress)
 
-	ing, err := e.IngressController.Get(ingress)
+	ing, err := e.IngressController.Get(ctx, ingress)
 	if err != nil {
 		return err
 	}
@@ -556,6 +570,7 @@ func (e *External) GetIngressHandler(c echo.Context) error {
 // Expects no request body and returns no body in the response. Returns a 200
 // if you attempt to delete an Endpoints object that doesn't exist.
 func (e *External) DeleteIngressHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	var ingress string = c.Param("name")
 	if ingress == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing ingress name in the URL")
@@ -563,7 +578,7 @@ func (e *External) DeleteIngressHandler(c echo.Context) error {
 
 	log.Printf("DeleteIngress: deleting ingress %s", ingress)
 
-	err := e.IngressController.Delete(ingress)
+	err := e.IngressController.Delete(ctx, ingress)
 	if err != nil {
 		log.Error(err) // Do this so that repeated deletion requests don't return an error.
 	}

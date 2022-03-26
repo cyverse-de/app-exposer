@@ -21,10 +21,10 @@ type IngressOptions struct {
 // IngressCrudder defines the interface for objects that allow CRUD operations
 // on Kubernetes Ingresses. Mostly needed to facilitate testing.
 type IngressCrudder interface {
-	Create(opts *IngressOptions) (*netv1.Ingress, error)
-	Get(name string) (*netv1.Ingress, error)
-	Update(opts *IngressOptions) (*netv1.Ingress, error)
-	Delete(name string) error
+	Create(ctx context.Context, opts *IngressOptions) (*netv1.Ingress, error)
+	Get(ctx context.Context, name string) (*netv1.Ingress, error)
+	Update(ctx context.Context, opts *IngressOptions) (*netv1.Ingress, error)
+	Delete(ctx context.Context, name string) error
 }
 
 // Ingresser is a concrete implementation of an IngressCrudder.
@@ -34,7 +34,7 @@ type Ingresser struct {
 }
 
 // Create uses the Kubernetes API add a new Ingress to the indicated namespace.
-func (i *Ingresser) Create(opts *IngressOptions) (*netv1.Ingress, error) {
+func (i *Ingresser) Create(ctx context.Context, opts *IngressOptions) (*netv1.Ingress, error) {
 	backend := &netv1.IngressBackend{
 		Service: &netv1.IngressServiceBackend{
 			Name: opts.Service,
@@ -45,7 +45,7 @@ func (i *Ingresser) Create(opts *IngressOptions) (*netv1.Ingress, error) {
 	}
 	pathType := netv1.PathTypeImplementationSpecific
 	return i.ing.Create(
-		context.TODO(),
+		ctx,
 		&netv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      opts.Name,
@@ -78,12 +78,12 @@ func (i *Ingresser) Create(opts *IngressOptions) (*netv1.Ingress, error) {
 
 // Get returns a *extv1beta.Ingress instance for the named Ingress in the K8s
 // cluster.
-func (i *Ingresser) Get(name string) (*netv1.Ingress, error) {
-	return i.ing.Get(context.TODO(), name, metav1.GetOptions{})
+func (i *Ingresser) Get(ctx context.Context, name string) (*netv1.Ingress, error) {
+	return i.ing.Get(ctx, name, metav1.GetOptions{})
 }
 
 // Update modifies an existing Ingress stored in K8s to match the provided info.
-func (i *Ingresser) Update(opts *IngressOptions) (*netv1.Ingress, error) {
+func (i *Ingresser) Update(ctx context.Context, opts *IngressOptions) (*netv1.Ingress, error) {
 	backend := &netv1.IngressBackend{
 		Service: &netv1.IngressServiceBackend{
 			Name: opts.Service,
@@ -94,7 +94,7 @@ func (i *Ingresser) Update(opts *IngressOptions) (*netv1.Ingress, error) {
 	}
 	pathType := netv1.PathTypeImplementationSpecific
 	return i.ing.Update(
-		context.TODO(),
+		ctx,
 		&netv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      opts.Name,
@@ -126,8 +126,8 @@ func (i *Ingresser) Update(opts *IngressOptions) (*netv1.Ingress, error) {
 }
 
 // Delete removes the specified Ingress from Kubernetes.
-func (i *Ingresser) Delete(name string) error {
-	return i.ing.Delete(context.TODO(), name, metav1.DeleteOptions{})
+func (i *Ingresser) Delete(ctx context.Context, name string) error {
+	return i.ing.Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // NewIngresser returns a newly instantiated *Ingresser.

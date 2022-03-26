@@ -20,10 +20,10 @@ type EndpointOptions struct {
 // EndpointCrudder defines the interface for objects that allow CRUD operations
 // on Kubernetes Endpoints. Mostly needed to facilitate testing.
 type EndpointCrudder interface {
-	Create(opts *EndpointOptions) (*v1.Endpoints, error)
-	Get(name string) (*v1.Endpoints, error)
-	Update(opts *EndpointOptions) (*v1.Endpoints, error)
-	Delete(name string) error
+	Create(ctx context.Context, opts *EndpointOptions) (*v1.Endpoints, error)
+	Get(ctx context.Context, name string) (*v1.Endpoints, error)
+	Update(ctx context.Context, opts *EndpointOptions) (*v1.Endpoints, error)
+	Delete(ctx context.Context, name string) error
 }
 
 // Endpointer is a concreate implementation of a EndpointCrudder.
@@ -33,9 +33,9 @@ type Endpointer struct {
 
 // Create uses the Kubernetes API to add a new Endpoint to the indicated
 // namespace.
-func (e *Endpointer) Create(opts *EndpointOptions) (*v1.Endpoints, error) {
+func (e *Endpointer) Create(ctx context.Context, opts *EndpointOptions) (*v1.Endpoints, error) {
 	return e.ept.Create(
-		context.TODO(),
+		ctx,
 		&v1.Endpoints{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      opts.Name,
@@ -52,14 +52,14 @@ func (e *Endpointer) Create(opts *EndpointOptions) (*v1.Endpoints, error) {
 }
 
 // Get returns a *v1.Endpoints for an existing Endpoints configuration in K8s.
-func (e *Endpointer) Get(name string) (*v1.Endpoints, error) {
-	return e.ept.Get(context.TODO(), name, metav1.GetOptions{})
+func (e *Endpointer) Get(ctx context.Context, name string) (*v1.Endpoints, error) {
+	return e.ept.Get(ctx, name, metav1.GetOptions{})
 }
 
 // Update applies updates to an existing set of Endpoints in K8s.
-func (e *Endpointer) Update(opts *EndpointOptions) (*v1.Endpoints, error) {
+func (e *Endpointer) Update(ctx context.Context, opts *EndpointOptions) (*v1.Endpoints, error) {
 	return e.ept.Update(
-		context.TODO(),
+		ctx,
 		&v1.Endpoints{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      opts.Name,
@@ -76,8 +76,8 @@ func (e *Endpointer) Update(opts *EndpointOptions) (*v1.Endpoints, error) {
 }
 
 // Delete removes an Endpoints object from K8s.
-func (e *Endpointer) Delete(name string) error {
-	return e.ept.Delete(context.TODO(), name, metav1.DeleteOptions{})
+func (e *Endpointer) Delete(ctx context.Context, name string) error {
+	return e.ept.Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // NewEndpointer returns a newly instantiated *Endpointer.

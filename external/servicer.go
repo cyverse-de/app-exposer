@@ -21,10 +21,10 @@ type ServiceOptions struct {
 // ServiceCrudder defines the interface for objects that allow CRUD operation
 // on Kubernetes Services. Mostly needed to facilitate testing.
 type ServiceCrudder interface {
-	Create(opts *ServiceOptions) (*v1.Service, error)
-	Get(name string) (*v1.Service, error)
-	Update(opts *ServiceOptions) (*v1.Service, error)
-	Delete(name string) error
+	Create(ctx context.Context, opts *ServiceOptions) (*v1.Service, error)
+	Get(ctx context.Context, name string) (*v1.Service, error)
+	Update(ctx context.Context, opts *ServiceOptions) (*v1.Service, error)
+	Delete(ctx context.Context, name string) error
 }
 
 // Servicer is a concrete implementation of a ServiceCrudder.
@@ -42,9 +42,9 @@ func NewServicer(s typed_corev1.ServiceInterface) *Servicer {
 // listenPort is weird, but that weirdness comes from the underlying K8s API.
 // I'm letting the weirdness percolate up the stack until I get annoyed enough
 // to deal with it.
-func (s *Servicer) Create(opts *ServiceOptions) (*v1.Service, error) {
+func (s *Servicer) Create(ctx context.Context, opts *ServiceOptions) (*v1.Service, error) {
 	return s.svc.Create(
-		context.TODO(),
+		ctx,
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      opts.Name,
@@ -58,14 +58,14 @@ func (s *Servicer) Create(opts *ServiceOptions) (*v1.Service, error) {
 }
 
 // Get returns a *v1.Service for an existing Service.
-func (s *Servicer) Get(name string) (*v1.Service, error) {
-	return s.svc.Get(context.TODO(), name, metav1.GetOptions{})
+func (s *Servicer) Get(ctx context.Context, name string) (*v1.Service, error) {
+	return s.svc.Get(ctx, name, metav1.GetOptions{})
 }
 
 // Update applies updates to an existing Service.
-func (s *Servicer) Update(opts *ServiceOptions) (*v1.Service, error) {
+func (s *Servicer) Update(ctx context.Context, opts *ServiceOptions) (*v1.Service, error) {
 	return s.svc.Update(
-		context.TODO(),
+		ctx,
 		&v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      opts.Name,
@@ -79,6 +79,6 @@ func (s *Servicer) Update(opts *ServiceOptions) (*v1.Service, error) {
 }
 
 // Delete removes a Service from Kubernetes.
-func (s *Servicer) Delete(name string) error {
-	return s.svc.Delete(context.TODO(), name, metav1.DeleteOptions{})
+func (s *Servicer) Delete(ctx context.Context, name string) error {
+	return s.svc.Delete(ctx, name, metav1.DeleteOptions{})
 }
