@@ -679,7 +679,7 @@ func (i *Internal) URLReadyHandler(c echo.Context) error {
 		BaseURL: i.PermissionsURL,
 	}
 
-	allowed, err := p.IsAllowed(user, analysisID)
+	allowed, err := p.IsAllowed(ctx, user, analysisID)
 	if err != nil {
 		return err
 	}

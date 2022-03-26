@@ -1,12 +1,17 @@
 package permissions
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path/filepath"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
+
+var httpClient = http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 
 // Permissions performs operations related to checking permissions.
 type Permissions struct {
@@ -55,14 +60,20 @@ type Lookup struct {
 }
 
 // GetPermissions returns subjects information about a subject.
-func (p *Permissions) GetPermissions(lookup *Lookup) (*PermissionList, error) {
+func (p *Permissions) GetPermissions(ctx context.Context, lookup *Lookup) (*PermissionList, error) {
 	requrl, err := url.Parse(p.BaseURL)
 	if err != nil {
 		return nil, err
 	}
 
 	requrl.Path = filepath.Join(requrl.Path, "permissions/subjects", lookup.SubjectType, lookup.Subject, lookup.ResourceType, lookup.Resource)
-	resp, err := http.Get(requrl.String())
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requrl.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +96,7 @@ func (p *Permissions) GetPermissions(lookup *Lookup) (*PermissionList, error) {
 // IsAllowed will return true if the user is allowed to access the running app
 // and false if they're not. An error might be returned as well. Access should
 // be denied if an error is returned, even if the boolean return value is true.
-func (p *Permissions) IsAllowed(user, resource string) (bool, error) {
+func (p *Permissions) IsAllowed(ctx context.Context, user, resource string) (bool, error) {
 	lookup := &Lookup{
 		Subject:      user,
 		SubjectType:  "user",
@@ -93,7 +104,7 @@ func (p *Permissions) IsAllowed(user, resource string) (bool, error) {
 		ResourceType: "analysis",
 	}
 
-	l, err := p.GetPermissions(lookup)
+	l, err := p.GetPermissions(ctx, lookup)
 	if err != nil {
 		return false, err
 	}

@@ -22,12 +22,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 
 	"github.com/cyverse-de/app-exposer/permissions"
 	"github.com/jmoiron/sqlx"
 	"github.com/jmoiron/sqlx/types"
 	"github.com/labstack/echo/v4"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
+
+var httpClient = http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 
 // InstantLaunch docs
 //

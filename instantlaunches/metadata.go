@@ -29,6 +29,8 @@ func (a *App) InstantLaunchExists(id string) (bool, error) {
 }
 
 func (a *App) listAVUs(c echo.Context) ([]byte, *http.Response, error) {
+	ctx := c.Request().Context()
+
 	log.Debug("in ListMetadataHandler")
 
 	user := c.QueryParam("user")
@@ -65,7 +67,12 @@ func (a *App) listAVUs(c echo.Context) ([]byte, *http.Response, error) {
 
 	log.Debug(fmt.Sprintf("metadata endpoint: GET %s", svc.String()))
 
-	resp, err := http.Get(svc.String())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, svc.String(), nil)
+	if err != nil {
+		return nil, nil, handleError(err, http.StatusInternalServerError)
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, nil, handleError(err, http.StatusInternalServerError)
 	}
@@ -131,6 +138,8 @@ func (a *App) ListMetadataHandler(c echo.Context) error {
 
 // GetMetadataHandler returns all of the metadata associated with an instant launch.
 func (a *App) GetMetadataHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
 	log.Debug("int GetMetadataHandler")
 
 	id := c.Param("id")
@@ -164,7 +173,12 @@ func (a *App) GetMetadataHandler(c echo.Context) error {
 
 	log.Debug(fmt.Sprintf("metadata endpoint: GET %s", svc.String()))
 
-	resp, err := http.Get(svc.String())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, svc.String(), nil)
+	if err != nil {
+		return handleError(err, http.StatusInternalServerError)
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return handleError(err, http.StatusInternalServerError)
 	}

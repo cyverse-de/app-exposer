@@ -555,6 +555,8 @@ func (i *Internal) AdminDescribeAnalysisHandler(c echo.Context) error {
 // DescribeAnalysisHandler returns a listing entry for a single analysis associated
 // with the host/subdomain passed in as 'host' from the URL.
 func (i *Internal) DescribeAnalysisHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
 	log.Info("in DescribeAnalysisHandler")
 	user := c.QueryParam("user")
 	if user == "" {
@@ -599,7 +601,7 @@ func (i *Internal) DescribeAnalysisHandler(c echo.Context) error {
 			BaseURL: i.PermissionsURL,
 		}
 
-		allowed, err := p.IsAllowed(user, analysisID)
+		allowed, err := p.IsAllowed(ctx, user, analysisID)
 		if err != nil {
 			return err
 		}
