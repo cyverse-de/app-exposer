@@ -202,7 +202,7 @@ func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind
 
 		log.Info(msg)
 
-		if successerr := i.statusPublisher.Running(externalID, msg); successerr != nil {
+		if successerr := i.statusPublisher.Running(ctx, externalID, msg); successerr != nil {
 			log.Error(successerr)
 		}
 
@@ -277,7 +277,7 @@ func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind
 
 					log.Error(err)
 
-					if failerr := i.statusPublisher.Running(externalID, msg); failerr != nil {
+					if failerr := i.statusPublisher.Running(ctx, externalID, msg); failerr != nil {
 						log.Error(failerr)
 					}
 
@@ -287,7 +287,7 @@ func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind
 
 					log.Info(msg)
 
-					if successerr := i.statusPublisher.Running(externalID, msg); successerr != nil {
+					if successerr := i.statusPublisher.Running(ctx, externalID, msg); successerr != nil {
 						log.Error(successerr)
 					}
 
@@ -295,7 +295,7 @@ func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind
 				case RequestedStatus:
 					msg := fmt.Sprintf("%s requested for job %s", kind, externalID)
 
-					if requestederr := i.statusPublisher.Running(externalID, msg); requestederr != nil {
+					if requestederr := i.statusPublisher.Running(ctx, externalID, msg); requestederr != nil {
 						log.Error(err)
 					}
 
@@ -305,7 +305,7 @@ func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind
 
 						log.Info(msg)
 
-						if uploadingerr := i.statusPublisher.Running(externalID, msg); uploadingerr != nil {
+						if uploadingerr := i.statusPublisher.Running(ctx, externalID, msg); uploadingerr != nil {
 							log.Error(err)
 						}
 
@@ -317,7 +317,7 @@ func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind
 
 						log.Info(msg)
 
-						if downloadingerr := i.statusPublisher.Running(externalID, msg); downloadingerr != nil {
+						if downloadingerr := i.statusPublisher.Running(ctx, externalID, msg); downloadingerr != nil {
 							log.Error(err)
 						}
 

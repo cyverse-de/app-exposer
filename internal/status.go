@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -15,9 +16,9 @@ import (
 // AnalysisStatusPublisher is the interface for types that need to publish a job
 // update.
 type AnalysisStatusPublisher interface {
-	Fail(jobID, msg string) error
-	Success(jobID, msg string) error
-	Running(jobID, msg string) error
+	Fail(ctx context.Context, jobID, msg string) error
+	Success(ctx context.Context, jobID, msg string) error
+	Running(ctx context.Context, jobID, msg string) error
 }
 
 // JSLPublisher is a concrete implementation of AnalysisStatusPublisher that
@@ -34,7 +35,7 @@ type AnalysisStatus struct {
 	Message string
 }
 
-func (j *JSLPublisher) postStatus(jobID, msg string, jobState messaging.JobState) error {
+func (j *JSLPublisher) postStatus(ctx context.Context, jobID, msg string, jobState messaging.JobState) error {
 	status := &AnalysisStatus{
 		Host:    hostname(),
 		State:   jobState,
@@ -63,7 +64,20 @@ func (j *JSLPublisher) postStatus(jobID, msg string, jobState messaging.JobState
 		)
 
 	}
-	response, err := http.Post(u.String(), "application/json", bytes.NewReader(js))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(js))
+	if err != nil {
+		return errors.Wrapf(
+			err,
+			"error returned posting %s status for job %s to %s",
+			jobState,
+			jobID,
+			u.String(),
+		)
+	}
+	req.Header.Set("content-type", "application/json")
+
+	response, err := httpClient.Do(req)
 	if err != nil {
 		return errors.Wrapf(
 			err,
@@ -89,24 +103,24 @@ func (j *JSLPublisher) postStatus(jobID, msg string, jobState messaging.JobState
 
 // Fail sends an analysis failure update with the provided message via the AMQP
 // broker. Should be sent once.
-func (j *JSLPublisher) Fail(jobID, msg string) error {
+func (j *JSLPublisher) Fail(ctx context.Context, jobID, msg string) error {
 	log.Warnf("Sending failure job status update for external-id %s", jobID)
 
-	return j.postStatus(jobID, msg, messaging.FailedState)
+	return j.postStatus(ctx, jobID, msg, messaging.FailedState)
 }
 
 // Success sends a success update via the AMQP broker. Should be sent once.
-func (j *JSLPublisher) Success(jobID, msg string) error {
+func (j *JSLPublisher) Success(ctx context.Context, jobID, msg string) error {
 	log.Warnf("Sending success job status update for external-id %s", jobID)
 
-	return j.postStatus(jobID, msg, messaging.SucceededState)
+	return j.postStatus(ctx, jobID, msg, messaging.SucceededState)
 }
 
 // Running sends an analysis running status update with the provided message via the
 // AMQP broker. May be sent multiple times, preferably with different messages.
-func (j *JSLPublisher) Running(jobID, msg string) error {
+func (j *JSLPublisher) Running(ctx context.Context, jobID, msg string) error {
 	log.Warnf("Sending running job status update for external-id %s", jobID)
-	return j.postStatus(jobID, msg, messaging.RunningState)
+	return j.postStatus(ctx, jobID, msg, messaging.RunningState)
 }
 
 func hostname() string {
