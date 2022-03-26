@@ -17,6 +17,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/cyverse-de/model"
 	appsv1 "k8s.io/api/apps/v1"
@@ -29,6 +30,7 @@ import (
 )
 
 var log = common.Log
+var httpClient = http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
 
 var leadingLabelReplacerRegexp = regexp.MustCompile("^[^0-9A-Za-z]+")
 var trailingLabelReplacerRegexp = regexp.MustCompile("[^0-9A-Za-z]+$")
@@ -412,10 +414,11 @@ func (i *Internal) TriggerDownloadsHandler(c echo.Context) error {
 // require the caller to have administrative privileges.
 func (i *Internal) AdminTriggerDownloadsHandler(c echo.Context) error {
 	var err error
+	ctx := c.Request().Context()
 
 	analysisID := c.Param("analysis-id")
 
-	externalID, err := i.getExternalIDByAnalysisID(analysisID)
+	externalID, err := i.getExternalIDByAnalysisID(ctx, analysisID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
@@ -434,10 +437,11 @@ func (i *Internal) TriggerUploadsHandler(c echo.Context) error {
 // require the caller to have administrative privileges.
 func (i *Internal) AdminTriggerUploadsHandler(c echo.Context) error {
 	var err error
+	ctx := c.Request().Context()
 
 	analysisID := c.Param("analysis-id")
 
-	externalID, err := i.getExternalIDByAnalysisID(analysisID)
+	externalID, err := i.getExternalIDByAnalysisID(ctx, analysisID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
@@ -558,10 +562,11 @@ func (i *Internal) ExitHandler(c echo.Context) error {
 // documentation for VICEExit applies here as well.
 func (i *Internal) AdminExitHandler(c echo.Context) error {
 	var err error
+	ctx := c.Request().Context()
 
 	analysisID := c.Param("analysis-id")
 
-	externalID, err := i.getExternalIDByAnalysisID(analysisID)
+	externalID, err := i.getExternalIDByAnalysisID(ctx, analysisID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
@@ -797,11 +802,13 @@ func (i *Internal) AdminSaveAndExitHandler(c echo.Context) error {
 			externalID string
 		)
 
+		ctx := c.Request().Context()
+
 		log.Debug("calling doFileTransfer")
 
 		analysisID := c.Param("analysis-id")
 
-		if externalID, err = i.getExternalIDByAnalysisID(analysisID); err != nil {
+		if externalID, err = i.getExternalIDByAnalysisID(ctx, analysisID); err != nil {
 			log.Error(err)
 			return
 		}
@@ -1039,13 +1046,15 @@ func (i *Internal) AdminGetExternalIDHandler(c echo.Context) error {
 		externalID string
 	)
 
+	ctx := c.Request().Context()
+
 	// analysisID is required
 	analysisID = c.Param("analysis-id")
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}
 
-	externalID, err = i.getExternalIDByAnalysisID(analysisID)
+	externalID, err = i.getExternalIDByAnalysisID(ctx, analysisID)
 	if err != nil {
 		return err
 	}

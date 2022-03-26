@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -53,7 +54,7 @@ func (i *Internal) AsyncDataHandler(c echo.Context) error {
 // getExternalID returns the externalID associated with the analysisID. For now,
 // only returns the first result, since VICE analyses only have a single step in
 // the database.
-func (i *Internal) getExternalIDByAnalysisID(analysisID string) (string, error) {
+func (i *Internal) getExternalIDByAnalysisID(ctx context.Context, analysisID string) (string, error) {
 	username, _, err := i.apps.GetUserByAnalysisID(analysisID)
 	if err != nil {
 		return "", err
@@ -61,7 +62,7 @@ func (i *Internal) getExternalIDByAnalysisID(analysisID string) (string, error) 
 
 	log.Infof("username %s", username)
 
-	externalIDs, err := i.getExternalIDs(username, analysisID)
+	externalIDs, err := i.getExternalIDs(ctx, username, analysisID)
 	if err != nil {
 		return "", err
 	}

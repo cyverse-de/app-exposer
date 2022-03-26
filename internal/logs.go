@@ -40,7 +40,7 @@ type VICEAnalysis struct {
 	Total      int        `json:"total"`
 }
 
-func (i *Internal) getExternalIDs(user, analysisID string) ([]string, error) {
+func (i *Internal) getExternalIDs(ctx context.Context, user, analysisID string) ([]string, error) {
 	var (
 		err               error
 		analysisLookupURL *url.URL
@@ -55,7 +55,12 @@ func (i *Internal) getExternalIDs(user, analysisID string) ([]string, error) {
 	q.Set("user", user)
 	analysisLookupURL.RawQuery = q.Encode()
 
-	resp, err := http.Get(analysisLookupURL.String())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, analysisLookupURL.String(), nil)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error from GET %s", analysisLookupURL.String())
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error from GET %s", analysisLookupURL.String())
 	}
@@ -118,6 +123,8 @@ func (i *Internal) LogsHandler(c echo.Context) error {
 		logOpts    *apiv1.PodLogOptions
 	)
 
+	ctx := c.Request().Context()
+
 	// id is required
 	id = c.Param("analysis-id")
 	if id == "" {
@@ -130,7 +137,7 @@ func (i *Internal) LogsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "user is not set")
 	}
 
-	externalIDs, err := i.getExternalIDs(user, id)
+	externalIDs, err := i.getExternalIDs(ctx, user, id)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -273,6 +280,8 @@ func (i *Internal) getPods(externalID string) ([]retPod, error) {
 // PodsHandler lists the k8s pods associated with the provided external-id. For now
 // just returns pod info in the format `{"pods" : [{}]}`
 func (i *Internal) PodsHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
 	analysisID := c.Param("analysis-id")
 	user := c.QueryParam("user")
 
@@ -280,7 +289,7 @@ func (i *Internal) PodsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "user not set")
 	}
 
-	externalIDs, err := i.getExternalIDs(user, analysisID)
+	externalIDs, err := i.getExternalIDs(ctx, user, analysisID)
 	if err != nil {
 		return err
 	}
