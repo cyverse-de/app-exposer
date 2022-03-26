@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog" // pull in to set klog output to stderr
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/propagation"
@@ -216,7 +217,7 @@ func main() {
 		}
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err := kubernetes.NewForConfigAndClient(config, &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)})
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "error creating clientset from config"))
 	}

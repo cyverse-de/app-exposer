@@ -475,7 +475,7 @@ func (i *Internal) defineAnalysisContainer(job *model.Job) apiv1.Container {
 			SuccessThreshold:    1,
 			FailureThreshold:    10,
 			PeriodSeconds:       31,
-			Handler: apiv1.Handler{
+			ProbeHandler: apiv1.ProbeHandler{
 				HTTPGet: &apiv1.HTTPGetAction{
 					Port:   intstr.FromInt(job.Steps[0].Component.Container.Ports[0].ContainerPort),
 					Scheme: apiv1.URISchemeHTTP,
@@ -540,7 +540,7 @@ func (i *Internal) deploymentContainers(job *model.Job) []apiv1.Container {
 			},
 		},
 		ReadinessProbe: &apiv1.Probe{
-			Handler: apiv1.Handler{
+			ProbeHandler: apiv1.ProbeHandler{
 				HTTPGet: &apiv1.HTTPGetAction{
 					Port:   intstr.FromInt(int(viceProxyPort)),
 					Scheme: apiv1.URISchemeHTTP,
@@ -585,7 +585,7 @@ func (i *Internal) deploymentContainers(job *model.Job) []apiv1.Container {
 				},
 			},
 			ReadinessProbe: &apiv1.Probe{
-				Handler: apiv1.Handler{
+				ProbeHandler: apiv1.ProbeHandler{
 					HTTPGet: &apiv1.HTTPGetAction{
 						Port:   intstr.FromInt(int(fileTransfersPort)),
 						Scheme: apiv1.URISchemeHTTP,
