@@ -196,6 +196,8 @@ func (a *App) GetMetadataHandler(c echo.Context) error {
 // AddOrUpdateMetadataHandler adds or updates one or more AVUs on an instant
 // launch.
 func (a *App) AddOrUpdateMetadataHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
 	log.Debug("in AddOrUpdateMetadataHandler")
 
 	id := c.Param("id")
@@ -234,7 +236,14 @@ func (a *App) AddOrUpdateMetadataHandler(c echo.Context) error {
 
 	log.Debug(fmt.Sprintf("metadata endpoint: POST %s", svc.String()))
 
-	resp, err := http.Post(svc.String(), "application/json", bytes.NewReader(inBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, svc.String(), bytes.NewReader(inBody))
+	if err != nil {
+		return handleError(err, http.StatusInternalServerError)
+	}
+
+	req.Header.Set("content-type", "application/json")
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return handleError(err, http.StatusInternalServerError)
 	}
@@ -252,6 +261,8 @@ func (a *App) AddOrUpdateMetadataHandler(c echo.Context) error {
 // SetAllMetadataHandler sets all of the AVUs associated with an instant
 // launch to the set contained in the body of the request.
 func (a *App) SetAllMetadataHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
 	log.Debug("in SetAllMetadataHandler")
 
 	id := c.Param("id")
@@ -290,14 +301,14 @@ func (a *App) SetAllMetadataHandler(c echo.Context) error {
 
 	log.Debug(fmt.Sprintf("metadata endpoint: PUT %s", svc.String()))
 
-	req, err := http.NewRequest(http.MethodPut, svc.String(), bytes.NewReader(inBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, svc.String(), bytes.NewReader(inBody))
 	if err != nil {
 		return handleError(err, http.StatusInternalServerError)
 	}
 
 	req.Header.Set("content-type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return handleError(err, http.StatusInternalServerError)
 	}
