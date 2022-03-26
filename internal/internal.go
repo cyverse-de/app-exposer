@@ -31,6 +31,7 @@ import (
 
 var log = common.Log
 var httpClient = http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
+var otelName = "github.com/cyverse-de/app-exposer/internal"
 
 var leadingLabelReplacerRegexp = regexp.MustCompile("^[^0-9A-Za-z]+")
 var trailingLabelReplacerRegexp = regexp.MustCompile("[^0-9A-Za-z]+$")
@@ -405,7 +406,7 @@ func (i *Internal) LaunchAppHandler(c echo.Context) error {
 
 // TriggerDownloadsHandler handles requests to trigger file downloads.
 func (i *Internal) TriggerDownloadsHandler(c echo.Context) error {
-	return i.doFileTransfer(c.Param("id"), downloadBasePath, downloadKind, true)
+	return i.doFileTransfer(c.Request().Context(), c.Param("id"), downloadBasePath, downloadKind, true)
 }
 
 // AdminTriggerDownloadsHandler handles requests to trigger file downloads
@@ -423,12 +424,12 @@ func (i *Internal) AdminTriggerDownloadsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	return i.doFileTransfer(externalID, downloadBasePath, downloadKind, true)
+	return i.doFileTransfer(ctx, externalID, downloadBasePath, downloadKind, true)
 }
 
 // TriggerUploadsHandler handles requests to trigger file uploads.
 func (i *Internal) TriggerUploadsHandler(c echo.Context) error {
-	return i.doFileTransfer(c.Param("id"), uploadBasePath, uploadKind, true)
+	return i.doFileTransfer(c.Request().Context(), c.Param("id"), uploadBasePath, uploadKind, true)
 }
 
 // AdminTriggerUploadsHandler handles requests to trigger file uploads without
@@ -446,7 +447,7 @@ func (i *Internal) AdminTriggerUploadsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	return i.doFileTransfer(externalID, uploadBasePath, uploadKind, true)
+	return i.doFileTransfer(ctx, externalID, uploadBasePath, uploadKind, true)
 }
 
 func (i *Internal) doExit(externalID string) error {
@@ -604,6 +605,8 @@ func (i *Internal) URLReadyHandler(c echo.Context) error {
 		podReady      bool
 	)
 
+	ctx := c.Request().Context()
+
 	user := c.QueryParam("user")
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter must be set")
@@ -639,9 +642,6 @@ func (i *Internal) URLReadyHandler(c echo.Context) error {
 	listoptions := metav1.ListOptions{
 		LabelSelector: set.AsSelector().String(),
 	}
-
-	// Use context.TODO() as the context for now.
-	ctx := context.TODO()
 
 	// check the service existence
 	svcclient := i.clientset.CoreV1().Services(i.ViceNamespace)
@@ -702,6 +702,7 @@ func (i *Internal) AdminURLReadyHandler(c echo.Context) error {
 		podReady      bool
 	)
 
+	ctx := c.Request().Context()
 	host := c.Param("host")
 
 	// Use the name of the ingress to retrieve the externalID
@@ -721,9 +722,6 @@ func (i *Internal) AdminURLReadyHandler(c echo.Context) error {
 	listoptions := metav1.ListOptions{
 		LabelSelector: set.AsSelector().String(),
 	}
-
-	// use context.TODO() as the context for now
-	ctx := context.TODO()
 
 	// check the service existence
 	svcclient := i.clientset.CoreV1().Services(i.ViceNamespace)
@@ -764,13 +762,14 @@ func (i *Internal) SaveAndExitHandler(c echo.Context) error {
 	// Since file transfers can take a while, we should do this asynchronously by default.
 	go func(c echo.Context) {
 		var err error
+		ctx := c.Request().Context()
 
 		externalID := c.Param("id")
 
 		log.Infof("calling doFileTransfer for %s", externalID)
 
 		// Trigger a blocking output file transfer request.
-		if err = i.doFileTransfer(externalID, uploadBasePath, uploadKind, false); err != nil {
+		if err = i.doFileTransfer(ctx, externalID, uploadBasePath, uploadKind, false); err != nil {
 			log.Error(errors.Wrap(err, "error doing file transfer")) // Log but don't exit. Possible to cancel a job that hasn't started yet
 		}
 
@@ -814,7 +813,7 @@ func (i *Internal) AdminSaveAndExitHandler(c echo.Context) error {
 		}
 
 		// Trigger a blocking output file transfer request.
-		if err = i.doFileTransfer(externalID, uploadBasePath, uploadKind, false); err != nil {
+		if err = i.doFileTransfer(ctx, externalID, uploadBasePath, uploadKind, false); err != nil {
 			log.Error(errors.Wrap(err, "error doing file transfer")) // Log but don't exit. Possible to cancel a job that hasn't started yet
 		}
 

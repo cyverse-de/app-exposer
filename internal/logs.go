@@ -228,7 +228,7 @@ func (i *Internal) LogsHandler(c echo.Context) error {
 		return err
 	}
 
-	logReadCloser, err := podLogs.Stream(context.TODO())
+	logReadCloser, err := podLogs.Stream(ctx)
 	if err != nil {
 		return err
 	}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cyverse-de/model"
+	"go.opentelemetry.io/otel"
 
 	"github.com/pkg/errors"
 
@@ -134,12 +135,13 @@ func requestTransfer(svc apiv1.Service, reqpath string) (*transferResponse, erro
 	return xferresp, nil
 }
 
-func getTransferDetails(id string, svc apiv1.Service, reqpath string) (*transferResponse, error) {
+func getTransferDetails(ctx context.Context, id string, svc apiv1.Service, reqpath string) (*transferResponse, error) {
 	var (
 		bodybytes []byte
 		bodyerr   error
 		jsonerr   error
-		err       error
+		reqerr    error
+		posterr   error
 	)
 
 	xferresp := &transferResponse{}
@@ -149,7 +151,12 @@ func getTransferDetails(id string, svc apiv1.Service, reqpath string) (*transfer
 	svcurl.Host = fmt.Sprintf("%s.%s:%d", svc.Name, svc.Namespace, fileTransfersPort)
 	svcurl.Path = reqpath
 
-	resp, posterr := http.Get(svcurl.String())
+	req, reqerr := http.NewRequestWithContext(ctx, http.MethodGet, svcurl.String(), nil)
+	if reqerr != nil {
+		return nil, errors.Wrapf(reqerr, "error on GET %s", svcurl.String())
+	}
+
+	resp, posterr := httpClient.Do(req)
 	if posterr != nil {
 		return nil, errors.Wrapf(posterr, "error on GET %s", svcurl.String())
 	}
@@ -163,7 +170,7 @@ func getTransferDetails(id string, svc apiv1.Service, reqpath string) (*transfer
 		return nil, errors.Wrapf(posterr, "status request to %s returned %d", svcurl.String(), resp.StatusCode)
 	}
 
-	if bodybytes, bodyerr = ioutil.ReadAll(resp.Body); err != nil {
+	if bodybytes, bodyerr = ioutil.ReadAll(resp.Body); bodyerr != nil {
 		return nil, errors.Wrapf(bodyerr, "reading body from %s failed", svcurl.String())
 	}
 
@@ -188,7 +195,7 @@ func isFinished(status string) bool {
 // doFileTransfer handles requests to initial file transfers for a VICE
 // analysis. We only need the ID of the job, nothing is required in the
 // body of the request.
-func (i *Internal) doFileTransfer(externalID, reqpath, kind string, async bool) error {
+func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind string, async bool) error {
 	if i.UseCSIDriver {
 		// if we use CSI Driver, file transfer is not required.
 		msg := fmt.Sprintf("%s succeeded for job %s", kind, externalID)
@@ -214,7 +221,7 @@ func (i *Internal) doFileTransfer(externalID, reqpath, kind string, async bool) 
 		"external-id": externalID,
 	})
 
-	svclist, err := svcclient.List(context.TODO(), metav1.ListOptions{
+	svclist, err := svcclient.List(ctx, metav1.ListOptions{
 		LabelSelector: set.AsSelector().String(),
 	})
 	if err != nil {
@@ -231,11 +238,13 @@ func (i *Internal) doFileTransfer(externalID, reqpath, kind string, async bool) 
 	var wg sync.WaitGroup
 
 	for _, svc := range svclist.Items {
+		iterCtx, _ := otel.Tracer(otelName).Start(ctx, "service iteration")
+
 		if !async {
 			wg.Add(1)
 		}
 
-		go func(svc apiv1.Service) {
+		go func(ctx context.Context, svc apiv1.Service) {
 			if !async {
 				defer wg.Done()
 			}
@@ -324,7 +333,7 @@ func (i *Internal) doFileTransfer(externalID, reqpath, kind string, async bool) 
 
 				fullreqpath := path.Join(reqpath, transferObj.UUID)
 
-				transferObj, xfererr = getTransferDetails(transferObj.UUID, svc, fullreqpath)
+				transferObj, xfererr = getTransferDetails(ctx, transferObj.UUID, svc, fullreqpath)
 				if xfererr != nil {
 					log.Error(errors.Wrapf(xfererr, "error getting transfer details for transferObj %s", fullreqpath))
 					err = xfererr
@@ -338,7 +347,7 @@ func (i *Internal) doFileTransfer(externalID, reqpath, kind string, async bool) 
 
 				time.Sleep(5 * time.Second)
 			}
-		}(svc)
+		}(iterCtx, svc)
 	}
 
 	// Block until all of the file transfers are complete. There usually will only
