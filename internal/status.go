@@ -8,7 +8,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/cyverse-de/messaging"
+	"github.com/cyverse-de/messaging/v9"
 	"github.com/pkg/errors"
 )
 

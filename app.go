@@ -9,6 +9,7 @@ import (
 	"github.com/cyverse-de/app-exposer/instantlaunches"
 	"github.com/cyverse-de/app-exposer/internal"
 	"github.com/jmoiron/sqlx"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/labstack/echo/v4"
@@ -95,6 +96,8 @@ func NewExposerApp(init *ExposerAppInit, ingressClass string, cs kubernetes.Inte
 		router:    echo.New(),
 		db:        init.db,
 	}
+
+	app.router.Use(otelecho.Middleware("app-exposer"))
 
 	ilInit := &instantlaunches.Init{
 		UserSuffix:      init.UserSuffix,
