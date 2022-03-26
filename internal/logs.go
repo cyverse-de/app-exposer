@@ -211,7 +211,7 @@ func (i *Internal) LogsHandler(c echo.Context) error {
 
 	// We're getting a list of pods associated with the first external-id for the analysis,
 	// but we're only going to use the first pod for now.
-	podList, err := i.getPods(externalID)
+	podList, err := i.getPods(ctx, externalID)
 	if err != nil {
 		return err
 	}
@@ -254,7 +254,7 @@ type retPod struct {
 	Name string `json:"name"`
 }
 
-func (i *Internal) getPods(externalID string) ([]retPod, error) {
+func (i *Internal) getPods(ctx context.Context, externalID string) ([]retPod, error) {
 	set := labels.Set(map[string]string{
 		"external-id": externalID,
 	})
@@ -265,7 +265,7 @@ func (i *Internal) getPods(externalID string) ([]retPod, error) {
 
 	returnedPods := []retPod{}
 
-	podlist, err := i.clientset.CoreV1().Pods(i.ViceNamespace).List(context.TODO(), listoptions)
+	podlist, err := i.clientset.CoreV1().Pods(i.ViceNamespace).List(ctx, listoptions)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func (i *Internal) PodsHandler(c echo.Context) error {
 	// For now, just use the first external ID
 	externalID := externalIDs[0]
 
-	returnedPods, err := i.getPods(externalID)
+	returnedPods, err := i.getPods(ctx, externalID)
 	if err != nil {
 		return err
 	}

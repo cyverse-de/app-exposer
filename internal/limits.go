@@ -33,7 +33,7 @@ func shouldCountStatus(status string) bool {
 	return countIt
 }
 
-func (i *Internal) countJobsForUser(username string) (int, error) {
+func (i *Internal) countJobsForUser(ctx context.Context, username string) (int, error) {
 	set := labels.Set(map[string]string{
 		"username": username,
 	})
@@ -41,9 +41,6 @@ func (i *Internal) countJobsForUser(username string) (int, error) {
 	listoptions := metav1.ListOptions{
 		LabelSelector: set.AsSelector().String(),
 	}
-
-	// use context.TODO() as the context for now.
-	ctx := context.TODO()
 
 	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
 	deplist, err := depclient.List(ctx, listoptions)
@@ -171,7 +168,7 @@ func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int
 	}
 }
 
-func (i *Internal) validateJob(job *model.Job) (int, error) {
+func (i *Internal) validateJob(ctx context.Context, job *model.Job) (int, error) {
 
 	// Verify that the job type is supported by this service
 	if strings.ToLower(job.ExecutionTarget) != "interapps" {
@@ -183,7 +180,7 @@ func (i *Internal) validateJob(job *model.Job) (int, error) {
 	user := job.Submitter
 
 	// Validate the number of concurrent jobs for the user.
-	jobCount, err := i.countJobsForUser(usernameLabelValue)
+	jobCount, err := i.countJobsForUser(ctx, usernameLabelValue)
 	if err != nil {
 		return http.StatusInternalServerError, errors.Wrapf(err, "unable to determine the number of jobs that %s is currently running", user)
 	}

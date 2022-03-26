@@ -152,13 +152,12 @@ func (i *Internal) labelsFromJob(job *model.Job) (map[string]string, error) {
 // containing the files that should not be uploaded to iRODS. It then calls
 // the k8s API to create the ConfigMap if it does not already exist or to
 // update it if it does.
-func (i *Internal) UpsertExcludesConfigMap(job *model.Job) error {
+func (i *Internal) UpsertExcludesConfigMap(ctx context.Context, job *model.Job) error {
 	excludesCM, err := i.excludesConfigMap(job)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.TODO()
 	cmclient := i.clientset.CoreV1().ConfigMaps(i.ViceNamespace)
 
 	_, err = cmclient.Get(ctx, excludesConfigMapName(job), metav1.GetOptions{})
@@ -181,13 +180,12 @@ func (i *Internal) UpsertExcludesConfigMap(job *model.Job) error {
 // containing the path list of files to download from iRODS for the VICE analysis.
 // It then uses the k8s API to create the ConfigMap if it does not already exist or to
 // update it if it does.
-func (i *Internal) UpsertInputPathListConfigMap(job *model.Job) error {
+func (i *Internal) UpsertInputPathListConfigMap(ctx context.Context, job *model.Job) error {
 	inputCM, err := i.inputPathListConfigMap(job)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.TODO()
 	cmclient := i.clientset.CoreV1().ConfigMaps(i.ViceNamespace)
 
 	_, err = cmclient.Get(ctx, inputPathListConfigMapName(job), metav1.GetOptions{})
@@ -209,9 +207,8 @@ func (i *Internal) UpsertInputPathListConfigMap(job *model.Job) error {
 // UpsertDeployment uses the Job passed in to assemble a Deployment for the
 // VICE analysis. If then uses the k8s API to create the Deployment if it does
 // not already exist or to update it if it does.
-func (i *Internal) UpsertDeployment(deployment *appsv1.Deployment, job *model.Job) error {
+func (i *Internal) UpsertDeployment(ctx context.Context, deployment *appsv1.Deployment, job *model.Job) error {
 	var err error
-	ctx := context.TODO()
 	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
 
 	_, err = depclient.Get(ctx, job.InvocationID, metav1.GetOptions{})
@@ -359,13 +356,15 @@ func (i *Internal) LaunchAppHandler(c echo.Context) error {
 		err error
 	)
 
+	ctx := c.Request().Context()
+
 	job = &model.Job{}
 
 	if err = c.Bind(job); err != nil {
 		return err
 	}
 
-	if status, err := i.validateJob(job); err != nil {
+	if status, err := i.validateJob(ctx, job); err != nil {
 		if validationErr, ok := err.(common.ErrorResponse); ok {
 			return validationErr
 		}
@@ -373,12 +372,12 @@ func (i *Internal) LaunchAppHandler(c echo.Context) error {
 	}
 
 	// Create the excludes file ConfigMap for the job.
-	if err = i.UpsertExcludesConfigMap(job); err != nil {
+	if err = i.UpsertExcludesConfigMap(ctx, job); err != nil {
 		return err
 	}
 
 	// Create the input path list config map
-	if err = i.UpsertInputPathListConfigMap(job); err != nil {
+	if err = i.UpsertInputPathListConfigMap(ctx, job); err != nil {
 		return err
 	}
 
@@ -397,7 +396,7 @@ func (i *Internal) LaunchAppHandler(c echo.Context) error {
 	}
 
 	// Create the deployment for the job.
-	if err = i.UpsertDeployment(deployment, job); err != nil {
+	if err = i.UpsertDeployment(ctx, deployment, job); err != nil {
 		return err
 	}
 
@@ -450,7 +449,7 @@ func (i *Internal) AdminTriggerUploadsHandler(c echo.Context) error {
 	return i.doFileTransfer(ctx, externalID, uploadBasePath, uploadKind, true)
 }
 
-func (i *Internal) doExit(externalID string) error {
+func (i *Internal) doExit(ctx context.Context, externalID string) error {
 	set := labels.Set(map[string]string{
 		"external-id": externalID,
 	})
@@ -458,9 +457,6 @@ func (i *Internal) doExit(externalID string) error {
 	listoptions := metav1.ListOptions{
 		LabelSelector: set.AsSelector().String(),
 	}
-
-	// Use context.TODO() as the context for now.
-	ctx := context.TODO()
 
 	// Delete the ingress
 	ingressclient := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
@@ -555,7 +551,7 @@ func (i *Internal) doExit(externalID string) error {
 // namespace associated with the job. Deletes the following objects:
 // ingresses, services, deployments, and configmaps.
 func (i *Internal) ExitHandler(c echo.Context) error {
-	return i.doExit(c.Param("id"))
+	return i.doExit(c.Request().Context(), c.Param("id"))
 }
 
 // AdminExitHandler terminates the VICE analysis based on the analysisID and
@@ -572,14 +568,14 @@ func (i *Internal) AdminExitHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	return i.doExit(externalID)
+	return i.doExit(ctx, externalID)
 }
 
 // getIDFromHost returns the external ID for the running VICE app, which
 // is assumed to be the same as the name of the ingress.
-func (i *Internal) getIDFromHost(host string) (string, error) {
+func (i *Internal) getIDFromHost(ctx context.Context, host string) (string, error) {
 	ingressclient := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
-	ingresslist, err := ingressclient.List(context.TODO(), metav1.ListOptions{})
+	ingresslist, err := ingressclient.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -626,7 +622,7 @@ func (i *Internal) URLReadyHandler(c echo.Context) error {
 	host := c.Param("host")
 
 	// Use the name of the ingress to retrieve the externalID
-	id, err := i.getIDFromHost(host)
+	id, err := i.getIDFromHost(ctx, host)
 	if err != nil {
 		return err
 	}
@@ -706,7 +702,7 @@ func (i *Internal) AdminURLReadyHandler(c echo.Context) error {
 	host := c.Param("host")
 
 	// Use the name of the ingress to retrieve the externalID
-	id, err := i.getIDFromHost(host)
+	id, err := i.getIDFromHost(ctx, host)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
 	}
@@ -775,7 +771,7 @@ func (i *Internal) SaveAndExitHandler(c echo.Context) error {
 
 		log.Infof("calling VICEExit for %s", externalID)
 
-		if err = i.doExit(externalID); err != nil {
+		if err = i.doExit(ctx, externalID); err != nil {
 			log.Error(errors.Wrapf(err, "error triggering analysis exit for %s", externalID))
 		}
 
@@ -819,7 +815,7 @@ func (i *Internal) AdminSaveAndExitHandler(c echo.Context) error {
 
 		log.Debug("calling VICEExit")
 
-		if err = i.doExit(externalID); err != nil {
+		if err = i.doExit(ctx, externalID); err != nil {
 			log.Error(err)
 		}
 

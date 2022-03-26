@@ -10,6 +10,7 @@ import (
 
 // AsyncDataHandler returns data that is generately asynchronously from the job launch.
 func (i *Internal) AsyncDataHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	externalID := c.QueryParam("external-id")
 	if externalID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "external-id not set")
@@ -25,7 +26,7 @@ func (i *Internal) AsyncDataHandler(c echo.Context) error {
 		"external-id": externalID,
 	}
 
-	deployments, err := i.deploymentList(i.ViceNamespace, filter, []string{})
+	deployments, err := i.deploymentList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return err
 	}
