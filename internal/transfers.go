@@ -95,12 +95,12 @@ func (i *Internal) fileTransfersVolumeMounts(job *model.Job) []apiv1.VolumeMount
 	return retval
 }
 
-func requestTransfer(svc apiv1.Service, reqpath string) (*transferResponse, error) {
+func requestTransfer(ctx context.Context, svc apiv1.Service, reqpath string) (*transferResponse, error) {
 	var (
 		bodybytes []byte
 		bodyerr   error
 		jsonerr   error
-		err       error
+		reqerr    error
 	)
 
 	xferresp := &transferResponse{}
@@ -110,7 +110,12 @@ func requestTransfer(svc apiv1.Service, reqpath string) (*transferResponse, erro
 	svcurl.Host = fmt.Sprintf("%s.%s:%d", svc.Name, svc.Namespace, fileTransfersPort)
 	svcurl.Path = reqpath
 
-	resp, posterr := http.Post(svcurl.String(), "", nil)
+	req, reqerr := http.NewRequestWithContext(ctx, http.MethodPost, svcurl.String(), nil)
+	if reqerr != nil {
+		return nil, errors.Wrapf(reqerr, "error POSTing to %s", svcurl.String())
+	}
+
+	resp, posterr := httpClient.Do(req)
 	if posterr != nil {
 		return nil, errors.Wrapf(posterr, "error POSTing to %s", svcurl.String())
 	}
@@ -124,7 +129,7 @@ func requestTransfer(svc apiv1.Service, reqpath string) (*transferResponse, erro
 		return nil, errors.Wrapf(posterr, "download request to %s returned %d", svcurl.String(), resp.StatusCode)
 	}
 
-	if bodybytes, bodyerr = ioutil.ReadAll(resp.Body); err != nil {
+	if bodybytes, bodyerr = ioutil.ReadAll(resp.Body); bodyerr != nil {
 		return nil, errors.Wrapf(bodyerr, "reading body from %s failed", svcurl.String())
 	}
 
@@ -251,7 +256,7 @@ func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind
 
 			log.Infof("%s transfer for %s", kind, externalID)
 
-			transferObj, xfererr := requestTransfer(svc, reqpath)
+			transferObj, xfererr := requestTransfer(ctx, svc, reqpath)
 			if xfererr != nil {
 				log.Error(xfererr)
 				err = xfererr
