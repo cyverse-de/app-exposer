@@ -25,6 +25,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog" // pull in to set klog output to stderr
 
+	"github.com/uptrace/opentelemetry-go-extra/otelsql"
+	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
+
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/jaeger"
@@ -257,7 +260,8 @@ func main() {
 	}
 
 	dbURI := cfg.GetString("db.uri")
-	db = sqlx.MustConnect("postgres", dbURI)
+	db = otelsqlx.MustConnect("postgres", dbURI,
+		otelsql.WithAttributes(semconv.DBSystemPostgreSQL))
 
 	exposerInit := &ExposerAppInit{
 		Namespace:                     *namespace,

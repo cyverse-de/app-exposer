@@ -18,6 +18,8 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.7.1
+	github.com/uptrace/opentelemetry-go-extra/otelsql v0.1.10
+	github.com/uptrace/opentelemetry-go-extra/otelsqlx v0.1.10
 	github.com/valyala/fastjson v1.6.3
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.30.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.30.0

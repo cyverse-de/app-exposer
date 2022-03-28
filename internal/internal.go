@@ -850,6 +850,7 @@ const getUserIDSQL = `
 
 // TimeLimitUpdateHandler handles requests to update the time limit on an already running VICE app.
 func (i *Internal) TimeLimitUpdateHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	log.Info("update time limit called")
 
 	var (
@@ -872,7 +873,7 @@ func (i *Internal) TimeLimitUpdateHandler(c echo.Context) error {
 		return idErr
 	}
 
-	outputMap, err := i.updateTimeLimit(user, id)
+	outputMap, err := i.updateTimeLimit(ctx, user, id)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -885,6 +886,7 @@ func (i *Internal) TimeLimitUpdateHandler(c echo.Context) error {
 // AdminTimeLimitUpdateHandler is basically the same as VICETimeLimitUpdate
 // except that it doesn't require user information in the request.
 func (i *Internal) AdminTimeLimitUpdateHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	var (
 		err  error
 		id   string
@@ -901,7 +903,7 @@ func (i *Internal) AdminTimeLimitUpdateHandler(c echo.Context) error {
 		return err
 	}
 
-	outputMap, err := i.updateTimeLimit(user, id)
+	outputMap, err := i.updateTimeLimit(ctx, user, id)
 	if err != nil {
 		return err
 	}
@@ -911,6 +913,7 @@ func (i *Internal) AdminTimeLimitUpdateHandler(c echo.Context) error {
 
 // GetTimeLimitHandler implements the handler for getting the current time limit from the database.
 func (i *Internal) GetTimeLimitHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	log.Info("get time limit called")
 
 	var (
@@ -938,7 +941,7 @@ func (i *Internal) GetTimeLimitHandler(c echo.Context) error {
 		return err
 	}
 
-	outputMap, err := i.getTimeLimit(userID, analysisID)
+	outputMap, err := i.getTimeLimit(ctx, userID, analysisID)
 	if err != nil {
 		return err
 	}
@@ -949,6 +952,7 @@ func (i *Internal) GetTimeLimitHandler(c echo.Context) error {
 // AdminGetTimeLimitHandler is the same as VICEGetTimeLimit but doesn't require
 // any user information in the request.
 func (i *Internal) AdminGetTimeLimitHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	log.Info("get time limit called")
 
 	var (
@@ -969,7 +973,7 @@ func (i *Internal) AdminGetTimeLimitHandler(c echo.Context) error {
 		return err
 	}
 
-	outputMap, err := i.getTimeLimit(userID, analysisID)
+	outputMap, err := i.getTimeLimit(ctx, userID, analysisID)
 	if err != nil {
 		return err
 	}
@@ -977,11 +981,11 @@ func (i *Internal) AdminGetTimeLimitHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, outputMap)
 }
 
-func (i *Internal) getTimeLimit(userID, id string) (map[string]string, error) {
+func (i *Internal) getTimeLimit(ctx context.Context, userID, id string) (map[string]string, error) {
 	var err error
 
 	var timeLimit pq.NullTime
-	if err = i.db.QueryRow(getTimeLimitSQL, userID, id).Scan(&timeLimit); err != nil {
+	if err = i.db.QueryRowContext(ctx, getTimeLimitSQL, userID, id).Scan(&timeLimit); err != nil {
 		return nil, errors.Wrapf(err, "error retrieving time limit for user %s on analysis %s", userID, id)
 	}
 
@@ -999,7 +1003,7 @@ func (i *Internal) getTimeLimit(userID, id string) (map[string]string, error) {
 	return outputMap, nil
 }
 
-func (i *Internal) updateTimeLimit(user, id string) (map[string]string, error) {
+func (i *Internal) updateTimeLimit(ctx context.Context, user, id string) (map[string]string, error) {
 	var (
 		err    error
 		userID string
@@ -1009,12 +1013,12 @@ func (i *Internal) updateTimeLimit(user, id string) (map[string]string, error) {
 		user = fmt.Sprintf("%s%s", user, userSuffix)
 	}
 
-	if err = i.db.QueryRow(getUserIDSQL, user).Scan(&userID); err != nil {
+	if err = i.db.QueryRowContext(ctx, getUserIDSQL, user).Scan(&userID); err != nil {
 		return nil, errors.Wrapf(err, "error looking user ID for %s", user)
 	}
 
 	var newTimeLimit pq.NullTime
-	if err = i.db.QueryRow(updateTimeLimitSQL, userID, id).Scan(&newTimeLimit); err != nil {
+	if err = i.db.QueryRowContext(ctx, updateTimeLimitSQL, userID, id).Scan(&newTimeLimit); err != nil {
 		return nil, errors.Wrapf(err, "error extending time limit for user %s on analysis %s", userID, id)
 	}
 
