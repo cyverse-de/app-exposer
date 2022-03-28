@@ -1,6 +1,8 @@
 package instantlaunches
 
 import (
+	"context"
+
 	"github.com/lib/pq"
 )
 
@@ -38,9 +40,9 @@ WHERE il.id = any($1);
 
 // ListFullInstantLaunchesByIDs returns the full instant launches associated with the UUIDs
 // passed in. Includes quick launch, app, and submission info.
-func (a *App) ListFullInstantLaunchesByIDs(ids []string) ([]FullInstantLaunch, error) {
+func (a *App) ListFullInstantLaunchesByIDs(ctx context.Context, ids []string) ([]FullInstantLaunch, error) {
 	fullListing := []FullInstantLaunch{}
-	err := a.DB.Select(&fullListing, fullListingQuery, pq.Array(ids))
+	err := a.DB.SelectContext(ctx, &fullListing, fullListingQuery, pq.Array(ids))
 	return fullListing, err
 }
 
@@ -51,9 +53,9 @@ const addInstantLaunchQuery = `
 `
 
 // AddInstantLaunch registers a new instant launch in the database.
-func (a *App) AddInstantLaunch(quickLaunchID, username string) (*InstantLaunch, error) {
+func (a *App) AddInstantLaunch(ctx context.Context, quickLaunchID, username string) (*InstantLaunch, error) {
 	newvalues := &InstantLaunch{}
-	err := a.DB.QueryRowx(addInstantLaunchQuery, quickLaunchID, username).StructScan(newvalues)
+	err := a.DB.QueryRowxContext(ctx, addInstantLaunchQuery, quickLaunchID, username).StructScan(newvalues)
 	return newvalues, err
 }
 
@@ -64,9 +66,9 @@ const getInstantLaunchQuery = `
 `
 
 // GetInstantLaunch returns a stored instant launch by ID.
-func (a *App) GetInstantLaunch(id string) (*InstantLaunch, error) {
+func (a *App) GetInstantLaunch(ctx context.Context, id string) (*InstantLaunch, error) {
 	il := &InstantLaunch{}
-	err := a.DB.QueryRowx(getInstantLaunchQuery, id).StructScan(il)
+	err := a.DB.QueryRowxContext(ctx, getInstantLaunchQuery, id).StructScan(il)
 	return il, err
 }
 
@@ -104,9 +106,9 @@ WHERE il.id = $1;
 
 // FullInstantLaunch returns an instant launch from the database that
 // includes quick launch, app, and submission information.
-func (a *App) FullInstantLaunch(id string) (*FullInstantLaunch, error) {
+func (a *App) FullInstantLaunch(ctx context.Context, id string) (*FullInstantLaunch, error) {
 	fil := &FullInstantLaunch{}
-	err := a.DB.QueryRowx(fullInstantLaunchQuery, id).StructScan(fil)
+	err := a.DB.QueryRowxContext(ctx, fullInstantLaunchQuery, id).StructScan(fil)
 	return fil, err
 }
 
@@ -118,9 +120,9 @@ const updateInstantLaunchQuery = `
 `
 
 // UpdateInstantLaunch updates a stored instant launch with new values.
-func (a *App) UpdateInstantLaunch(id, quickLaunchID string) (*InstantLaunch, error) {
+func (a *App) UpdateInstantLaunch(ctx context.Context, id, quickLaunchID string) (*InstantLaunch, error) {
 	il := &InstantLaunch{}
-	err := a.DB.QueryRowx(updateInstantLaunchQuery, quickLaunchID, id).StructScan(il)
+	err := a.DB.QueryRowxContext(ctx, updateInstantLaunchQuery, quickLaunchID, id).StructScan(il)
 	return il, err
 }
 
@@ -129,8 +131,8 @@ const deleteInstantLaunchQuery = `
 `
 
 // DeleteInstantLaunch deletes a stored instant launch.
-func (a *App) DeleteInstantLaunch(id string) error {
-	_, err := a.DB.Exec(deleteInstantLaunchQuery, id)
+func (a *App) DeleteInstantLaunch(ctx context.Context, id string) error {
+	_, err := a.DB.ExecContext(ctx, deleteInstantLaunchQuery, id)
 	return err
 }
 
@@ -140,9 +142,9 @@ const listInstantLaunchesQuery = `
 `
 
 // ListInstantLaunches lists all registered instant launches.
-func (a *App) ListInstantLaunches() ([]InstantLaunch, error) {
+func (a *App) ListInstantLaunches(ctx context.Context) ([]InstantLaunch, error) {
 	all := []InstantLaunch{}
-	err := a.DB.Select(&all, listInstantLaunchesQuery)
+	err := a.DB.SelectContext(ctx, &all, listInstantLaunchesQuery)
 	return all, err
 }
 
@@ -176,9 +178,9 @@ FROM instant_launches il
 `
 
 // FullListInstantLaunches returns a full listing of instant launches.
-func (a *App) FullListInstantLaunches() ([]FullInstantLaunch, error) {
+func (a *App) FullListInstantLaunches(ctx context.Context) ([]FullInstantLaunch, error) {
 	all := []FullInstantLaunch{}
-	err := a.DB.Select(&all, fullListInstantLaunchesQuery)
+	err := a.DB.SelectContext(ctx, &all, fullListInstantLaunchesQuery)
 	return all, err
 }
 
@@ -194,9 +196,9 @@ const userMappingQuery = `
 `
 
 // UserMapping returns the user's instant launch mappings.
-func (a *App) UserMapping(user string) (*UserInstantLaunchMapping, error) {
+func (a *App) UserMapping(ctx context.Context, user string) (*UserInstantLaunchMapping, error) {
 	m := &UserInstantLaunchMapping{}
-	err := a.DB.Get(m, userMappingQuery, user)
+	err := a.DB.GetContext(ctx, m, userMappingQuery, user)
 	return m, err
 }
 
@@ -215,9 +217,9 @@ const updateUserMappingQuery = `
 
 // UpdateUserMapping updates the the latest version of the user's custom
 // instant launch mappings.
-func (a *App) UpdateUserMapping(user string, update *InstantLaunchMapping) (*InstantLaunchMapping, error) {
+func (a *App) UpdateUserMapping(ctx context.Context, user string, update *InstantLaunchMapping) (*InstantLaunchMapping, error) {
 	updated := &InstantLaunchMapping{}
-	err := a.DB.QueryRowx(updateUserMappingQuery, update, user).Scan(updated)
+	err := a.DB.QueryRowxContext(ctx, updateUserMappingQuery, update, user).Scan(updated)
 	return updated, err
 }
 
@@ -234,8 +236,8 @@ const deleteUserMappingQuery = `
 
 // DeleteUserMapping is intended as an admin only operation that completely removes
 // the latest mapping for the user.
-func (a *App) DeleteUserMapping(user string) error {
-	_, err := a.DB.Exec(deleteUserMappingQuery, user)
+func (a *App) DeleteUserMapping(ctx context.Context, user string) error {
+	_, err := a.DB.ExecContext(ctx, deleteUserMappingQuery, user)
 	return err
 }
 
@@ -246,9 +248,9 @@ const createUserMappingQuery = `
 `
 
 // AddUserMapping adds a new record to the database for the user's instant launches.
-func (a *App) AddUserMapping(user string, mapping *InstantLaunchMapping) (*InstantLaunchMapping, error) {
+func (a *App) AddUserMapping(ctx context.Context, user string, mapping *InstantLaunchMapping) (*InstantLaunchMapping, error) {
 	newvalue := &InstantLaunchMapping{}
-	err := a.DB.QueryRowx(createUserMappingQuery, mapping, user).Scan(newvalue)
+	err := a.DB.QueryRowxContext(ctx, createUserMappingQuery, mapping, user).Scan(newvalue)
 	if err != nil {
 		return nil, err
 	}
@@ -266,9 +268,9 @@ const allUserMappingsQuery = `
 `
 
 // AllUserMappings returns all of the user's instant launch mappings regardless of version.
-func (a *App) AllUserMappings(user string) ([]UserInstantLaunchMapping, error) {
+func (a *App) AllUserMappings(ctx context.Context, user string) ([]UserInstantLaunchMapping, error) {
 	m := []UserInstantLaunchMapping{}
-	err := a.DB.Select(&m, allUserMappingsQuery, user)
+	err := a.DB.SelectContext(ctx, &m, allUserMappingsQuery, user)
 	return m, err
 }
 
@@ -283,9 +285,9 @@ const userMappingsByVersionQuery = `
 `
 
 // UserMappingsByVersion returns a specific version of the user's instant launch mappings.
-func (a *App) UserMappingsByVersion(user string, version int) (UserInstantLaunchMapping, error) {
+func (a *App) UserMappingsByVersion(ctx context.Context, user string, version int) (UserInstantLaunchMapping, error) {
 	m := UserInstantLaunchMapping{}
-	err := a.DB.Get(&m, userMappingsByVersionQuery, user, version)
+	err := a.DB.GetContext(ctx, &m, userMappingsByVersionQuery, user, version)
 	return m, err
 }
 
@@ -300,9 +302,9 @@ const updateUserMappingsByVersionQuery = `
 `
 
 // UpdateUserMappingsByVersion updates the user's instant launches for a specific version.
-func (a *App) UpdateUserMappingsByVersion(user string, version int, update *InstantLaunchMapping) (*InstantLaunchMapping, error) {
+func (a *App) UpdateUserMappingsByVersion(ctx context.Context, user string, version int, update *InstantLaunchMapping) (*InstantLaunchMapping, error) {
 	retval := &InstantLaunchMapping{}
-	err := a.DB.QueryRowx(updateUserMappingsByVersionQuery, update, version, user).Scan(retval)
+	err := a.DB.QueryRowxContext(ctx, updateUserMappingsByVersionQuery, update, version, user).Scan(retval)
 	if err != nil {
 		return nil, err
 	}
@@ -318,8 +320,8 @@ const deleteUserMappingsByVersionQuery = `
 `
 
 // DeleteUserMappingsByVersion deletes a user's instant launch mappings at a specific version.
-func (a *App) DeleteUserMappingsByVersion(user string, version int) error {
-	_, err := a.DB.Exec(deleteUserMappingsByVersionQuery, user, version)
+func (a *App) DeleteUserMappingsByVersion(ctx context.Context, user string, version int) error {
+	_, err := a.DB.ExecContext(ctx, deleteUserMappingsByVersionQuery, user, version)
 	return err
 }
 
@@ -333,9 +335,9 @@ const latestDefaultsQuery = `
 `
 
 // LatestDefaults returns the latest version of the default instant launches.
-func (a *App) LatestDefaults() (DefaultInstantLaunchMapping, error) {
+func (a *App) LatestDefaults(ctx context.Context) (DefaultInstantLaunchMapping, error) {
 	m := DefaultInstantLaunchMapping{}
-	err := a.DB.Get(&m, latestDefaultsQuery)
+	err := a.DB.GetContext(ctx, &m, latestDefaultsQuery)
 	return m, err
 }
 
@@ -350,9 +352,9 @@ const updateLatestDefaultsQuery = `
 `
 
 // UpdateLatestDefaults sets a new value for the latest version of the defaults.
-func (a *App) UpdateLatestDefaults(newjson *InstantLaunchMapping) (*InstantLaunchMapping, error) {
+func (a *App) UpdateLatestDefaults(ctx context.Context, newjson *InstantLaunchMapping) (*InstantLaunchMapping, error) {
 	retval := &InstantLaunchMapping{}
-	err := a.DB.QueryRowx(updateLatestDefaultsQuery, newjson).Scan(retval)
+	err := a.DB.QueryRowxContext(ctx, updateLatestDefaultsQuery, newjson).Scan(retval)
 	return retval, err
 }
 
@@ -365,8 +367,8 @@ const deleteLatestDefaultsQuery = `
 `
 
 // DeleteLatestDefaults removes the latest default mappings from the database.
-func (a *App) DeleteLatestDefaults() error {
-	_, err := a.DB.Exec(deleteLatestDefaultsQuery)
+func (a *App) DeleteLatestDefaults(ctx context.Context) error {
+	_, err := a.DB.ExecContext(ctx, deleteLatestDefaultsQuery)
 	return err
 }
 
@@ -377,9 +379,9 @@ const createLatestDefaultsQuery = `
 `
 
 // AddLatestDefaults adds a new version of the default instant launch mappings.
-func (a *App) AddLatestDefaults(update *InstantLaunchMapping, addedBy string) (*InstantLaunchMapping, error) {
+func (a *App) AddLatestDefaults(ctx context.Context, update *InstantLaunchMapping, addedBy string) (*InstantLaunchMapping, error) {
 	newvalue := &InstantLaunchMapping{}
-	err := a.DB.QueryRowx(createLatestDefaultsQuery, update, addedBy).Scan(newvalue)
+	err := a.DB.QueryRowxContext(ctx, createLatestDefaultsQuery, update, addedBy).Scan(newvalue)
 	return newvalue, err
 }
 
@@ -392,9 +394,9 @@ const defaultsByVersionQuery = `
 `
 
 // DefaultsByVersion returns a specific version of the default instant launches.
-func (a *App) DefaultsByVersion(version int) (*DefaultInstantLaunchMapping, error) {
+func (a *App) DefaultsByVersion(ctx context.Context, version int) (*DefaultInstantLaunchMapping, error) {
 	m := &DefaultInstantLaunchMapping{}
-	err := a.DB.Get(m, defaultsByVersionQuery, version)
+	err := a.DB.GetContext(ctx, m, defaultsByVersionQuery, version)
 	return m, err
 }
 
@@ -406,9 +408,9 @@ const updateDefaultsByVersionQuery = `
 `
 
 // UpdateDefaultsByVersion updates the default mapping for a specific version.
-func (a *App) UpdateDefaultsByVersion(newjson *InstantLaunchMapping, version int) (*InstantLaunchMapping, error) {
+func (a *App) UpdateDefaultsByVersion(ctx context.Context, newjson *InstantLaunchMapping, version int) (*InstantLaunchMapping, error) {
 	updated := &InstantLaunchMapping{}
-	err := a.DB.QueryRowx(updateDefaultsByVersionQuery, newjson, version).Scan(updated)
+	err := a.DB.QueryRowxContext(ctx, updateDefaultsByVersionQuery, newjson, version).Scan(updated)
 	return updated, err
 }
 
@@ -419,8 +421,8 @@ const deleteDefaultsByVersionQuery = `
 
 // DeleteDefaultsByVersion removes a default instant launch mapping from the database
 // based on its version.
-func (a *App) DeleteDefaultsByVersion(version int) error {
-	_, err := a.DB.Exec(deleteDefaultsByVersionQuery, version)
+func (a *App) DeleteDefaultsByVersion(ctx context.Context, version int) error {
+	_, err := a.DB.ExecContext(ctx, deleteDefaultsByVersionQuery, version)
 	return err
 }
 
@@ -432,9 +434,9 @@ const listAllDefaultsQuery = `
 `
 
 // ListAllDefaults returns a list of all of the default instant launches, including their version.
-func (a *App) ListAllDefaults() (ListAllDefaultsResponse, error) {
+func (a *App) ListAllDefaults(ctx context.Context) (ListAllDefaultsResponse, error) {
 	m := ListAllDefaultsResponse{Defaults: []DefaultInstantLaunchMapping{}}
-	err := a.DB.Select(&m.Defaults, listAllDefaultsQuery)
+	err := a.DB.SelectContext(ctx, &m.Defaults, listAllDefaultsQuery)
 	return m, err
 }
 
@@ -456,8 +458,8 @@ const listPublicQLsQuery = `
 // ListViablePublicQuickLaunches returns a listing of quick launches that the user is permitted to run. This list
 // includes quick launches that were created by the authenticated user and public quick launches for which the
 // corresponding app is also public.
-func (a *App) ListViablePublicQuickLaunches(user string) ([]QuickLaunch, error) {
+func (a *App) ListViablePublicQuickLaunches(ctx context.Context, user string) ([]QuickLaunch, error) {
 	l := []QuickLaunch{}
-	err := a.DB.Select(&l, listPublicQLsQuery, user)
+	err := a.DB.SelectContext(ctx, &l, listPublicQLsQuery, user)
 	return l, err
 }

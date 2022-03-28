@@ -2,6 +2,7 @@ package instantlaunches
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
 	"io/ioutil"
@@ -22,9 +23,9 @@ func handleError(err error, statusCode int) error {
 }
 
 // InstantLaunchExists returns true if the id passed in exists in the database
-func (a *App) InstantLaunchExists(id string) (bool, error) {
+func (a *App) InstantLaunchExists(ctx context.Context, id string) (bool, error) {
 	var count int
-	err := a.DB.Get(&count, "SELECT COUNT(*) FROM instant_launches WHERE id = $1;", id)
+	err := a.DB.GetContext(ctx, &count, "SELECT COUNT(*) FROM instant_launches WHERE id = $1;", id)
 	return count > 0, err
 }
 
@@ -90,6 +91,7 @@ func (a *App) listAVUs(c echo.Context) ([]byte, *http.Response, error) {
 // FullListMetadataHandler returns a list of instant launches with the quick launches
 // embedded, meaning that the submission field is included.
 func (a *App) FullListMetadataHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	log.Debug("in FullListMetadataHandler")
 	avuBody, _, err := a.listAVUs(c)
 	if err != nil {
@@ -114,7 +116,7 @@ func (a *App) FullListMetadataHandler(c echo.Context) error {
 		targetIDs = append(targetIDs, string(avu.GetStringBytes("target_id")))
 	}
 
-	fullListing, err := a.ListFullInstantLaunchesByIDs(targetIDs)
+	fullListing, err := a.ListFullInstantLaunchesByIDs(ctx, targetIDs)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, "no instant launches found")
@@ -152,7 +154,7 @@ func (a *App) GetMetadataHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "user is missing")
 	}
 
-	exists, err := a.InstantLaunchExists(id)
+	exists, err := a.InstantLaunchExists(ctx, id)
 	if err != nil {
 		return handleError(err, http.StatusInternalServerError)
 	}
@@ -210,7 +212,7 @@ func (a *App) AddOrUpdateMetadataHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "user is missing")
 	}
 
-	exists, err := a.InstantLaunchExists(id)
+	exists, err := a.InstantLaunchExists(ctx, id)
 	if err != nil {
 		return handleError(err, http.StatusInternalServerError)
 	}
@@ -275,7 +277,7 @@ func (a *App) SetAllMetadataHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "user is missing")
 	}
 
-	exists, err := a.InstantLaunchExists(id)
+	exists, err := a.InstantLaunchExists(ctx, id)
 	if err != nil {
 		return handleError(err, http.StatusInternalServerError)
 	}

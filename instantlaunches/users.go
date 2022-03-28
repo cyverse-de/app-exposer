@@ -13,6 +13,7 @@ import (
 // UserMappingHandler is the echo handler for the http API that returns the user's
 // instant launch mappings.
 func (a *App) UserMappingHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	user := c.Param("username")
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
@@ -22,7 +23,7 @@ func (a *App) UserMappingHandler(c echo.Context) error {
 		user = fmt.Sprintf("%s%s", user, a.UserSuffix)
 	}
 
-	m, err := a.UserMapping(user)
+	m, err := a.UserMapping(ctx, user)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -35,6 +36,7 @@ func (a *App) UserMappingHandler(c echo.Context) error {
 // UpdateUserMappingHandler is the echo handler for the HTTP API that updates the user's
 // instant launch mapping.
 func (a *App) UpdateUserMappingHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	user := c.Param("username")
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
@@ -49,7 +51,7 @@ func (a *App) UpdateUserMappingHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "cannot parse JSON")
 	}
 
-	updated, err := a.UpdateUserMapping(user, newdefaults)
+	updated, err := a.UpdateUserMapping(ctx, user, newdefaults)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -63,6 +65,7 @@ func (a *App) UpdateUserMappingHandler(c echo.Context) error {
 // DeleteUserMappingHandler is the handler for the admin-only operation that removes
 // the latest mapping for the user.
 func (a *App) DeleteUserMappingHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	user := c.Param("username")
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
@@ -70,11 +73,12 @@ func (a *App) DeleteUserMappingHandler(c echo.Context) error {
 	if !strings.HasSuffix(user, a.UserSuffix) {
 		user = fmt.Sprintf("%s%s", user, a.UserSuffix)
 	}
-	return a.DeleteUserMapping(user)
+	return a.DeleteUserMapping(ctx, user)
 }
 
 // AddUserMappingHandler is the HTTP handler for adding a new user mapping to the database.
 func (a *App) AddUserMappingHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	user := c.Param("username")
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
@@ -89,7 +93,7 @@ func (a *App) AddUserMappingHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "cannot parse JSON")
 	}
 
-	retval, err := a.AddUserMapping(user, newvalue)
+	retval, err := a.AddUserMapping(ctx, user, newvalue)
 	if err != nil {
 		return err
 	}
@@ -100,6 +104,7 @@ func (a *App) AddUserMappingHandler(c echo.Context) error {
 // AllUserMappingsHandler is the echo handler for the http API that returns the user's
 // instant launch mappings.
 func (a *App) AllUserMappingsHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	user := c.Param("username")
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
@@ -109,7 +114,7 @@ func (a *App) AllUserMappingsHandler(c echo.Context) error {
 		user = fmt.Sprintf("%s%s", user, a.UserSuffix)
 	}
 
-	m, err := a.AllUserMappings(user)
+	m, err := a.AllUserMappings(ctx, user)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -123,6 +128,7 @@ func (a *App) AllUserMappingsHandler(c echo.Context) error {
 // UserMappingsByVersionHandler is the echo handler for the http API that returns a specific
 // version of the user's instant launch mappings.
 func (a *App) UserMappingsByVersionHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	user := c.Param("username")
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
@@ -137,7 +143,7 @@ func (a *App) UserMappingsByVersionHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "cannot process version")
 	}
 
-	m, err := a.UserMappingsByVersion(user, int(version))
+	m, err := a.UserMappingsByVersion(ctx, user, int(version))
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -151,6 +157,7 @@ func (a *App) UserMappingsByVersionHandler(c echo.Context) error {
 // UpdateUserMappingsByVersionHandler is the echo handler for the HTTP API that allows callers
 // to update a user's instant launches for a specific version.
 func (a *App) UpdateUserMappingsByVersionHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	user := c.Param("username")
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
@@ -172,7 +179,7 @@ func (a *App) UpdateUserMappingsByVersionHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "cannot parse JSON")
 	}
 
-	newversion, err := a.UpdateUserMappingsByVersion(user, int(version), update)
+	newversion, err := a.UpdateUserMappingsByVersion(ctx, user, int(version), update)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -186,6 +193,7 @@ func (a *App) UpdateUserMappingsByVersionHandler(c echo.Context) error {
 // DeleteUserMappingsByVersionHandler is the echo handler for the HTTP API that allows callers
 // delete a user's instant launch mappings at a specific version.
 func (a *App) DeleteUserMappingsByVersionHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	user := c.Param("username")
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
@@ -200,5 +208,5 @@ func (a *App) DeleteUserMappingsByVersionHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "cannot process version")
 	}
 
-	return a.DeleteUserMappingsByVersion(user, int(version))
+	return a.DeleteUserMappingsByVersion(ctx, user, int(version))
 }

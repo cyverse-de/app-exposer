@@ -11,6 +11,7 @@ import (
 
 // AddInstantLaunchHandler is the HTTP handler for adding a new instant launch.
 func (a *App) AddInstantLaunchHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	il, err := NewInstantLaunchFromJSON(c.Request().Body)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "cannot parse JSON")
@@ -24,7 +25,7 @@ func (a *App) AddInstantLaunchHandler(c echo.Context) error {
 		il.AddedBy = fmt.Sprintf("%s%s", il.AddedBy, a.UserSuffix)
 	}
 
-	newil, err := a.AddInstantLaunch(il.QuickLaunchID, il.AddedBy)
+	newil, err := a.AddInstantLaunch(ctx, il.QuickLaunchID, il.AddedBy)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -38,12 +39,13 @@ func (a *App) AddInstantLaunchHandler(c echo.Context) error {
 // GetInstantLaunchHandler is the HTTP handler for getting a specific Instant Launch
 // by its UUID.
 func (a *App) GetInstantLaunchHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
 	if id == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "id is missing")
 	}
 
-	il, err := a.GetInstantLaunch(id)
+	il, err := a.GetInstantLaunch(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -58,12 +60,13 @@ func (a *App) GetInstantLaunchHandler(c echo.Context) error {
 // FullInstantLaunchHandler is the HTTP handler for getting a full description of
 // an instant launch, including its quick launch, submission, and basic app info.
 func (a *App) FullInstantLaunchHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
 	if id == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "id is missing")
 	}
 
-	il, err := a.FullInstantLaunch(id)
+	il, err := a.FullInstantLaunch(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -76,6 +79,7 @@ func (a *App) FullInstantLaunchHandler(c echo.Context) error {
 
 // UpdateInstantLaunchHandler is the HTTP handler for updating an instant launch.
 func (a *App) UpdateInstantLaunchHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
 	if id == "" {
 		return echo.NewHTTPError(http.StatusNotFound, "id is missing")
@@ -86,7 +90,7 @@ func (a *App) UpdateInstantLaunchHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "cannot parse JSON")
 	}
 
-	newvalue, err := a.UpdateInstantLaunch(id, updated.QuickLaunchID)
+	newvalue, err := a.UpdateInstantLaunch(ctx, id, updated.QuickLaunchID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -100,12 +104,13 @@ func (a *App) UpdateInstantLaunchHandler(c echo.Context) error {
 // DeleteInstantLaunchHandler is the HTTP handler for deleting an Instant Launch
 // based on its UUID.
 func (a *App) DeleteInstantLaunchHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
 	if id == "" {
 		return echo.NewHTTPError(http.StatusNotFound, "id is missing")
 	}
 
-	err := a.DeleteInstantLaunch(id)
+	err := a.DeleteInstantLaunch(ctx, id)
 	return err
 
 }
@@ -113,7 +118,8 @@ func (a *App) DeleteInstantLaunchHandler(c echo.Context) error {
 // ListInstantLaunchesHandler is the HTTP handler for listing all of the
 // registered Instant Launches.
 func (a *App) ListInstantLaunchesHandler(c echo.Context) error {
-	list, err := a.ListInstantLaunches()
+	ctx := c.Request().Context()
+	list, err := a.ListInstantLaunches(ctx)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -127,7 +133,8 @@ func (a *App) ListInstantLaunchesHandler(c echo.Context) error {
 // FullListInstantLaunchesHandler is the HTTP handler for performing a full
 // listing of all registered instant launches.
 func (a *App) FullListInstantLaunchesHandler(c echo.Context) error {
-	list, err := a.FullListInstantLaunches()
+	ctx := c.Request().Context()
+	list, err := a.FullListInstantLaunches(ctx)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -142,6 +149,7 @@ func (a *App) FullListInstantLaunchesHandler(c echo.Context) error {
 // public. This should help us avoid situations where we accidentally list public
 // quick launches for apps that have been deleted or are otherwise no longer public.
 func (a *App) ListViablePublicQuickLaunchesHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	user := c.QueryParam("user")
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user must be set")
@@ -151,7 +159,7 @@ func (a *App) ListViablePublicQuickLaunchesHandler(c echo.Context) error {
 		user = fmt.Sprintf("%s%s", user, a.UserSuffix)
 	}
 
-	list, err := a.ListViablePublicQuickLaunches(user)
+	list, err := a.ListViablePublicQuickLaunches(ctx, user)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
