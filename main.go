@@ -65,6 +65,10 @@ func jaegerTracerProvider(url string) (*tracesdk.TracerProvider, error) {
 	return tp, nil
 }
 
+func wrapOtelTransport(rt http.RoundTripper) http.RoundTripper {
+	return otelhttp.NewTransport(rt)
+}
+
 func main() {
 	log.Logger.SetReportCaller(true)
 
@@ -217,7 +221,9 @@ func main() {
 		}
 	}
 
-	clientset, err := kubernetes.NewForConfigAndClient(config, &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)})
+	config.Wrap(wrapOtelTransport)
+
+	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "error creating clientset from config"))
 	}
