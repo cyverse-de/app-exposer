@@ -51,17 +51,6 @@ spec:
           limits:
             cpu: "100m"
             memory: "256Mi"
-        env:
-          - name: OTEL_TRACES_EXPORTER
-            valueFrom:
-              secretKeyRef:
-                name: configs
-                key: OTEL_TRACES_EXPORTER
-          - name: OTEL_EXPORTER_JAEGER_ENDPOINT
-            valueFrom:
-              secretKeyRef:
-                name: configs
-                key: OTEL_EXPORTER_JAEGER_HTTP_ENDPOINT
         args:
           - --namespace
           - "$(APP_EXPOSER_NAMESPACE)"
@@ -81,6 +70,16 @@ spec:
               secretKeyRef:
                 name: configs
                 key: USER_SUFFIX
+          - name: OTEL_TRACES_EXPORTER
+            valueFrom:
+              secretKeyRef:
+                name: configs
+                key: OTEL_TRACES_EXPORTER
+          - name: OTEL_EXPORTER_JAEGER_ENDPOINT
+            valueFrom:
+              secretKeyRef:
+                name: configs
+                key: OTEL_EXPORTER_JAEGER_HTTP_ENDPOINT
         ports:
           - name: listen-port
             containerPort: 60000
