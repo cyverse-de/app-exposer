@@ -120,7 +120,7 @@ func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, apps *apps.App
 }
 
 // labelsFromJob returns a map[string]string that can be used as labels for K8s resources.
-func (i *Internal) labelsFromJob(job *model.Job) (map[string]string, error) {
+func (i *Internal) labelsFromJob(ctx context.Context, job *model.Job) (map[string]string, error) {
 	name := []rune(job.Name)
 
 	var stringmax int
@@ -130,7 +130,7 @@ func (i *Internal) labelsFromJob(job *model.Job) (map[string]string, error) {
 		stringmax = len(name) - 1
 	}
 
-	ipAddr, err := i.apps.GetUserIP(job.UserID)
+	ipAddr, err := i.apps.GetUserIP(ctx, job.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +153,7 @@ func (i *Internal) labelsFromJob(job *model.Job) (map[string]string, error) {
 // the k8s API to create the ConfigMap if it does not already exist or to
 // update it if it does.
 func (i *Internal) UpsertExcludesConfigMap(ctx context.Context, job *model.Job) error {
-	excludesCM, err := i.excludesConfigMap(job)
+	excludesCM, err := i.excludesConfigMap(ctx, job)
 	if err != nil {
 		return err
 	}
@@ -181,7 +181,7 @@ func (i *Internal) UpsertExcludesConfigMap(ctx context.Context, job *model.Job) 
 // It then uses the k8s API to create the ConfigMap if it does not already exist or to
 // update it if it does.
 func (i *Internal) UpsertInputPathListConfigMap(ctx context.Context, job *model.Job) error {
-	inputCM, err := i.inputPathListConfigMap(job)
+	inputCM, err := i.inputPathListConfigMap(ctx, job)
 	if err != nil {
 		return err
 	}
@@ -225,12 +225,12 @@ func (i *Internal) UpsertDeployment(ctx context.Context, deployment *appsv1.Depl
 	}
 
 	// Create the persistent volumes and persistent volume claims for the job.
-	volumes, err := i.getPersistentVolumes(job)
+	volumes, err := i.getPersistentVolumes(ctx, job)
 	if err != nil {
 		return err
 	}
 
-	volumeclaims, err := i.getPersistentVolumeClaims(job)
+	volumeclaims, err := i.getPersistentVolumeClaims(ctx, job)
 	if err != nil {
 		return err
 	}
@@ -274,7 +274,7 @@ func (i *Internal) UpsertDeployment(ctx context.Context, deployment *appsv1.Depl
 	}
 
 	// Create the service for the job.
-	svc, err := i.getService(job, deployment)
+	svc, err := i.getService(ctx, job, deployment)
 	if err != nil {
 		return err
 	}
@@ -288,7 +288,7 @@ func (i *Internal) UpsertDeployment(ctx context.Context, deployment *appsv1.Depl
 	}
 
 	// Create the ingress for the job
-	ingress, err := i.getIngress(job, svc)
+	ingress, err := i.getIngress(ctx, job, svc)
 	if err != nil {
 		return err
 	}
@@ -381,7 +381,7 @@ func (i *Internal) LaunchAppHandler(c echo.Context) error {
 		return err
 	}
 
-	deployment, err := i.getDeployment(job)
+	deployment, err := i.getDeployment(ctx, job)
 	if err != nil {
 		return err
 	}
@@ -611,7 +611,7 @@ func (i *Internal) URLReadyHandler(c echo.Context) error {
 	// Since some usernames don't come through the labelling process unscathed, we have to use
 	// the user ID.
 	fixedUser := i.fixUsername(user)
-	_, err := i.apps.GetUserID(fixedUser)
+	_, err := i.apps.GetUserID(ctx, fixedUser)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("user %s not found", fixedUser))
@@ -665,7 +665,7 @@ func (i *Internal) URLReadyHandler(c echo.Context) error {
 		"ready": ingressExists && serviceExists && podReady,
 	}
 
-	analysisID, err := i.apps.GetAnalysisIDByExternalID(id)
+	analysisID, err := i.apps.GetAnalysisIDByExternalID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -898,7 +898,7 @@ func (i *Internal) AdminTimeLimitUpdateHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}
 
-	user, _, err = i.apps.GetUserByAnalysisID(id)
+	user, _, err = i.apps.GetUserByAnalysisID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -936,7 +936,7 @@ func (i *Internal) GetTimeLimitHandler(c echo.Context) error {
 	}
 
 	// Could use this to get the username, but we need to not break other services.
-	_, userID, err = i.apps.GetUserByAnalysisID(analysisID)
+	_, userID, err = i.apps.GetUserByAnalysisID(ctx, analysisID)
 	if err != nil {
 		return err
 	}
@@ -968,7 +968,7 @@ func (i *Internal) AdminGetTimeLimitHandler(c echo.Context) error {
 	}
 
 	// Could use this to get the username, but we need to not break other services.
-	_, userID, err = i.apps.GetUserByAnalysisID(analysisID)
+	_, userID, err = i.apps.GetUserByAnalysisID(ctx, analysisID)
 	if err != nil {
 		return err
 	}

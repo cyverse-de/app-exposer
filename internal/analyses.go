@@ -16,7 +16,7 @@ func (i *Internal) AsyncDataHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "external-id not set")
 	}
 
-	analysisID, err := i.apps.GetAnalysisIDByExternalID(externalID)
+	analysisID, err := i.apps.GetAnalysisIDByExternalID(ctx, externalID)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -39,7 +39,7 @@ func (i *Internal) AsyncDataHandler(c echo.Context) error {
 	userID := labels["user-id"]
 
 	subdomain := IngressName(userID, externalID)
-	ipAddr, err := i.apps.GetUserIP(userID)
+	ipAddr, err := i.apps.GetUserIP(ctx, userID)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -56,7 +56,7 @@ func (i *Internal) AsyncDataHandler(c echo.Context) error {
 // only returns the first result, since VICE analyses only have a single step in
 // the database.
 func (i *Internal) getExternalIDByAnalysisID(ctx context.Context, analysisID string) (string, error) {
-	username, _, err := i.apps.GetUserByAnalysisID(analysisID)
+	username, _, err := i.apps.GetUserByAnalysisID(ctx, analysisID)
 	if err != nil {
 		return "", err
 	}

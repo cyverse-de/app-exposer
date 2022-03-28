@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 
@@ -18,13 +19,13 @@ func IngressName(userID, invocationID string) string {
 
 // getIngress assembles and returns the Ingress needed for the VICE analysis.
 // It does not call the k8s API.
-func (i *Internal) getIngress(job *model.Job, svc *apiv1.Service) (*netv1.Ingress, error) {
+func (i *Internal) getIngress(ctx context.Context, job *model.Job, svc *apiv1.Service) (*netv1.Ingress, error) {
 	var (
 		rules       []netv1.IngressRule
 		defaultPort int32
 	)
 
-	labels, err := i.labelsFromJob(job)
+	labels, err := i.labelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -139,8 +140,8 @@ func (i *Internal) getSharedPathMapping(job *model.Job) IRODSFSPathMapping {
 	}
 }
 
-func (i *Internal) getCSIInputOutputVolumeLabels(job *model.Job) (map[string]string, error) {
-	labels, err := i.labelsFromJob(job)
+func (i *Internal) getCSIInputOutputVolumeLabels(ctx context.Context, job *model.Job) (map[string]string, error) {
+	labels, err := i.labelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -149,8 +150,8 @@ func (i *Internal) getCSIInputOutputVolumeLabels(job *model.Job) (map[string]str
 	return labels, nil
 }
 
-func (i *Internal) getCSIHomeVolumeLabels(job *model.Job) (map[string]string, error) {
-	labels, err := i.labelsFromJob(job)
+func (i *Internal) getCSIHomeVolumeLabels(ctx context.Context, job *model.Job) (map[string]string, error) {
+	labels, err := i.labelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +162,7 @@ func (i *Internal) getCSIHomeVolumeLabels(job *model.Job) (map[string]string, er
 
 // getPersistentVolumes returns the PersistentVolumes for the VICE analysis. It does
 // not call the k8s API.
-func (i *Internal) getPersistentVolumes(job *model.Job) ([]*apiv1.PersistentVolume, error) {
+func (i *Internal) getPersistentVolumes(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolume, error) {
 	if i.UseCSIDriver {
 		// input output path
 		ioPathMappings := []IRODSFSPathMapping{}
@@ -200,7 +201,7 @@ func (i *Internal) getPersistentVolumes(job *model.Job) ([]*apiv1.PersistentVolu
 		volmode := apiv1.PersistentVolumeFilesystem
 		persistentVolumes := []*apiv1.PersistentVolume{}
 
-		ioVolumeLabels, err := i.getCSIInputOutputVolumeLabels(job)
+		ioVolumeLabels, err := i.getCSIInputOutputVolumeLabels(ctx, job)
 		if err != nil {
 			return nil, err
 		}
@@ -240,7 +241,7 @@ func (i *Internal) getPersistentVolumes(job *model.Job) ([]*apiv1.PersistentVolu
 		persistentVolumes = append(persistentVolumes, ioVolume)
 
 		if job.UserHome != "" {
-			homeVolumeLabels, err := i.getCSIHomeVolumeLabels(job)
+			homeVolumeLabels, err := i.getCSIHomeVolumeLabels(ctx, job)
 			if err != nil {
 				return nil, err
 			}
@@ -288,9 +289,9 @@ func (i *Internal) getPersistentVolumes(job *model.Job) ([]*apiv1.PersistentVolu
 
 // getPersistentVolumeClaims returns the PersistentVolumes for the VICE analysis. It does
 // not call the k8s API.
-func (i *Internal) getPersistentVolumeClaims(job *model.Job) ([]*apiv1.PersistentVolumeClaim, error) {
+func (i *Internal) getPersistentVolumeClaims(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolumeClaim, error) {
 	if i.UseCSIDriver {
-		labels, err := i.labelsFromJob(job)
+		labels, err := i.labelsFromJob(ctx, job)
 		if err != nil {
 			return nil, err
 		}

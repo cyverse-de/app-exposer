@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -615,8 +616,8 @@ func (i *Internal) imagePullSecrets(_ *model.Job) []apiv1.LocalObjectReference {
 
 // getDeployment assembles and returns the Deployment for the VICE analysis. It does
 // not call the k8s API.
-func (i *Internal) getDeployment(job *model.Job) (*appsv1.Deployment, error) {
-	labels, err := i.labelsFromJob(job)
+func (i *Internal) getDeployment(ctx context.Context, job *model.Job) (*appsv1.Deployment, error) {
+	labels, err := i.labelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}

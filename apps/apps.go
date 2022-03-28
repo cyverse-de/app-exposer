@@ -1,6 +1,7 @@
 package apps
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -12,7 +13,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
 )
+
+const otelName = "github.com/cyverse-de/app-exposer/apps"
 
 var log = common.Log.WithFields(logrus.Fields{"package": "apps"})
 
@@ -51,10 +55,12 @@ func (a *Apps) Run() {
 		case mj := <-a.addJob:
 			a.jobs[mj.ID.String()] = true
 			go func(mj millicoresJob) {
+				ctx, span := otel.Tracer(otelName).Start(context.Background(), "job millicores goroutine")
+				defer span.End()
 				var err error
 
 				log.Debugf("storing %s millicores reserved for %s", mj.MillicoresReserved.String(), mj.Job.InvocationID)
-				if err = a.storeMillicoresInternal(&mj.Job, mj.MillicoresReserved); err != nil {
+				if err = a.storeMillicoresInternal(ctx, &mj.Job, mj.MillicoresReserved); err != nil {
 					log.Error(err)
 				}
 				log.Debugf("done storing %s millicores reserved for %s", mj.MillicoresReserved.String(), mj.Job.InvocationID)
@@ -85,9 +91,9 @@ const analysisIDByExternalIDQuery = `
 
 // GetAnalysisIDByExternalID returns the analysis ID based on the external ID
 // passed in.
-func (a *Apps) GetAnalysisIDByExternalID(externalID string) (string, error) {
+func (a *Apps) GetAnalysisIDByExternalID(ctx context.Context, externalID string) (string, error) {
 	var analysisID string
-	err := a.DB.QueryRow(analysisIDByExternalIDQuery, externalID).Scan(&analysisID)
+	err := a.DB.QueryRowContext(ctx, analysisIDByExternalIDQuery, externalID).Scan(&analysisID)
 	if err != nil {
 		return "", err
 	}
@@ -102,9 +108,9 @@ const analysisIDBySubdomainQuery = `
 
 // GetAnalysisIDBySubdomain returns the analysis ID based on the subdomain
 // generated for it.
-func (a *Apps) GetAnalysisIDBySubdomain(subdomain string) (string, error) {
+func (a *Apps) GetAnalysisIDBySubdomain(ctx context.Context, subdomain string) (string, error) {
 	var analysisID string
-	err := a.DB.QueryRow(analysisIDBySubdomainQuery, subdomain).Scan(&analysisID)
+	err := a.DB.QueryRowContext(ctx, analysisIDBySubdomainQuery, subdomain).Scan(&analysisID)
 	if err != nil {
 		return "", err
 	}
@@ -121,13 +127,13 @@ const getUserIPQuery = `
 `
 
 // GetUserIP returns the latest login ip address for the given user ID.
-func (a *Apps) GetUserIP(userID string) (string, error) {
+func (a *Apps) GetUserIP(ctx context.Context, userID string) (string, error) {
 	var (
 		ipAddr sql.NullString
 		retval string
 	)
 
-	err := a.DB.QueryRow(getUserIPQuery, userID).Scan(&ipAddr)
+	err := a.DB.QueryRowContext(ctx, getUserIPQuery, userID).Scan(&ipAddr)
 	if err != nil {
 		return "", err
 	}
@@ -148,9 +154,9 @@ const getAnalysisStatusQuery = `
 `
 
 // GetAnalysisStatus gets the current status of the overall Analysis/Job in the database.
-func (a *Apps) GetAnalysisStatus(analysisID string) (string, error) {
+func (a *Apps) GetAnalysisStatus(ctx context.Context, analysisID string) (string, error) {
 	var status string
-	err := a.DB.QueryRow(getAnalysisStatusQuery, analysisID).Scan(&status)
+	err := a.DB.QueryRowContext(ctx, getAnalysisStatusQuery, analysisID).Scan(&status)
 	if err != nil {
 		return "", err
 	}
@@ -166,9 +172,9 @@ const userByAnalysisIDQuery = `
 `
 
 // GetUserByAnalysisID returns the username and id of the user that launched the analysis.
-func (a *Apps) GetUserByAnalysisID(analysisID string) (string, string, error) {
+func (a *Apps) GetUserByAnalysisID(ctx context.Context, analysisID string) (string, string, error) {
 	var username, id string
-	err := a.DB.QueryRow(userByAnalysisIDQuery, analysisID).Scan(&username, &id)
+	err := a.DB.QueryRowContext(ctx, userByAnalysisIDQuery, analysisID).Scan(&username, &id)
 	if err != nil {
 		return "", "", err
 	}
@@ -183,9 +189,9 @@ const userByUsername = `
 `
 
 // GetUserID returns the user's UUID based on their full username, including domain suffix.
-func (a *Apps) GetUserID(username string) (string, error) {
+func (a *Apps) GetUserID(ctx context.Context, username string) (string, error) {
 	var id string
-	err := a.DB.QueryRow(userByUsername, username).Scan(&id)
+	err := a.DB.QueryRowContext(ctx, userByUsername, username).Scan(&id)
 	return id, err
 }
 
@@ -195,18 +201,18 @@ const setMillicoresStmt = `
 	WHERE id = $1;
 `
 
-func (a *Apps) setMillicoresReserved(analysisID string, millicores *apd.Decimal) error {
+func (a *Apps) setMillicoresReserved(ctx context.Context, analysisID string, millicores *apd.Decimal) error {
 	milliInt, err := millicores.Int64()
 	if err != nil {
 		return err
 	}
-	_, err = a.DB.Exec(setMillicoresStmt, analysisID, milliInt)
+	_, err = a.DB.ExecContext(ctx, setMillicoresStmt, analysisID, milliInt)
 	return err
 }
 
-func (a *Apps) tryForAnalysisID(job *model.Job, maxAttempts int) (string, error) {
+func (a *Apps) tryForAnalysisID(ctx context.Context, job *model.Job, maxAttempts int) (string, error) {
 	for i := 0; i < maxAttempts; i++ {
-		analysisID, err := a.GetAnalysisIDByExternalID(job.InvocationID)
+		analysisID, err := a.GetAnalysisIDByExternalID(ctx, job.InvocationID)
 		if err != nil {
 			time.Sleep(1 * time.Second)
 		} else {
@@ -216,13 +222,13 @@ func (a *Apps) tryForAnalysisID(job *model.Job, maxAttempts int) (string, error)
 	return "", fmt.Errorf("failed to find analysis ID after %d attempts", maxAttempts)
 }
 
-func (a *Apps) storeMillicoresInternal(job *model.Job, millicores *apd.Decimal) error {
-	analysisID, err := a.tryForAnalysisID(job, 30)
+func (a *Apps) storeMillicoresInternal(ctx context.Context, job *model.Job, millicores *apd.Decimal) error {
+	analysisID, err := a.tryForAnalysisID(ctx, job, 30)
 	if err != nil {
 		return err
 	}
 
-	if err = a.setMillicoresReserved(analysisID, millicores); err != nil {
+	if err = a.setMillicoresReserved(ctx, analysisID, millicores); err != nil {
 		return err
 	}
 

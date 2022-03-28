@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/cyverse-de/model"
@@ -13,8 +14,8 @@ import (
 
 // getService assembles and returns the Service needed for the VICE analysis.
 // It does not call the k8s API.
-func (i *Internal) getService(job *model.Job, deployment *appsv1.Deployment) (*apiv1.Service, error) {
-	labels, err := i.labelsFromJob(job)
+func (i *Internal) getService(ctx context.Context, job *model.Job, deployment *appsv1.Deployment) (*apiv1.Service, error) {
+	labels, err := i.labelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}

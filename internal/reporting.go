@@ -572,7 +572,7 @@ func (i *Internal) DescribeAnalysisHandler(c echo.Context) error {
 	// Since some usernames don't come through the labelling process unscathed, we have to use
 	// the user ID.
 	fixedUser := i.fixUsername(user)
-	_, err := i.apps.GetUserID(fixedUser)
+	_, err := i.apps.GetUserID(ctx, fixedUser)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("user %s not found", fixedUser))
@@ -597,7 +597,7 @@ func (i *Internal) DescribeAnalysisHandler(c echo.Context) error {
 	// is set in the database.
 	if len(listing.Deployments) > 0 {
 		externalID := listing.Deployments[0].ExternalID
-		analysisID, err := i.apps.GetAnalysisIDByExternalID(externalID)
+		analysisID, err := i.apps.GetAnalysisIDByExternalID(ctx, externalID)
 		if err != nil {
 			return err
 		}
@@ -632,7 +632,7 @@ func (i *Internal) FilterableResourcesHandler(c echo.Context) error {
 	// Since some usernames don't come through the labelling process unscathed, we have to use
 	// the user ID.
 	user = i.fixUsername(user)
-	userID, err := i.apps.GetUserID(user)
+	userID, err := i.apps.GetUserID(ctx, user)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("user %s not found", user))
@@ -669,13 +669,13 @@ func (i *Internal) AdminFilterableResourcesHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, listing)
 }
 
-func populateAnalysisID(a *apps.Apps, existingLabels map[string]string) (map[string]string, error) {
+func populateAnalysisID(ctx context.Context, a *apps.Apps, existingLabels map[string]string) (map[string]string, error) {
 	if _, ok := existingLabels["analysis-id"]; !ok {
 		externalID, ok := existingLabels["external-id"]
 		if !ok {
 			return existingLabels, fmt.Errorf("missing external-id key")
 		}
-		analysisID, err := a.GetAnalysisIDByExternalID(externalID)
+		analysisID, err := a.GetAnalysisIDByExternalID(ctx, externalID)
 		if err != nil {
 			log.Debug(errors.Wrapf(err, "error getting analysis id for external id %s", externalID))
 		} else {
@@ -697,10 +697,10 @@ func populateSubdomain(existingLabels map[string]string) map[string]string {
 	return existingLabels
 }
 
-func populateLoginIP(a *apps.Apps, existingLabels map[string]string) (map[string]string, error) {
+func populateLoginIP(ctx context.Context, a *apps.Apps, existingLabels map[string]string) (map[string]string, error) {
 	if _, ok := existingLabels["login-ip"]; !ok {
 		if userID, ok := existingLabels["user-id"]; ok {
-			ipAddr, err := a.GetUserIP(userID)
+			ipAddr, err := a.GetUserIP(ctx, userID)
 			if err != nil {
 				return existingLabels, err
 			}
@@ -726,12 +726,12 @@ func (i *Internal) relabelDeployments(ctx context.Context) []error {
 
 		existingLabels = populateSubdomain(existingLabels)
 
-		existingLabels, err = populateLoginIP(i.apps, existingLabels)
+		existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
 
-		existingLabels, err = populateAnalysisID(i.apps, existingLabels)
+		existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -761,12 +761,12 @@ func (i *Internal) relabelConfigMaps(ctx context.Context) []error {
 
 		existingLabels = populateSubdomain(existingLabels)
 
-		existingLabels, err = populateLoginIP(i.apps, existingLabels)
+		existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
 
-		existingLabels, err = populateAnalysisID(i.apps, existingLabels)
+		existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -796,12 +796,12 @@ func (i *Internal) relabelServices(ctx context.Context) []error {
 
 		existingLabels = populateSubdomain(existingLabels)
 
-		existingLabels, err = populateLoginIP(i.apps, existingLabels)
+		existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
 
-		existingLabels, err = populateAnalysisID(i.apps, existingLabels)
+		existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -831,12 +831,12 @@ func (i *Internal) relabelIngresses(ctx context.Context) []error {
 
 		existingLabels = populateSubdomain(existingLabels)
 
-		existingLabels, err = populateLoginIP(i.apps, existingLabels)
+		existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}
 
-		existingLabels, err = populateAnalysisID(i.apps, existingLabels)
+		existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
 		if err != nil {
 			errors = append(errors, err)
 		}

@@ -64,7 +64,7 @@ func (i *Internal) countJobsForUser(ctx context.Context, username string) (int, 
 			continue
 		}
 
-		if analysisID, err = i.apps.GetAnalysisIDByExternalID(externalID); err != nil {
+		if analysisID, err = i.apps.GetAnalysisIDByExternalID(ctx, externalID); err != nil {
 			// If we failed to get it from the database, count it because it
 			// shouldn't be running.
 			log.Error(err)
@@ -72,7 +72,7 @@ func (i *Internal) countJobsForUser(ctx context.Context, username string) (int, 
 			continue
 		}
 
-		analysisStatus, err = i.apps.GetAnalysisStatus(analysisID)
+		analysisStatus, err = i.apps.GetAnalysisStatus(ctx, analysisID)
 		if err != nil {
 			// If we failed to get the status, then something is horribly wrong.
 			// Count the analysis.
