@@ -828,7 +828,7 @@ func (i *Internal) AdminSaveAndExitHandler(c echo.Context) error {
 		}
 
 		log.Debug("after VICEExit")
-	}(c)
+	}(c.Request().Context(), c)
 
 	log.Info("admin leaving save and exit")
 	return nil
