@@ -760,8 +760,9 @@ func (i *Internal) SaveAndExitHandler(c echo.Context) error {
 	// Since file transfers can take a while, we should do this asynchronously by default.
 	go func(c echo.Context) {
 		var err error
-		ctx := c.Request().Context()
-		ctx, span := otel.Tracer(otelName).Start(context.Background(), "SaveAndExitHandler goroutine", trace.WithLinks(trace.LinkFromContext(ctx)))
+		outerCtx := trace.ContextWithSpanContext(context.Background(),
+			trace.SpanContextFromContext(c.Request().Context()))
+		ctx, span := otel.Tracer(otelName).Start(outerCtx, "SaveAndExitHandler goroutine")
 		defer span.End()
 
 		externalID := c.Param("id")
