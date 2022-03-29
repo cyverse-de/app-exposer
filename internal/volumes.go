@@ -27,6 +27,10 @@ type IRODSFSPathMapping struct {
 	IgnoreNotExist bool   `yaml:"ignore_not_exist" json:"ignore_not_exist"`
 }
 
+func (i *Internal) getZoneMountPath() string {
+	return fmt.Sprintf("%s/%s", csiDriverLocalMountPath, i.IRODSZone)
+}
+
 func (i *Internal) getCSIInputOutputVolumeHandle(job *model.Job) string {
 	return fmt.Sprintf("%s-handle-%s", csiDriverInputOutputVolumeNamePrefix, job.InvocationID)
 }
@@ -112,7 +116,7 @@ func (i *Internal) getOutputPathMapping(job *model.Job) IRODSFSPathMapping {
 
 func (i *Internal) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
 	// mount a single collection for home
-	userHome := strings.TrimPrefix(job.UserHome, fmt.Sprintf("/%s", i.IRODSZone))
+	userHome := strings.TrimPrefix(job.UserHome, i.getZoneMountPath())
 	userHome = strings.TrimSuffix(userHome, "/")
 
 	return IRODSFSPathMapping{
@@ -127,7 +131,7 @@ func (i *Internal) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
 
 func (i *Internal) getSharedPathMapping(job *model.Job) IRODSFSPathMapping {
 	// mount a single collection for shared data
-	sharedHomeFullPath := fmt.Sprintf("/%s/home/shared", i.IRODSZone)
+	sharedHomeFullPath := fmt.Sprintf("%s/home/shared", i.getZoneMountPath())
 	sharedHome := "/home/shared"
 
 	return IRODSFSPathMapping{
@@ -408,7 +412,7 @@ func (i *Internal) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMoun
 
 		homeVolumeMount := &apiv1.VolumeMount{
 			Name:      i.getCSIHomeVolumeClaimName(job),
-			MountPath: fmt.Sprintf("/%s", i.IRODSZone),
+			MountPath: i.getZoneMountPath(),
 		}
 		volumeMounts = append(volumeMounts, homeVolumeMount)
 

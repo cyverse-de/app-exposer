@@ -15,7 +15,7 @@ const (
 	csiDriverHomeVolumeClaimNamePrefix        = "csi-home-volume-claim"
 	csiDriverInputVolumeMountPath             = "/input"
 	csiDriverOutputVolumeMountPath            = "/output"
-	csiDriverLocalMountPath                   = "/data"
+	csiDriverLocalMountPath                   = "/data-store"
 
 	// The file transfers volume serves as the working directory when IRODS CSI Driver integration is disabled.
 	fileTransfersVolumeName        = "input-files"
