@@ -758,10 +758,11 @@ func (i *Internal) SaveAndExitHandler(c echo.Context) error {
 	log.Info("save and exit called")
 
 	// Since file transfers can take a while, we should do this asynchronously by default.
-	go func(c echo.Context) {
+	go func(ctx context.Context, c echo.Context) {
 		var err error
-		outerCtx := trace.ContextWithSpanContext(context.Background(),
-			trace.SpanContextFromContext(c.Request().Context()))
+		separatedSpanContext := trace.SpanContextFromContext(ctx)
+		log.Infof("separated span context has traceID %s and spanID %s", separatedSpanContext.SpanID(), separatedSpanContext.TraceID())
+		outerCtx := trace.ContextWithSpanContext(context.Background(), separatedSpanContext)
 		ctx, span := otel.Tracer(otelName).Start(outerCtx, "SaveAndExitHandler goroutine")
 		defer span.End()
 
@@ -781,7 +782,7 @@ func (i *Internal) SaveAndExitHandler(c echo.Context) error {
 		}
 
 		log.Infof("after VICEExit for %s", externalID)
-	}(c)
+	}(c.Request().Context(), c)
 
 	log.Info("leaving save and exit")
 
