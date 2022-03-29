@@ -3,6 +3,7 @@ package instantlaunches
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -30,7 +31,7 @@ func TestUserMapping(t *testing.T) {
 		WithArgs("test").
 		WillReturnRows(rows)
 
-	actual, err := app.UserMapping("test")
+	actual, err := app.UserMapping(context.Background(), "test")
 	assert.NoError(err, "should not error")
 	assert.Equal("0", actual.ID, "id should be 0")
 	assert.Equal("0", actual.Version, "version should be 0")
@@ -79,6 +80,7 @@ func TestUserMappingHandler(t *testing.T) {
 
 		actual := &UserInstantLaunchMapping{}
 		err = json.Unmarshal(rec.Body.Bytes(), &actual)
+		assert.NoError(err, "failed to unmarshal the response body")
 		assert.Equal("0", actual.ID, "id should be 0")
 		assert.Equal("0", actual.Version, "version should be 0")
 		assert.True(
@@ -128,7 +130,7 @@ func TestUpdateUserMapping(t *testing.T) {
 		WithArgs(v, fmt.Sprintf("test%s", app.UserSuffix)).
 		WillReturnRows(rows)
 
-	actual, err := app.UpdateUserMapping(fmt.Sprintf("test%s", app.UserSuffix), expected)
+	actual, err := app.UpdateUserMapping(context.Background(), fmt.Sprintf("test%s", app.UserSuffix), expected)
 	if assert.NoError(err, "no errors expected") {
 		assert.True(cmp.Equal(expected, actual), "should be equal")
 	}
@@ -182,6 +184,7 @@ func TestUpdateUserMappingHandler(t *testing.T) {
 
 		actual := &InstantLaunchMapping{}
 		err = json.Unmarshal(rec.Body.Bytes(), &actual)
+		assert.NoError(err, "failed to unmarshal the response body")
 		assert.True(cmp.Equal(expected, actual), "should be equal")
 	}
 	assert.NoError(mock.ExpectationsWereMet(), "expectations were not met")
@@ -201,7 +204,7 @@ func TestDeleteUserMapping(t *testing.T) {
 		WithArgs("test").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err = app.DeleteUserMapping("test")
+	err = app.DeleteUserMapping(context.Background(), "test")
 	assert.NoError(err, "should not error")
 	assert.NoError(mock.ExpectationsWereMet(), "expectations were not met")
 }
@@ -265,7 +268,7 @@ func TestAddUserMapping(t *testing.T) {
 	mock.ExpectQuery("INSERT INTO user_instant_launches").
 		WillReturnRows(rows)
 
-	actual, err := app.AddUserMapping("test", expected)
+	actual, err := app.AddUserMapping(context.Background(), "test", expected)
 	if assert.NoError(err, "should not error") {
 		assert.True(cmp.Equal(expected, actual), "should be equal")
 	}
@@ -318,6 +321,7 @@ func TestAddUserMappingHandler(t *testing.T) {
 
 		actual := &InstantLaunchMapping{}
 		err = json.Unmarshal(rec.Body.Bytes(), &actual)
+		assert.NoError(err, "failed to unmarshal the response body")
 		assert.True(cmp.Equal(expected, actual), "should be equal")
 	}
 	assert.NoError(mock.ExpectationsWereMet(), "expectations were not met")
@@ -362,7 +366,7 @@ func TestAllUserMappings(t *testing.T) {
 		WithArgs("test").
 		WillReturnRows(rows)
 
-	actual, err := app.AllUserMappings("test")
+	actual, err := app.AllUserMappings(context.Background(), "test")
 	if assert.NoError(err, "should not return error") {
 		assert.True(cmp.Equal(expected, actual), "should be equal")
 	}
@@ -425,6 +429,7 @@ func TestAllUserMappingsHandler(t *testing.T) {
 
 		actual := []UserInstantLaunchMapping{}
 		err = json.Unmarshal(rec.Body.Bytes(), &actual)
+		assert.NoError(err, "failed to unmarshal the response body")
 		assert.True(cmp.Equal(expected, actual), "should be equal")
 
 	}
@@ -468,7 +473,7 @@ func TestUserMappingsByVersion(t *testing.T) {
 		WithArgs("test", 0).
 		WillReturnRows(rows)
 
-	actual, err := app.UserMappingsByVersion("test", 0)
+	actual, err := app.UserMappingsByVersion(context.Background(), "test", 0)
 	if assert.NoError(err, "no error expected") {
 		assert.True(cmp.Equal(expected, actual), "should be equal")
 	}
@@ -528,6 +533,7 @@ func TestUserMappingsByVersionHandler(t *testing.T) {
 
 		actual := &UserInstantLaunchMapping{}
 		err = json.Unmarshal(rec.Body.Bytes(), &actual)
+		assert.NoError(err, "failed to unmarshal the response body")
 		assert.True(cmp.Equal(expected, actual), "should be equal")
 
 	}
@@ -564,7 +570,7 @@ func TestUpdateUserMappingsByVersion(t *testing.T) {
 		WithArgs(v, 0, "test").
 		WillReturnRows(rows)
 
-	actual, err := app.UpdateUserMappingsByVersion("test", 0, expected)
+	actual, err := app.UpdateUserMappingsByVersion(context.Background(), "test", 0, expected)
 	if assert.NoError(err, "no error expected") {
 		assert.True(cmp.Equal(expected, actual), "should be equal")
 	}
@@ -616,6 +622,7 @@ func TestUpdateUserMappingsByVersionHandler(t *testing.T) {
 
 		actual := &InstantLaunchMapping{}
 		err = json.Unmarshal(rec.Body.Bytes(), &actual)
+		assert.NoError(err, "failed to unmarshal the response body")
 		assert.True(cmp.Equal(expected, actual), "should be equal")
 	}
 	assert.NoError(mock.ExpectationsWereMet(), "expectations were not met")
@@ -634,7 +641,7 @@ func TestDeleteUserMappingsByVersion(t *testing.T) {
 		WithArgs("test", 0).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err = app.DeleteUserMappingsByVersion("test", 0)
+	err = app.DeleteUserMappingsByVersion(context.Background(), "test", 0)
 	assert.NoError(err, "no error expected")
 	assert.NoError(mock.ExpectationsWereMet(), "expectations were not met")
 }

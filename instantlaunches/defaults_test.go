@@ -2,6 +2,7 @@ package instantlaunches
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -49,7 +50,7 @@ func TestLatestDefaults(t *testing.T) {
 
 	mock.ExpectQuery(latestDefaultsQuery).WillReturnRows(rows)
 
-	mapping, err := app.LatestDefaults()
+	mapping, err := app.LatestDefaults(context.Background())
 	assert.NoError(err, "error from LatestDefaults should be nil")
 	assert.Equal("0", mapping.ID, "id should be 0")
 	assert.Equal("0", mapping.Version, "version should be 0")
@@ -145,7 +146,7 @@ func TestUpdateLatestDefaults(t *testing.T) {
 
 	mock.ExpectQuery("UPDATE ONLY default_instant_launches").WillReturnRows(rows)
 
-	mapping, err := app.UpdateLatestDefaults(expected)
+	mapping, err := app.UpdateLatestDefaults(context.Background(), expected)
 	assert.NoError(err, "error from UpdateLatestDefaults should be nil")
 	assert.True(cmp.Equal(expected, mapping), "mappings should match")
 	assert.NoError(mock.ExpectationsWereMet(), "expectations were not met")
@@ -214,7 +215,7 @@ func TestDeleteLatestDefaults(t *testing.T) {
 
 	mock.ExpectExec("DELETE FROM ONLY default_instant_launches AS def").WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err = app.DeleteLatestDefaults()
+	err = app.DeleteLatestDefaults(context.Background())
 	assert.NoError(err, "delete shouldn't return an error")
 	assert.NoError(mock.ExpectationsWereMet(), "expectations were not met")
 }
@@ -277,7 +278,7 @@ func TestAddLatestDefaults(t *testing.T) {
 		WithArgs(v, testUser).
 		WillReturnRows(rows)
 
-	actual, err := app.AddLatestDefaults(expected, testUser)
+	actual, err := app.AddLatestDefaults(context.Background(), expected, testUser)
 	if assert.NoError(err, "shouldn't be an error") {
 		assert.True(cmp.Equal(expected, actual), "should be equal")
 	}
@@ -374,7 +375,7 @@ func TestDefaultsByVersion(t *testing.T) {
 				AddRow("0", "0", v),
 		)
 
-	actual, err := app.DefaultsByVersion(0)
+	actual, err := app.DefaultsByVersion(context.Background(), 0)
 	if assert.NoError(err) {
 		assert.True(cmp.Equal(expected, actual))
 	}
@@ -469,7 +470,7 @@ func TestUpdateDefaultsByVersion(t *testing.T) {
 				AddRow(v),
 		)
 
-	actual, err := app.UpdateDefaultsByVersion(expected, 0)
+	actual, err := app.UpdateDefaultsByVersion(context.Background(), expected, 0)
 	if assert.NoError(err, "should not error") {
 		assert.True(cmp.Equal(expected, actual), "should be equal")
 	}
@@ -535,7 +536,7 @@ func TestDeleteDefaultsByVersion(t *testing.T) {
 	mock.ExpectExec("DELETE FROM ONLY default_instant_launches as def").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err = app.DeleteDefaultsByVersion(0)
+	err = app.DeleteDefaultsByVersion(context.Background(), 0)
 	assert.NoError(err, "delete shouldn't return an error")
 	assert.NoError(mock.ExpectationsWereMet(), "expectations were not met")
 }
@@ -582,7 +583,7 @@ func TestListAllDefaults(t *testing.T) {
 				AddRow("1", "1", `{"one":"two"}`),
 		)
 
-	listing, err := app.ListAllDefaults()
+	listing, err := app.ListAllDefaults(context.Background())
 	if assert.NoError(err, "should not return an error") {
 		assert.Equal(2, len(listing.Defaults), "number of rows should be 2")
 		assert.Equal("0", listing.Defaults[0].ID, "ID should be 0")

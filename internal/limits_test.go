@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -298,7 +299,7 @@ func TestLimitChecks(t *testing.T) {
 			registerDefaultLimitQuery(mock, test.defaultLimit)
 
 			// Run the limit check.
-			status, err := internal.validateJob(createTestSubmission(test.username))
+			status, err := internal.validateJob(context.Background(), createTestSubmission(test.username))
 			expectedError := expectedLimitError(test.username, test.defaultLimit, len(test.analyses), test.limit)
 			if expectedError == nil {
 				assert.Equalf(http.StatusOK, status, "the status code should be %d", http.StatusOK)
