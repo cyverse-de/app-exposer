@@ -761,8 +761,10 @@ func (i *Internal) SaveAndExitHandler(c echo.Context) error {
 	go func(c echo.Context) {
 		var err error
 		ctx := c.Request().Context()
-		ctx, span := otel.Tracer(otelName).Start(context.Background(), "SaveAndExitHandler goroutine", trace.WithLinks(trace.LinkFromContext(ctx)))
+		_, span := otel.Tracer(otelName).Start(context.Background(), "SaveAndExitHandler goroutine", trace.WithLinks(trace.LinkFromContext(ctx)))
 		defer span.End()
+
+		ctx = trace.ContextWithSpan(ctx, span)
 
 		externalID := c.Param("id")
 
@@ -802,8 +804,10 @@ func (i *Internal) AdminSaveAndExitHandler(c echo.Context) error {
 		)
 
 		ctx := c.Request().Context()
-		ctx, span := otel.Tracer(otelName).Start(context.Background(), "AdminSaveAndExitHandler goroutine", trace.WithLinks(trace.LinkFromContext(ctx)))
+		_, span := otel.Tracer(otelName).Start(context.Background(), "AdminSaveAndExitHandler goroutine", trace.WithLinks(trace.LinkFromContext(ctx)))
 		defer span.End()
+
+		ctx = trace.ContextWithSpan(ctx, span)
 
 		log.Debug("calling doFileTransfer")
 

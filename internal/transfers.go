@@ -250,8 +250,10 @@ func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind
 		}
 
 		go func(ctx context.Context, svc apiv1.Service) {
-			ctx, span := otel.Tracer(otelName).Start(context.Background(), "service iteration", trace.WithLinks(trace.LinkFromContext(ctx)))
+			_, span := otel.Tracer(otelName).Start(context.Background(), "service iteration", trace.WithLinks(trace.LinkFromContext(ctx)))
 			defer span.End()
+
+			ctx = trace.ContextWithSpan(ctx, span)
 
 			if !async {
 				defer wg.Done()
