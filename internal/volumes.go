@@ -27,32 +27,16 @@ type IRODSFSPathMapping struct {
 	IgnoreNotExist bool   `yaml:"ignore_not_exist" json:"ignore_not_exist"`
 }
 
-func (i *Internal) getZoneMountPath() string {
-	return fmt.Sprintf("%s/%s", csiDriverLocalMountPath, i.IRODSZone)
+func (i *Internal) getCSIDataVolumeHandle(job *model.Job) string {
+	return fmt.Sprintf("%s-handle-%s", csiDriverDataVolumeNamePrefix, job.InvocationID)
 }
 
-func (i *Internal) getCSIInputOutputVolumeHandle(job *model.Job) string {
-	return fmt.Sprintf("%s-handle-%s", csiDriverInputOutputVolumeNamePrefix, job.InvocationID)
+func (i *Internal) getCSIDataVolumeName(job *model.Job) string {
+	return fmt.Sprintf("%s-%s", csiDriverDataVolumeNamePrefix, job.InvocationID)
 }
 
-func (i *Internal) getCSIHomeVolumeHandle(job *model.Job) string {
-	return fmt.Sprintf("%s-handle-%s", csiDriverHomeVolumeNamePrefix, job.InvocationID)
-}
-
-func (i *Internal) getCSIInputOutputVolumeName(job *model.Job) string {
-	return fmt.Sprintf("%s-%s", csiDriverInputOutputVolumeNamePrefix, job.InvocationID)
-}
-
-func (i *Internal) getCSIHomeVolumeName(job *model.Job) string {
-	return fmt.Sprintf("%s-%s", csiDriverHomeVolumeNamePrefix, job.InvocationID)
-}
-
-func (i *Internal) getCSIInputOutputVolumeClaimName(job *model.Job) string {
-	return fmt.Sprintf("%s-%s", csiDriverInputOutputVolumeClaimNamePrefix, job.InvocationID)
-}
-
-func (i *Internal) getCSIHomeVolumeClaimName(job *model.Job) string {
-	return fmt.Sprintf("%s-%s", csiDriverHomeVolumeClaimNamePrefix, job.InvocationID)
+func (i *Internal) getCSIDataVolumeClaimName(job *model.Job) string {
+	return fmt.Sprintf("%s-%s", csiDriverDataVolumeClaimNamePrefix, job.InvocationID)
 }
 
 func (i *Internal) getInputPathMappings(job *model.Job) ([]IRODSFSPathMapping, error) {
@@ -116,12 +100,9 @@ func (i *Internal) getOutputPathMapping(job *model.Job) IRODSFSPathMapping {
 
 func (i *Internal) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
 	// mount a single collection for home
-	userHome := strings.TrimPrefix(job.UserHome, i.getZoneMountPath())
-	userHome = strings.TrimSuffix(userHome, "/")
-
 	return IRODSFSPathMapping{
 		IRODSPath:      job.UserHome,
-		MappingPath:    userHome,
+		MappingPath:    job.UserHome,
 		ResourceType:   "dir",
 		ReadOnly:       false,
 		CreateDir:      false,
@@ -131,12 +112,11 @@ func (i *Internal) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
 
 func (i *Internal) getSharedPathMapping(job *model.Job) IRODSFSPathMapping {
 	// mount a single collection for shared data
-	sharedHomeFullPath := fmt.Sprintf("%s/home/shared", i.getZoneMountPath())
-	sharedHome := "/home/shared"
+	sharedHomeFullPath := fmt.Sprintf("%s/home/shared", i.IRODSZone)
 
 	return IRODSFSPathMapping{
 		IRODSPath:      sharedHomeFullPath,
-		MappingPath:    sharedHome,
+		MappingPath:    sharedHomeFullPath,
 		ResourceType:   "dir",
 		ReadOnly:       false,
 		CreateDir:      false,
@@ -144,23 +124,13 @@ func (i *Internal) getSharedPathMapping(job *model.Job) IRODSFSPathMapping {
 	}
 }
 
-func (i *Internal) getCSIInputOutputVolumeLabels(ctx context.Context, job *model.Job) (map[string]string, error) {
+func (i *Internal) getCSIDataVolumeLabels(ctx context.Context, job *model.Job) (map[string]string, error) {
 	labels, err := i.labelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}
 
-	labels["volume-name"] = i.getCSIInputOutputVolumeClaimName(job)
-	return labels, nil
-}
-
-func (i *Internal) getCSIHomeVolumeLabels(ctx context.Context, job *model.Job) (map[string]string, error) {
-	labels, err := i.labelsFromJob(ctx, job)
-	if err != nil {
-		return nil, err
-	}
-
-	labels["volume-name"] = i.getCSIHomeVolumeClaimName(job)
+	labels["volume-name"] = i.getCSIDataVolumeClaimName(job)
 	return labels, nil
 }
 
@@ -168,36 +138,30 @@ func (i *Internal) getCSIHomeVolumeLabels(ctx context.Context, job *model.Job) (
 // not call the k8s API.
 func (i *Internal) getPersistentVolumes(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolume, error) {
 	if i.UseCSIDriver {
-		// input output path
-		ioPathMappings := []IRODSFSPathMapping{}
+		dataPathMappings := []IRODSFSPathMapping{}
 
+		// input output path
 		inputPathMappings, err := i.getInputPathMappings(job)
 		if err != nil {
 			return nil, err
 		}
-		ioPathMappings = append(ioPathMappings, inputPathMappings...)
+		dataPathMappings = append(dataPathMappings, inputPathMappings...)
 
 		outputPathMapping := i.getOutputPathMapping(job)
-		ioPathMappings = append(ioPathMappings, outputPathMapping)
-
-		// convert pathMappings into json
-		ioPathMappingsJSONBytes, err := json.Marshal(ioPathMappings)
-		if err != nil {
-			return nil, err
-		}
+		dataPathMappings = append(dataPathMappings, outputPathMapping)
 
 		// home path
-		homePathMappings := []IRODSFSPathMapping{}
 		if job.UserHome != "" {
 			homePathMapping := i.getHomePathMapping(job)
-			homePathMappings = append(homePathMappings, homePathMapping)
+			dataPathMappings = append(dataPathMappings, homePathMapping)
 		}
 
 		// shared path
 		sharedPathMapping := i.getSharedPathMapping(job)
-		homePathMappings = append(homePathMappings, sharedPathMapping)
+		dataPathMappings = append(dataPathMappings, sharedPathMapping)
 
-		homePathMappingsJSONBytes, err := json.Marshal(homePathMappings)
+		// convert path mappings into json
+		dataPathMappingsJSONBytes, err := json.Marshal(dataPathMappings)
 		if err != nil {
 			return nil, err
 		}
@@ -205,15 +169,15 @@ func (i *Internal) getPersistentVolumes(ctx context.Context, job *model.Job) ([]
 		volmode := apiv1.PersistentVolumeFilesystem
 		persistentVolumes := []*apiv1.PersistentVolume{}
 
-		ioVolumeLabels, err := i.getCSIInputOutputVolumeLabels(ctx, job)
+		dataVolumeLabels, err := i.getCSIDataVolumeLabels(ctx, job)
 		if err != nil {
 			return nil, err
 		}
 
-		ioVolume := &apiv1.PersistentVolume{
+		dataVolume := &apiv1.PersistentVolume{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   i.getCSIInputOutputVolumeName(job),
-				Labels: ioVolumeLabels,
+				Name:   i.getCSIDataVolumeName(job),
+				Labels: dataVolumeLabels,
 			},
 			Spec: apiv1.PersistentVolumeSpec{
 				Capacity: apiv1.ResourceList{
@@ -228,10 +192,10 @@ func (i *Internal) getPersistentVolumes(ctx context.Context, job *model.Job) ([]
 				PersistentVolumeSource: apiv1.PersistentVolumeSource{
 					CSI: &apiv1.CSIPersistentVolumeSource{
 						Driver:       csiDriverName,
-						VolumeHandle: i.getCSIInputOutputVolumeHandle(job),
+						VolumeHandle: i.getCSIDataVolumeHandle(job),
 						VolumeAttributes: map[string]string{
 							"client":            "irodsfuse",
-							"path_mapping_json": string(ioPathMappingsJSONBytes),
+							"path_mapping_json": string(dataPathMappingsJSONBytes),
 							// use proxy access
 							"clientUser": job.Submitter,
 							"uid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
@@ -242,49 +206,7 @@ func (i *Internal) getPersistentVolumes(ctx context.Context, job *model.Job) ([]
 			},
 		}
 
-		persistentVolumes = append(persistentVolumes, ioVolume)
-
-		if job.UserHome != "" {
-			homeVolumeLabels, err := i.getCSIHomeVolumeLabels(ctx, job)
-			if err != nil {
-				return nil, err
-			}
-
-			homeVolume := &apiv1.PersistentVolume{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   i.getCSIHomeVolumeName(job),
-					Labels: homeVolumeLabels,
-				},
-				Spec: apiv1.PersistentVolumeSpec{
-					Capacity: apiv1.ResourceList{
-						apiv1.ResourceStorage: defaultStorageCapacity,
-					},
-					VolumeMode: &volmode,
-					AccessModes: []apiv1.PersistentVolumeAccessMode{
-						apiv1.ReadWriteMany,
-					},
-					PersistentVolumeReclaimPolicy: apiv1.PersistentVolumeReclaimRetain,
-					StorageClassName:              csiDriverStorageClassName,
-					PersistentVolumeSource: apiv1.PersistentVolumeSource{
-						CSI: &apiv1.CSIPersistentVolumeSource{
-							Driver:       csiDriverName,
-							VolumeHandle: i.getCSIHomeVolumeHandle(job),
-							VolumeAttributes: map[string]string{
-								"client":            "irodsfuse",
-								"path_mapping_json": string(homePathMappingsJSONBytes),
-								// use proxy access
-								"clientUser": job.Submitter,
-								"uid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
-								"gid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
-							},
-						},
-					},
-				},
-			}
-
-			persistentVolumes = append(persistentVolumes, homeVolume)
-		}
-
+		persistentVolumes = append(persistentVolumes, dataVolume)
 		return persistentVolumes, nil
 	}
 
@@ -303,9 +225,9 @@ func (i *Internal) getPersistentVolumeClaims(ctx context.Context, job *model.Job
 		storageclassname := csiDriverStorageClassName
 		volumeClaims := []*apiv1.PersistentVolumeClaim{}
 
-		ioVolumeClaim := &apiv1.PersistentVolumeClaim{
+		dataVolumeClaim := &apiv1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   i.getCSIInputOutputVolumeClaimName(job),
+				Name:   i.getCSIDataVolumeClaimName(job),
 				Labels: labels,
 			},
 			Spec: apiv1.PersistentVolumeClaimSpec{
@@ -315,7 +237,7 @@ func (i *Internal) getPersistentVolumeClaims(ctx context.Context, job *model.Job
 				StorageClassName: &storageclassname,
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
-						"volume-name": i.getCSIInputOutputVolumeClaimName(job),
+						"volume-name": i.getCSIDataVolumeClaimName(job),
 					},
 				},
 				Resources: apiv1.ResourceRequirements{
@@ -327,34 +249,6 @@ func (i *Internal) getPersistentVolumeClaims(ctx context.Context, job *model.Job
 		}
 
 		volumeClaims = append(volumeClaims, ioVolumeClaim)
-
-		if job.UserHome != "" {
-			homeVolumeClaim := &apiv1.PersistentVolumeClaim{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   i.getCSIHomeVolumeClaimName(job),
-					Labels: labels,
-				},
-				Spec: apiv1.PersistentVolumeClaimSpec{
-					AccessModes: []apiv1.PersistentVolumeAccessMode{
-						apiv1.ReadWriteMany,
-					},
-					StorageClassName: &storageclassname,
-					Selector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"volume-name": i.getCSIHomeVolumeClaimName(job),
-						},
-					},
-					Resources: apiv1.ResourceRequirements{
-						Requests: apiv1.ResourceList{
-							apiv1.ResourceStorage: defaultStorageCapacity,
-						},
-					},
-				},
-			}
-
-			volumeClaims = append(volumeClaims, homeVolumeClaim)
-		}
-
 		return volumeClaims, nil
 	}
 
@@ -367,30 +261,16 @@ func (i *Internal) getPersistentVolumeSources(job *model.Job) ([]*apiv1.Volume, 
 	if i.UseCSIDriver {
 		volumes := []*apiv1.Volume{}
 
-		ioVolume := &apiv1.Volume{
-			Name: i.getCSIInputOutputVolumeClaimName(job),
+		dataVolume := &apiv1.Volume{
+			Name: i.getCSIDataVolumeClaimName(job),
 			VolumeSource: apiv1.VolumeSource{
 				PersistentVolumeClaim: &apiv1.PersistentVolumeClaimVolumeSource{
-					ClaimName: i.getCSIInputOutputVolumeClaimName(job),
+					ClaimName: i.getCSIDataVolumeClaimName(job),
 				},
 			},
 		}
 
-		volumes = append(volumes, ioVolume)
-
-		if job.UserHome != "" {
-			homeVolume := &apiv1.Volume{
-				Name: i.getCSIHomeVolumeClaimName(job),
-				VolumeSource: apiv1.VolumeSource{
-					PersistentVolumeClaim: &apiv1.PersistentVolumeClaimVolumeSource{
-						ClaimName: i.getCSIHomeVolumeClaimName(job),
-					},
-				},
-			}
-
-			volumes = append(volumes, homeVolume)
-		}
-
+		volumes = append(volumes, dataVolume)
 		return volumes, nil
 	}
 
@@ -403,19 +283,12 @@ func (i *Internal) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMoun
 	if i.UseCSIDriver {
 		volumeMounts := []*apiv1.VolumeMount{}
 
-		ioVolumeMount := &apiv1.VolumeMount{
-			Name:      i.getCSIInputOutputVolumeClaimName(job),
+		dataVolumeMount := &apiv1.VolumeMount{
+			Name:      i.getCSIDataVolumeClaimName(job),
 			MountPath: csiDriverLocalMountPath,
 		}
 
-		volumeMounts = append(volumeMounts, ioVolumeMount)
-
-		homeVolumeMount := &apiv1.VolumeMount{
-			Name:      i.getCSIHomeVolumeClaimName(job),
-			MountPath: i.getZoneMountPath(),
-		}
-		volumeMounts = append(volumeMounts, homeVolumeMount)
-
+		volumeMounts = append(volumeMounts, dataVolumeMount)
 		return volumeMounts
 	}
 
