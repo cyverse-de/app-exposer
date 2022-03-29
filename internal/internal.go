@@ -18,6 +18,8 @@ import (
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/cyverse-de/model"
 	appsv1 "k8s.io/api/apps/v1"
@@ -759,6 +761,8 @@ func (i *Internal) SaveAndExitHandler(c echo.Context) error {
 	go func(c echo.Context) {
 		var err error
 		ctx := c.Request().Context()
+		ctx, span := otel.Tracer(otelName).Start(context.Background(), "SaveAndExitHandler goroutine", trace.WithLinks(trace.LinkFromContext(ctx)))
+		defer span.End()
 
 		externalID := c.Param("id")
 
@@ -798,6 +802,8 @@ func (i *Internal) AdminSaveAndExitHandler(c echo.Context) error {
 		)
 
 		ctx := c.Request().Context()
+		ctx, span := otel.Tracer(otelName).Start(context.Background(), "AdminSaveAndExitHandler goroutine", trace.WithLinks(trace.LinkFromContext(ctx)))
+		defer span.End()
 
 		log.Debug("calling doFileTransfer")
 

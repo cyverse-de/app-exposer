@@ -13,6 +13,7 @@ import (
 
 	"github.com/cyverse-de/model"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/pkg/errors"
 
@@ -243,13 +244,15 @@ func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind
 	var wg sync.WaitGroup
 
 	for _, svc := range svclist.Items {
-		iterCtx, _ := otel.Tracer(otelName).Start(ctx, "service iteration")
 
 		if !async {
 			wg.Add(1)
 		}
 
 		go func(ctx context.Context, svc apiv1.Service) {
+			ctx, span := otel.Tracer(otelName).Start(context.Background(), "service iteration", trace.WithLinks(trace.LinkFromContext(ctx)))
+			defer span.End()
+
 			if !async {
 				defer wg.Done()
 			}
@@ -352,7 +355,7 @@ func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind
 
 				time.Sleep(5 * time.Second)
 			}
-		}(iterCtx, svc)
+		}(ctx, svc)
 	}
 
 	// Block until all of the file transfers are complete. There usually will only
