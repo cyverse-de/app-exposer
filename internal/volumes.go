@@ -116,7 +116,7 @@ func (i *Internal) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
 
 func (i *Internal) getSharedPathMapping(job *model.Job) IRODSFSPathMapping {
 	// mount a single collection for shared data
-	sharedHomeFullPath := fmt.Sprintf("%s/home/shared", i.IRODSZone)
+	sharedHomeFullPath := fmt.Sprintf("/%s/home/shared", i.IRODSZone)
 
 	return IRODSFSPathMapping{
 		IRODSPath:      sharedHomeFullPath,
