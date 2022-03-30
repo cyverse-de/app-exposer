@@ -3,6 +3,7 @@ package instantlaunches
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -27,7 +28,7 @@ func TestAddInstantLaunch(t *testing.T) {
 
 	mock.ExpectQuery("INSERT INTO instant_launches").WillReturnRows(rows)
 
-	actual, err := app.AddInstantLaunch("0", "test@iplantcollaborative.org")
+	actual, err := app.AddInstantLaunch(context.Background(), "0", "test@iplantcollaborative.org")
 	assert.NoError(err, "error should be nil")
 	assert.Equal("0", actual.ID, "id should be 0")
 	assert.Equal("0", actual.QuickLaunchID, "quick_launch_id should be 0")
@@ -93,7 +94,7 @@ func TestGetInstantLaunch(t *testing.T) {
 	mock.ExpectQuery("SELECT i.id, i.quick_launch_id, i.added_by, i.added_on FROM instant_launches i").
 		WillReturnRows(rows)
 
-	actual, err := app.GetInstantLaunch("0")
+	actual, err := app.GetInstantLaunch(context.Background(), "0")
 	assert.NoError(err, "error should be nil")
 	assert.Equal("0", actual.ID, "id should be 0")
 	assert.Equal("0", actual.QuickLaunchID, "quick_launch_id should be 0")
@@ -165,7 +166,7 @@ func TestUpdateInstantLaunch(t *testing.T) {
 	mock.ExpectQuery("UPDATE ONLY instant_launches").
 		WillReturnRows(rows)
 
-	actual, err := app.UpdateInstantLaunch("0", "0")
+	actual, err := app.UpdateInstantLaunch(context.Background(), "0", "0")
 	assert.NoError(err, "error should be nil")
 	assert.Equal("0", actual.ID, "id should be 0")
 	assert.Equal("0", actual.QuickLaunchID, "quick_launch_id should be 0")
@@ -232,7 +233,7 @@ func TestDeleteInstantLaunch(t *testing.T) {
 	mock.ExpectExec("DELETE FROM instant_launches").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err = app.DeleteInstantLaunch("0")
+	err = app.DeleteInstantLaunch(context.Background(), "0")
 	assert.NoError(err, "error should be nil")
 	assert.NoError(mock.ExpectationsWereMet(), "expectations were not met")
 }
@@ -295,7 +296,7 @@ func TestListInstantLaunches(t *testing.T) {
 	mock.ExpectQuery("SELECT i.id, i.quick_launch_id, i.added_by, i.added_on FROM instant_launches i").
 		WillReturnRows(rows)
 
-	actual, err := app.ListInstantLaunches()
+	actual, err := app.ListInstantLaunches(context.Background())
 	assert.NoError(err, "error should be nil")
 	if assert.True(len(actual) > 0 && len(actual) == len(expected), "length is wrong") {
 		for index := range expected {
@@ -350,6 +351,7 @@ func TestListInstantLaunchesHandler(t *testing.T) {
 
 		actual := []InstantLaunch{}
 		err = json.Unmarshal(rec.Body.Bytes(), &actual)
+		assert.NoError(err, "failed to unmarshal the response body")
 		if assert.True(len(actual) > 0 && len(actual) == len(expected), "length is wrong") {
 			for index := range expected {
 				assert.True(cmp.Equal(expected[index], actual[index]), "should be equal")
