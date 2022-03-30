@@ -27,6 +27,10 @@ type IRODSFSPathMapping struct {
 	IgnoreNotExist bool   `yaml:"ignore_not_exist" json:"ignore_not_exist"`
 }
 
+func (i *Internal) getZoneMountPath() string {
+	return fmt.Sprintf("%s/%s", csiDriverLocalMountPath, i.IRODSZone)
+}
+
 func (i *Internal) getCSIDataVolumeHandle(job *model.Job) string {
 	return fmt.Sprintf("%s-handle-%s", csiDriverDataVolumeNamePrefix, job.InvocationID)
 }
@@ -248,7 +252,7 @@ func (i *Internal) getPersistentVolumeClaims(ctx context.Context, job *model.Job
 			},
 		}
 
-		volumeClaims = append(volumeClaims, ioVolumeClaim)
+		volumeClaims = append(volumeClaims, dataVolumeClaim)
 		return volumeClaims, nil
 	}
 
