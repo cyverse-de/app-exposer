@@ -202,6 +202,9 @@ func isFinished(status string) bool {
 // analysis. We only need the ID of the job, nothing is required in the
 // body of the request.
 func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind string, async bool) error {
+	ctx, span := otel.Tracer(otelName).Start(ctx, "doFileTransfer")
+	defer span.End()
+
 	if i.UseCSIDriver {
 		// if we use CSI Driver, file transfer is not required.
 		msg := fmt.Sprintf("%s succeeded for job %s", kind, externalID)
