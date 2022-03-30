@@ -11,12 +11,8 @@ ENV GOARCH=amd64
 
 COPY --from=swagger /usr/bin/swagger /usr/bin/
 
-COPY go.mod go.sum ./
-RUN go mod download && go mod verify
-
 COPY . .
-
-RUN go install -v ./...
+RUN go install -v ./... && go clean -cache -modcache
 RUN swagger generate spec -o ./docs/swagger.json --scan-models
 
 ENTRYPOINT ["app-exposer"]
