@@ -6,7 +6,7 @@ import (
 	"github.com/cockroachdb/apd"
 	"github.com/cyverse-de/jex-adapter/db"
 	"github.com/cyverse-de/jex-adapter/logging"
-	"github.com/cyverse-de/model"
+	"github.com/cyverse-de/model/v6"
 	"github.com/sirupsen/logrus"
 )
 
