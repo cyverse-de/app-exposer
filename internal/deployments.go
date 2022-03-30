@@ -291,7 +291,7 @@ func (i *Internal) workingDirPrepContainer(job *model.Job) apiv1.Container {
 		"bash",
 		"-c",
 		strings.Join([]string{
-			fmt.Sprintf("ln -s \"%s\" ./data", csiDriverLocalMountPath),
+			fmt.Sprintf("ln -s \"%s\" \"data\"", csiDriverLocalMountPath),
 			fmt.Sprintf("ln -s \"%s/home\" .", i.getZoneMountPath()),
 		}, " && "),
 	}
