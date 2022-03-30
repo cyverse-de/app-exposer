@@ -10,7 +10,7 @@ import (
 
 	"github.com/cyverse-de/jex-adapter/db"
 	"github.com/cyverse-de/jex-adapter/millicores"
-	"github.com/cyverse-de/model"
+	"github.com/cyverse-de/model/v6"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
