@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/cyverse-de/app-exposer/common"
-	"github.com/cyverse-de/model"
+	"github.com/cyverse-de/model/v6"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

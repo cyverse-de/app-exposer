@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cyverse-de/model"
+	"github.com/cyverse-de/model/v6"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
