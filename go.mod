@@ -6,6 +6,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/cockroachdb/apd v1.1.0
 	github.com/cyverse-de/configurate v0.0.0-20210914212501-fc18b48e00a9
+	github.com/cyverse-de/go-mod/otelutils v0.0.1
 	github.com/cyverse-de/messaging/v9 v9.1.3
 	github.com/cyverse-de/model/v6 v6.0.1
 	github.com/google/go-cmp v0.5.7
@@ -26,8 +27,6 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.30.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.30.0
 	go.opentelemetry.io/otel v1.6.1
-	go.opentelemetry.io/otel/exporters/jaeger v1.6.0
-	go.opentelemetry.io/otel/sdk v1.6.0
 	go.opentelemetry.io/otel/trace v1.6.1
 	golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect

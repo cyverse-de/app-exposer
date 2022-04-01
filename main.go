@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -17,6 +16,7 @@ import (
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/configurate"
+	"github.com/cyverse-de/go-mod/otelutils"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -29,15 +29,12 @@ import (
 	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/jaeger"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
-	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 )
 
 var log = common.Log
+
+const serviceName = "app-exposer"
 
 func init() {
 	// Set klog, used by the k8s client, to use its "log to stderr"
@@ -48,24 +45,6 @@ func init() {
 	klog.InitFlags(klogFlags)
 	logtostderr := klogFlags.Lookup("logtostderr")
 	logtostderr.Value.Set("true") // nolint:errcheck
-}
-
-func jaegerTracerProvider(url string) (*tracesdk.TracerProvider, error) {
-	// Create the Jaeger exporter
-	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(url)))
-	if err != nil {
-		return nil, err
-	}
-
-	tp := tracesdk.NewTracerProvider(
-		tracesdk.WithBatcher(exp),
-		tracesdk.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String("app-exposer"),
-		)),
-	)
-
-	return tp, nil
 }
 
 func wrapOtelTransport(rt http.RoundTripper) http.RoundTripper {
@@ -93,38 +72,12 @@ func main() {
 		checkResourceAccessService    = flag.String("check-resource-access-service", "check-resource-access", "The name of the service that validates whether a user can access a resource")
 		userSuffix                    = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
 		logLevel                      = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
-
-		tracerProvider *tracesdk.TracerProvider
 	)
 
-	otelTracesExporter := os.Getenv("OTEL_TRACES_EXPORTER")
-	if otelTracesExporter == "jaeger" {
-		jaegerEndpoint := os.Getenv("OTEL_EXPORTER_JAEGER_ENDPOINT")
-		if jaegerEndpoint == "" {
-			log.Warn("Jaeger set as OpenTelemetry trace exporter, but no Jaeger endpoint configured.")
-		} else {
-			tp, err := jaegerTracerProvider(jaegerEndpoint)
-			if err != nil {
-				log.Fatal(err)
-			}
-			tracerProvider = tp
-			otel.SetTracerProvider(tp)
-			otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-		}
-	}
-
-	if tracerProvider != nil {
-		tracerCtx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		defer func(tracerContext context.Context) {
-			ctx, cancel := context.WithTimeout(tracerContext, time.Second*5)
-			defer cancel()
-			if err := tracerProvider.Shutdown(ctx); err != nil {
-				log.Fatal(err)
-			}
-		}(tracerCtx)
-	}
+	var tracerCtx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+	shutdown := otelutils.TracerProviderFromEnv(tracerCtx, serviceName, func(e error) { log.Fatal(e) })
+	defer shutdown()
 
 	// if cluster is set, then
 	if cluster := os.Getenv("CLUSTER"); cluster != "" {
