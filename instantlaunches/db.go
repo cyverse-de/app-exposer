@@ -452,15 +452,13 @@ const listPublicQLsQuery = `
 		ql.is_public,
 		s.submission
 	FROM quick_launches ql
-	JOIN app_listing a on ql.app_id = a.id
 	JOIN users u on ql.creator = u.id
 	JOIN submissions s on ql.submission_id = s.id
-	WHERE u.username = $1 OR ( ql.is_public = true AND a.is_public = true)
+	WHERE u.username = $1 OR ql.is_public = true
 `
 
 // ListViablePublicQuickLaunches returns a listing of quick launches that the user is permitted to run. This list
-// includes quick launches that were created by the authenticated user and public quick launches for which the
-// corresponding app is also public.
+// includes quick launches that were created by the authenticated user and public quick launches.
 func (a *App) ListViablePublicQuickLaunches(ctx context.Context, user string) ([]QuickLaunch, error) {
 	l := []QuickLaunch{}
 	err := a.DB.SelectContext(ctx, &l, listPublicQLsQuery, user)
