@@ -86,8 +86,8 @@ SELECT
 	ql.is_public,
 	a.name AS app_name,
 	a.description AS app_description,
-	a.deleted AS app_deleted,
-	a.disabled AS app_disabled,
+	v.deleted AS app_deleted,
+	v.disabled AS app_disabled,
 	iu.username as integrator
 
 
@@ -95,7 +95,8 @@ FROM instant_launches il
 	JOIN quick_launches ql ON il.quick_launch_id = ql.id
 	JOIN submissions sub ON ql.submission_id = sub.id
 	JOIN apps a ON ql.app_id = a.id
-	JOIN integration_data integ ON a.integration_data_id = integ.id
+	JOIN app_versions v ON ql.app_version_id = v.id
+	JOIN integration_data integ ON vintegration_data_id = integ.id
 	JOIN users iu ON integ.user_id = iu.id
 	JOIN users qlu ON ql.creator = qlu.id
 	JOIN users ilu ON il.added_by = ilu.id
