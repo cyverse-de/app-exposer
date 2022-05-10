@@ -17,11 +17,12 @@ SELECT
 	qlu.username AS ql_creator,
 	sub.submission AS submission,
 	ql.app_id,
+	ql.app_version_id,
 	ql.is_public,
 	a.name AS app_name,
 	a.description AS app_description,
-	a.deleted AS app_deleted,
-	a.disabled AS app_disabled,
+	v.deleted AS app_deleted,
+	v.disabled AS app_disabled,
 	iu.username as integrator
 
 
@@ -29,7 +30,8 @@ FROM instant_launches il
 	JOIN quick_launches ql ON il.quick_launch_id = ql.id
 	JOIN submissions sub ON ql.submission_id = sub.id
 	JOIN apps a ON ql.app_id = a.id
-	JOIN integration_data integ ON a.integration_data_id = integ.id
+	JOIN app_versions v ON ql.app_version_id = v.id
+	JOIN integration_data integ ON v.integration_data_id = integ.id
 	JOIN users iu ON integ.user_id = iu.id
 	JOIN users qlu ON ql.creator = qlu.id
 	JOIN users ilu ON il.added_by = ilu.id
@@ -83,11 +85,12 @@ SELECT
 	qlu.username AS ql_creator,
 	sub.submission AS submission,
 	ql.app_id,
+	ql.app_version_id,
 	ql.is_public,
 	a.name AS app_name,
 	a.description AS app_description,
-	a.deleted AS app_deleted,
-	a.disabled AS app_disabled,
+	v.deleted AS app_deleted,
+	v.disabled AS app_disabled,
 	iu.username as integrator
 
 
@@ -95,7 +98,8 @@ FROM instant_launches il
 	JOIN quick_launches ql ON il.quick_launch_id = ql.id
 	JOIN submissions sub ON ql.submission_id = sub.id
 	JOIN apps a ON ql.app_id = a.id
-	JOIN integration_data integ ON a.integration_data_id = integ.id
+	JOIN app_versions v ON ql.app_version_id = v.id
+	JOIN integration_data integ ON vintegration_data_id = integ.id
 	JOIN users iu ON integ.user_id = iu.id
 	JOIN users qlu ON ql.creator = qlu.id
 	JOIN users ilu ON il.added_by = ilu.id
@@ -159,11 +163,12 @@ SELECT
 	qlu.username AS ql_creator,
 	sub.submission AS submission,
 	ql.app_id,
+	ql.app_version_id,
 	ql.is_public,
 	a.name AS app_name,
 	a.description AS app_description,
-	a.deleted AS app_deleted,
-	a.disabled AS app_disabled,
+	v.deleted AS app_deleted,
+	v.disabled AS app_disabled,
 	iu.username as integrator
 
 
@@ -171,7 +176,8 @@ FROM instant_launches il
 	JOIN quick_launches ql ON il.quick_launch_id = ql.id
 	JOIN submissions sub ON ql.submission_id = sub.id
 	JOIN apps a ON ql.app_id = a.id
-	JOIN integration_data integ ON a.integration_data_id = integ.id
+	JOIN app_versions v ON ql.app_version_id = v.id
+	JOIN integration_data integ ON v.integration_data_id = integ.id
 	JOIN users iu ON integ.user_id = iu.id
 	JOIN users qlu ON ql.creator = qlu.id
 	JOIN users ilu ON il.added_by = ilu.id
@@ -444,20 +450,19 @@ const listPublicQLsQuery = `
 	SELECT ql.id,
 		u.username as creator,
 		ql.app_id,
+		ql.app_version_id,
 		ql.name,
 		ql.description,
 		ql.is_public,
 		s.submission
 	FROM quick_launches ql
-	JOIN app_listing a on ql.app_id = a.id
 	JOIN users u on ql.creator = u.id
 	JOIN submissions s on ql.submission_id = s.id
-	WHERE u.username = $1 OR ( ql.is_public = true AND a.is_public = true)
+	WHERE u.username = $1 OR ql.is_public = true
 `
 
 // ListViablePublicQuickLaunches returns a listing of quick launches that the user is permitted to run. This list
-// includes quick launches that were created by the authenticated user and public quick launches for which the
-// corresponding app is also public.
+// includes quick launches that were created by the authenticated user and public quick launches.
 func (a *App) ListViablePublicQuickLaunches(ctx context.Context, user string) ([]QuickLaunch, error) {
 	l := []QuickLaunch{}
 	err := a.DB.SelectContext(ctx, &l, listPublicQLsQuery, user)

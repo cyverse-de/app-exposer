@@ -75,6 +75,7 @@ type FullInstantLaunch struct {
 	QuickLaunchIsPublic    bool           `json:"is_public" db:"is_public"`
 	Submission             types.JSONText `json:"submission" db:"submission"`
 	AppID                  string         `json:"app_id" db:"app_id"`
+	AppVersionID           string         `json:"app_version_id" db:"app_version_id"`
 	AppName                string         `json:"app_name" db:"app_name"`
 	AppDescription         string         `json:"app_description" db:"app_description"`
 	AppDeleted             bool           `json:"app_deleted" db:"app_deleted"`
@@ -161,13 +162,14 @@ type UserInstantLaunchMapping struct {
 
 // QuickLaunch describes an app with a set of pre-filled parameter values.
 type QuickLaunch struct {
-	ID          string         `json:"id" db:"id"`
-	Creator     string         `json:"creator" db:"creator"`
-	AppID       string         `json:"app_id" db:"app_id"`
-	Name        string         `json:"name" db:"name"`
-	Description string         `json:"description" db:"description"`
-	IsPublic    bool           `json:"is_public" db:"is_public"`
-	Submission  types.JSONText `json:"submission" db:"submission"`
+	ID           string         `json:"id" db:"id"`
+	Creator      string         `json:"creator" db:"creator"`
+	AppID        string         `json:"app_id" db:"app_id"`
+	AppVersionID string         `json:"app_version_id" db:"app_version_id"`
+	Name         string         `json:"name" db:"name"`
+	Description  string         `json:"description" db:"description"`
+	IsPublic     bool           `json:"is_public" db:"is_public"`
+	Submission   types.JSONText `json:"submission" db:"submission"`
 }
 
 // App provides an API for managing instant launches.
