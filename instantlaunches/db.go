@@ -99,7 +99,7 @@ FROM instant_launches il
 	JOIN submissions sub ON ql.submission_id = sub.id
 	JOIN apps a ON ql.app_id = a.id
 	JOIN app_versions v ON ql.app_version_id = v.id
-	JOIN integration_data integ ON vintegration_data_id = integ.id
+	JOIN integration_data integ ON v.integration_data_id = integ.id
 	JOIN users iu ON integ.user_id = iu.id
 	JOIN users qlu ON ql.creator = qlu.id
 	JOIN users ilu ON il.added_by = ilu.id
