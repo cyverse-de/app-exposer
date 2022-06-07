@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/cyverse-de/app-exposer/external"
+	"github.com/knadh/koanf"
 	"github.com/labstack/echo/v4"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -21,9 +22,12 @@ func TestNewExposerApp(t *testing.T) {
 	testinit := &ExposerAppInit{
 		Namespace:     expectedNS,
 		ViceNamespace: "",
+		IngressClass:  "linkerd",
+		ClientSet:     testcs,
 	}
+	c := koanf.New(".")
 
-	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
+	testapp := NewExposerApp(testinit, nil, c)
 
 	if testapp.namespace != expectedNS {
 		t.Errorf("namespace was %s, not %s", testapp.namespace, expectedNS)
@@ -53,9 +57,12 @@ func TestCreateService(t *testing.T) {
 	testinit := &ExposerAppInit{
 		Namespace:     expectedNS,
 		ViceNamespace: "",
+		IngressClass:  "linkerd",
+		ClientSet:     testcs,
 	}
+	c := koanf.New(".")
 
-	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
+	testapp := NewExposerApp(testinit, nil, c)
 
 	expectedOpts := &external.ServiceOptions{
 		TargetPort: 60000,
@@ -112,9 +119,13 @@ func createAppLoadService(ns, name string) (*ExposerApp, error) {
 	testinit := &ExposerAppInit{
 		Namespace:     ns,
 		ViceNamespace: "",
+		ClientSet:     testcs,
+		IngressClass:  "linkerd",
 	}
 
-	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
+	c := koanf.New(".")
+
+	testapp := NewExposerApp(testinit, nil, c)
 
 	createOpts := &external.ServiceOptions{
 		TargetPort: 40000,
@@ -290,9 +301,13 @@ func TestCreateEndpoint(t *testing.T) {
 	testinit := &ExposerAppInit{
 		Namespace:     expectedNS,
 		ViceNamespace: "",
+		ClientSet:     testcs,
+		IngressClass:  "linkerd",
 	}
 
-	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
+	c := koanf.New(".")
+
+	testapp := NewExposerApp(testinit, nil, c)
 
 	expectedOpts := &external.EndpointOptions{
 		IP:   expectedIP,
@@ -344,8 +359,11 @@ func createAppLoadEndpoint(ns, name string) (*ExposerApp, error) {
 	testinit := &ExposerAppInit{
 		Namespace:     ns,
 		ViceNamespace: "",
+		ClientSet:     testcs,
+		IngressClass:  "linkerd",
 	}
-	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
+	c := koanf.New(".")
+	testapp := NewExposerApp(testinit, nil, c)
 
 	createOpts := &external.EndpointOptions{
 		IP:   "1.1.1.1",
@@ -514,9 +532,13 @@ func TestCreateIngress(t *testing.T) {
 	testinit := &ExposerAppInit{
 		Namespace:     expectedNS,
 		ViceNamespace: "",
+		ClientSet:     testcs,
+		IngressClass:  "linkerd",
 	}
 
-	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
+	c := koanf.New(".")
+
+	testapp := NewExposerApp(testinit, nil, c)
 
 	expectedOpts := &external.IngressOptions{
 		Service: expectedService,
@@ -568,8 +590,11 @@ func createAppLoadIngress(ns, name string) (*ExposerApp, error) {
 	testinit := &ExposerAppInit{
 		Namespace:     ns,
 		ViceNamespace: "",
+		ClientSet:     testcs,
+		IngressClass:  "linkerd",
 	}
-	testapp := NewExposerApp(testinit, "linkerd", testcs, nil)
+	c := koanf.New(".")
+	testapp := NewExposerApp(testinit, nil, c)
 
 	createOpts := &external.IngressOptions{
 		Service: "test-service",
@@ -584,11 +609,11 @@ func createAppLoadIngress(ns, name string) (*ExposerApp, error) {
 	req := httptest.NewRequest("POST", fmt.Sprintf("/ingress/%s", name), bytes.NewReader(createJSON))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	cw := httptest.NewRecorder()
-	c := testapp.router.NewContext(req, cw)
-	c.SetPath("/ingress/:name")
-	c.SetParamNames("name")
-	c.SetParamValues(name)
-	if err = testapp.external.CreateIngressHandler(c); err != nil {
+	ctx := testapp.router.NewContext(req, cw)
+	ctx.SetPath("/ingress/:name")
+	ctx.SetParamNames("name")
+	ctx.SetParamValues(name)
+	if err = testapp.external.CreateIngressHandler(ctx); err != nil {
 		return nil, err
 	}
 

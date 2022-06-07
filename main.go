@@ -11,15 +11,19 @@ import (
 	"strconv"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/knadh/koanf"
 	_ "github.com/lib/pq"
+	"github.com/nats-io/nats.go"
+	"github.com/sirupsen/logrus"
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
-	"github.com/cyverse-de/configurate"
+	"github.com/cyverse-de/go-mod/cfg"
+	"github.com/cyverse-de/go-mod/gotelnats"
+	"github.com/cyverse-de/go-mod/logging"
 	"github.com/cyverse-de/go-mod/otelutils"
+	"github.com/cyverse-de/go-mod/protobufjson"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -57,10 +61,18 @@ func main() {
 	var (
 		err        error
 		kubeconfig *string
-		cfg        *viper.Viper
+		c          *koanf.Koanf
 		db         *sqlx.DB
 
-		configPath                    = flag.String("config", "/etc/iplant/de/jobservices.yml", "Path to the config file")
+		configPath = flag.String("config", cfg.DefaultConfigPath, "Path to the config file")
+		dotEnvPath = flag.String("dotenv-path", cfg.DefaultDotEnvPath, "Path to the dotenv file")
+		tlsCert    = flag.String("tlscert", gotelnats.DefaultTLSCertPath, "Path to the NATS TLS cert file")
+		tlsKey     = flag.String("tlskey", gotelnats.DefaultTLSKeyPath, "Path to the NATS TLS key file")
+		caCert     = flag.String("tlsca", gotelnats.DefaultTLSCAPath, "Path to the NATS TLS CA file")
+		credsPath  = flag.String("creds", gotelnats.DefaultCredsPath, "Path to the NATS creds file")
+		//maxReconnects                 = flag.Int("max-reconnects", gotelnats.DefaultMaxReconnects, "Maximum number of reconnection attempts to NATS")
+		//reconnectWait                 = flag.Int("reconnect-wait", gotelnats.DefaultReconnectWait, "Seconds to wait between reconnection attempts to NATS")
+		envPrefix                     = flag.String("env-prefix", "APP_EXPOSER_", "The prefix for environment variables")
 		namespace                     = flag.String("namespace", "default", "The namespace scope this process operates on for non-VICE calls")
 		viceNamespace                 = flag.String("vice-namespace", "vice-apps", "The namepsace that VICE apps are launched within")
 		listenPort                    = flag.Int("port", 60000, "(optional) The port to listen on")
@@ -94,53 +106,41 @@ func main() {
 	}
 
 	flag.Parse()
+	logging.SetupLogging(*logLevel)
 
-	var levelSetting logrus.Level
+	nats.RegisterEncoder("protojson", protobufjson.NewCodec(protobufjson.WithEmitUnpopulated()))
 
-	switch *logLevel {
-	case "trace":
-		levelSetting = logrus.TraceLevel
-	case "debug":
-		levelSetting = logrus.DebugLevel
-	case "info":
-		levelSetting = logrus.InfoLevel
-	case "warn":
-		levelSetting = logrus.WarnLevel
-	case "error":
-		levelSetting = logrus.ErrorLevel
-	case "fatal":
-		levelSetting = logrus.FatalLevel
-	case "panic":
-		levelSetting = logrus.PanicLevel
-	default:
-		log.Fatal("incorrect log level")
-	}
-
-	log.Logger.SetLevel(levelSetting)
+	log := log.WithFields(logrus.Fields{"context": "main"})
 
 	log.Infof("Reading config from %s", *configPath)
 	if _, err = os.Open(*configPath); err != nil {
 		log.Fatal(*configPath)
 	}
 
-	cfg, err = configurate.Init(*configPath)
+	c, err = cfg.Init(&cfg.Settings{
+		EnvPrefix:   *envPrefix,
+		ConfigPath:  *configPath,
+		DotEnvPath:  *dotEnvPath,
+		StrictMerge: false,
+		FileType:    cfg.YAML,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Infof("Done reading config from %s", *configPath)
 
 	// Make sure the db.uri URL is parseable
-	if _, err = url.Parse(cfg.GetString("db.uri")); err != nil {
+	if _, err = url.Parse(c.String("db.uri")); err != nil {
 		log.Fatal(errors.Wrap(err, "Can't parse db.uri in the config file"))
 	}
 
 	// Make sure the frontend base URL is parseable.
-	if _, err = url.Parse(cfg.GetString("k8s.frontend.base")); err != nil {
+	if _, err = url.Parse(c.String("k8s.frontend.base")); err != nil {
 		log.Fatal(errors.Wrap(err, "Can't parse k8s.frontend.base in the config file"))
 	}
 
 	// Make sure that the iRODS zone isn't empty.
-	zone := cfg.GetString("irods.zone")
+	zone := c.String("irods.zone")
 	if zone == "" {
 		log.Fatal("The iRODS zone must be specified in the config file")
 	}
@@ -184,72 +184,46 @@ func main() {
 		log.Fatal(errors.Wrap(err, "error creating clientset from config"))
 	}
 
-	jobStatusURL := cfg.GetString("vice.job-status.base")
-	if jobStatusURL == "" {
-		jobStatusURL = "http://job-status-listener"
-	}
-
-	appsServiceBaseURL := cfg.GetString("apps.base")
-	if appsServiceBaseURL == "" {
-		appsServiceBaseURL = "http://apps"
-	}
-
-	metadataBaseURL := cfg.GetString("metadata.base")
-	if metadataBaseURL == "" {
-		metadataBaseURL = "http://metadata"
-	}
-
-	permissionsURL := cfg.GetString("permissions.base")
-	if permissionsURL == "" {
-		permissionsURL = "http://permissions"
-	}
-
 	var proxyImage string
-	proxyTag := cfg.GetString("interapps.proxy.tag")
+	proxyTag := c.String("interapps.proxy.tag")
 	if proxyTag == "" {
 		proxyImage = *viceProxy
 	} else {
 		proxyImage = fmt.Sprintf("%s:%s", *viceProxy, proxyTag)
 	}
 
-	dbURI := cfg.GetString("db.uri")
+	dbURI := c.String("db.uri")
 	db = otelsqlx.MustConnect("postgres", dbURI,
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL))
+
+	log.Infof("NATS TLS cert file is %s", *tlsCert)
+	log.Infof("NATS TLS key file is %s", *tlsKey)
+	log.Infof("NATS CA cert file is %s", *caCert)
+	log.Infof("NATS creds file is %s", *credsPath)
 
 	exposerInit := &ExposerAppInit{
 		Namespace:                     *namespace,
 		ViceNamespace:                 *viceNamespace,
-		PorklockImage:                 cfg.GetString("vice.file-transfers.image"),
-		PorklockTag:                   cfg.GetString("vice.file-transfers.tag"),
-		UseCSIDriver:                  cfg.GetBool("vice.use_csi_driver"),
-		InputPathListIdentifier:       cfg.GetString("path_list.file_identifier"),
-		TicketInputPathListIdentifier: cfg.GetString("tickets_path_list.file_identifier"),
-		ImagePullSecretName:           cfg.GetString("vice.image-pull-secret"),
-		JobStatusURL:                  jobStatusURL,
 		ViceProxyImage:                proxyImage,
-		CASBaseURL:                    cfg.GetString("cas.base"),
-		FrontendBaseURL:               cfg.GetString("k8s.frontend.base"),
 		ViceDefaultBackendService:     *viceDefaultBackendService,
 		ViceDefaultBackendServicePort: *viceDefaultBackendServicePort,
 		GetAnalysisIDService:          *getAnalysisIDService,
 		CheckResourceAccessService:    *checkResourceAccessService,
-		VICEBackendNamespace:          cfg.GetString("vice.backend-namespace"),
-		AppsServiceBaseURL:            appsServiceBaseURL,
 		db:                            db,
 		UserSuffix:                    *userSuffix,
-		MetadataBaseURL:               metadataBaseURL,
-		PermissionsURL:                permissionsURL,
-		KeycloakBaseURL:               cfg.GetString("keycloak.base"),
-		KeycloakRealm:                 cfg.GetString("keycloak.realm"),
-		KeycloakClientID:              cfg.GetString("keycloak.client-id"),
-		KeycloakClientSecret:          cfg.GetString("keycloak.client-secret"),
 		IRODSZone:                     zone,
+		IngressClass:                  *ingressClass,
+		ClientSet:                     clientset,
 	}
 
 	a := apps.NewApps(db, *userSuffix)
 	go a.Run()
 	defer a.Finish()
-	app := NewExposerApp(exposerInit, *ingressClass, clientset, a)
+	app := NewExposerApp(
+		exposerInit,
+		a,
+		c,
+	)
 	log.Printf("listening on port %d", *listenPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", strconv.Itoa(*listenPort)), app.router))
 }

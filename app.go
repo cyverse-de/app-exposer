@@ -9,6 +9,7 @@ import (
 	"github.com/cyverse-de/app-exposer/instantlaunches"
 	"github.com/cyverse-de/app-exposer/internal"
 	"github.com/jmoiron/sqlx"
+	"github.com/knadh/koanf"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"k8s.io/client-go/kubernetes"
 
@@ -32,67 +33,72 @@ type ExposerApp struct {
 type ExposerAppInit struct {
 	Namespace                     string // The namespace that the Ingress settings are added to.
 	ViceNamespace                 string // The namespace containing the running VICE apps.
-	PorklockImage                 string // The image containing the porklock tool
-	PorklockTag                   string // The docker tag for the image containing the porklock tool
-	UseCSIDriver                  bool   // Yes to use CSI Driver for data input/output, No to use Vice-file-transfer
-	InputPathListIdentifier       string // Header line for input path lists
-	TicketInputPathListIdentifier string // Header line for ticket input path lists
-	ImagePullSecretName           string // A secret name to add to pods' imagePullSecrets
-	JobStatusURL                  string
 	ViceProxyImage                string
-	CASBaseURL                    string
-	FrontendBaseURL               string
 	ViceDefaultBackendService     string
 	ViceDefaultBackendServicePort int
 	GetAnalysisIDService          string
 	CheckResourceAccessService    string
-	VICEBackendNamespace          string
-	AppsServiceBaseURL            string
 	db                            *sqlx.DB
 	UserSuffix                    string
-	MetadataBaseURL               string
-	PermissionsURL                string
-	KeycloakBaseURL               string
-	KeycloakRealm                 string
-	KeycloakClientID              string
-	KeycloakClientSecret          string
 	IRODSZone                     string
+	IngressClass                  string
+	ClientSet                     kubernetes.Interface
 }
 
 // NewExposerApp creates and returns a newly instantiated *ExposerApp.
-func NewExposerApp(init *ExposerAppInit, ingressClass string, cs kubernetes.Interface, apps *apps.Apps) *ExposerApp {
+func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *ExposerApp {
+	jobStatusURL := c.String("vice.job-status.base")
+	if jobStatusURL == "" {
+		jobStatusURL = "http://job-status-listener"
+	}
+
+	metadataBaseURL := c.String("metadata.base")
+	if metadataBaseURL == "" {
+		metadataBaseURL = "http://metadata"
+	}
+
+	appsServiceBaseURL := c.String("apps.base")
+	if appsServiceBaseURL == "" {
+		appsServiceBaseURL = "http://apps"
+	}
+
+	permissionsURL := c.String("permissions.base")
+	if permissionsURL == "" {
+		permissionsURL = "http://permissions"
+	}
+
 	internalInit := &internal.Init{
 		ViceNamespace:                 init.ViceNamespace,
-		PorklockImage:                 init.PorklockImage,
-		PorklockTag:                   init.PorklockTag,
-		UseCSIDriver:                  init.UseCSIDriver,
-		InputPathListIdentifier:       init.InputPathListIdentifier,
-		TicketInputPathListIdentifier: init.TicketInputPathListIdentifier,
-		ImagePullSecretName:           init.ImagePullSecretName,
+		PorklockImage:                 c.String("vice.file-transfers.image"),
+		PorklockTag:                   c.String("vice.file-transfers.tag"),
+		UseCSIDriver:                  c.Bool("vice.use_csi_driver"),
+		InputPathListIdentifier:       c.String("path_list.file_identifier"),
+		TicketInputPathListIdentifier: c.String("tickets_path_list.file_identifier"),
+		ImagePullSecretName:           c.String("vice.image-pull-secret"),
 		ViceProxyImage:                init.ViceProxyImage,
-		CASBaseURL:                    init.CASBaseURL,
-		FrontendBaseURL:               init.FrontendBaseURL,
+		CASBaseURL:                    c.String("cas.base"),
+		FrontendBaseURL:               c.String("k8s.frontend.base"),
 		ViceDefaultBackendService:     init.ViceDefaultBackendService,
 		ViceDefaultBackendServicePort: init.ViceDefaultBackendServicePort,
 		GetAnalysisIDService:          init.GetAnalysisIDService,
 		CheckResourceAccessService:    init.CheckResourceAccessService,
-		VICEBackendNamespace:          init.VICEBackendNamespace,
-		AppsServiceBaseURL:            init.AppsServiceBaseURL,
-		JobStatusURL:                  init.JobStatusURL,
+		VICEBackendNamespace:          c.String("vice.backend-namespace"),
+		AppsServiceBaseURL:            appsServiceBaseURL,
+		JobStatusURL:                  jobStatusURL,
 		UserSuffix:                    init.UserSuffix,
-		PermissionsURL:                init.PermissionsURL,
-		KeycloakBaseURL:               init.KeycloakBaseURL,
-		KeycloakRealm:                 init.KeycloakRealm,
-		KeycloakClientID:              init.KeycloakClientID,
-		KeycloakClientSecret:          init.KeycloakClientSecret,
+		PermissionsURL:                permissionsURL,
+		KeycloakBaseURL:               c.String("keycloak.base"),
+		KeycloakRealm:                 c.String("keycloak.realm"),
+		KeycloakClientID:              c.String("keycloak.client-id"),
+		KeycloakClientSecret:          c.String("keycloak.client-secret"),
 		IRODSZone:                     init.IRODSZone,
 	}
 
 	app := &ExposerApp{
-		external:  external.New(cs, init.Namespace, ingressClass),
-		internal:  internal.New(internalInit, init.db, cs, apps),
+		external:  external.New(init.ClientSet, init.Namespace, init.IngressClass),
+		internal:  internal.New(internalInit, init.db, init.ClientSet, apps),
 		namespace: init.Namespace,
-		clientset: cs,
+		clientset: init.ClientSet,
 		router:    echo.New(),
 		db:        init.db,
 	}
@@ -101,8 +107,8 @@ func NewExposerApp(init *ExposerAppInit, ingressClass string, cs kubernetes.Inte
 
 	ilInit := &instantlaunches.Init{
 		UserSuffix:      init.UserSuffix,
-		MetadataBaseURL: init.MetadataBaseURL,
-		PermissionsURL:  init.PermissionsURL,
+		MetadataBaseURL: metadataBaseURL,
+		PermissionsURL:  permissionsURL,
 	}
 
 	app.router.HTTPErrorHandler = func(err error, c echo.Context) {
