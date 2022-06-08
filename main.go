@@ -145,6 +145,11 @@ func main() {
 		log.Fatal("The iRODS zone must be specified in the config file")
 	}
 
+	natsCluster := c.String("nats.cluster")
+	if natsCluster == "" {
+		log.Fatalf("The %s_NATS_CLUSTER environment variable or nats.cluster configuration value must be set", *envPrefix)
+	}
+
 	// Print error and exit if *kubeconfig is not empty and doesn't actually
 	// exist. If *kubeconfig is blank, then the app may be running inside the
 	// cluster, so let things proceed.
@@ -214,6 +219,11 @@ func main() {
 		IRODSZone:                     zone,
 		IngressClass:                  *ingressClass,
 		ClientSet:                     clientset,
+		NATSCluster:                   natsCluster,
+		NATSTLSKey:                    *tlsKey,
+		NATSTLSCert:                   *tlsCert,
+		NATSTLSCA:                     *caCert,
+		NATSCredsFilePath:             *credsPath,
 	}
 
 	a := apps.NewApps(db, *userSuffix)

@@ -2,6 +2,8 @@ package main
 
 import (
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
@@ -10,6 +12,7 @@ import (
 	"github.com/cyverse-de/app-exposer/internal"
 	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf"
+	"github.com/nats-io/nats.go"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"k8s.io/client-go/kubernetes"
 
@@ -43,6 +46,13 @@ type ExposerAppInit struct {
 	IRODSZone                     string
 	IngressClass                  string
 	ClientSet                     kubernetes.Interface
+	NATSCluster                   string
+	NATSTLSKey                    string
+	NATSTLSCert                   string
+	NATSTLSCA                     string
+	NATSCredsFilePath             string
+	NATSMaxReconnects             int
+	NATSReconnectWait             int
 }
 
 // NewExposerApp creates and returns a newly instantiated *ExposerApp.
@@ -65,6 +75,36 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *Expos
 	permissionsURL := c.String("permissions.base")
 	if permissionsURL == "" {
 		permissionsURL = "http://permissions"
+	}
+
+	nc, err := nats.Connect(
+		init.NATSCluster,
+		nats.UserCredentials(init.NATSCredsFilePath),
+		nats.RootCAs(init.NATSTLSCA),
+		nats.ClientCert(init.NATSTLSCert, init.NATSTLSKey),
+		nats.RetryOnFailedConnect(true),
+		nats.MaxReconnects(init.NATSMaxReconnects),
+		nats.ReconnectWait(time.Duration(init.NATSReconnectWait)*time.Second),
+		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
+			log.Errorf("disconnected from nats: %s", err.Error())
+		}),
+		nats.ReconnectHandler(func(nc *nats.Conn) {
+			log.Infof("reconnected to %s", nc.ConnectedUrl())
+		}),
+		nats.ClosedHandler(func(nc *nats.Conn) {
+			log.Errorf("connection closed: %s", nc.LastError().Error())
+		}),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Infof("configured servers: %s", strings.Join(nc.Servers(), " "))
+	log.Infof("connected to NATS host: %s", nc.ConnectedServerName())
+
+	conn, err := nats.NewEncodedConn(nc, "protojson")
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	internalInit := &internal.Init{
@@ -92,6 +132,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *Expos
 		KeycloakClientID:              c.String("keycloak.client-id"),
 		KeycloakClientSecret:          c.String("keycloak.client-secret"),
 		IRODSZone:                     init.IRODSZone,
+		NATSEncodedConn:               conn,
 	}
 
 	app := &ExposerApp{
