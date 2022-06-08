@@ -9,9 +9,11 @@ require (
 	github.com/cyverse-de/go-mod/gotelnats v0.0.10
 	github.com/cyverse-de/go-mod/logging v0.0.2
 	github.com/cyverse-de/go-mod/otelutils v0.0.2
+	github.com/cyverse-de/go-mod/pbinit v0.0.1
 	github.com/cyverse-de/go-mod/protobufjson v0.0.3
 	github.com/cyverse-de/messaging/v9 v9.1.3
 	github.com/cyverse-de/model/v6 v6.0.1
+	github.com/cyverse-de/p/go/qms v0.0.1
 	github.com/google/go-cmp v0.5.7
 	github.com/google/uuid v1.3.0
 	github.com/gosimple/slug v1.10.0
@@ -28,8 +30,8 @@ require (
 	github.com/valyala/fastjson v1.6.3
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.30.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.30.0
-	go.opentelemetry.io/otel v1.6.3
-	go.opentelemetry.io/otel/trace v1.6.3
+	go.opentelemetry.io/otel v1.7.0
+	go.opentelemetry.io/otel/trace v1.7.0
 	k8s.io/api v0.23.5
 	k8s.io/apimachinery v0.23.5
 	k8s.io/client-go v0.23.5
@@ -38,7 +40,7 @@ require (
 
 require (
 	github.com/cyverse-de/configurate v0.0.0-20210914212501-fc18b48e00a9 // indirect
-	github.com/cyverse-de/p/go/header v0.0.0-20220425195853-720402e94a27 // indirect
+	github.com/cyverse-de/p/go/header v0.0.1 // indirect
 	github.com/cyverse-de/p/go/svcerror v0.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
@@ -89,7 +91,7 @@ require (
 	golang.org/x/sys v0.0.0-20220403205710-6acee93ad0eb // indirect
 	golang.org/x/term v0.0.0-20210615171337-6886f2dfbf5b // indirect
 	golang.org/x/text v0.3.7 // indirect
-	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11 // indirect
+	golang.org/x/time v0.0.0-20220411224347-583f2d630306 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect

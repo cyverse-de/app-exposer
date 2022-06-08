@@ -8,7 +8,10 @@ import (
 	"strings"
 
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/go-mod/gotelnats"
+	"github.com/cyverse-de/go-mod/pbinit"
 	"github.com/cyverse-de/model/v6"
+	"github.com/cyverse-de/p/go/qms"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -123,6 +126,33 @@ func (i *Internal) getDefaultJobLimit() (int, error) {
 	return defaultJobLimit, nil
 }
 
+func (i *Internal) getResourceOveragesForUser(ctx context.Context, username string) (*qms.OverageList, error) {
+	var err error
+
+	subject := "cyverse.qms.user-overages"
+
+	req := &qms.AllUserOveragesRequest{
+		Username: username,
+	}
+
+	ctx, span := pbinit.InitAllUserOveragesRequest(req, subject)
+	defer span.End()
+
+	resp := pbinit.NewOverageList()
+
+	if err = gotelnats.Request(
+		ctx,
+		i.NATSEncodedConn,
+		"cyverse.qms.user-overages",
+		req,
+		resp,
+	); err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
 func buildLimitError(code, msg string, defaultJobLimit, jobCount int, jobLimit *int) error {
 	return common.ErrorResponse{
 		ErrorCode: code,
@@ -135,7 +165,7 @@ func buildLimitError(code, msg string, defaultJobLimit, jobCount int, jobLimit *
 	}
 }
 
-func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int) (int, error) {
+func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int, overages *qms.OverageList) (int, error) {
 	switch {
 
 	// Jobs are disabled by default and the user has not been granted permission yet.
@@ -161,6 +191,21 @@ func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int
 		code := "ERR_LIMIT_REACHED"
 		msg := fmt.Sprintf("%s is already running %d or more concurrent jobs", user, *jobLimit)
 		return http.StatusBadRequest, buildLimitError(code, msg, defaultJobLimit, jobCount, jobLimit)
+
+	case overages != nil && len(overages.Overages) == 0:
+		code := "ERR_RESOURCE_OVERAGE"
+		msg := fmt.Sprintf("%s has resource overages.", user)
+		details := make(map[string]interface{})
+
+		for _, ov := range overages.Overages {
+			details[ov.ResourceName] = fmt.Sprintf("quota: %f, usage: %f", ov.Quota, ov.Usage)
+		}
+
+		return http.StatusBadRequest, common.ErrorResponse{
+			ErrorCode: code,
+			Message:   msg,
+			Details:   &details,
+		}
 
 	// In every other case, we can permit the job to be launched.
 	default:
@@ -192,5 +237,10 @@ func (i *Internal) validateJob(ctx context.Context, job *model.Job) (int, error)
 	if err != nil {
 		return http.StatusInternalServerError, errors.Wrapf(err, "unable to determine the default concurrent job limit")
 	}
-	return validateJobLimits(user, defaultJobLimit, jobCount, jobLimit)
+	overages, err := i.getResourceOveragesForUser(ctx, user)
+	if err != nil {
+		return http.StatusInternalServerError, errors.Wrapf(err, "unable to get list of resource overages for user %s", user)
+	}
+
+	return validateJobLimits(user, defaultJobLimit, jobCount, jobLimit, overages)
 }
