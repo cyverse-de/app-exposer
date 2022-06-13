@@ -135,7 +135,7 @@ func (i *Internal) getResourceOveragesForUser(ctx context.Context, username stri
 		Username: username,
 	}
 
-	ctx, span := pbinit.InitAllUserOveragesRequest(req, subject)
+	_, span := pbinit.InitAllUserOveragesRequest(req, subject)
 	defer span.End()
 
 	resp := pbinit.NewOverageList()
