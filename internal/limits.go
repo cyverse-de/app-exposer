@@ -192,7 +192,7 @@ func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int
 		msg := fmt.Sprintf("%s is already running %d or more concurrent jobs", user, *jobLimit)
 		return http.StatusBadRequest, buildLimitError(code, msg, defaultJobLimit, jobCount, jobLimit)
 
-	case overages != nil && len(overages.Overages) == 0:
+	case overages != nil && len(overages.Overages) != 0:
 		code := "ERR_RESOURCE_OVERAGE"
 		msg := fmt.Sprintf("%s has resource overages.", user)
 		details := make(map[string]interface{})
