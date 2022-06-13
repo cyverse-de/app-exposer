@@ -4,17 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 
 	"github.com/cockroachdb/apd"
+	"github.com/cyverse-de/go-mod/gotelnats"
+	"github.com/cyverse-de/go-mod/pbinit"
 	"github.com/cyverse-de/jex-adapter/logging"
 	"github.com/cyverse-de/jex-adapter/millicores"
 	"github.com/cyverse-de/jex-adapter/types"
 	"github.com/cyverse-de/messaging/v9"
 	"github.com/cyverse-de/model/v6"
+	"github.com/cyverse-de/p/go/qms"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/streadway/amqp"
@@ -40,12 +45,14 @@ func amqpError(err error) {
 type AMQPMessenger struct {
 	exchange string
 	client   *messaging.Client
+	natsConn *nats.EncodedConn
 }
 
-func NewAMQPMessenger(exchange string, client *messaging.Client) *AMQPMessenger {
+func NewAMQPMessenger(exchange string, client *messaging.Client, natsConn *nats.EncodedConn) *AMQPMessenger {
 	return &AMQPMessenger{
 		exchange: exchange,
 		client:   client,
+		natsConn: natsConn,
 	}
 }
 
@@ -57,6 +64,40 @@ func (a *AMQPMessenger) Stop(context context.Context, id string) error {
 	return err
 }
 
+func (a *AMQPMessenger) getResourceOveragesForUser(ctx context.Context, username string) (*qms.OverageList, error) {
+	var err error
+
+	subject := "cyverse.qms.user-overages"
+
+	req := &qms.AllUserOveragesRequest{
+		Username: username,
+	}
+
+	_, span := pbinit.InitAllUserOveragesRequest(req, subject)
+	defer span.End()
+
+	resp := pbinit.NewOverageList()
+
+	if err = gotelnats.Request(ctx, a.natsConn, subject, req, resp); err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func (a *AMQPMessenger) validateLaunch(ctx context.Context, job *model.Job) error {
+	overages, err := a.getResourceOveragesForUser(ctx, job.Submitter)
+	if err != nil {
+		return err
+	}
+
+	if overages != nil && len(overages.Overages) != 0 {
+		return fmt.Errorf("%s has resource overages", job.Submitter)
+	}
+
+	return nil
+}
+
 func (a *AMQPMessenger) Launch(context context.Context, job *model.Job) error {
 	var (
 		err        error
@@ -65,6 +106,11 @@ func (a *AMQPMessenger) Launch(context context.Context, job *model.Job) error {
 
 	ctx, span := otel.Tracer(otelName).Start(context, "Launch")
 	defer span.End()
+
+	if err = a.validateLaunch(ctx, job); err != nil {
+		amqpError(err)
+		return err
+	}
 
 	// This is included just for the side effect of creating the stop
 	// queue before the job launches, otherwise some stop requests can be missed.
