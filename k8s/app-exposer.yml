@@ -41,6 +41,25 @@ spec:
             items:
               - key: jobservices.yml
                 path: jobservices.yml
+        - name: nats-client-tls
+          secret:
+            secretName: nats-client-tls
+        - name: nats-services-creds
+          secret:
+            secretName: nats-services-creds
+        - name: nats-configuration
+          emptyDir: {}
+      initContainers:
+      - name: nats-configurator
+        image: harbor.cyverse.org/de/nats-configurator
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+                fieldPath: metadata.namespace
+        volumeMounts:
+          - name: nats-configuration
+            mountPath: /etc/cyverse/de/env
       containers:
       - name: app-exposer
         image: harbor.cyverse.org/de/app-exposer
@@ -92,6 +111,15 @@ spec:
             subPath: timezone
           - name: service-configs
             mountPath: /etc/iplant/de
+            readOnly: true
+          - name: nats-client-tls
+            mountPath: /etc/nats/tls
+            readOnly: true
+          - name: nats-services-creds
+            mountPath: /etc/nats/creds
+            readOnly: true
+          - name: nats-configuration
+            mountPath: /etc/cyverse/de/env
             readOnly: true
         livenessProbe:
           httpGet:
