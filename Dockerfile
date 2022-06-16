@@ -1,18 +1,20 @@
 ### First stage
 FROM quay.io/goswagger/swagger as swagger
 
-FROM golang:1.17 as build-root
+FROM golang:1.18 as build-root
 
-WORKDIR /build
+WORKDIR /go/src/github.com/cyverse-de/app-exposer
+COPY . . 
 
 ENV CGO_ENABLED=0
 ENV GOOS=linux
 ENV GOARCH=amd64
 
-COPY --from=swagger /usr/bin/swagger /usr/bin/
+RUN go build --buildvcs=false .
+RUN go clean -cache -modcache
+RUN cp ./app-exposer /bin/app-exposer
 
-COPY . .
-RUN go install -v ./... && go clean -cache -modcache
+COPY --from=swagger /usr/bin/swagger /usr/bin/
 RUN swagger generate spec -o ./docs/swagger.json --scan-models
 
 ENTRYPOINT ["app-exposer"]
