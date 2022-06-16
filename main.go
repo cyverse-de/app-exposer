@@ -72,7 +72,7 @@ func main() {
 		credsPath  = flag.String("creds", gotelnats.DefaultCredsPath, "Path to the NATS creds file")
 		//maxReconnects                 = flag.Int("max-reconnects", gotelnats.DefaultMaxReconnects, "Maximum number of reconnection attempts to NATS")
 		//reconnectWait                 = flag.Int("reconnect-wait", gotelnats.DefaultReconnectWait, "Seconds to wait between reconnection attempts to NATS")
-		envPrefix                     = flag.String("env-prefix", "APP_EXPOSER_", "The prefix for environment variables")
+		envPrefix                     = flag.String("env-prefix", cfg.DefaultEnvPrefix, "The prefix for environment variables")
 		namespace                     = flag.String("namespace", "default", "The namespace scope this process operates on for non-VICE calls")
 		viceNamespace                 = flag.String("vice-namespace", "vice-apps", "The namepsace that VICE apps are launched within")
 		listenPort                    = flag.Int("port", 60000, "(optional) The port to listen on")
