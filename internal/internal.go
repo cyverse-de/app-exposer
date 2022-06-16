@@ -16,6 +16,7 @@ import (
 	"github.com/gosimple/slug"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
+	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -96,6 +97,7 @@ type Init struct {
 	KeycloakClientID              string
 	KeycloakClientSecret          string
 	IRODSZone                     string
+	NATSEncodedConn               *nats.EncodedConn
 }
 
 // Internal contains information and operations for launching VICE apps inside the
