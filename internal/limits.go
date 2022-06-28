@@ -129,7 +129,7 @@ func (i *Internal) getDefaultJobLimit() (int, error) {
 func (i *Internal) getResourceOveragesForUser(ctx context.Context, username string) (*qms.OverageList, error) {
 	var err error
 
-	subject := "cyverse.qms.user-overages"
+	subject := "cyverse.qms.user.overages.get"
 
 	req := &qms.AllUserOveragesRequest{
 		Username: username,
@@ -143,7 +143,7 @@ func (i *Internal) getResourceOveragesForUser(ctx context.Context, username stri
 	if err = gotelnats.Request(
 		ctx,
 		i.NATSEncodedConn,
-		"cyverse.qms.user-overages",
+		subject,
 		req,
 		resp,
 	); err != nil {
