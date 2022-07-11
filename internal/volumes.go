@@ -19,12 +19,12 @@ var (
 
 // IRODSFSPathMapping defines a single path mapping that can be used by the iRODS CSI driver to create a mount point.
 type IRODSFSPathMapping struct {
-	IRODSPath           string `yaml:"irods_path" json:"irods_path"`
-	MappingPath         string `yaml:"mapping_path" json:"mapping_path"`
-	ResourceType        string `yaml:"resource_type" json:"resource_type"` // file or dir
-	ReadOnly            bool   `yaml:"read_only" json:"read_only"`
-	CreateDir           bool   `yaml:"create_dir" json:"create_dir"`
-	IgnoreNotExistError bool   `yaml:"ignore_not_exist_error" json:"ignore_not_exist_error"`
+	IRODSPath      string `yaml:"irods_path" json:"irods_path"`
+	MappingPath    string `yaml:"mapping_path" json:"mapping_path"`
+	ResourceType   string `yaml:"resource_type" json:"resource_type"` // file or dir
+	ReadOnly       bool   `yaml:"read_only" json:"read_only"`
+	CreateDir      bool   `yaml:"create_dir" json:"create_dir"`
+	IgnoreNotExist bool   `yaml:"ignore_not_exist" json:"ignore_not_exist"`
 }
 
 func (i *Internal) getZoneMountPath() string {
@@ -75,12 +75,12 @@ func (i *Internal) getInputPathMappings(job *model.Job) ([]IRODSFSPathMapping, e
 				mappingMap[mountPath] = irodsPath
 
 				mapping := IRODSFSPathMapping{
-					IRODSPath:           irodsPath,
-					MappingPath:         mountPath,
-					ResourceType:        resourceType,
-					ReadOnly:            true,
-					CreateDir:           false,
-					IgnoreNotExistError: true,
+					IRODSPath:      irodsPath,
+					MappingPath:    mountPath,
+					ResourceType:   resourceType,
+					ReadOnly:       true,
+					CreateDir:      false,
+					IgnoreNotExist: true,
 				}
 
 				mappings = append(mappings, mapping)
@@ -93,24 +93,24 @@ func (i *Internal) getInputPathMappings(job *model.Job) ([]IRODSFSPathMapping, e
 func (i *Internal) getOutputPathMapping(job *model.Job) IRODSFSPathMapping {
 	// mount a single collection for output
 	return IRODSFSPathMapping{
-		IRODSPath:           job.OutputDirectory(),
-		MappingPath:         csiDriverOutputVolumeMountPath,
-		ResourceType:        "dir",
-		ReadOnly:            false,
-		CreateDir:           true,
-		IgnoreNotExistError: false,
+		IRODSPath:      job.OutputDirectory(),
+		MappingPath:    csiDriverOutputVolumeMountPath,
+		ResourceType:   "dir",
+		ReadOnly:       false,
+		CreateDir:      true,
+		IgnoreNotExist: false,
 	}
 }
 
 func (i *Internal) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
 	// mount a single collection for home
 	return IRODSFSPathMapping{
-		IRODSPath:           job.UserHome,
-		MappingPath:         job.UserHome,
-		ResourceType:        "dir",
-		ReadOnly:            false,
-		CreateDir:           false,
-		IgnoreNotExistError: false,
+		IRODSPath:      job.UserHome,
+		MappingPath:    job.UserHome,
+		ResourceType:   "dir",
+		ReadOnly:       false,
+		CreateDir:      false,
+		IgnoreNotExist: false,
 	}
 }
 
@@ -119,12 +119,12 @@ func (i *Internal) getSharedPathMapping(job *model.Job) IRODSFSPathMapping {
 	sharedHomeFullPath := fmt.Sprintf("/%s/home/shared", i.IRODSZone)
 
 	return IRODSFSPathMapping{
-		IRODSPath:           sharedHomeFullPath,
-		MappingPath:         sharedHomeFullPath,
-		ResourceType:        "dir",
-		ReadOnly:            false,
-		CreateDir:           false,
-		IgnoreNotExistError: true,
+		IRODSPath:      sharedHomeFullPath,
+		MappingPath:    sharedHomeFullPath,
+		ResourceType:   "dir",
+		ReadOnly:       false,
+		CreateDir:      false,
+		IgnoreNotExist: true,
 	}
 }
 
