@@ -1,8 +1,5 @@
 apps:
-  base: "http://apps"
-
-cas:
-  base: "https://my-cas-server.example.org/cas"
+  base: "http://localhost:31323"
 
 db:
   uri: postgresql://username:password@host:5432/database?sslmode=disable
@@ -12,11 +9,17 @@ interapps:
     tag: latest
 
 irods:
-  zone: iplant
+  zone: "cyverse"
 
 k8s:
   frontend:
     base: "https://cyverse.run"
+
+keycloak:
+  base: "https://keycloak.example.org/auth"
+  realm: "example"
+  client-id: "example-client"
+  client-secret: "619ba48b-e633-40be-8bb3-8cb7ceb54411"
 
 metadata:
   base: "http://metadata"
@@ -24,8 +27,8 @@ metadata:
 path_list:
   file_identifier: "# application/vnd.de.multi-input-path-list+csv; version=1"
 
-permissions:
-  base: "http://permissions"
+tickets_path_list:
+  file_identifier: "# application/vnd.de.tickets-path-list+csv; version=1"
 
 vice:
   file-transfers:
@@ -35,3 +38,5 @@ vice:
     base: http://job-status-listener
   k8s-enabled: true
   backend-namespace: default
+  use_csi_driver: false
+  image-pull-secret: ""
