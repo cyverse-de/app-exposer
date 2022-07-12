@@ -25,7 +25,6 @@ var testConfig = &Init{
 	InputPathListIdentifier:       "# application/vnd.de.multi-input-path-list+csv; version=1",
 	TicketInputPathListIdentifier: "# application/vnd.de.tickets-path-list+csv; version=1",
 	ViceProxyImage:                "discoenv/vice-proxy",
-	CASBaseURL:                    "https://auth.example.org/cas",
 	FrontendBaseURL:               "https://example.run",
 	ViceDefaultBackendService:     "vice-default-backend",
 	ViceDefaultBackendServicePort: 80,

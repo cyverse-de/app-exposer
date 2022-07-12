@@ -116,7 +116,6 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *Expos
 		TicketInputPathListIdentifier: c.String("tickets_path_list.file_identifier"),
 		ImagePullSecretName:           c.String("vice.image-pull-secret"),
 		ViceProxyImage:                init.ViceProxyImage,
-		CASBaseURL:                    c.String("cas.base"),
 		FrontendBaseURL:               c.String("k8s.frontend.base"),
 		ViceDefaultBackendService:     init.ViceDefaultBackendService,
 		ViceDefaultBackendServicePort: init.ViceDefaultBackendServicePort,

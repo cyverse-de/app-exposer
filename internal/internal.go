@@ -80,7 +80,6 @@ type Init struct {
 	TicketInputPathListIdentifier string
 	ImagePullSecretName           string
 	ViceProxyImage                string
-	CASBaseURL                    string
 	FrontendBaseURL               string
 	ViceDefaultBackendService     string
 	ViceDefaultBackendServicePort int
