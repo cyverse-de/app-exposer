@@ -124,8 +124,6 @@ func (i *Internal) viceProxyCommand(job *model.Job) []string {
 		"--listen-addr", fmt.Sprintf("0.0.0.0:%d", viceProxyPort),
 		"--backend-url", backendURL,
 		"--ws-backend-url", backendURL,
-		"--cas-base-url", i.CASBaseURL,
-		"--cas-validate", "validate",
 		"--frontend-url", frontURL.String(),
 		"--external-id", job.InvocationID,
 		"--get-analysis-id-base", fmt.Sprintf("http://%s.%s", i.GetAnalysisIDService, i.VICEBackendNamespace),
