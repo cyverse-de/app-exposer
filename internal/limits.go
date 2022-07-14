@@ -132,7 +132,7 @@ func (i *Internal) getResourceOveragesForUser(ctx context.Context, username stri
 	subject := "cyverse.qms.user.overages.get"
 
 	req := &qms.AllUserOveragesRequest{
-		Username: username,
+		Username: i.fixUsername(username),
 	}
 
 	_, span := pbinit.InitAllUserOveragesRequest(req, subject)
