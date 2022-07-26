@@ -198,8 +198,9 @@ func (i *Internal) getPersistentVolumes(ctx context.Context, job *model.Job) ([]
 						Driver:       csiDriverName,
 						VolumeHandle: i.getCSIDataVolumeHandle(job),
 						VolumeAttributes: map[string]string{
-							"client":            "irodsfuse",
-							"path_mapping_json": string(dataPathMappingsJSONBytes),
+							"client":              "irodsfuse",
+							"path_mapping_json":   string(dataPathMappingsJSONBytes),
+							"no_permission_check": "true",
 							// use proxy access
 							"clientUser": job.Submitter,
 							"uid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
