@@ -67,7 +67,7 @@ func (a *AMQPMessenger) Stop(context context.Context, id string) error {
 func (a *AMQPMessenger) getResourceOveragesForUser(ctx context.Context, username string) (*qms.OverageList, error) {
 	var err error
 
-	subject := "cyverse.qms.user-overages"
+	subject := "cyverse.qms.user.overages.get"
 
 	req := &qms.AllUserOveragesRequest{
 		Username: username,
