@@ -19,7 +19,7 @@ require (
 	github.com/gosimple/slug v1.10.0
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/knadh/koanf v1.4.1
-	github.com/labstack/echo/v4 v4.7.0
+	github.com/labstack/echo/v4 v4.9.0
 	github.com/lib/pq v1.10.3
 	github.com/nats-io/nats.go v1.16.0
 	github.com/pkg/errors v0.9.1
