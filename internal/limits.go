@@ -193,19 +193,27 @@ func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int
 		return http.StatusBadRequest, buildLimitError(code, msg, defaultJobLimit, jobCount, jobLimit)
 
 	case overages != nil && len(overages.Overages) != 0:
+		var inOverage bool
 		code := "ERR_RESOURCE_OVERAGE"
-		msg := fmt.Sprintf("%s has resource overages.", user)
 		details := make(map[string]interface{})
 
 		for _, ov := range overages.Overages {
-			details[ov.ResourceName] = fmt.Sprintf("quota: %f, usage: %f", ov.Quota, ov.Usage)
+			if ov.Usage >= ov.Quota {
+				inOverage = true
+				details[ov.ResourceName] = fmt.Sprintf("quota: %f, usage: %f", ov.Quota, ov.Usage)
+			}
 		}
 
-		return http.StatusBadRequest, common.ErrorResponse{
-			ErrorCode: code,
-			Message:   msg,
-			Details:   &details,
+		if inOverage {
+			msg := fmt.Sprintf("%s has resource overages.", user)
+			return http.StatusBadRequest, common.ErrorResponse{
+				ErrorCode: code,
+				Message:   msg,
+				Details:   &details,
+			}
 		}
+
+		return http.StatusOK, nil
 
 	// In every other case, we can permit the job to be launched.
 	default:
