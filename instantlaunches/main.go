@@ -39,7 +39,7 @@ var httpClient = http.Client{Transport: otelhttp.NewTransport(http.DefaultTransp
 //
 // swagger:response instantLaunch
 //
-//		In: body
+//	In: body
 type InstantLaunch struct {
 	// Unique identifier
 	//
@@ -62,7 +62,7 @@ type InstantLaunch struct {
 	AddedOn string `json:"added_on" db:"added_on"` // formatted timestamp including timezone
 }
 
-//FullInstantLaunch contains more data about the instant launch, including quick launch
+// FullInstantLaunch contains more data about the instant launch, including quick launch
 // info, the submission, and app info.
 type FullInstantLaunch struct {
 	ID                     string         `json:"id" db:"id"`
@@ -78,6 +78,7 @@ type FullInstantLaunch struct {
 	AppVersionID           string         `json:"app_version_id" db:"app_version_id"`
 	AppName                string         `json:"app_name" db:"app_name"`
 	AppDescription         string         `json:"app_description" db:"app_description"`
+	AppVersion             string         `json:"app_version" db:"app_version"`
 	AppDeleted             bool           `json:"app_deleted" db:"app_deleted"`
 	AppDisabled            bool           `json:"app_disabled" db:"app_disabled"`
 	AppIntegrator          string         `json:"integrator" db:"integrator"`
