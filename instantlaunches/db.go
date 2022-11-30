@@ -21,6 +21,7 @@ SELECT
 	ql.is_public,
 	a.name AS app_name,
 	a.description AS app_description,
+	v.version AS app_version,
 	v.deleted AS app_deleted,
 	v.disabled AS app_disabled,
 	iu.username as integrator
@@ -89,6 +90,7 @@ SELECT
 	ql.is_public,
 	a.name AS app_name,
 	a.description AS app_description,
+	v.version AS app_version,
 	v.deleted AS app_deleted,
 	v.disabled AS app_disabled,
 	iu.username as integrator
@@ -167,6 +169,7 @@ SELECT
 	ql.is_public,
 	a.name AS app_name,
 	a.description AS app_description,
+	v.version AS app_version,
 	v.deleted AS app_deleted,
 	v.disabled AS app_disabled,
 	iu.username as integrator
