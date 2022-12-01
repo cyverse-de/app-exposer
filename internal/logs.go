@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -65,7 +65,7 @@ func (i *Internal) getExternalIDs(ctx context.Context, user, analysisID string) 
 		return nil, errors.Wrapf(err, "error from GET %s", analysisLookupURL.String())
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error reading response body from %s", analysisLookupURL.String())
 	}
@@ -97,17 +97,18 @@ type VICELogEntry struct {
 // VICE app. Needs the 'id' and 'pod-name' mux Vars.
 //
 // Query Parameters:
-//   previous - Converted to a boolean, should be either true or false. Return previously
-//              terminated container logs.
-//   since - Converted to a int64. The number of seconds before the current time at which
-//           to begin showing logs. Yeah, that's a sentence.
-//   since-time - Converted to an int64. The number of seconds since the epoch for the time at
-//               which to begin showing logs.
-//   tail-lines - Converted to an int64. The number of lines from the end of the log to show.
-//   timestamps - Converted to a boolean, should be either true or false. Whether or not to
-//                display timestamps at the beginning of each log line.
-//   container - String containing the name of the container to display logs from. Defaults
-//               the value 'analysis', since this is VICE-specific.
+//
+//	previous - Converted to a boolean, should be either true or false. Return previously
+//	           terminated container logs.
+//	since - Converted to a int64. The number of seconds before the current time at which
+//	        to begin showing logs. Yeah, that's a sentence.
+//	since-time - Converted to an int64. The number of seconds since the epoch for the time at
+//	            which to begin showing logs.
+//	tail-lines - Converted to an int64. The number of lines from the end of the log to show.
+//	timestamps - Converted to a boolean, should be either true or false. Whether or not to
+//	             display timestamps at the beginning of each log line.
+//	container - String containing the name of the container to display logs from. Defaults
+//	            the value 'analysis', since this is VICE-specific.
 func (i *Internal) LogsHandler(c echo.Context) error {
 	var (
 		err        error
@@ -234,7 +235,7 @@ func (i *Internal) LogsHandler(c echo.Context) error {
 	}
 	defer logReadCloser.Close()
 
-	bodyBytes, err := ioutil.ReadAll(logReadCloser)
+	bodyBytes, err := io.ReadAll(logReadCloser)
 	if err != nil {
 		return err
 	}

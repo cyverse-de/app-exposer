@@ -5,7 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -80,7 +80,7 @@ func (a *App) listAVUs(c echo.Context) ([]byte, *http.Response, error) {
 
 	log.Debug(fmt.Sprintf("metadata endpoint: %s, status code: %d", svc.String(), resp.StatusCode))
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, resp, handleError(err, http.StatusInternalServerError)
 	}
@@ -187,7 +187,7 @@ func (a *App) GetMetadataHandler(c echo.Context) error {
 
 	log.Debug(fmt.Sprintf("metadata endpoint: %s, status code: %d", svc.String(), resp.StatusCode))
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return handleError(err, http.StatusInternalServerError)
 	}
@@ -221,7 +221,7 @@ func (a *App) AddOrUpdateMetadataHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("instant launch UUID %s not found", id))
 	}
 
-	inBody, err := ioutil.ReadAll(c.Request().Body)
+	inBody, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		return handleError(err, http.StatusInternalServerError)
 	}
@@ -252,7 +252,7 @@ func (a *App) AddOrUpdateMetadataHandler(c echo.Context) error {
 
 	log.Debug(fmt.Sprintf("metadata endpoint: %s, status code: %d", svc.String(), resp.StatusCode))
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return handleError(err, http.StatusInternalServerError)
 	}
@@ -286,7 +286,7 @@ func (a *App) SetAllMetadataHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("instant launch UUID %s not found", id))
 	}
 
-	inBody, err := ioutil.ReadAll(c.Request().Body)
+	inBody, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		return handleError(err, http.StatusInternalServerError)
 	}
@@ -317,7 +317,7 @@ func (a *App) SetAllMetadataHandler(c echo.Context) error {
 
 	log.Debug(fmt.Sprintf("metadata endpoint: %s, status code: %d", svc.String(), resp.StatusCode))
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return handleError(err, http.StatusInternalServerError)
 	}

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -82,7 +82,7 @@ func TestCreateService(t *testing.T) {
 	testapp.router.ServeHTTP(w, req)
 
 	resp := w.Result()
-	rbody, err := ioutil.ReadAll(resp.Body)
+	rbody, err := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
 		t.Error(err)
@@ -179,7 +179,7 @@ func TestUpdateService(t *testing.T) {
 	testapp.router.ServeHTTP(w, req)
 
 	resp := w.Result()
-	rbody, err := ioutil.ReadAll(resp.Body)
+	rbody, err := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
 		t.Error(err)
@@ -236,7 +236,7 @@ func TestGetService(t *testing.T) {
 	testapp.router.ServeHTTP(w, req)
 
 	resp := w.Result()
-	rbody, err := ioutil.ReadAll(resp.Body)
+	rbody, err := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
 		t.Error(err)
@@ -326,7 +326,7 @@ func TestCreateEndpoint(t *testing.T) {
 	testapp.router.ServeHTTP(w, req)
 
 	resp := w.Result()
-	rbody, err := ioutil.ReadAll(resp.Body)
+	rbody, err := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
 		t.Error(err)
@@ -420,7 +420,7 @@ func TestUpdateEndpoint(t *testing.T) {
 	testapp.router.ServeHTTP(w, req)
 
 	resp := w.Result()
-	rbody, err := ioutil.ReadAll(resp.Body)
+	rbody, err := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
 		t.Error(err)
@@ -469,7 +469,7 @@ func TestGetEndpoint(t *testing.T) {
 	testapp.router.ServeHTTP(w, req)
 
 	resp := w.Result()
-	rbody, err := ioutil.ReadAll(resp.Body)
+	rbody, err := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
 		t.Error(err)
@@ -557,7 +557,7 @@ func TestCreateIngress(t *testing.T) {
 	testapp.router.ServeHTTP(w, req)
 
 	resp := w.Result()
-	rbody, err := ioutil.ReadAll(resp.Body)
+	rbody, err := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
 		t.Error(err)
@@ -655,7 +655,7 @@ func TestUpdateIngress(t *testing.T) {
 	}
 
 	resp := w.Result()
-	rbody, err := ioutil.ReadAll(resp.Body)
+	rbody, err := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
 		t.Error(err)
@@ -708,7 +708,7 @@ func TestGetIngress(t *testing.T) {
 	}
 
 	resp := w.Result()
-	rbody, err := ioutil.ReadAll(resp.Body)
+	rbody, err := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
 		t.Error(err)
