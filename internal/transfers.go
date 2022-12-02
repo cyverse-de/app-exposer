@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -130,7 +130,7 @@ func requestTransfer(ctx context.Context, svc apiv1.Service, reqpath string) (*t
 		return nil, errors.Wrapf(posterr, "download request to %s returned %d", svcurl.String(), resp.StatusCode)
 	}
 
-	if bodybytes, bodyerr = ioutil.ReadAll(resp.Body); bodyerr != nil {
+	if bodybytes, bodyerr = io.ReadAll(resp.Body); bodyerr != nil {
 		return nil, errors.Wrapf(bodyerr, "reading body from %s failed", svcurl.String())
 	}
 
@@ -176,7 +176,7 @@ func getTransferDetails(ctx context.Context, id string, svc apiv1.Service, reqpa
 		return nil, errors.Wrapf(posterr, "status request to %s returned %d", svcurl.String(), resp.StatusCode)
 	}
 
-	if bodybytes, bodyerr = ioutil.ReadAll(resp.Body); bodyerr != nil {
+	if bodybytes, bodyerr = io.ReadAll(resp.Body); bodyerr != nil {
 		return nil, errors.Wrapf(bodyerr, "reading body from %s failed", svcurl.String())
 	}
 

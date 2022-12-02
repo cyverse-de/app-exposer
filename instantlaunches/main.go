@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/cyverse-de/app-exposer/permissions"
@@ -91,7 +90,7 @@ func NewInstantLaunchFromJSON(r io.ReadCloser) (*InstantLaunch, error) {
 
 	il := &InstantLaunch{}
 
-	readbytes, err := ioutil.ReadAll(r)
+	readbytes, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
@@ -135,12 +134,12 @@ func (i InstantLaunchMapping) Value() (driver.Value, error) {
 }
 
 // InstantLaunchMappingFromJSON creates a new *InstantLaunchMapping from the io.ReadCloser
-// passed in. Calls ioutil.ReadAll on the ReadCloser and closes it.
+// passed in. Calls io.ReadAll on the ReadCloser and closes it.
 func InstantLaunchMappingFromJSON(r io.ReadCloser) (*InstantLaunchMapping, error) {
 	il := &InstantLaunchMapping{}
 
 	defer r.Close()
-	readbytes, err := ioutil.ReadAll(r)
+	readbytes, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}

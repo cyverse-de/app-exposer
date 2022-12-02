@@ -3,7 +3,7 @@ package permissions
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -79,7 +79,7 @@ func (p *Permissions) GetPermissions(ctx context.Context, lookup *Lookup) (*Perm
 	}
 	defer resp.Body.Close()
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
