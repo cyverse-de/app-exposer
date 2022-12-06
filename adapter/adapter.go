@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/cockroachdb/apd"
@@ -282,7 +282,7 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	log := log.WithFields(logrus.Fields{"context": "app launch"})
 
 	log.Debug("reading request body")
-	bodyBytes, err := ioutil.ReadAll(request.Body)
+	bodyBytes, err := io.ReadAll(request.Body)
 	if err != nil {
 		log.Error(err)
 		return err
