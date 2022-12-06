@@ -92,7 +92,17 @@ func (a *AMQPMessenger) validateLaunch(ctx context.Context, job *model.Job) erro
 	}
 
 	if overages != nil && len(overages.Overages) != 0 {
-		return fmt.Errorf("%s has resource overages", job.Submitter)
+		var inOverage bool
+
+		for _, ov := range overages.Overages {
+			if ov.Usage >= ov.Quota && ov.ResourceName == "cpu.hours" {
+				inOverage = true
+			}
+		}
+
+		if inOverage {
+			return fmt.Errorf("%s has resource overages", job.Submitter)
+		}
 	}
 
 	return nil
