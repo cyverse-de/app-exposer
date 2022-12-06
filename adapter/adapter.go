@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/cockroachdb/apd"
@@ -92,7 +92,17 @@ func (a *AMQPMessenger) validateLaunch(ctx context.Context, job *model.Job) erro
 	}
 
 	if overages != nil && len(overages.Overages) != 0 {
-		return fmt.Errorf("%s has resource overages", job.Submitter)
+		var inOverage bool
+
+		for _, ov := range overages.Overages {
+			if ov.Usage >= ov.Quota && ov.ResourceName == "cpu.hours" {
+				inOverage = true
+			}
+		}
+
+		if inOverage {
+			return fmt.Errorf("%s has resource overages", job.Submitter)
+		}
 	}
 
 	return nil
@@ -272,7 +282,7 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	log := log.WithFields(logrus.Fields{"context": "app launch"})
 
 	log.Debug("reading request body")
-	bodyBytes, err := ioutil.ReadAll(request.Body)
+	bodyBytes, err := io.ReadAll(request.Body)
 	if err != nil {
 		log.Error(err)
 		return err
