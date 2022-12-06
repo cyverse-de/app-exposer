@@ -198,7 +198,7 @@ func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int
 		details := make(map[string]interface{})
 
 		for _, ov := range overages.Overages {
-			if ov.Usage >= ov.Quota {
+			if ov.Usage >= ov.Quota && ov.ResourceName == "cpu.hours" {
 				inOverage = true
 				details[ov.ResourceName] = fmt.Sprintf("quota: %f, usage: %f", ov.Quota, ov.Usage)
 			}
