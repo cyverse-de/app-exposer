@@ -86,7 +86,11 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *Expos
 		nats.MaxReconnects(init.NATSMaxReconnects),
 		nats.ReconnectWait(time.Duration(init.NATSReconnectWait)*time.Second),
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
-			log.Errorf("disconnected from nats: %s", err.Error())
+			if err != nil {
+				log.Errorf("disconnected from nats: %s", err.Error())
+			} else {
+				log.Error("disconnected from nats with no error")
+			}
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
 			log.Infof("reconnected to %s", nc.ConnectedUrl())
