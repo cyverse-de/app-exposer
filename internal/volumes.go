@@ -134,7 +134,7 @@ func (i *Internal) getCSIDataVolumeLabels(ctx context.Context, job *model.Job) (
 		return nil, err
 	}
 
-	labels["volume-name"] = i.getCSIDataVolumeClaimName(job)
+	labels["volume-name"] = i.getCSIDataVolumeName(job)
 	return labels, nil
 }
 
@@ -240,11 +240,7 @@ func (i *Internal) getPersistentVolumeClaims(ctx context.Context, job *model.Job
 					apiv1.ReadWriteMany,
 				},
 				StorageClassName: &storageclassname,
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"volume-name": i.getCSIDataVolumeClaimName(job),
-					},
-				},
+				VolumeName:       i.getCSIDataVolumeName(job),
 				Resources: apiv1.ResourceRequirements{
 					Requests: apiv1.ResourceList{
 						apiv1.ResourceStorage: defaultStorageCapacity,
