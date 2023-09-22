@@ -98,7 +98,7 @@ func (i *Internal) getOutputPathMapping(job *model.Job) IRODSFSPathMapping {
 		ResourceType:        "dir",
 		ReadOnly:            false,
 		CreateDir:           true,
-		IgnoreNotExistError: false,
+		IgnoreNotExistError: true,
 	}
 }
 
