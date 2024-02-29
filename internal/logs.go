@@ -225,9 +225,6 @@ func (i *Internal) LogsHandler(c echo.Context) error {
 
 	// Finally, actually get the logs and write the response out
 	podLogs := i.clientset.CoreV1().Pods(i.ViceNamespace).GetLogs(podName, logOpts)
-	if err != nil {
-		return err
-	}
 
 	logReadCloser, err := podLogs.Stream(ctx)
 	if err != nil {

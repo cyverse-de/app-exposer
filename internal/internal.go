@@ -277,7 +277,7 @@ func (i *Internal) UpsertDeployment(ctx context.Context, deployment *appsv1.Depl
 	}
 
 	// Create the service for the job.
-	svc, err := i.getService(ctx, job, deployment)
+	svc, err := i.getService(ctx, job)
 	if err != nil {
 		return err
 	}

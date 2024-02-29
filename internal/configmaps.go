@@ -60,7 +60,7 @@ func inputPathListConfigMapName(job *model.Job) string {
 // input path list file. Does not write out the contents to a file. Returns
 // (nil, nil) if there aren't any inputs without tickets associated with the
 // Job.
-func inputPathListContents(job *model.Job, pathListIdentifier, ticketsPathListIdentifier string) (*bytes.Buffer, error) {
+func inputPathListContents(job *model.Job, pathListIdentifier string) (*bytes.Buffer, error) {
 	buffer := bytes.NewBufferString("")
 
 	// Add the path list identifier.
@@ -90,7 +90,7 @@ func (i *Internal) inputPathListConfigMap(ctx context.Context, job *model.Job) (
 		return nil, err
 	}
 
-	fileContents, err := inputPathListContents(job, i.InputPathListIdentifier, i.TicketInputPathListIdentifier)
+	fileContents, err := inputPathListContents(job, i.InputPathListIdentifier)
 	if err != nil {
 		return nil, err
 	}

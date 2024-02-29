@@ -151,7 +151,7 @@ func (i *Internal) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
 	}
 }
 
-func (i *Internal) getSharedPathMapping(job *model.Job) IRODSFSPathMapping {
+func (i *Internal) getSharedPathMapping() IRODSFSPathMapping {
 	// mount a single collection for shared data
 	sharedHomeFullPath := fmt.Sprintf("/%s/home/shared", i.IRODSZone)
 
@@ -270,7 +270,7 @@ func (i *Internal) getCSIPersistentVolumeClaim(volumeName string, volumeClaimNam
 			},
 			StorageClassName: &storageclassname,
 			VolumeName:       volumeName,
-			Resources: apiv1.ResourceRequirements{
+			Resources: apiv1.VolumeResourceRequirements{
 				Requests: apiv1.ResourceList{
 					apiv1.ResourceStorage: defaultStorageCapacity,
 				},
@@ -404,7 +404,7 @@ func (i *Internal) getSharedPersistentVolume(ctx context.Context, job *model.Job
 
 	pathMappings := []IRODSFSPathMapping{}
 
-	pathMapping := i.getSharedPathMapping(job)
+	pathMapping := i.getSharedPathMapping()
 	pathMappings = append(pathMappings, pathMapping)
 
 	labels, err := i.getCSISharedVolumeLabels(ctx, job)
