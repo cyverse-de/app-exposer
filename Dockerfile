@@ -1,7 +1,7 @@
 ### First stage
 FROM quay.io/goswagger/swagger as swagger
 
-FROM golang:1.18 as build-root
+FROM golang:1.21 as build-root
 
 WORKDIR /go/src/github.com/cyverse-de/app-exposer
 COPY . . 

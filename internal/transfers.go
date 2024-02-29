@@ -141,7 +141,7 @@ func requestTransfer(ctx context.Context, svc apiv1.Service, reqpath string) (*t
 	return xferresp, nil
 }
 
-func getTransferDetails(ctx context.Context, id string, svc apiv1.Service, reqpath string) (*transferResponse, error) {
+func getTransferDetails(ctx context.Context, svc apiv1.Service, reqpath string) (*transferResponse, error) {
 	var (
 		bodybytes []byte
 		bodyerr   error
@@ -346,7 +346,7 @@ func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind
 
 				fullreqpath := path.Join(reqpath, transferObj.UUID)
 
-				transferObj, xfererr = getTransferDetails(ctx, transferObj.UUID, svc, fullreqpath)
+				transferObj, xfererr = getTransferDetails(ctx, svc, fullreqpath)
 				if xfererr != nil {
 					log.Error(errors.Wrapf(xfererr, "error getting transfer details for transferObj %s", fullreqpath))
 					err = xfererr
