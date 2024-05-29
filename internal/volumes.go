@@ -161,7 +161,7 @@ func (i *Internal) getPersistentVolumes(ctx context.Context, job *model.Job) ([]
 		}
 
 		// shared path
-		sharedPathMapping := i.getSharedPathMapping(job)
+		sharedPathMapping := i.getSharedPathMapping()
 		dataPathMappings = append(dataPathMappings, sharedPathMapping)
 
 		// convert path mappings into json
@@ -241,7 +241,7 @@ func (i *Internal) getPersistentVolumeClaims(ctx context.Context, job *model.Job
 				},
 				StorageClassName: &storageclassname,
 				VolumeName:       i.getCSIDataVolumeName(job),
-				Resources: apiv1.ResourceRequirements{
+				Resources: apiv1.VolumeResourceRequirements{
 					Requests: apiv1.ResourceList{
 						apiv1.ResourceStorage: defaultStorageCapacity,
 					},
