@@ -262,7 +262,7 @@ type ServiceInfoPort struct {
 	Protocol       string `json:"protocol"`
 }
 
-//ServiceInfo contains info about a service
+// ServiceInfo contains info about a service
 type ServiceInfo struct {
 	MetaInfo
 	Ports []ServiceInfoPort `json:"ports"`
@@ -473,7 +473,7 @@ func (i *Internal) getFilteredIngresses(ctx context.Context, filter map[string]s
 	return ingresses, nil
 }
 
-//FilterableIngressesHandler lists ingresses in use by VICE apps.
+// FilterableIngressesHandler lists ingresses in use by VICE apps.
 func (i *Internal) FilterableIngressesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := filterMap(c.Request().URL.Query())
@@ -499,10 +499,16 @@ type ResourceInfo struct {
 }
 
 func (i *Internal) fixUsername(username string) string {
-	if strings.HasSuffix(username, i.UserSuffix) {
+	var userSuffix string
+	if strings.HasPrefix("@", i.UserSuffix) {
+		userSuffix = i.UserSuffix
+	} else {
+		userSuffix = fmt.Sprintf("@%s", i.UserSuffix)
+	}
+	if strings.HasSuffix(username, userSuffix) {
 		return username
 	}
-	return fmt.Sprintf("%s%s", username, i.UserSuffix)
+	return fmt.Sprintf("%s%s", username, userSuffix)
 }
 
 func (i *Internal) doResourceListing(ctx context.Context, filter map[string]string) (*ResourceInfo, error) {
