@@ -570,10 +570,13 @@ func (i *Internal) DescribeAnalysisHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	log.Info("in DescribeAnalysisHandler")
+	host := c.Param("host")
 	user := c.QueryParam("user")
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter must be set")
 	}
+
+	log.Infof("user: %s, user suffix: %s, host: %s", user, i.UserSuffix, host)
 
 	// Since some usernames don't come through the labelling process unscathed, we have to use
 	// the user ID.
@@ -585,8 +588,6 @@ func (i *Internal) DescribeAnalysisHandler(c echo.Context) error {
 		}
 		return err
 	}
-
-	host := c.Param("host")
 
 	filter := map[string]string{
 		"subdomain": host,
