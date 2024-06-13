@@ -500,12 +500,12 @@ type ResourceInfo struct {
 
 func (i *Internal) fixUsername(username string) string {
 	var userSuffix string
-	if strings.HasPrefix("@", i.UserSuffix) {
+	if strings.HasPrefix(i.UserSuffix, "@") {
 		userSuffix = i.UserSuffix
 	} else {
 		userSuffix = fmt.Sprintf("@%s", i.UserSuffix)
 	}
-	if strings.HasSuffix(username, userSuffix) {
+	if strings.HasSuffix(userSuffix, username) {
 		return username
 	}
 	return fmt.Sprintf("%s%s", username, userSuffix)
@@ -588,6 +588,8 @@ func (i *Internal) DescribeAnalysisHandler(c echo.Context) error {
 		}
 		return err
 	}
+
+	log.Infof("2 user: %s, user suffix: %s, host: %s", user, i.UserSuffix, host)
 
 	filter := map[string]string{
 		"subdomain": host,
