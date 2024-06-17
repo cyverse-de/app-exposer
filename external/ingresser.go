@@ -50,9 +50,9 @@ func (i *Ingresser) Create(ctx context.Context, opts *IngressOptions) (*netv1.In
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      opts.Name,
 				Namespace: opts.Namespace,
-				Annotations: map[string]string{
-					"kubernetes.io/ingress.class": i.class,
-				},
+				//Annotations: map[string]string{
+				//	"kubernetes.io/ingress.class": i.class,
+				//},
 			},
 			Spec: netv1.IngressSpec{
 				DefaultBackend: backend,
@@ -99,9 +99,9 @@ func (i *Ingresser) Update(ctx context.Context, opts *IngressOptions) (*netv1.In
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      opts.Name,
 				Namespace: opts.Namespace,
-				Annotations: map[string]string{
-					"kubernetes.io/ingress.class": i.class,
-				},
+				//Annotations: map[string]string{
+				//	"kubernetes.io/ingress.class": i.class,
+				//},
 			},
 			Spec: netv1.IngressSpec{
 				DefaultBackend: backend,

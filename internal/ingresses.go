@@ -83,9 +83,9 @@ func (i *Internal) getIngress(ctx context.Context, job *model.Job, svc *apiv1.Se
 	return &netv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: job.InvocationID,
-			Annotations: map[string]string{
-				"kubernetes.io/ingress.class": "nginx",
-			},
+			// Annotations: map[string]string{
+			// 	"kubernetes.io/ingress.class": "nginx",
+			// },
 			Labels: labels,
 		},
 		Spec: netv1.IngressSpec{
