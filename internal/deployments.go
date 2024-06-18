@@ -140,7 +140,7 @@ func (i *Internal) viceProxyCommand(job *model.Job) []string {
 var (
 	defaultCPUResourceRequest, _ = resourcev1.ParseQuantity("1000m")
 	defaultMemResourceRequest, _ = resourcev1.ParseQuantity("2Gi")
-	defaultStorageRequest, _     = resourcev1.ParseQuantity("16Gi")
+	defaultStorageRequest, _     = resourcev1.ParseQuantity("1Gi")
 	defaultCPUResourceLimit, _   = resourcev1.ParseQuantity("4000m")
 	defaultMemResourceLimit, _   = resourcev1.ParseQuantity("8Gi")
 )
