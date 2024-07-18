@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 // ExposerApp encapsulates the overall application-logic, tying together the
@@ -148,6 +149,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *Expos
 	}
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
+	app.router.Use(middleware.Logger())
 
 	ilInit := &instantlaunches.Init{
 		UserSuffix:      init.UserSuffix,
