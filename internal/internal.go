@@ -1004,6 +1004,7 @@ func (i *Internal) getTimeLimit(ctx context.Context, userID, id string) (map[str
 		if err != nil {
 			return nil, errors.Wrapf(err, "error getting time limit for user %s on analysis %s", userID, id)
 		}
+		v = v.(time.Time).Local()
 		outputMap["time_limit"] = fmt.Sprintf("%d", v.(time.Time).Unix())
 	} else {
 		outputMap["time_limit"] = "null"
