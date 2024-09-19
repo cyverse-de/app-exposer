@@ -990,6 +990,13 @@ func (i *Internal) AdminGetTimeLimitHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, outputMap)
 }
 
+func dbTimestampToLocal(t time.Time) time.Time {
+	_, offset := time.Now().Zone()
+	t = t.Local()
+	t = t.Add(time.Duration(offset*-1) * time.Second)
+	return t
+}
+
 func (i *Internal) getTimeLimit(ctx context.Context, userID, id string) (map[string]string, error) {
 	var err error
 
@@ -1004,7 +1011,7 @@ func (i *Internal) getTimeLimit(ctx context.Context, userID, id string) (map[str
 		if err != nil {
 			return nil, errors.Wrapf(err, "error getting time limit for user %s on analysis %s", userID, id)
 		}
-		outputMap["time_limit"] = fmt.Sprintf("%d", v.(time.Time).Unix())
+		outputMap["time_limit"] = fmt.Sprintf("%d", dbTimestampToLocal(v.(time.Time)).Unix())
 	} else {
 		outputMap["time_limit"] = "null"
 	}
@@ -1037,7 +1044,7 @@ func (i *Internal) updateTimeLimit(ctx context.Context, user, id string) (map[st
 		if err != nil {
 			return nil, errors.Wrapf(err, "error getting new time limit for user %s on analysis %s", userID, id)
 		}
-		outputMap["time_limit"] = fmt.Sprintf("%d", v.(time.Time).Unix())
+		outputMap["time_limit"] = fmt.Sprintf("%d", dbTimestampToLocal(v.(time.Time)).Unix())
 	} else {
 		return nil, errors.Wrapf(err, "the time limit for analysis %s was null after extension", id)
 	}
