@@ -10,13 +10,14 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// suffixUsername takes a possibly-already-suffixed username, strips any suffix, and adds the provided one, to ensure proper suffixing
 func suffixUsername(username, suffix string) string {
 	re, _ := regexp.Compile(`@.*$`)
 	return fmt.Sprintf("%s@%s", re.ReplaceAllString(username, ""), strings.Trim(suffix, "@"))
 }
 
+// checkUserMatches ensures that `first` and `second` match when both suffixed the same.
 func checkUserMatches(first, second, suffix string) bool {
-	// Just make sure both usernames match when properly suffixed
 	return (suffixUsername(first, suffix) == suffixUsername(second, suffix))
 }
 
