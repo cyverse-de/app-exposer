@@ -195,12 +195,12 @@ func (a *App) GetMetadataHandler(c echo.Context) error {
 	return c.Blob(resp.StatusCode, resp.Header.Get("content-type"), body)
 }
 
-// AddOrUpdateMetadataHandler adds or updates one or more AVUs on an instant
-// launch.
-func (a *App) AddOrUpdateMetadataHandler(c echo.Context) error {
+// AdminAddOrUpdateMetadataHandler adds or updates one or more AVUs on an instant
+// launch as an admin
+func (a *App) AdminAddOrUpdateMetadataHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	log.Debug("in AddOrUpdateMetadataHandler")
+	log.Debug("in AdminAddOrUpdateMetadataHandler")
 
 	id := c.Param("id")
 	if id == "" {
@@ -260,12 +260,12 @@ func (a *App) AddOrUpdateMetadataHandler(c echo.Context) error {
 	return c.Blob(resp.StatusCode, resp.Header.Get("content-type"), body)
 }
 
-// SetAllMetadataHandler sets all of the AVUs associated with an instant
-// launch to the set contained in the body of the request.
-func (a *App) SetAllMetadataHandler(c echo.Context) error {
+// AdminSetAllMetadataHandler sets all of the AVUs associated with an instant
+// launch to the set contained in the body of the request (as an admin).
+func (a *App) AdminSetAllMetadataHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	log.Debug("in SetAllMetadataHandler")
+	log.Debug("in AdminSetAllMetadataHandler")
 
 	id := c.Param("id")
 	if id == "" {

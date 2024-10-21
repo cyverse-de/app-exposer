@@ -229,8 +229,14 @@ func New(db *sqlx.DB, group *echo.Group, init *Init) *App {
 	instance.Group.DELETE("/:id", instance.DeleteInstantLaunchHandler)
 	instance.Group.GET("/:id/full", instance.FullInstantLaunchHandler)
 	instance.Group.GET("/:id/metadata", instance.GetMetadataHandler)
-	instance.Group.POST("/:id/metadata", instance.AddOrUpdateMetadataHandler)
-	instance.Group.PUT("/:id/metadata", instance.SetAllMetadataHandler)
+
+	iladmin := instance.Group.Group("/admin")
+	iladmin.PUT("/", instance.AdminAddInstantLaunchHandler)
+	iladmin.PUT("", instance.AdminAddInstantLaunchHandler)
+	iladmin.POST("/:id", instance.AdminUpdateInstantLaunchHandler)
+	iladmin.DELETE("/:id", instance.AdminDeleteInstantLaunchHandler)
+	iladmin.POST("/:id/metadata", instance.AdminAddOrUpdateMetadataHandler)
+	iladmin.PUT("/:id/metadata", instance.AdminSetAllMetadataHandler)
 
 	return instance
 }
