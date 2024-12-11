@@ -19,7 +19,7 @@ func IngressName(userID, invocationID string) string {
 
 // getIngress assembles and returns the Ingress needed for the VICE analysis.
 // It does not call the k8s API.
-func (i *Internal) getIngress(ctx context.Context, job *model.Job, svc *apiv1.Service) (*netv1.Ingress, error) {
+func (i *Internal) getIngress(ctx context.Context, job *model.Job, svc *apiv1.Service, class string) (*netv1.Ingress, error) {
 	var (
 		rules       []netv1.IngressRule
 		defaultPort int32
@@ -82,15 +82,13 @@ func (i *Internal) getIngress(ctx context.Context, job *model.Job, svc *apiv1.Se
 
 	return &netv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: job.InvocationID,
-			// Annotations: map[string]string{
-			// 	"kubernetes.io/ingress.class": "nginx",
-			// },
+			Name:   job.InvocationID,
 			Labels: labels,
 		},
 		Spec: netv1.IngressSpec{
-			DefaultBackend: defaultBackend, // default backend, not the service backend
-			Rules:          rules,
+			DefaultBackend:   defaultBackend, // default backend, not the service backend
+			IngressClassName: &class,
+			Rules:            rules,
 		},
 	}, nil
 }

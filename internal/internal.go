@@ -96,6 +96,7 @@ type Init struct {
 	KeycloakClientID              string
 	KeycloakClientSecret          string
 	IRODSZone                     string
+	IngressClass                  string
 	NATSEncodedConn               *nats.EncodedConn
 }
 
@@ -291,7 +292,7 @@ func (i *Internal) UpsertDeployment(ctx context.Context, deployment *appsv1.Depl
 	}
 
 	// Create the ingress for the job
-	ingress, err := i.getIngress(ctx, job, svc)
+	ingress, err := i.getIngress(ctx, job, svc, i.Init.IngressClass)
 	if err != nil {
 		return err
 	}

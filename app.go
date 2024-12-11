@@ -136,6 +136,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *Expos
 		KeycloakClientID:              c.String("keycloak.client-id"),
 		KeycloakClientSecret:          c.String("keycloak.client-secret"),
 		IRODSZone:                     init.IRODSZone,
+		IngressClass:                  init.IngressClass,
 		NATSEncodedConn:               conn,
 	}
 

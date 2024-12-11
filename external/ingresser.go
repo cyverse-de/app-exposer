@@ -104,7 +104,8 @@ func (i *Ingresser) Update(ctx context.Context, opts *IngressOptions) (*netv1.In
 				//},
 			},
 			Spec: netv1.IngressSpec{
-				DefaultBackend: backend,
+				DefaultBackend:   backend,
+				IngressClassName: &i.class,
 				Rules: []netv1.IngressRule{
 					{
 						Host: opts.Name,
