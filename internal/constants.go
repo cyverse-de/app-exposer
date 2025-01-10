@@ -21,6 +21,9 @@ const (
 	fileTransfersInitContainerName = "input-files-init"
 	fileTransfersInputsMountPath   = "/input-files"
 
+	// Constants for shared memory volumes.
+	sharedMemoryVolumeName = "shared-memory"
+
 	// The working directory volume serves as the working directory when IRODS CSI Driver integration is enabled.
 	workingDirVolumeName             = "working-dir"
 	workingDirInitContainerName      = "working-dir-init"
