@@ -10,9 +10,8 @@ ENV CGO_ENABLED=0
 ENV GOOS=linux
 ENV GOARCH=amd64
 
-RUN go build --buildvcs=false .
-RUN go clean -cache -modcache
-RUN cp ./app-exposer /bin/app-exposer
+RUN make app-exposer
+RUN cp ./bin/app-exposer /bin/app-exposer
 
 COPY --from=swagger /usr/bin/swagger /usr/bin/
 RUN swagger generate spec -o ./docs/swagger.json --scan-models
