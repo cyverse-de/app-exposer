@@ -36,10 +36,11 @@ func New(cs kubernetes.Interface, namespace, ingressClass string) *External {
 // CreateServiceHandler is an http handler for creating a Service object in a k8s cluster.
 //
 // Expects JSON in the request body in the following format:
-// 	{
-// 		"target_port" : integer,
-// 		"listen_port" : integer
-// 	}
+//
+//	{
+//		"target_port" : integer,
+//		"listen_port" : integer
+//	}
 //
 // The name of the Service comes from the URL the request is sent to and the
 // namespace is a daemon-wide configuration setting.
@@ -98,10 +99,11 @@ func (e *External) CreateServiceHandler(c echo.Context) error {
 // UpdateServiceHandler is an http handler for updating a Service object in a k8s cluster.
 //
 // Expects JSON in the request body in the following format:
-// 	{
-// 		"target_port" : integer,
-// 		"listen_port" : integer
-// 	}
+//
+//	{
+//		"target_port" : integer,
+//		"listen_port" : integer
+//	}
 //
 // The name of the Service comes from the URL the request is sent to and the
 // namespace is a daemon-wide configuration setting.
@@ -162,12 +164,13 @@ func (e *External) UpdateServiceHandler(c echo.Context) error {
 //
 // Expects no body in the requests and will return a JSON encoded body in the
 // response in the following format:
-// 	{
-// 		"name" : "The name of the service as a string.",
-// 		"namespace" : "The namespace that the service is in, as a string",
-// 		"target_port" : integer,
-// 		"listen_port" : integer
-// 	}
+//
+//	{
+//		"name" : "The name of the service as a string.",
+//		"namespace" : "The namespace that the service is in, as a string",
+//		"target_port" : integer,
+//		"listen_port" : integer
+//	}
 //
 // The namespace of the Service comes from the daemon configuration setting.
 func (e *External) GetServiceHandler(c echo.Context) error {
@@ -220,10 +223,11 @@ func (e *External) DeleteServiceHandler(c echo.Context) error {
 // CreateEndpointHandler is an http handler for creating an Endpoints object in a k8s cluster.
 //
 // Expects JSON in the request body in the following format:
-// 	{
-// 		"ip" : "IP address of the external process as a string.",
-// 		"port" : The target port of the external process as an integer
-// 	}
+//
+//	{
+//		"ip" : "IP address of the external process as a string.",
+//		"port" : The target port of the external process as an integer
+//	}
 //
 // The name of the Endpoint is derived from the URL the request was sent to and
 // the namespace comes from the daemon-wide configuration value.
@@ -281,10 +285,11 @@ func (e *External) CreateEndpointHandler(c echo.Context) error {
 // UpdateEndpointHandler is an http handler for updating an Endpoints object in a k8s cluster.
 //
 // Expects JSON in the request body in the following format:
-// 	{
-// 		"ip" : "IP address of the external process as a string.",
-// 		"port" : The target port of the external process as an integer
-// 	}
+//
+//	{
+//		"ip" : "IP address of the external process as a string.",
+//		"port" : The target port of the external process as an integer
+//	}
 //
 // The name of the Endpoint is derived from the URL the request was sent to and
 // the namespace comes from the daemon-wide configuration value.
@@ -341,12 +346,13 @@ func (e *External) UpdateEndpointHandler(c echo.Context) error {
 //
 // Expects no body in the request and returns JSON in the response body in the
 // following format:
-// 	{
-// 		"name" : "The name of the Endpoints object in Kubernetes, as a string.",
-// 		"namespace" : "The namespace of the Endpoints object in Kubernetes, as a string.",
-// 		"ip" : "IP address of the external process as a string.",
-// 		"port" : The target port of the external process as an integer
-// 	}
+//
+//	{
+//		"name" : "The name of the Endpoints object in Kubernetes, as a string.",
+//		"namespace" : "The namespace of the Endpoints object in Kubernetes, as a string.",
+//		"ip" : "IP address of the external process as a string.",
+//		"port" : The target port of the external process as an integer
+//	}
 //
 // The name of the Endpoint is derived from the URL the request was sent to and
 // the namespace comes from the daemon-wide configuration value.
@@ -405,10 +411,11 @@ func (e *External) DeleteEndpointHandler(c echo.Context) error {
 // CreateIngressHandler is an http handler for creating an Ingress object in a k8s cluster.
 //
 // Expects a JSON encoded request body in the following format:
-// 	{
-// 		"service" : "The name of the Service that the Ingress is configured for, as a string.",
-// 		"port" : The port of the Service that the Ingress is configured for, as an integer
-// 	}
+//
+//	{
+//		"service" : "The name of the Service that the Ingress is configured for, as a string.",
+//		"port" : The port of the Service that the Ingress is configured for, as an integer
+//	}
 //
 // The name of the Ingress is extracted from the URL that the request is sent to.
 // The namespace for the Ingress object comes from the daemon configuration setting.
@@ -464,10 +471,11 @@ func (e *External) CreateIngressHandler(c echo.Context) error {
 // UpdateIngressHandler is an http handler for updating an Ingress object in a k8s cluster.
 //
 // Expects a JSON encoded request body in the following format:
-// 	{
-// 		"service" : "The name of the Service that the Ingress is configured for, as a string.",
-// 		"port" : The port of the Service that the Ingress is configured for, as an integer
-// 	}
+//
+//	{
+//		"service" : "The name of the Service that the Ingress is configured for, as a string.",
+//		"port" : The port of the Service that the Ingress is configured for, as an integer
+//	}
 //
 // The name of the Ingress is extracted from the URL that the request is sent to.
 // The namespace for the Ingress object comes from the daemon configuration setting.
@@ -527,12 +535,13 @@ func (e *External) UpdateIngressHandler(c echo.Context) error {
 //
 // Expects no request body and returns a JSON-encoded body in the response in the
 // following format:
-// 	{
-// 		"name" : "The name of the Ingress, as a string.",
-// 		"namespace" : "The Kubernetes namespace that the Ingress exists in, as a string.",
-// 		"service" : "The name of the Service that the Ingress is configured for, as a string.",
-// 		"port" : The port of the Service that the Ingress is configured for, as an integer
-// 	}
+//
+//	{
+//		"name" : "The name of the Ingress, as a string.",
+//		"namespace" : "The Kubernetes namespace that the Ingress exists in, as a string.",
+//		"service" : "The name of the Service that the Ingress is configured for, as a string.",
+//		"port" : The port of the Service that the Ingress is configured for, as an integer
+//	}
 func (e *External) GetIngressHandler(c echo.Context) error {
 	var (
 		ingress string
