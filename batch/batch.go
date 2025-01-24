@@ -14,6 +14,7 @@ var (
 	defaultStorageCapacity, _ = resourcev1.ParseQuantity("5Gi")
 	defaultStorageMode        = "ReadWriteOnce"
 	defaultVolumeName         = "workdir"
+	statusRunning             = "running"
 )
 
 type BatchSubmissionOpts struct {
@@ -69,6 +70,95 @@ func stepTemplates(job *model.Job) []v1alpha1.Template {
 	return templates
 }
 
+func sendStatusStep(name, message, state string) *v1alpha1.WorkflowStep {
+	return &v1alpha1.WorkflowStep{
+		Name:     name,
+		Template: "send-status",
+		Arguments: v1alpha1.Arguments{
+			Parameters: []v1alpha1.Parameter{
+				{
+					Name:  "message",
+					Value: v1alpha1.AnyStringPtr(message),
+				},
+				{
+					Name:  "state",
+					Value: v1alpha1.AnyStringPtr(state),
+				},
+			},
+		},
+	}
+}
+
+func runStepsTemplates(job *model.Job) []v1alpha1.Template {
+	// We generate a sequence of parallel steps consisting of single steps to
+	// force the steps to run in sequence. Looks nicer in YAML than it does in
+	// in code form.
+	var templates []v1alpha1.Template
+	var runSteps []v1alpha1.ParallelSteps
+
+	stepTemplates := stepTemplates(job)
+
+	runSteps = append(
+		runSteps,
+		v1alpha1.ParallelSteps{
+			Steps: []v1alpha1.WorkflowStep{
+				*sendStatusStep("downloading-files-status", "downloading files", "running"),
+			},
+		},
+		v1alpha1.ParallelSteps{
+			Steps: []v1alpha1.WorkflowStep{
+				{
+					Name:     "download-files",
+					Template: "download-files",
+				},
+			},
+		},
+		v1alpha1.ParallelSteps{
+			Steps: []v1alpha1.WorkflowStep{
+				*sendStatusStep("done-downloading", "done downloading inputs", "running"),
+			},
+		},
+	)
+
+	for idx, st := range stepTemplates {
+		runningName := fmt.Sprintf("running-%d", idx)
+		runningMsg := fmt.Sprintf("running %d", idx)
+		stepTmplName := fmt.Sprintf("step-%d", idx)
+		doneRunningName := fmt.Sprintf("done-running-%d", idx)
+		doneRunningMsg := fmt.Sprintf("done running %d", idx)
+
+		runSteps = append(runSteps,
+			v1alpha1.ParallelSteps{
+				Steps: []v1alpha1.WorkflowStep{
+					*sendStatusStep(runningName, runningMsg, statusRunning),
+				},
+			},
+			v1alpha1.ParallelSteps{
+				Steps: []v1alpha1.WorkflowStep{
+					{
+						Name:     st.Name,
+						Template: stepTmplName,
+					},
+				},
+			},
+			v1alpha1.ParallelSteps{
+				Steps: []v1alpha1.WorkflowStep{
+					*sendStatusStep(doneRunningName, doneRunningMsg, statusRunning),
+				},
+			},
+		)
+	}
+
+	templates = append(templates, v1alpha1.Template{
+		Name:  "analysis-steps",
+		Steps: runSteps,
+	})
+
+	templates = append(templates, stepTemplates...)
+
+	return templates
+}
+
 // exitHandlerTemplate returns the template definition for the
 // steps taken when the workflow exits.
 func exitHandlerTemplate() *v1alpha1.Template {
@@ -88,7 +178,7 @@ func exitHandlerTemplate() *v1alpha1.Template {
 								},
 								{
 									Name:  "state",
-									Value: v1alpha1.AnyStringPtr("running"),
+									Value: v1alpha1.AnyStringPtr(statusRunning),
 								},
 							},
 						},
@@ -341,6 +431,7 @@ func uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 
 func NewWorkflow(job *model.Job, opts *BatchSubmissionOpts) *v1alpha1.Workflow {
 	var workflowTemplates []v1alpha1.Template
+	workflowTemplates = append(workflowTemplates, runStepsTemplates(job)...)
 	workflowTemplates = append(workflowTemplates, stepTemplates(job)...)
 	workflowTemplates = append(
 		workflowTemplates,
