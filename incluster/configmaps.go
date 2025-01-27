@@ -1,4 +1,4 @@
-package internal
+package incluster
 
 import (
 	"bytes"
@@ -32,7 +32,7 @@ func excludesFileContents(job *model.Job) *bytes.Buffer {
 // that should be excluded from file uploads to iRODS by porklock. This does NOT
 // call the k8s API to actually create the ConfigMap, just returns the object
 // that can be passed to the API.
-func (i *Internal) excludesConfigMap(ctx context.Context, job *model.Job) (*apiv1.ConfigMap, error) {
+func (i *Incluster) excludesConfigMap(ctx context.Context, job *model.Job) (*apiv1.ConfigMap, error) {
 	labels, err := i.labelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func inputPathListContents(job *model.Job, pathListIdentifier string) (*bytes.Bu
 // list of paths that should be downloaded from iRODS by porklock as input
 // files for the VICE analysis. This does NOT call the k8s API to actually
 // create the ConfigMap, just returns the object that can be passed to the API.
-func (i *Internal) inputPathListConfigMap(ctx context.Context, job *model.Job) (*apiv1.ConfigMap, error) {
+func (i *Incluster) inputPathListConfigMap(ctx context.Context, job *model.Job) (*apiv1.ConfigMap, error) {
 	labels, err := i.labelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err

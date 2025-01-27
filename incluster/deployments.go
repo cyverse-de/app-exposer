@@ -1,4 +1,4 @@
-package internal
+package incluster
 
 import (
 	"context"
@@ -38,7 +38,7 @@ func analysisPorts(step *model.Step) []apiv1.ContainerPort {
 // it returns the objects that can be included in the Deployment object that
 // will get passed to the k8s API later. Also not that these are the Volumes,
 // not the container-specific VolumeMounts.
-func (i *Internal) deploymentVolumes(job *model.Job) []apiv1.Volume {
+func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 	output := []apiv1.Volume{}
 
 	if len(job.FilterInputsWithoutTickets()) > 0 {
@@ -121,14 +121,14 @@ func (i *Internal) deploymentVolumes(job *model.Job) []apiv1.Volume {
 	return output
 }
 
-func (i *Internal) getFrontendURL(job *model.Job) *url.URL {
+func (i *Incluster) getFrontendURL(job *model.Job) *url.URL {
 	// This should be parsed in main(), so we shouldn't worry about it here.
 	frontURL, _ := url.Parse(i.FrontendBaseURL)
 	frontURL.Host = fmt.Sprintf("%s.%s", IngressName(job.UserID, job.InvocationID), frontURL.Host)
 	return frontURL
 }
 
-func (i *Internal) viceProxyCommand(job *model.Job) []string {
+func (i *Incluster) viceProxyCommand(job *model.Job) []string {
 	frontURL := i.getFrontendURL(job)
 	backendURL := fmt.Sprintf("http://localhost:%s", strconv.Itoa(job.Steps[0].Component.Container.Ports[0].ContainerPort))
 
@@ -259,7 +259,7 @@ func storageRequest(job *model.Job) resourcev1.Quantity {
 
 // inputStagingContainer returns the init container to be used for staging input files. This init container
 // is only used when iRODS CSI driver integration is disabled.
-func (i *Internal) inputStagingContainer(job *model.Job) apiv1.Container {
+func (i *Incluster) inputStagingContainer(job *model.Job) apiv1.Container {
 	return apiv1.Container{
 		Name:            fileTransfersInitContainerName,
 		Image:           fmt.Sprintf("%s:%s", i.PorklockImage, i.PorklockTag),
@@ -303,7 +303,7 @@ func (i *Internal) inputStagingContainer(job *model.Job) apiv1.Container {
 // It may seem odd to use the file transfer image to initialize the working directory when no files are actually
 // being transferred, but it works. We use it for a couple of different reasons. First, we need a Unix shell and
 // it has one. Second, it's already set up so that we can configure it in a way that avoids image pull rate limits.
-func (i *Internal) workingDirPrepContainer(job *model.Job) apiv1.Container {
+func (i *Incluster) workingDirPrepContainer(job *model.Job) apiv1.Container {
 
 	// Build the command used to initialize the working directory.
 	workingDirInitCommand := []string{
@@ -360,7 +360,7 @@ func workingDirMountPath(job *model.Job) string {
 
 // initContainers returns a []apiv1.Container used for the InitContainers in
 // the VICE app Deployment resource.
-func (i *Internal) initContainers(job *model.Job) []apiv1.Container {
+func (i *Incluster) initContainers(job *model.Job) []apiv1.Container {
 	output := []apiv1.Container{}
 
 	if !i.UseCSIDriver {
@@ -398,7 +398,8 @@ func sharedMemoryAmount(job *model.Job) *resourcev1.Quantity {
 	return nil
 }
 
-func (i *Internal) defineAnalysisContainer(job *model.Job) apiv1.Container {
+func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
+>>>>>>> 5722b99 (Rename internal to incluster):incluster/deployments.go
 	analysisEnvironment := []apiv1.EnvVar{}
 	for envKey, envVal := range job.Steps[0].Environment {
 		analysisEnvironment = append(
@@ -549,7 +550,7 @@ func (i *Internal) defineAnalysisContainer(job *model.Job) apiv1.Container {
 
 // deploymentContainers returns the Containers needed for the VICE analysis
 // Deployment. It does not call the k8s API.
-func (i *Internal) deploymentContainers(job *model.Job) []apiv1.Container {
+func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 	output := []apiv1.Container{}
 
 	output = append(output, apiv1.Container{
@@ -659,7 +660,7 @@ func (i *Internal) deploymentContainers(job *model.Job) []apiv1.Container {
 // configured secrets to use for pulling images This is passed the job because
 // it may be advantageous, in the future, to add secrets depending on the
 // images actually needed by the job, but at present this uses a static value
-func (i *Internal) imagePullSecrets(_ *model.Job) []apiv1.LocalObjectReference {
+func (i *Incluster) imagePullSecrets(_ *model.Job) []apiv1.LocalObjectReference {
 	if i.ImagePullSecretName != "" {
 		return []apiv1.LocalObjectReference{
 			{Name: i.ImagePullSecretName},
@@ -670,7 +671,7 @@ func (i *Internal) imagePullSecrets(_ *model.Job) []apiv1.LocalObjectReference {
 
 // getDeployment assembles and returns the Deployment for the VICE analysis. It does
 // not call the k8s API.
-func (i *Internal) getDeployment(ctx context.Context, job *model.Job) (*appsv1.Deployment, error) {
+func (i *Incluster) getDeployment(ctx context.Context, job *model.Job) (*appsv1.Deployment, error) {
 	labels, err := i.labelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err

@@ -1,4 +1,4 @@
-package internal
+package incluster
 
 import (
 	"context"
@@ -34,7 +34,7 @@ import (
 
 var log = common.Log
 var httpClient = http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
-var otelName = "github.com/cyverse-de/app-exposer/internal"
+var otelName = "github.com/cyverse-de/app-exposer/incluster"
 
 var leadingLabelReplacerRegexp = regexp.MustCompile("^[^0-9A-Za-z]+")
 var trailingLabelReplacerRegexp = regexp.MustCompile("[^0-9A-Za-z]+$")
@@ -71,7 +71,7 @@ func labelValueString(str string) string {
 	return slug.Make(str)
 }
 
-// Init contains configuration for configuring an *Internal.
+// Init contains configuration for configuring an *Incluster.
 type Init struct {
 	PorklockImage                 string
 	PorklockTag                   string
@@ -100,9 +100,9 @@ type Init struct {
 	NATSEncodedConn               *nats.EncodedConn
 }
 
-// Internal contains information and operations for launching VICE apps inside the
+// Incluster contains information and operations for launching VICE apps inside the
 // local k8s cluster.
-type Internal struct {
+type Incluster struct {
 	Init
 	clientset       kubernetes.Interface
 	db              *sqlx.DB
@@ -110,9 +110,9 @@ type Internal struct {
 	apps            *apps.Apps
 }
 
-// New creates a new *Internal.
-func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, apps *apps.Apps) *Internal {
-	return &Internal{
+// New creates a new *Incluster.
+func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, apps *apps.Apps) *Incluster {
+	return &Incluster{
 		Init:      *init,
 		db:        db,
 		clientset: clientset,
@@ -124,7 +124,7 @@ func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, apps *apps.App
 }
 
 // labelsFromJob returns a map[string]string that can be used as labels for K8s resources.
-func (i *Internal) labelsFromJob(ctx context.Context, job *model.Job) (map[string]string, error) {
+func (i *Incluster) labelsFromJob(ctx context.Context, job *model.Job) (map[string]string, error) {
 	name := []rune(job.Name)
 
 	var stringmax int
@@ -156,7 +156,7 @@ func (i *Internal) labelsFromJob(ctx context.Context, job *model.Job) (map[strin
 // containing the files that should not be uploaded to iRODS. It then calls
 // the k8s API to create the ConfigMap if it does not already exist or to
 // update it if it does.
-func (i *Internal) UpsertExcludesConfigMap(ctx context.Context, job *model.Job) error {
+func (i *Incluster) UpsertExcludesConfigMap(ctx context.Context, job *model.Job) error {
 	excludesCM, err := i.excludesConfigMap(ctx, job)
 	if err != nil {
 		return err
@@ -184,7 +184,7 @@ func (i *Internal) UpsertExcludesConfigMap(ctx context.Context, job *model.Job) 
 // containing the path list of files to download from iRODS for the VICE analysis.
 // It then uses the k8s API to create the ConfigMap if it does not already exist or to
 // update it if it does.
-func (i *Internal) UpsertInputPathListConfigMap(ctx context.Context, job *model.Job) error {
+func (i *Incluster) UpsertInputPathListConfigMap(ctx context.Context, job *model.Job) error {
 	inputCM, err := i.inputPathListConfigMap(ctx, job)
 	if err != nil {
 		return err
@@ -211,7 +211,7 @@ func (i *Internal) UpsertInputPathListConfigMap(ctx context.Context, job *model.
 // UpsertDeployment uses the Job passed in to assemble a Deployment for the
 // VICE analysis. If then uses the k8s API to create the Deployment if it does
 // not already exist or to update it if it does.
-func (i *Internal) UpsertDeployment(ctx context.Context, deployment *appsv1.Deployment, job *model.Job) error {
+func (i *Incluster) UpsertDeployment(ctx context.Context, deployment *appsv1.Deployment, job *model.Job) error {
 	var err error
 	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
 
@@ -354,7 +354,7 @@ func getMillicoresFromDeployment(deployment *appsv1.Deployment) (*apd.Decimal, e
 // LaunchAppHandler is the HTTP handler that orchestrates the launching of a VICE analysis inside
 // the k8s cluster. This get passed to the router to be associated with a route. The Job
 // is passed in as the body of the request.
-func (i *Internal) LaunchAppHandler(c echo.Context) error {
+func (i *Incluster) LaunchAppHandler(c echo.Context) error {
 	var (
 		job *model.Job
 		err error
@@ -408,7 +408,7 @@ func (i *Internal) LaunchAppHandler(c echo.Context) error {
 }
 
 // TriggerDownloadsHandler handles requests to trigger file downloads.
-func (i *Internal) TriggerDownloadsHandler(c echo.Context) error {
+func (i *Incluster) TriggerDownloadsHandler(c echo.Context) error {
 	return i.doFileTransfer(c.Request().Context(), c.Param("id"), downloadBasePath, downloadKind, true)
 }
 
@@ -416,7 +416,7 @@ func (i *Internal) TriggerDownloadsHandler(c echo.Context) error {
 // without requiring user information in the request and also operates from
 // the analysis UUID rather than the external ID. For use with tools that
 // require the caller to have administrative privileges.
-func (i *Internal) AdminTriggerDownloadsHandler(c echo.Context) error {
+func (i *Incluster) AdminTriggerDownloadsHandler(c echo.Context) error {
 	var err error
 	ctx := c.Request().Context()
 
@@ -431,7 +431,7 @@ func (i *Internal) AdminTriggerDownloadsHandler(c echo.Context) error {
 }
 
 // TriggerUploadsHandler handles requests to trigger file uploads.
-func (i *Internal) TriggerUploadsHandler(c echo.Context) error {
+func (i *Incluster) TriggerUploadsHandler(c echo.Context) error {
 	return i.doFileTransfer(c.Request().Context(), c.Param("id"), uploadBasePath, uploadKind, true)
 }
 
@@ -439,7 +439,7 @@ func (i *Internal) TriggerUploadsHandler(c echo.Context) error {
 // requiring user information in the request, while also operating from the
 // analysis UUID rather than the external UUID. For use with tools that
 // require the caller to have administrative privileges.
-func (i *Internal) AdminTriggerUploadsHandler(c echo.Context) error {
+func (i *Incluster) AdminTriggerUploadsHandler(c echo.Context) error {
 	var err error
 	ctx := c.Request().Context()
 
@@ -453,7 +453,7 @@ func (i *Internal) AdminTriggerUploadsHandler(c echo.Context) error {
 	return i.doFileTransfer(ctx, externalID, uploadBasePath, uploadKind, true)
 }
 
-func (i *Internal) doExit(ctx context.Context, externalID string) error {
+func (i *Incluster) doExit(ctx context.Context, externalID string) error {
 	set := labels.Set(map[string]string{
 		"external-id": externalID,
 	})
@@ -554,14 +554,14 @@ func (i *Internal) doExit(ctx context.Context, externalID string) error {
 // the external-id label to find all of the objects in the configured
 // namespace associated with the job. Deletes the following objects:
 // ingresses, services, deployments, and configmaps.
-func (i *Internal) ExitHandler(c echo.Context) error {
+func (i *Incluster) ExitHandler(c echo.Context) error {
 	return i.doExit(c.Request().Context(), c.Param("id"))
 }
 
 // AdminExitHandler terminates the VICE analysis based on the analysisID and
 // and should not require any user information to be provided. Otherwise, the
 // documentation for VICEExit applies here as well.
-func (i *Internal) AdminExitHandler(c echo.Context) error {
+func (i *Incluster) AdminExitHandler(c echo.Context) error {
 	var err error
 	ctx := c.Request().Context()
 
@@ -577,7 +577,7 @@ func (i *Internal) AdminExitHandler(c echo.Context) error {
 
 // getIDFromHost returns the external ID for the running VICE app, which
 // is assumed to be the same as the name of the ingress.
-func (i *Internal) getIDFromHost(ctx context.Context, host string) (string, error) {
+func (i *Incluster) getIDFromHost(ctx context.Context, host string) (string, error) {
 	ingressclient := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
 	ingresslist, err := ingressclient.List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -598,7 +598,7 @@ func (i *Internal) getIDFromHost(ctx context.Context, host string) (string, erro
 // URLReadyHandler returns whether or not a VICE app is ready
 // for users to access it. This version will check the user's permissions
 // and return an error if they aren't allowed to access the running app.
-func (i *Internal) URLReadyHandler(c echo.Context) error {
+func (i *Incluster) URLReadyHandler(c echo.Context) error {
 	var (
 		ingressExists bool
 		serviceExists bool
@@ -695,7 +695,7 @@ func (i *Internal) URLReadyHandler(c echo.Context) error {
 // This will return an overall status and status for the individual containers in
 // the app's pod. Uses the state of the readiness checks in K8s, along with the
 // existence of the various resources created for the app.
-func (i *Internal) AdminURLReadyHandler(c echo.Context) error {
+func (i *Incluster) AdminURLReadyHandler(c echo.Context) error {
 	var (
 		ingressExists bool
 		serviceExists bool
@@ -756,7 +756,7 @@ func (i *Internal) AdminURLReadyHandler(c echo.Context) error {
 // The exit portion will only occur if the save operation succeeds. The operation is
 // performed inside of a goroutine so that the caller isn't waiting for hours/days for
 // output file transfers to complete.
-func (i *Internal) SaveAndExitHandler(c echo.Context) error {
+func (i *Incluster) SaveAndExitHandler(c echo.Context) error {
 	log.Info("save and exit called")
 
 	// Since file transfers can take a while, we should do this asynchronously by default.
@@ -794,7 +794,7 @@ func (i *Internal) SaveAndExitHandler(c echo.Context) error {
 // then exit. This version of the call operates based on the analysis ID and does
 // not require user information to be required by the caller. Otherwise, the docs
 // for the VICESaveAndExit function apply here as well.
-func (i *Internal) AdminSaveAndExitHandler(c echo.Context) error {
+func (i *Incluster) AdminSaveAndExitHandler(c echo.Context) error {
 	log.Info("admin save and exit called")
 
 	// Since file transfers can take a while, we should do this asynchronously by default.
@@ -859,7 +859,7 @@ const getUserIDSQL = `
 `
 
 // TimeLimitUpdateHandler handles requests to update the time limit on an already running VICE app.
-func (i *Internal) TimeLimitUpdateHandler(c echo.Context) error {
+func (i *Incluster) TimeLimitUpdateHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	log.Info("update time limit called")
 
@@ -895,7 +895,7 @@ func (i *Internal) TimeLimitUpdateHandler(c echo.Context) error {
 
 // AdminTimeLimitUpdateHandler is basically the same as VICETimeLimitUpdate
 // except that it doesn't require user information in the request.
-func (i *Internal) AdminTimeLimitUpdateHandler(c echo.Context) error {
+func (i *Incluster) AdminTimeLimitUpdateHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	var (
 		err  error
@@ -922,7 +922,7 @@ func (i *Internal) AdminTimeLimitUpdateHandler(c echo.Context) error {
 }
 
 // GetTimeLimitHandler implements the handler for getting the current time limit from the database.
-func (i *Internal) GetTimeLimitHandler(c echo.Context) error {
+func (i *Incluster) GetTimeLimitHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	log.Info("get time limit called")
 
@@ -961,7 +961,7 @@ func (i *Internal) GetTimeLimitHandler(c echo.Context) error {
 
 // AdminGetTimeLimitHandler is the same as VICEGetTimeLimit but doesn't require
 // any user information in the request.
-func (i *Internal) AdminGetTimeLimitHandler(c echo.Context) error {
+func (i *Incluster) AdminGetTimeLimitHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	log.Info("get time limit called")
 
@@ -998,7 +998,7 @@ func dbTimestampToLocal(t time.Time) time.Time {
 	return t
 }
 
-func (i *Internal) getTimeLimit(ctx context.Context, userID, id string) (map[string]string, error) {
+func (i *Incluster) getTimeLimit(ctx context.Context, userID, id string) (map[string]string, error) {
 	var err error
 
 	var timeLimit pq.NullTime
@@ -1020,7 +1020,7 @@ func (i *Internal) getTimeLimit(ctx context.Context, userID, id string) (map[str
 	return outputMap, nil
 }
 
-func (i *Internal) updateTimeLimit(ctx context.Context, user, id string) (map[string]string, error) {
+func (i *Incluster) updateTimeLimit(ctx context.Context, user, id string) (map[string]string, error) {
 	var (
 		err    error
 		userID string
@@ -1055,7 +1055,7 @@ func (i *Internal) updateTimeLimit(ctx context.Context, user, id string) (map[st
 
 // AdminGetExternalIDHandler returns the external ID associated with the analysis ID.
 // There is only one external ID for each VICE analysis, unlike non-VICE analyses.
-func (i *Internal) AdminGetExternalIDHandler(c echo.Context) error {
+func (i *Incluster) AdminGetExternalIDHandler(c echo.Context) error {
 	var (
 		err        error
 		analysisID string

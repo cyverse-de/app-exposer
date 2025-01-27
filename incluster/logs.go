@@ -1,4 +1,4 @@
-package internal
+package incluster
 
 import (
 	"context"
@@ -40,7 +40,7 @@ type VICEAnalysis struct {
 	Total      int        `json:"total"`
 }
 
-func (i *Internal) getExternalIDs(ctx context.Context, user, analysisID string) ([]string, error) {
+func (i *Incluster) getExternalIDs(ctx context.Context, user, analysisID string) ([]string, error) {
 	var (
 		err               error
 		analysisLookupURL *url.URL
@@ -109,7 +109,7 @@ type VICELogEntry struct {
 //	             display timestamps at the beginning of each log line.
 //	container - String containing the name of the container to display logs from. Defaults
 //	            the value 'analysis', since this is VICE-specific.
-func (i *Internal) LogsHandler(c echo.Context) error {
+func (i *Incluster) LogsHandler(c echo.Context) error {
 	var (
 		err        error
 		id         string
@@ -252,7 +252,7 @@ type retPod struct {
 	Name string `json:"name"`
 }
 
-func (i *Internal) getPods(ctx context.Context, externalID string) ([]retPod, error) {
+func (i *Incluster) getPods(ctx context.Context, externalID string) ([]retPod, error) {
 	set := labels.Set(map[string]string{
 		"external-id": externalID,
 	})
@@ -277,7 +277,7 @@ func (i *Internal) getPods(ctx context.Context, externalID string) ([]retPod, er
 
 // PodsHandler lists the k8s pods associated with the provided external-id. For now
 // just returns pod info in the format `{"pods" : [{}]}`
-func (i *Internal) PodsHandler(c echo.Context) error {
+func (i *Incluster) PodsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	analysisID := c.Param("analysis-id")
