@@ -1,12 +1,15 @@
 package batch
 
 import (
+	"context"
 	"fmt"
 
+	workflowpkg "github.com/argoproj/argo-workflows/v3/pkg/apiclient/workflow"
 	v1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/cyverse-de/model/v6"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -507,4 +510,15 @@ func NewWorkflow(job *model.Job, opts *BatchSubmissionOpts) *v1alpha1.Workflow {
 	}
 
 	return &workflow
+}
+
+func SubmitWorkflow(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, workflow *v1alpha1.Workflow) (*v1alpha1.Workflow, error) {
+	creationOptions := &metav1.CreateOptions{}
+
+	return serviceClient.CreateWorkflow(ctx, &workflowpkg.WorkflowCreateRequest{
+		Namespace:     workflow.GetNamespace(),
+		Workflow:      workflow,
+		ServerDryRun:  false,
+		CreateOptions: creationOptions,
+	})
 }
