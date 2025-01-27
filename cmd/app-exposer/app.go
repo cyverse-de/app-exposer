@@ -8,8 +8,8 @@ import (
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/external"
+	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/instantlaunches"
-	"github.com/cyverse-de/app-exposer/internal"
 	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf"
 	"github.com/nats-io/nats.go"
@@ -26,7 +26,7 @@ import (
 // are methods for an ExposerApp instance.
 type ExposerApp struct {
 	external        *external.External
-	internal        *internal.Internal
+	incluster       *incluster.Incluster
 	namespace       string
 	clientset       kubernetes.Interface
 	router          *echo.Echo
@@ -113,7 +113,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *Expos
 		log.Fatal(err)
 	}
 
-	internalInit := &internal.Init{
+	inclusterInit := &incluster.Init{
 		ViceNamespace:                 init.ViceNamespace,
 		PorklockImage:                 c.String("vice.file-transfers.image"),
 		PorklockTag:                   c.String("vice.file-transfers.tag"),
@@ -143,7 +143,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *Expos
 
 	app := &ExposerApp{
 		external:  external.New(init.ClientSet, init.Namespace, init.IngressClass),
-		internal:  internal.New(internalInit, init.db, init.ClientSet, apps),
+		incluster: incluster.New(inclusterInit, init.db, init.ClientSet, apps),
 		namespace: init.Namespace,
 		clientset: init.ClientSet,
 		router:    echo.New(),
@@ -185,43 +185,43 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *Expos
 	app.router.Static("/docs", "./docs")
 
 	vice := app.router.Group("/vice")
-	vice.POST("/launch", app.internal.LaunchAppHandler)
-	vice.POST("/apply-labels", app.internal.ApplyAsyncLabelsHandler)
-	vice.GET("/async-data", app.internal.AsyncDataHandler)
-	vice.GET("/listing", app.internal.FilterableResourcesHandler)
-	vice.POST("/:id/download-input-files", app.internal.TriggerDownloadsHandler)
-	vice.POST("/:id/save-output-files", app.internal.TriggerUploadsHandler)
-	vice.POST("/:id/exit", app.internal.ExitHandler)
-	vice.POST("/:id/save-and-exit", app.internal.SaveAndExitHandler)
-	vice.GET("/:analysis-id/pods", app.internal.PodsHandler)
-	vice.GET("/:analysis-id/logs", app.internal.LogsHandler)
-	vice.POST("/:analysis-id/time-limit", app.internal.TimeLimitUpdateHandler)
-	vice.GET("/:analysis-id/time-limit", app.internal.GetTimeLimitHandler)
-	vice.GET("/:host/url-ready", app.internal.URLReadyHandler)
-	vice.GET("/:host/description", app.internal.DescribeAnalysisHandler)
+	vice.POST("/launch", app.incluster.LaunchAppHandler)
+	vice.POST("/apply-labels", app.incluster.ApplyAsyncLabelsHandler)
+	vice.GET("/async-data", app.incluster.AsyncDataHandler)
+	vice.GET("/listing", app.incluster.FilterableResourcesHandler)
+	vice.POST("/:id/download-input-files", app.incluster.TriggerDownloadsHandler)
+	vice.POST("/:id/save-output-files", app.incluster.TriggerUploadsHandler)
+	vice.POST("/:id/exit", app.incluster.ExitHandler)
+	vice.POST("/:id/save-and-exit", app.incluster.SaveAndExitHandler)
+	vice.GET("/:analysis-id/pods", app.incluster.PodsHandler)
+	vice.GET("/:analysis-id/logs", app.incluster.LogsHandler)
+	vice.POST("/:analysis-id/time-limit", app.incluster.TimeLimitUpdateHandler)
+	vice.GET("/:analysis-id/time-limit", app.incluster.GetTimeLimitHandler)
+	vice.GET("/:host/url-ready", app.incluster.URLReadyHandler)
+	vice.GET("/:host/description", app.incluster.DescribeAnalysisHandler)
 
 	vicelisting := vice.Group("/listing")
-	vicelisting.GET("/", app.internal.FilterableResourcesHandler)
-	vicelisting.GET("/deployments", app.internal.FilterableDeploymentsHandler)
-	vicelisting.GET("/pods", app.internal.FilterablePodsHandler)
-	vicelisting.GET("/configmaps", app.internal.FilterableConfigMapsHandler)
-	vicelisting.GET("/services", app.internal.FilterableServicesHandler)
-	vicelisting.GET("/ingresses", app.internal.FilterableIngressesHandler)
+	vicelisting.GET("/", app.incluster.FilterableResourcesHandler)
+	vicelisting.GET("/deployments", app.incluster.FilterableDeploymentsHandler)
+	vicelisting.GET("/pods", app.incluster.FilterablePodsHandler)
+	vicelisting.GET("/configmaps", app.incluster.FilterableConfigMapsHandler)
+	vicelisting.GET("/services", app.incluster.FilterableServicesHandler)
+	vicelisting.GET("/ingresses", app.incluster.FilterableIngressesHandler)
 
 	viceadmin := vice.Group("/admin")
-	viceadmin.GET("/listing", app.internal.AdminFilterableResourcesHandler)
-	viceadmin.GET("/:host/description", app.internal.AdminDescribeAnalysisHandler)
-	viceadmin.GET("/:host/url-ready", app.internal.AdminURLReadyHandler)
+	viceadmin.GET("/listing", app.incluster.AdminFilterableResourcesHandler)
+	viceadmin.GET("/:host/description", app.incluster.AdminDescribeAnalysisHandler)
+	viceadmin.GET("/:host/url-ready", app.incluster.AdminURLReadyHandler)
 
 	viceanalyses := viceadmin.Group("/analyses")
-	viceanalyses.GET("/", app.internal.AdminFilterableResourcesHandler)
-	viceanalyses.POST("/:analysis-id/download-input-files", app.internal.AdminTriggerDownloadsHandler)
-	viceanalyses.POST("/:analysis-id/save-output-files", app.internal.AdminTriggerUploadsHandler)
-	viceanalyses.POST("/:analysis-id/exit", app.internal.AdminExitHandler)
-	viceanalyses.POST("/:analysis-id/save-and-exit", app.internal.AdminSaveAndExitHandler)
-	viceanalyses.GET("/:analysis-id/time-limit", app.internal.AdminGetTimeLimitHandler)
-	viceanalyses.POST("/:analysis-id/time-limit", app.internal.AdminTimeLimitUpdateHandler)
-	viceanalyses.GET("/:analysis-id/external-id", app.internal.AdminGetExternalIDHandler)
+	viceanalyses.GET("/", app.incluster.AdminFilterableResourcesHandler)
+	viceanalyses.POST("/:analysis-id/download-input-files", app.incluster.AdminTriggerDownloadsHandler)
+	viceanalyses.POST("/:analysis-id/save-output-files", app.incluster.AdminTriggerUploadsHandler)
+	viceanalyses.POST("/:analysis-id/exit", app.incluster.AdminExitHandler)
+	viceanalyses.POST("/:analysis-id/save-and-exit", app.incluster.AdminSaveAndExitHandler)
+	viceanalyses.GET("/:analysis-id/time-limit", app.incluster.AdminGetTimeLimitHandler)
+	viceanalyses.POST("/:analysis-id/time-limit", app.incluster.AdminTimeLimitUpdateHandler)
+	viceanalyses.GET("/:analysis-id/external-id", app.incluster.AdminGetExternalIDHandler)
 
 	svc := app.router.Group("/service")
 	svc.POST("/:name", app.external.CreateServiceHandler)

@@ -1,4 +1,4 @@
-package internal
+package incluster
 
 const (
 	analysisContainerName = "analysis"

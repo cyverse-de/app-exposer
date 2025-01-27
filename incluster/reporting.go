@@ -1,4 +1,4 @@
-package internal
+package incluster
 
 import (
 	"context"
@@ -61,7 +61,7 @@ func getListOptions(customLabels map[string]string, missingLabels []string) meta
 	}
 }
 
-func (i *Internal) deploymentList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*v1.DeploymentList, error) {
+func (i *Incluster) deploymentList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*v1.DeploymentList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 
 	depList, err := i.clientset.AppsV1().Deployments(namespace).List(ctx, listOptions)
@@ -72,7 +72,7 @@ func (i *Internal) deploymentList(ctx context.Context, namespace string, customL
 	return depList, nil
 }
 
-func (i *Internal) podList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.PodList, error) {
+func (i *Incluster) podList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.PodList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 
 	podList, err := i.clientset.CoreV1().Pods(namespace).List(ctx, listOptions)
@@ -83,7 +83,7 @@ func (i *Internal) podList(ctx context.Context, namespace string, customLabels m
 	return podList, nil
 }
 
-func (i *Internal) configmapsList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.ConfigMapList, error) {
+func (i *Incluster) configmapsList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.ConfigMapList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 
 	cfgList, err := i.clientset.CoreV1().ConfigMaps(namespace).List(ctx, listOptions)
@@ -94,7 +94,7 @@ func (i *Internal) configmapsList(ctx context.Context, namespace string, customL
 	return cfgList, nil
 }
 
-func (i *Internal) serviceList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.ServiceList, error) {
+func (i *Incluster) serviceList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.ServiceList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 
 	svcList, err := i.clientset.CoreV1().Services(namespace).List(ctx, listOptions)
@@ -105,7 +105,7 @@ func (i *Internal) serviceList(ctx context.Context, namespace string, customLabe
 	return svcList, nil
 }
 
-func (i *Internal) ingressList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*netv1.IngressList, error) {
+func (i *Incluster) ingressList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*netv1.IngressList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 
 	client := i.clientset.NetworkingV1().Ingresses(namespace)
@@ -333,7 +333,7 @@ func ingressInfo(ingress *netv1.Ingress) *IngressInfo {
 	}
 }
 
-func (i *Internal) getFilteredDeployments(ctx context.Context, filter map[string]string) ([]DeploymentInfo, error) {
+func (i *Incluster) getFilteredDeployments(ctx context.Context, filter map[string]string) ([]DeploymentInfo, error) {
 	depList, err := i.deploymentList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return nil, err
@@ -350,7 +350,7 @@ func (i *Internal) getFilteredDeployments(ctx context.Context, filter map[string
 }
 
 // FilterableDeploymentsHandler lists all of the deployments.
-func (i *Internal) FilterableDeploymentsHandler(c echo.Context) error {
+func (i *Incluster) FilterableDeploymentsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := filterMap(c.Request().URL.Query())
 
@@ -364,7 +364,7 @@ func (i *Internal) FilterableDeploymentsHandler(c echo.Context) error {
 	})
 }
 
-func (i *Internal) getFilteredPods(ctx context.Context, filter map[string]string) ([]PodInfo, error) {
+func (i *Incluster) getFilteredPods(ctx context.Context, filter map[string]string) ([]PodInfo, error) {
 	podList, err := i.podList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return nil, err
@@ -381,7 +381,7 @@ func (i *Internal) getFilteredPods(ctx context.Context, filter map[string]string
 }
 
 // FilterablePodsHandler returns a listing of the pods in a VICE analysis.
-func (i *Internal) FilterablePodsHandler(c echo.Context) error {
+func (i *Incluster) FilterablePodsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := filterMap(c.Request().URL.Query())
 
@@ -395,7 +395,7 @@ func (i *Internal) FilterablePodsHandler(c echo.Context) error {
 	})
 }
 
-func (i *Internal) getFilteredConfigMaps(ctx context.Context, filter map[string]string) ([]ConfigMapInfo, error) {
+func (i *Incluster) getFilteredConfigMaps(ctx context.Context, filter map[string]string) ([]ConfigMapInfo, error) {
 	cmList, err := i.configmapsList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return nil, err
@@ -412,7 +412,7 @@ func (i *Internal) getFilteredConfigMaps(ctx context.Context, filter map[string]
 }
 
 // FilterableConfigMapsHandler lists configmaps in use by VICE apps.
-func (i *Internal) FilterableConfigMapsHandler(c echo.Context) error {
+func (i *Incluster) FilterableConfigMapsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := filterMap(c.Request().URL.Query())
 
@@ -426,7 +426,7 @@ func (i *Internal) FilterableConfigMapsHandler(c echo.Context) error {
 	})
 }
 
-func (i *Internal) getFilteredServices(ctx context.Context, filter map[string]string) ([]ServiceInfo, error) {
+func (i *Incluster) getFilteredServices(ctx context.Context, filter map[string]string) ([]ServiceInfo, error) {
 	svcList, err := i.serviceList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return nil, err
@@ -443,7 +443,7 @@ func (i *Internal) getFilteredServices(ctx context.Context, filter map[string]st
 }
 
 // FilterableServicesHandler lists services in use by VICE apps.
-func (i *Internal) FilterableServicesHandler(c echo.Context) error {
+func (i *Incluster) FilterableServicesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := filterMap(c.Request().URL.Query())
 
@@ -457,7 +457,7 @@ func (i *Internal) FilterableServicesHandler(c echo.Context) error {
 	})
 }
 
-func (i *Internal) getFilteredIngresses(ctx context.Context, filter map[string]string) ([]IngressInfo, error) {
+func (i *Incluster) getFilteredIngresses(ctx context.Context, filter map[string]string) ([]IngressInfo, error) {
 	ingList, err := i.ingressList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return nil, err
@@ -474,7 +474,7 @@ func (i *Internal) getFilteredIngresses(ctx context.Context, filter map[string]s
 }
 
 // FilterableIngressesHandler lists ingresses in use by VICE apps.
-func (i *Internal) FilterableIngressesHandler(c echo.Context) error {
+func (i *Incluster) FilterableIngressesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := filterMap(c.Request().URL.Query())
 
@@ -498,7 +498,7 @@ type ResourceInfo struct {
 	Ingresses   []IngressInfo    `json:"ingresses"`
 }
 
-func (i *Internal) fixUsername(username string) string {
+func (i *Incluster) fixUsername(username string) string {
 	var userSuffix string
 	if strings.HasPrefix(i.UserSuffix, "@") {
 		userSuffix = i.UserSuffix
@@ -511,7 +511,7 @@ func (i *Internal) fixUsername(username string) string {
 	return fmt.Sprintf("%s%s", username, userSuffix)
 }
 
-func (i *Internal) doResourceListing(ctx context.Context, filter map[string]string) (*ResourceInfo, error) {
+func (i *Incluster) doResourceListing(ctx context.Context, filter map[string]string) (*ResourceInfo, error) {
 	deployments, err := i.getFilteredDeployments(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -548,7 +548,7 @@ func (i *Internal) doResourceListing(ctx context.Context, filter map[string]stri
 
 // AdminDescribeAnalysisHandler returns a listing entry for a single analysis
 // asssociated with the host/subdomain passed in as 'host' from the URL.
-func (i *Internal) AdminDescribeAnalysisHandler(c echo.Context) error {
+func (i *Incluster) AdminDescribeAnalysisHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	host := c.Param("host")
 
@@ -566,7 +566,7 @@ func (i *Internal) AdminDescribeAnalysisHandler(c echo.Context) error {
 
 // DescribeAnalysisHandler returns a listing entry for a single analysis associated
 // with the host/subdomain passed in as 'host' from the URL.
-func (i *Internal) DescribeAnalysisHandler(c echo.Context) error {
+func (i *Incluster) DescribeAnalysisHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	log.Info("in DescribeAnalysisHandler")
@@ -631,7 +631,7 @@ func (i *Internal) DescribeAnalysisHandler(c echo.Context) error {
 
 // FilterableResourcesHandler returns all of the k8s resources associated with a VICE analysis
 // but checks permissions to see if the requesting user has permission to access the resource.
-func (i *Internal) FilterableResourcesHandler(c echo.Context) error {
+func (i *Incluster) FilterableResourcesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	user := c.QueryParam("user")
 	if user == "" {
@@ -666,7 +666,7 @@ func (i *Internal) FilterableResourcesHandler(c echo.Context) error {
 }
 
 // AdminFilterableResourcesHandler returns all of the k8s resources associated with a VICE analysis.
-func (i *Internal) AdminFilterableResourcesHandler(c echo.Context) error {
+func (i *Incluster) AdminFilterableResourcesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := filterMap(c.Request().URL.Query())
 
@@ -720,7 +720,7 @@ func populateLoginIP(ctx context.Context, a *apps.Apps, existingLabels map[strin
 	return existingLabels, nil
 }
 
-func (i *Internal) relabelDeployments(ctx context.Context) []error {
+func (i *Incluster) relabelDeployments(ctx context.Context) []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
 
@@ -755,7 +755,7 @@ func (i *Internal) relabelDeployments(ctx context.Context) []error {
 	return errors
 }
 
-func (i *Internal) relabelConfigMaps(ctx context.Context) []error {
+func (i *Incluster) relabelConfigMaps(ctx context.Context) []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
 
@@ -790,7 +790,7 @@ func (i *Internal) relabelConfigMaps(ctx context.Context) []error {
 	return errors
 }
 
-func (i *Internal) relabelServices(ctx context.Context) []error {
+func (i *Incluster) relabelServices(ctx context.Context) []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
 
@@ -825,7 +825,7 @@ func (i *Internal) relabelServices(ctx context.Context) []error {
 	return errors
 }
 
-func (i *Internal) relabelIngresses(ctx context.Context) []error {
+func (i *Incluster) relabelIngresses(ctx context.Context) []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
 
@@ -864,7 +864,7 @@ func (i *Internal) relabelIngresses(ctx context.Context) []error {
 // ApplyAsyncLabels ensures that the required labels are applied to all running VICE analyses.
 // This is useful to avoid race conditions between the DE database and the k8s cluster,
 // and also for adding new labels to "old" analyses during an update.
-func (i *Internal) ApplyAsyncLabels(ctx context.Context) []error {
+func (i *Incluster) ApplyAsyncLabels(ctx context.Context) []error {
 	errors := []error{}
 
 	labelDepsErrors := i.relabelDeployments(ctx)
@@ -892,7 +892,7 @@ func (i *Internal) ApplyAsyncLabels(ctx context.Context) []error {
 
 // ApplyAsyncLabelsHandler is the http handler for triggering the application
 // of labels on running VICE analyses.
-func (i *Internal) ApplyAsyncLabelsHandler(c echo.Context) error {
+func (i *Incluster) ApplyAsyncLabelsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	errs := i.ApplyAsyncLabels(ctx)
 

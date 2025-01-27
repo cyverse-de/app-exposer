@@ -1,4 +1,4 @@
-package internal
+package incluster
 
 import (
 	"context"
@@ -19,7 +19,7 @@ func IngressName(userID, invocationID string) string {
 
 // getIngress assembles and returns the Ingress needed for the VICE analysis.
 // It does not call the k8s API.
-func (i *Internal) getIngress(ctx context.Context, job *model.Job, svc *apiv1.Service, class string) (*netv1.Ingress, error) {
+func (i *Incluster) getIngress(ctx context.Context, job *model.Job, svc *apiv1.Service, class string) (*netv1.Ingress, error) {
 	var (
 		rules       []netv1.IngressRule
 		defaultPort int32

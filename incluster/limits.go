@@ -1,4 +1,4 @@
-package internal
+package incluster
 
 import (
 	"context"
@@ -36,7 +36,7 @@ func shouldCountStatus(status string) bool {
 	return countIt
 }
 
-func (i *Internal) countJobsForUser(ctx context.Context, username string) (int, error) {
+func (i *Incluster) countJobsForUser(ctx context.Context, username string) (int, error) {
 	set := labels.Set(map[string]string{
 		"username": username,
 	})
@@ -101,7 +101,7 @@ const getJobLimitForUserSQL = `
 	WHERE launcher = regexp_replace($1, '-', '_')
 `
 
-func (i *Internal) getJobLimitForUser(username string) (*int, error) {
+func (i *Incluster) getJobLimitForUser(username string) (*int, error) {
 	var jobLimit int
 	err := i.db.QueryRow(getJobLimitForUserSQL, username).Scan(&jobLimit)
 	if err == sql.ErrNoRows {
@@ -118,7 +118,7 @@ const getDefaultJobLimitSQL = `
 	WHERE launcher IS NULL
 `
 
-func (i *Internal) getDefaultJobLimit() (int, error) {
+func (i *Incluster) getDefaultJobLimit() (int, error) {
 	var defaultJobLimit int
 	if err := i.db.QueryRow(getDefaultJobLimitSQL).Scan(&defaultJobLimit); err != nil {
 		return 0, err
@@ -126,7 +126,7 @@ func (i *Internal) getDefaultJobLimit() (int, error) {
 	return defaultJobLimit, nil
 }
 
-func (i *Internal) getResourceOveragesForUser(ctx context.Context, username string) (*qms.OverageList, error) {
+func (i *Incluster) getResourceOveragesForUser(ctx context.Context, username string) (*qms.OverageList, error) {
 	var err error
 
 	subject := "cyverse.qms.user.overages.get"
@@ -221,7 +221,7 @@ func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int
 	}
 }
 
-func (i *Internal) validateJob(ctx context.Context, job *model.Job) (int, error) {
+func (i *Incluster) validateJob(ctx context.Context, job *model.Job) (int, error) {
 
 	// Verify that the job type is supported by this service
 	if strings.ToLower(job.ExecutionTarget) != "interapps" {

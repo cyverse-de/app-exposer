@@ -1,4 +1,4 @@
-package internal
+package incluster
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 
 // getService assembles and returns the Service needed for the VICE analysis.
 // It does not call the k8s API.
-func (i *Internal) getService(ctx context.Context, job *model.Job) (*apiv1.Service, error) {
+func (i *Incluster) getService(ctx context.Context, job *model.Job) (*apiv1.Service, error) {
 	labels, err := i.labelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err

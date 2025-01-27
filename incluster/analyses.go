@@ -1,4 +1,4 @@
-package internal
+package incluster
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 )
 
 // AsyncDataHandler returns data that is generately asynchronously from the job launch.
-func (i *Internal) AsyncDataHandler(c echo.Context) error {
+func (i *Incluster) AsyncDataHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	externalID := c.QueryParam("external-id")
 	if externalID == "" {
@@ -55,7 +55,7 @@ func (i *Internal) AsyncDataHandler(c echo.Context) error {
 // getExternalID returns the externalID associated with the analysisID. For now,
 // only returns the first result, since VICE analyses only have a single step in
 // the database.
-func (i *Internal) getExternalIDByAnalysisID(ctx context.Context, analysisID string) (string, error) {
+func (i *Incluster) getExternalIDByAnalysisID(ctx context.Context, analysisID string) (string, error) {
 	username, _, err := i.apps.GetUserByAnalysisID(ctx, analysisID)
 	if err != nil {
 		return "", err

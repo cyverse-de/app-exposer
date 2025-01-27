@@ -1,4 +1,4 @@
-package internal
+package incluster
 
 import (
 	"context"
@@ -27,23 +27,23 @@ type IRODSFSPathMapping struct {
 	IgnoreNotExistError bool   `yaml:"ignore_not_exist_error" json:"ignore_not_exist_error"`
 }
 
-func (i *Internal) getZoneMountPath() string {
+func (i *Incluster) getZoneMountPath() string {
 	return fmt.Sprintf("%s/%s", csiDriverLocalMountPath, i.IRODSZone)
 }
 
-func (i *Internal) getCSIDataVolumeHandle(job *model.Job) string {
+func (i *Incluster) getCSIDataVolumeHandle(job *model.Job) string {
 	return fmt.Sprintf("%s-handle-%s", csiDriverDataVolumeNamePrefix, job.InvocationID)
 }
 
-func (i *Internal) getCSIDataVolumeName(job *model.Job) string {
+func (i *Incluster) getCSIDataVolumeName(job *model.Job) string {
 	return fmt.Sprintf("%s-%s", csiDriverDataVolumeNamePrefix, job.InvocationID)
 }
 
-func (i *Internal) getCSIDataVolumeClaimName(job *model.Job) string {
+func (i *Incluster) getCSIDataVolumeClaimName(job *model.Job) string {
 	return fmt.Sprintf("%s-%s", csiDriverDataVolumeClaimNamePrefix, job.InvocationID)
 }
 
-func (i *Internal) getInputPathMappings(job *model.Job) ([]IRODSFSPathMapping, error) {
+func (i *Incluster) getInputPathMappings(job *model.Job) ([]IRODSFSPathMapping, error) {
 	mappings := []IRODSFSPathMapping{}
 	// mark if the mapping path is already occupied
 	// key = mount path, val = irods path
@@ -90,7 +90,7 @@ func (i *Internal) getInputPathMappings(job *model.Job) ([]IRODSFSPathMapping, e
 	return mappings, nil
 }
 
-func (i *Internal) getOutputPathMapping(job *model.Job) IRODSFSPathMapping {
+func (i *Incluster) getOutputPathMapping(job *model.Job) IRODSFSPathMapping {
 	// mount a single collection for output
 	return IRODSFSPathMapping{
 		IRODSPath:           job.OutputDirectory(),
@@ -102,7 +102,7 @@ func (i *Internal) getOutputPathMapping(job *model.Job) IRODSFSPathMapping {
 	}
 }
 
-func (i *Internal) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
+func (i *Incluster) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
 	// mount a single collection for home
 	return IRODSFSPathMapping{
 		IRODSPath:           job.UserHome,
@@ -114,7 +114,7 @@ func (i *Internal) getHomePathMapping(job *model.Job) IRODSFSPathMapping {
 	}
 }
 
-func (i *Internal) getSharedPathMapping() IRODSFSPathMapping {
+func (i *Incluster) getSharedPathMapping() IRODSFSPathMapping {
 	// mount a single collection for shared data
 	sharedHomeFullPath := fmt.Sprintf("/%s/home/shared", i.IRODSZone)
 
@@ -128,7 +128,7 @@ func (i *Internal) getSharedPathMapping() IRODSFSPathMapping {
 	}
 }
 
-func (i *Internal) getCSIDataVolumeLabels(ctx context.Context, job *model.Job) (map[string]string, error) {
+func (i *Incluster) getCSIDataVolumeLabels(ctx context.Context, job *model.Job) (map[string]string, error) {
 	labels, err := i.labelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
@@ -140,7 +140,7 @@ func (i *Internal) getCSIDataVolumeLabels(ctx context.Context, job *model.Job) (
 
 // getPersistentVolumes returns the PersistentVolumes for the VICE analysis. It does
 // not call the k8s API.
-func (i *Internal) getPersistentVolumes(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolume, error) {
+func (i *Incluster) getPersistentVolumes(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolume, error) {
 	if i.UseCSIDriver {
 		dataPathMappings := []IRODSFSPathMapping{}
 
@@ -220,7 +220,7 @@ func (i *Internal) getPersistentVolumes(ctx context.Context, job *model.Job) ([]
 
 // getPersistentVolumeClaims returns the PersistentVolumes for the VICE analysis. It does
 // not call the k8s API.
-func (i *Internal) getPersistentVolumeClaims(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolumeClaim, error) {
+func (i *Incluster) getPersistentVolumeClaims(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolumeClaim, error) {
 	if i.UseCSIDriver {
 		labels, err := i.labelsFromJob(ctx, job)
 		if err != nil {
@@ -258,7 +258,7 @@ func (i *Internal) getPersistentVolumeClaims(ctx context.Context, job *model.Job
 
 // getPersistentVolumeSources returns the volumes for the VICE analysis. It does
 // not call the k8s API.
-func (i *Internal) getPersistentVolumeSources(job *model.Job) ([]*apiv1.Volume, error) {
+func (i *Incluster) getPersistentVolumeSources(job *model.Job) ([]*apiv1.Volume, error) {
 	if i.UseCSIDriver {
 		volumes := []*apiv1.Volume{}
 
@@ -280,7 +280,7 @@ func (i *Internal) getPersistentVolumeSources(job *model.Job) ([]*apiv1.Volume, 
 
 // getPersistentVolumeMounts returns the volume mount for the VICE analysis. It does
 // not call the k8s API.
-func (i *Internal) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMount {
+func (i *Incluster) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMount {
 	if i.UseCSIDriver {
 		volumeMounts := []*apiv1.VolumeMount{}
 

@@ -1,4 +1,4 @@
-package internal
+package incluster
 
 import (
 	"context"
@@ -66,7 +66,7 @@ func fileTransferCommand(job *model.Job) []string {
 // fileTransferVolumeMounts returns the list of VolumeMounts needed by the fileTransfer
 // container in the VICE analysis pod. Each VolumeMount should correspond to one of the
 // Volumes returned by the deploymentVolumes() function. This does not call the k8s API.
-func (i *Internal) fileTransfersVolumeMounts(job *model.Job) []apiv1.VolumeMount {
+func (i *Incluster) fileTransfersVolumeMounts(job *model.Job) []apiv1.VolumeMount {
 	retval := []apiv1.VolumeMount{
 		{
 			Name:      porklockConfigVolumeName,
@@ -201,7 +201,7 @@ func isFinished(status string) bool {
 // doFileTransfer handles requests to initial file transfers for a VICE
 // analysis. We only need the ID of the job, nothing is required in the
 // body of the request.
-func (i *Internal) doFileTransfer(ctx context.Context, externalID, reqpath, kind string, async bool) error {
+func (i *Incluster) doFileTransfer(ctx context.Context, externalID, reqpath, kind string, async bool) error {
 	ctx, span := otel.Tracer(otelName).Start(ctx, "doFileTransfer")
 	defer span.End()
 
