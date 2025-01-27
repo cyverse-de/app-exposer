@@ -1,7 +1,7 @@
 // Contains code for managing VICE applciations running
 // outside of the k8s cluster, namely in HTCondor
 
-package external
+package outcluster
 
 import (
 	"net/http"
@@ -13,8 +13,8 @@ import (
 
 var log = common.Log
 
-// External contains the support for running VICE apps outside of k8s.
-type External struct {
+// Outcluster contains the support for running VICE apps outside of k8s.
+type Outcluster struct {
 	namespace          string
 	clientset          kubernetes.Interface
 	ServiceController  ServiceCrudder
@@ -22,9 +22,9 @@ type External struct {
 	IngressController  IngressCrudder
 }
 
-// New returns a new *External.
-func New(cs kubernetes.Interface, namespace, ingressClass string) *External {
-	return &External{
+// New returns a new *Outcluster.
+func New(cs kubernetes.Interface, namespace, ingressClass string) *Outcluster {
+	return &Outcluster{
 		clientset:          cs,
 		namespace:          namespace,
 		ServiceController:  NewServicer(cs.CoreV1().Services(namespace)),
@@ -44,7 +44,7 @@ func New(cs kubernetes.Interface, namespace, ingressClass string) *External {
 //
 // The name of the Service comes from the URL the request is sent to and the
 // namespace is a daemon-wide configuration setting.
-func (e *External) CreateServiceHandler(c echo.Context) error {
+func (e *Outcluster) CreateServiceHandler(c echo.Context) error {
 	var (
 		service string
 		err     error
@@ -107,7 +107,7 @@ func (e *External) CreateServiceHandler(c echo.Context) error {
 //
 // The name of the Service comes from the URL the request is sent to and the
 // namespace is a daemon-wide configuration setting.
-func (e *External) UpdateServiceHandler(c echo.Context) error {
+func (e *Outcluster) UpdateServiceHandler(c echo.Context) error {
 
 	var (
 		service string
@@ -173,7 +173,7 @@ func (e *External) UpdateServiceHandler(c echo.Context) error {
 //	}
 //
 // The namespace of the Service comes from the daemon configuration setting.
-func (e *External) GetServiceHandler(c echo.Context) error {
+func (e *Outcluster) GetServiceHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	var service string = c.Param("name")
 	if service == "" {
@@ -203,7 +203,7 @@ func (e *External) GetServiceHandler(c echo.Context) error {
 //
 // Expects no body in the request and returns no body in the response. Returns
 // a 200 status if you try to delete a Service that doesn't exist.
-func (e *External) DeleteServiceHandler(c echo.Context) error {
+func (e *Outcluster) DeleteServiceHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	var service string = c.Param("name")
 	if service == "" {
@@ -231,7 +231,7 @@ func (e *External) DeleteServiceHandler(c echo.Context) error {
 //
 // The name of the Endpoint is derived from the URL the request was sent to and
 // the namespace comes from the daemon-wide configuration value.
-func (e *External) CreateEndpointHandler(c echo.Context) error {
+func (e *Outcluster) CreateEndpointHandler(c echo.Context) error {
 	var (
 		endpoint string
 		err      error
@@ -293,7 +293,7 @@ func (e *External) CreateEndpointHandler(c echo.Context) error {
 //
 // The name of the Endpoint is derived from the URL the request was sent to and
 // the namespace comes from the daemon-wide configuration value.
-func (e *External) UpdateEndpointHandler(c echo.Context) error {
+func (e *Outcluster) UpdateEndpointHandler(c echo.Context) error {
 	var err error
 	ctx := c.Request().Context()
 
@@ -356,7 +356,7 @@ func (e *External) UpdateEndpointHandler(c echo.Context) error {
 //
 // The name of the Endpoint is derived from the URL the request was sent to and
 // the namespace comes from the daemon-wide configuration value.
-func (e *External) GetEndpointHandler(c echo.Context) error {
+func (e *Outcluster) GetEndpointHandler(c echo.Context) error {
 	var (
 		endpoint string
 		err      error
@@ -391,7 +391,7 @@ func (e *External) GetEndpointHandler(c echo.Context) error {
 //
 // Expects no request body and returns no body in the response. Returns a 200
 // if you attempt to delete an Endpoints object that doesn't exist.
-func (e *External) DeleteEndpointHandler(c echo.Context) error {
+func (e *Outcluster) DeleteEndpointHandler(c echo.Context) error {
 	var endpoint string = c.Param("name")
 	if endpoint == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing endpoint name in the URL")
@@ -419,7 +419,7 @@ func (e *External) DeleteEndpointHandler(c echo.Context) error {
 //
 // The name of the Ingress is extracted from the URL that the request is sent to.
 // The namespace for the Ingress object comes from the daemon configuration setting.
-func (e *External) CreateIngressHandler(c echo.Context) error {
+func (e *Outcluster) CreateIngressHandler(c echo.Context) error {
 	var ingress string
 	var err error
 
@@ -479,7 +479,7 @@ func (e *External) CreateIngressHandler(c echo.Context) error {
 //
 // The name of the Ingress is extracted from the URL that the request is sent to.
 // The namespace for the Ingress object comes from the daemon configuration setting.
-func (e *External) UpdateIngressHandler(c echo.Context) error {
+func (e *Outcluster) UpdateIngressHandler(c echo.Context) error {
 	var (
 		ingress string
 		err     error
@@ -542,7 +542,7 @@ func (e *External) UpdateIngressHandler(c echo.Context) error {
 //		"service" : "The name of the Service that the Ingress is configured for, as a string.",
 //		"port" : The port of the Service that the Ingress is configured for, as an integer
 //	}
-func (e *External) GetIngressHandler(c echo.Context) error {
+func (e *Outcluster) GetIngressHandler(c echo.Context) error {
 	var (
 		ingress string
 		err     error
@@ -578,7 +578,7 @@ func (e *External) GetIngressHandler(c echo.Context) error {
 //
 // Expects no request body and returns no body in the response. Returns a 200
 // if you attempt to delete an Endpoints object that doesn't exist.
-func (e *External) DeleteIngressHandler(c echo.Context) error {
+func (e *Outcluster) DeleteIngressHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	var ingress string = c.Param("name")
 	if ingress == "" {

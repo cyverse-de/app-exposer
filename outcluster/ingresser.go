@@ -1,4 +1,4 @@
-package external
+package outcluster
 
 // Ingresser is a concrete implementation of IngressCrudder
 import (
