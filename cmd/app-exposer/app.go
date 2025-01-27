@@ -7,9 +7,9 @@ import (
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
-	"github.com/cyverse-de/app-exposer/external"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/instantlaunches"
+	"github.com/cyverse-de/app-exposer/outcluster"
 	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf"
 	"github.com/nats-io/nats.go"
@@ -25,7 +25,7 @@ import (
 // REST-like API with the underlying Kubernetes API. All of the HTTP handlers
 // are methods for an ExposerApp instance.
 type ExposerApp struct {
-	external        *external.External
+	outcluster      *outcluster.Outcluster
 	incluster       *incluster.Incluster
 	namespace       string
 	clientset       kubernetes.Interface
@@ -142,12 +142,12 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *Expos
 	}
 
 	app := &ExposerApp{
-		external:  external.New(init.ClientSet, init.Namespace, init.IngressClass),
-		incluster: incluster.New(inclusterInit, init.db, init.ClientSet, apps),
-		namespace: init.Namespace,
-		clientset: init.ClientSet,
-		router:    echo.New(),
-		db:        init.db,
+		outcluster: outcluster.New(init.ClientSet, init.Namespace, init.IngressClass),
+		incluster:  incluster.New(inclusterInit, init.db, init.ClientSet, apps),
+		namespace:  init.Namespace,
+		clientset:  init.ClientSet,
+		router:     echo.New(),
+		db:         init.db,
 	}
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
@@ -224,22 +224,22 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *Expos
 	viceanalyses.GET("/:analysis-id/external-id", app.incluster.AdminGetExternalIDHandler)
 
 	svc := app.router.Group("/service")
-	svc.POST("/:name", app.external.CreateServiceHandler)
-	svc.PUT("/:name", app.external.UpdateServiceHandler)
-	svc.GET("/:name", app.external.GetServiceHandler)
-	svc.DELETE("/:name", app.external.DeleteServiceHandler)
+	svc.POST("/:name", app.outcluster.CreateServiceHandler)
+	svc.PUT("/:name", app.outcluster.UpdateServiceHandler)
+	svc.GET("/:name", app.outcluster.GetServiceHandler)
+	svc.DELETE("/:name", app.outcluster.DeleteServiceHandler)
 
 	endpoint := app.router.Group("/endpoint")
-	endpoint.POST("/:name", app.external.CreateEndpointHandler)
-	endpoint.PUT("/:name", app.external.UpdateEndpointHandler)
-	endpoint.GET("/:name", app.external.GetEndpointHandler)
-	endpoint.DELETE("/:name", app.external.DeleteEndpointHandler)
+	endpoint.POST("/:name", app.outcluster.CreateEndpointHandler)
+	endpoint.PUT("/:name", app.outcluster.UpdateEndpointHandler)
+	endpoint.GET("/:name", app.outcluster.GetEndpointHandler)
+	endpoint.DELETE("/:name", app.outcluster.DeleteEndpointHandler)
 
 	ingress := app.router.Group("/ingress")
-	ingress.POST("/:name", app.external.CreateIngressHandler)
-	ingress.PUT("/:name", app.external.UpdateIngressHandler)
-	ingress.GET("/:name", app.external.GetIngressHandler)
-	ingress.DELETE("/:name", app.external.DeleteIngressHandler)
+	ingress.POST("/:name", app.outcluster.CreateIngressHandler)
+	ingress.PUT("/:name", app.outcluster.UpdateIngressHandler)
+	ingress.GET("/:name", app.outcluster.GetIngressHandler)
+	ingress.DELETE("/:name", app.outcluster.DeleteIngressHandler)
 
 	ilgroup := app.router.Group("/instantlaunches")
 	app.instantlaunches = instantlaunches.New(app.db, ilgroup, ilInit)
