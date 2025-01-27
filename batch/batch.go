@@ -519,7 +519,7 @@ func SubmitWorkflow(ctx context.Context, serviceClient workflowpkg.WorkflowServi
 	creationOptions := &metav1.CreateOptions{}
 
 	return serviceClient.CreateWorkflow(ctx, &workflowpkg.WorkflowCreateRequest{
-		Namespace:     workflow.GetNamespace(),
+		Namespace:     workflow.Namespace,
 		Workflow:      workflow,
 		ServerDryRun:  false,
 		CreateOptions: creationOptions,
@@ -528,11 +528,11 @@ func SubmitWorkflow(ctx context.Context, serviceClient workflowpkg.WorkflowServi
 
 // NewWorkflowServiceClient creates a WorkflowServiceClient that can be used to submit
 // a workflow to the cluster with SubmitWorkflow().
-func NewWorkflowServiceClient(ctx context.Context) (workflowpkg.WorkflowServiceClient, error) {
-	ctx, apiClient, err := client.NewAPIClient(ctx)
+func NewWorkflowServiceClient(c context.Context) (context.Context, workflowpkg.WorkflowServiceClient, error) {
+	ctx, apiClient, err := client.NewAPIClient(c)
 	if err != nil {
-		return nil, err
+		return c, nil, err
 	}
 	serviceClient := apiClient.NewWorkflowServiceClient()
-	return serviceClient, err
+	return ctx, serviceClient, err
 }

@@ -77,8 +77,7 @@ func main() {
 	}
 
 	if *doSubmit {
-		ctx := context.Background()
-		cl, err := batch.NewWorkflowServiceClient(ctx)
+		ctx, cl, err := batch.NewWorkflowServiceClient(context.Background())
 		if err != nil {
 			log.Fatal(err)
 		}
