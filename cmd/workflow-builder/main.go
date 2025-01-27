@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"log"
@@ -22,6 +23,8 @@ func main() {
 		transferLogLevel   = flag.String("transfer-log-level", "debug", "The log level of the output of the file transfer tool.")
 		statusSenderImage  = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
 		analysisID         = flag.String("analysis-id", "", "The unique identifier for the analysis.")
+		quiet              = flag.Bool("quiet", false, "Whether to turn off printing out the workflow.")
+		doSubmit           = flag.Bool("submit", false, "Whether to submit the workflow to the cluster.")
 		out                = flag.String("out", "", "The file the workflow will be written to.")
 	)
 
@@ -55,19 +58,32 @@ func main() {
 
 	workflow := batch.NewWorkflow(&inputJob, &opts)
 
-	var outfile *os.File
+	if !*quiet {
+		var outfile *os.File
 
-	if *out == "" {
-		outfile = os.Stdout
-	} else {
-		outfile, err := os.Create(*out)
+		if *out == "" {
+			outfile = os.Stdout
+		} else {
+			outfile, err := os.Create(*out)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer outfile.Close()
+		}
+
+		if err = yaml.NewEncoder(outfile).Encode(&workflow); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if *doSubmit {
+		ctx := context.Background()
+		cl, err := batch.NewWorkflowServiceClient(ctx)
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer outfile.Close()
-	}
-
-	if err = yaml.NewEncoder(outfile).Encode(&workflow); err != nil {
-		log.Fatal(err)
+		if _, err = batch.SubmitWorkflow(ctx, cl, workflow); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
