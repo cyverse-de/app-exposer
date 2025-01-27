@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/argoproj/argo-workflows/v3/cmd/argo/commands/client"
 	workflowpkg "github.com/argoproj/argo-workflows/v3/pkg/apiclient/workflow"
 	v1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/cyverse-de/model/v6"
@@ -512,6 +513,8 @@ func NewWorkflow(job *model.Job, opts *BatchSubmissionOpts) *v1alpha1.Workflow {
 	return &workflow
 }
 
+// SubmitWorkflow submits a workflow (probably created by GenerateWorkflow()) to the cluster.
+// It does not wait for the workflow to complete.
 func SubmitWorkflow(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, workflow *v1alpha1.Workflow) (*v1alpha1.Workflow, error) {
 	creationOptions := &metav1.CreateOptions{}
 
@@ -521,4 +524,15 @@ func SubmitWorkflow(ctx context.Context, serviceClient workflowpkg.WorkflowServi
 		ServerDryRun:  false,
 		CreateOptions: creationOptions,
 	})
+}
+
+// NewWorkflowServiceClient creates a WorkflowServiceClient that can be used to submit
+// a workflow to the cluster with SubmitWorkflow().
+func NewWorkflowServiceClient(ctx context.Context) (workflowpkg.WorkflowServiceClient, error) {
+	ctx, apiClient, err := client.NewAPIClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	serviceClient := apiClient.NewWorkflowServiceClient()
+	return serviceClient, err
 }
