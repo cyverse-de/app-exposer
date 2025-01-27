@@ -70,6 +70,7 @@ func stepTemplates(job *model.Job) []v1alpha1.Template {
 	return templates
 }
 
+// sendStatusStep generates a workflow step to send a status message to the DE.
 func sendStatusStep(name, message, state string) *v1alpha1.WorkflowStep {
 	return &v1alpha1.WorkflowStep{
 		Name:     name,
@@ -89,6 +90,8 @@ func sendStatusStep(name, message, state string) *v1alpha1.WorkflowStep {
 	}
 }
 
+// runStepsTemplates generates a list of templates that orchestrate the logic
+// of a workflow.
 func runStepsTemplates(job *model.Job) []v1alpha1.Template {
 	// We generate a sequence of parallel steps consisting of single steps to
 	// force the steps to run in sequence. Looks nicer in YAML than it does in
@@ -217,6 +220,8 @@ func exitHandlerTemplate() *v1alpha1.Template {
 	}
 }
 
+// sendStatusTemplate returns the template definition for the steps that send
+// status updates to the DE backend.
 func sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	return &v1alpha1.Template{
 		Name: "send-status",
@@ -253,6 +258,8 @@ func sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	}
 }
 
+// downloadFilesTemplate returns a template definition for the steps that
+// download files from the data store into the working directory volume.
 func downloadFilesTemplate(job *model.Job, opts *BatchSubmissionOpts) *v1alpha1.Template {
 	var inputFilesAndFolders []string
 
@@ -345,6 +352,8 @@ func downloadFilesTemplate(job *model.Job, opts *BatchSubmissionOpts) *v1alpha1.
 	}
 }
 
+// uploadFilesTemplate returns a template used for the steps that uploads
+// files to the data store.
 func uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	return &v1alpha1.Template{
 		Name: "upload-files",
@@ -429,6 +438,8 @@ func uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	}
 }
 
+// NewWorkflow returns a defintion of a workflow that executes a DE batch
+// analyis. It does not submit the workflow to the cluster.
 func NewWorkflow(job *model.Job, opts *BatchSubmissionOpts) *v1alpha1.Workflow {
 	var workflowTemplates []v1alpha1.Template
 	workflowTemplates = append(workflowTemplates, runStepsTemplates(job)...)
