@@ -447,7 +447,6 @@ func uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 func NewWorkflow(job *model.Job, opts *BatchSubmissionOpts) *v1alpha1.Workflow {
 	var workflowTemplates []v1alpha1.Template
 	workflowTemplates = append(workflowTemplates, runStepsTemplates(job)...)
-	workflowTemplates = append(workflowTemplates, stepTemplates(job)...)
 	workflowTemplates = append(
 		workflowTemplates,
 		*exitHandlerTemplate(),
