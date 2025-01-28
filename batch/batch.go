@@ -35,40 +35,30 @@ func stepTemplates(job *model.Job) []v1alpha1.Template {
 	var templates []v1alpha1.Template
 
 	for idx, step := range job.Steps {
-		allArgs := step.Arguments()
-		var cmd []string
-		var args []string
-
-		if len(allArgs) > 0 {
-			cmd = []string{allArgs[0]}
-
-			if len(allArgs) > 1 {
-				args = allArgs[1:]
-			}
-		}
-
-		templates = append(
-			templates,
-			v1alpha1.Template{
-				Name: fmt.Sprintf("step-%d", idx),
-				Container: &apiv1.Container{
-					Image: fmt.Sprintf(
-						"%s:%s",
-						step.Component.Container.Image.Name,
-						step.Component.Container.Image.Tag,
-					),
-					Command:    cmd,
-					Args:       args,
-					WorkingDir: step.Component.Container.WorkingDirectory(),
-					VolumeMounts: []apiv1.VolumeMount{
-						{
-							Name:      "workdir",
-							MountPath: step.Component.Container.WorkingDirectory(),
-						},
+		stTmpl := v1alpha1.Template{
+			Name: fmt.Sprintf("step-%d", idx),
+			Container: &apiv1.Container{
+				Image: fmt.Sprintf(
+					"%s:%s",
+					step.Component.Container.Image.Name,
+					step.Component.Container.Image.Tag,
+				),
+				Args:       step.Arguments(),
+				WorkingDir: step.Component.Container.WorkingDirectory(),
+				VolumeMounts: []apiv1.VolumeMount{
+					{
+						Name:      "workdir",
+						MountPath: step.Component.Container.WorkingDirectory(),
 					},
 				},
 			},
-		)
+		}
+
+		if step.Component.Container.EntryPoint != "" {
+			stTmpl.Container.Command = []string{step.Component.Container.EntryPoint}
+		}
+
+		templates = append(templates, stTmpl)
 	}
 
 	return templates
