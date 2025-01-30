@@ -103,6 +103,21 @@ func (i *Internal) deploymentVolumes(job *model.Job) []apiv1.Volume {
 		},
 	)
 
+	shmSize := sharedMemoryAmount(job)
+	if shmSize != nil {
+		output = append(output,
+			apiv1.Volume{
+				Name: sharedMemoryVolumeName,
+				VolumeSource: apiv1.VolumeSource{
+					EmptyDir: &apiv1.EmptyDirVolumeSource{
+						Medium:    "Memory",
+						SizeLimit: shmSize,
+					},
+				},
+			},
+		)
+	}
+
 	return output
 }
 
@@ -361,6 +376,22 @@ func gpuEnabled(job *model.Job) bool {
 	return gpuEnabled
 }
 
+func sharedMemoryAmount(job *model.Job) *resourcev1.Quantity {
+	var shmAmount resourcev1.Quantity
+	var err error
+	for _, device := range job.Steps[0].Component.Container.Devices {
+		if strings.HasPrefix(strings.ToLower(device.HostPath), shmDevice) {
+			shmAmount, err = resourcev1.ParseQuantity(device.ContainerPath)
+			if err != nil {
+				log.Warn(err)
+				return nil
+			}
+			return &shmAmount
+		}
+	}
+	return nil
+}
+
 func (i *Internal) defineAnalysisContainer(job *model.Job) apiv1.Container {
 	analysisEnvironment := []apiv1.EnvVar{}
 	for envKey, envVal := range job.Steps[0].Environment {
@@ -432,6 +463,13 @@ func (i *Internal) defineAnalysisContainer(job *model.Job) apiv1.Container {
 		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
 			Name:      fileTransfersVolumeName,
 			MountPath: workingDirMountPath(job),
+			ReadOnly:  false,
+		})
+	}
+	if sharedMemoryAmount(job) != nil {
+		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
+			Name:      sharedMemoryVolumeName,
+			MountPath: shmDevice,
 			ReadOnly:  false,
 		})
 	}
