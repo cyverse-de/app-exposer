@@ -380,7 +380,7 @@ func sharedMemoryAmount(job *model.Job) *resourcev1.Quantity {
 	var shmAmount resourcev1.Quantity
 	var err error
 	for _, device := range job.Steps[0].Component.Container.Devices {
-		if strings.HasPrefix(strings.ToLower(device.HostPath), "/dev/shm") {
+		if strings.HasPrefix(strings.ToLower(device.HostPath), shmDevice) {
 			shmAmount, err = resourcev1.ParseQuantity(device.ContainerPath)
 			if err != nil {
 				log.Warn(err)
@@ -469,7 +469,7 @@ func (i *Internal) defineAnalysisContainer(job *model.Job) apiv1.Container {
 	if sharedMemoryAmount(job) != nil {
 		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
 			Name:      sharedMemoryVolumeName,
-			MountPath: "/dev/shm",
+			MountPath: shmDevice,
 			ReadOnly:  false,
 		})
 	}

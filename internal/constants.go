@@ -71,6 +71,8 @@ const (
 	gpuAffinityValue    = "true"
 
 	userSuffix = "@iplantcollaborative.org"
+
+	shmDevice = "/dev/shm"
 )
 
 func int32Ptr(i int32) *int32 { return &i }
