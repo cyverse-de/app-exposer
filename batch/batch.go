@@ -395,6 +395,7 @@ func uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 				fmt.Sprintf("--log_level=%s", opts.FileTransferLogLevel),
 				"put",
 				"-f",
+				"--no_root",
 				".",
 				"{{workflow.parameters.output-folder}}",
 			},
