@@ -3,6 +3,7 @@ package batch
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/argoproj/argo-workflows/v3/cmd/argo/commands/client"
 	workflowpkg "github.com/argoproj/argo-workflows/v3/pkg/apiclient/workflow"
@@ -35,27 +36,57 @@ func stepTemplates(job *model.Job) []v1alpha1.Template {
 	var templates []v1alpha1.Template
 
 	for idx, step := range job.Steps {
+		var (
+			sourceParts []string
+			source      string
+		)
+
+		// If there's an entrypoint defined, it needs to be the command in the script.
+		if step.Component.Container.EntryPoint != "" {
+			sourceParts = append(sourceParts, step.Component.Container.EntryPoint)
+		}
+
+		// Add the arguments to the source. If may include the tool
+		// executable, it may already have been added to the source as the
+		// entrypoint.
+		sourceParts = append(sourceParts, step.Arguments()...)
+
+		// If the StdoutPath is not empty, then stdout of the command needs to go to
+		// a named file.
+		if step.StdoutPath != "" {
+			sourceParts = append(sourceParts, fmt.Sprintf("> %s", step.StdoutPath))
+		}
+
+		// If the StderrPath is not empty, then stderr of the command needs to go to
+		// a named file.
+		if step.StderrPath != "" {
+			sourceParts = append(sourceParts, fmt.Sprintf("2> %s", step.StderrPath))
+		}
+
+		// Assemble the source string for the script template.
+		source = strings.Join(sourceParts, " ")
+
 		stTmpl := v1alpha1.Template{
 			Name: fmt.Sprintf("step-%d", idx),
-			Container: &apiv1.Container{
-				Image: fmt.Sprintf(
-					"%s:%s",
-					step.Component.Container.Image.Name,
-					step.Component.Container.Image.Tag,
-				),
-				Args:       step.Arguments(),
-				WorkingDir: step.Component.Container.WorkingDirectory(),
-				VolumeMounts: []apiv1.VolumeMount{
-					{
-						Name:      "workdir",
-						MountPath: step.Component.Container.WorkingDirectory(),
+			Script: &v1alpha1.ScriptTemplate{
+				Source: source,
+				Container: apiv1.Container{
+					Image: fmt.Sprintf(
+						"%s:%s",
+						step.Component.Container.Image.Name,
+						step.Component.Container.Image.Tag,
+					),
+
+					Command:    []string{"bash"},
+					WorkingDir: step.Component.Container.WorkingDirectory(),
+					VolumeMounts: []apiv1.VolumeMount{
+						{
+							Name:      "workdir",
+							MountPath: step.Component.Container.WorkingDirectory(),
+						},
 					},
 				},
 			},
-		}
-
-		if step.Component.Container.EntryPoint != "" {
-			stTmpl.Container.Command = []string{step.Component.Container.EntryPoint}
 		}
 
 		templates = append(templates, stTmpl)

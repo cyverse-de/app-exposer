@@ -129,10 +129,11 @@ spec:
             mountPath: /de-app-work
 
     - name: tool-0
-      container:
+      script:
         image: harbor.cyverse.org/de/url-import:latest
-        command: ["/bin/bash", "-c"]
-        args: ["wc configMapServices.yaml > wc.out"]
+        command: ["bash"]
+        source: |
+          wc configMapServices.yaml > wc.out
         workingDir: /de-app-work
         volumeMounts:
           - name: workdir
