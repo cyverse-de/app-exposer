@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cyverse-de/jex-adapter/db"
-	"github.com/cyverse-de/jex-adapter/millicores"
+	"github.com/cyverse-de/app-exposer/db"
+	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/model/v6"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
@@ -45,7 +45,7 @@ func initTestAdapter(t *testing.T) (*JEXAdapter, sqlmock.Sqlmock) {
 		var err error
 		var mockconn *sql.DB
 		cfg := getTestConfig()
-		msger := &TestMessenger{}
+
 		mockconn, mock, err = sqlmock.New()
 		if err != nil {
 			t.Fatalf("error opening mocked database connection: %s", err)
@@ -56,7 +56,7 @@ func initTestAdapter(t *testing.T) (*JEXAdapter, sqlmock.Sqlmock) {
 		if err != nil {
 			t.Fatalf(err.Error())
 		}
-		a = New(cfg, detector, msger)
+		a = New(cfg, detector)
 	}
 	return a, mock
 }

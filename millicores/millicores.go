@@ -4,13 +4,13 @@ import (
 	"context"
 
 	"github.com/cockroachdb/apd"
-	"github.com/cyverse-de/jex-adapter/db"
-	"github.com/cyverse-de/jex-adapter/logging"
+	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/db"
 	"github.com/cyverse-de/model/v6"
 	"github.com/sirupsen/logrus"
 )
 
-var log = logging.Log.WithFields(logrus.Fields{"package": "millicores"})
+var log = common.Log
 
 type Detector struct {
 	defaultNumber *apd.Decimal

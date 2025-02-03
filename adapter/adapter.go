@@ -2,9 +2,7 @@ package adapter
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 
@@ -12,143 +10,17 @@ import (
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/app-exposer/types"
-	"github.com/cyverse-de/go-mod/gotelnats"
-	"github.com/cyverse-de/go-mod/pbinit"
-	"github.com/cyverse-de/messaging/v9"
 	"github.com/cyverse-de/model/v6"
-	"github.com/cyverse-de/p/go/qms"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"github.com/streadway/amqp"
 	"go.opentelemetry.io/otel"
 )
 
 var log = common.Log
 
-const otelName = "github.com/cyverse-de/jex-adapter/adapter"
-
-type Messenger interface {
-	Launch(context context.Context, job *model.Job) error
-	Stop(context context.Context, id string) error
-}
-
-func amqpError(err error) {
-	amqpErr, ok := err.(*amqp.Error)
-	if !ok || amqpErr.Code != 0 {
-		log.Fatal(err)
-	}
-}
-
-type AMQPMessenger struct {
-	exchange string
-	client   *messaging.Client
-	natsConn *nats.EncodedConn
-}
-
-func NewAMQPMessenger(exchange string, client *messaging.Client, natsConn *nats.EncodedConn) *AMQPMessenger {
-	return &AMQPMessenger{
-		exchange: exchange,
-		client:   client,
-		natsConn: natsConn,
-	}
-}
-
-func (a *AMQPMessenger) Stop(context context.Context, id string) error {
-	err := a.client.SendStopRequestContext(context, id, "root", "because I said to")
-	if err != nil {
-		amqpError(err)
-	}
-	return err
-}
-
-func (a *AMQPMessenger) getResourceOveragesForUser(ctx context.Context, username string) (*qms.OverageList, error) {
-	var err error
-
-	subject := "cyverse.qms.user.overages.get"
-
-	req := &qms.AllUserOveragesRequest{
-		Username: username,
-	}
-
-	_, span := pbinit.InitAllUserOveragesRequest(req, subject)
-	defer span.End()
-
-	resp := pbinit.NewOverageList()
-
-	if err = gotelnats.Request(ctx, a.natsConn, subject, req, resp); err != nil {
-		return nil, err
-	}
-
-	return resp, nil
-}
-
-func (a *AMQPMessenger) validateLaunch(ctx context.Context, job *model.Job) error {
-	overages, err := a.getResourceOveragesForUser(ctx, job.Submitter)
-	if err != nil {
-		return err
-	}
-
-	if overages != nil && len(overages.Overages) != 0 {
-		var inOverage bool
-
-		for _, ov := range overages.Overages {
-			if ov.Usage >= ov.Quota && ov.ResourceName == "cpu.hours" {
-				inOverage = true
-			}
-		}
-
-		if inOverage {
-			return fmt.Errorf("%s has resource overages", job.Submitter)
-		}
-	}
-
-	return nil
-}
-
-func (a *AMQPMessenger) Launch(context context.Context, job *model.Job) error {
-	var (
-		err        error
-		launchJSON []byte
-	)
-
-	ctx, span := otel.Tracer(otelName).Start(context, "Launch")
-	defer span.End()
-
-	if err = a.validateLaunch(ctx, job); err != nil {
-		amqpError(err)
-		return err
-	}
-
-	// This is included just for the side effect of creating the stop
-	// queue before the job launches, otherwise some stop requests can be missed.
-	s, err := a.client.CreateQueue(
-		messaging.StopQueueName(job.InvocationID),
-		a.exchange,
-		messaging.StopRequestKey(job.InvocationID),
-		false,
-		true,
-	)
-	if err != nil {
-		amqpError(err)
-		s.Close()
-		return err
-	}
-	defer s.Close()
-
-	if launchJSON, err = json.Marshal(messaging.NewLaunchRequest(job)); err != nil {
-		return err
-	}
-
-	if err = a.client.PublishContext(ctx, messaging.LaunchesKey, launchJSON); err != nil {
-		amqpError(err)
-		return err
-	}
-
-	return nil
-}
+const otelName = "github.com/cyverse-de/app-exposer/adapter"
 
 type millicoresJob struct {
 	ID                 uuid.UUID
@@ -158,25 +30,23 @@ type millicoresJob struct {
 
 // JEXAdapter contains the application state for jex-adapter.
 type JEXAdapter struct {
-	cfg       *viper.Viper
-	detector  *millicores.Detector
-	messenger Messenger
-	jobs      map[string]bool
-	addJob    chan millicoresJob
-	jobDone   chan uuid.UUID
-	exit      chan bool
+	cfg      *viper.Viper
+	detector *millicores.Detector
+	jobs     map[string]bool
+	addJob   chan millicoresJob
+	jobDone  chan uuid.UUID
+	exit     chan bool
 }
 
 // New returns a *JEXAdapter
-func New(cfg *viper.Viper, detector *millicores.Detector, messenger Messenger) *JEXAdapter {
+func New(cfg *viper.Viper, detector *millicores.Detector) *JEXAdapter {
 	return &JEXAdapter{
-		cfg:       cfg,
-		messenger: messenger,
-		detector:  detector,
-		addJob:    make(chan millicoresJob),
-		jobDone:   make(chan uuid.UUID),
-		exit:      make(chan bool),
-		jobs:      map[string]bool{},
+		cfg:      cfg,
+		detector: detector,
+		addJob:   make(chan millicoresJob),
+		jobDone:  make(chan uuid.UUID),
+		exit:     make(chan bool),
+		jobs:     map[string]bool{},
 	}
 }
 
@@ -249,8 +119,6 @@ func (j *JEXAdapter) HomeHandler(c echo.Context) error {
 func (j *JEXAdapter) StopHandler(c echo.Context) error {
 	var err error
 
-	context := c.Request().Context()
-
 	log := log.WithFields(logrus.Fields{"context": "stop app"})
 
 	invID := c.Param("invocation_id")
@@ -262,13 +130,7 @@ func (j *JEXAdapter) StopHandler(c echo.Context) error {
 
 	log = log.WithFields(logrus.Fields{"external_id": invID})
 
-	log.Debug("starting sending stop message")
-	err = j.messenger.Stop(context, invID)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	log.Debug("Done sending stop message")
+	// TODO: Add stop logic
 
 	log.Info("sent stop message")
 
@@ -277,7 +139,6 @@ func (j *JEXAdapter) StopHandler(c echo.Context) error {
 
 func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	request := c.Request()
-	context := request.Context()
 
 	log := log.WithFields(logrus.Fields{"context": "app launch"})
 
@@ -299,12 +160,7 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 
 	log = log.WithFields(logrus.Fields{"external_id": job.InvocationID})
 
-	log.Debug("sending launch message")
-	if err = j.messenger.Launch(context, job); err != nil {
-		log.Error(err)
-		return err
-	}
-	log.Debug("done sending launch message")
+	// TODO: Do launch logic
 
 	log.Debug("finding number of millicores reserved")
 	millicoresReserved, err := j.detector.NumberReserved(job)
