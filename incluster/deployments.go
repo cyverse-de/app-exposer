@@ -399,7 +399,6 @@ func sharedMemoryAmount(job *model.Job) *resourcev1.Quantity {
 }
 
 func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
->>>>>>> 5722b99 (Rename internal to incluster):incluster/deployments.go
 	analysisEnvironment := []apiv1.EnvVar{}
 	for envKey, envVal := range job.Steps[0].Environment {
 		analysisEnvironment = append(

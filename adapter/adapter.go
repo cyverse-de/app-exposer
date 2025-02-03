@@ -9,11 +9,11 @@ import (
 	"net/http"
 
 	"github.com/cockroachdb/apd"
+	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/millicores"
+	"github.com/cyverse-de/app-exposer/types"
 	"github.com/cyverse-de/go-mod/gotelnats"
 	"github.com/cyverse-de/go-mod/pbinit"
-	"github.com/cyverse-de/jex-adapter/logging"
-	"github.com/cyverse-de/jex-adapter/millicores"
-	"github.com/cyverse-de/jex-adapter/types"
 	"github.com/cyverse-de/messaging/v9"
 	"github.com/cyverse-de/model/v6"
 	"github.com/cyverse-de/p/go/qms"
@@ -26,7 +26,7 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-var log = logging.Log.WithFields(logrus.Fields{"package": "adapter"})
+var log = common.Log
 
 const otelName = "github.com/cyverse-de/jex-adapter/adapter"
 
