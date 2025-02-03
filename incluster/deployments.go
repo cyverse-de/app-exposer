@@ -392,7 +392,7 @@ func sharedMemoryAmount(job *model.Job) *resourcev1.Quantity {
 	return nil
 }
 
-func (i *Internal) defineAnalysisContainer(job *model.Job) apiv1.Container {
+func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 	analysisEnvironment := []apiv1.EnvVar{}
 	for envKey, envVal := range job.Steps[0].Environment {
 		analysisEnvironment = append(
