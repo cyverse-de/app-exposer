@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"github.com/cockroachdb/apd"
-	"github.com/cyverse-de/jex-adapter/logging"
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
 )
 
-var log = logging.Log.WithFields(logrus.Fields{"package": "db"})
+var log = common.Log
 
 const otelName = "github.com/cyverse-de/jex-adapter/db"
 
@@ -46,7 +46,7 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 	log = log.WithFields(logrus.Fields{"context": "set millicores reserved", "externalID": externalID, "millicoresReserved": millicoresReserved.String()})
 
 	const stmt = `
-		UPDATE jobs 
+		UPDATE jobs
 		SET millicores_reserved = $2
 		WHERE jobs.id = $1
 	`
