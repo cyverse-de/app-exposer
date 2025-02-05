@@ -9,18 +9,19 @@ import (
 	"testing"
 
 	"github.com/cyverse-de/app-exposer/db"
+	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
-	"github.com/cyverse-de/model/v6"
+	"github.com/cyverse-de/model/v7"
 	"github.com/jmoiron/sqlx"
+	"github.com/knadh/koanf"
 	"github.com/labstack/echo/v4"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/DATA-DOG/go-sqlmock"
 )
 
-func getTestConfig() *viper.Viper {
-	cfg := viper.New()
+func getTestConfig() *koanf.Koanf {
+	cfg := koanf.New(".")
 	cfg.Set("condor.log_path", "/tmp/")
 	cfg.Set("condor.filter_files", "output-last-stderr")
 	cfg.Set("irods.base", "/iplant/home")
@@ -56,14 +57,16 @@ func initTestAdapter(t *testing.T) (*JEXAdapter, sqlmock.Sqlmock) {
 		if err != nil {
 			t.Fatalf(err.Error())
 		}
-		a = New(cfg, detector)
+		getter, err := imageinfo.NewHarborInfoGetter("https://harbor.cyverse.org/api/v2.0", "", "")
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		a = New(cfg, detector, getter)
 	}
 	return a, mock
 }
 func TestHomeHandler(t *testing.T) {
 	a, _ := initTestAdapter(t)
-	go a.Run()
-	defer a.Finish()
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -78,8 +81,6 @@ func TestHomeHandler(t *testing.T) {
 
 func TestStopAdapter(t *testing.T) {
 	a, _ := initTestAdapter(t)
-	go a.Run()
-	defer a.Finish()
 
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rec := httptest.NewRecorder()
@@ -97,8 +98,6 @@ func TestStopAdapter(t *testing.T) {
 
 func TestLaunchHandler(t *testing.T) {
 	a, _ := initTestAdapter(t)
-	go a.Run()
-	defer a.Finish()
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(testCondorLaunchJSON))
 	rec := httptest.NewRecorder()
@@ -113,8 +112,6 @@ func TestLaunchHandler(t *testing.T) {
 
 func TestCondorLaunchDefaultMillicores(t *testing.T) {
 	a, _ := initTestAdapter(t)
-	go a.Run()
-	defer a.Finish()
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(testCondorCustomLaunchJSON))
 	rec := httptest.NewRecorder()
