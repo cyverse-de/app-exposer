@@ -145,6 +145,31 @@ func main() {
 		log.Fatal("The iRODS zone must be specified in the config file")
 	}
 
+	harborFQDN := c.String("harbor.fqdn")
+	if harborFQDN == "" {
+		log.Fatal("The harbor.fqdn setting must be specified in the config file")
+	}
+
+	harborUser := c.String("harbor.user")
+	if harborUser == "" {
+		log.Fatal("The harbor.user setting must be specified in the config file")
+	}
+
+	harborPass := c.String("harbor.pass")
+	if harborPass == "" {
+		log.Fatal("The harbor.pass setting must be specified in the config file")
+	}
+
+	// imageInfoHost := fmt.Sprintf("https://%s", harborFQDN)
+	// imageInfo, err := imageinfo.NewHarborInfoGetter(
+	// 	imageInfoHost,
+	// 	harborUser,
+	// 	harborPass,
+	// )
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
 	natsCluster := c.String("nats.cluster")
 	if natsCluster == "" {
 		log.Fatalf("The %s_NATS_CLUSTER environment variable or nats.cluster configuration value must be set", *envPrefix)

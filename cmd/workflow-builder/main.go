@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/cyverse-de/app-exposer/batch"
+	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/model/v6"
 	"gopkg.in/yaml.v3"
 )
@@ -26,6 +27,10 @@ func main() {
 		quiet              = flag.Bool("quiet", false, "Whether to turn off printing out the workflow.")
 		doSubmit           = flag.Bool("submit", false, "Whether to submit the workflow to the cluster.")
 		out                = flag.String("out", "", "The file the workflow will be written to.")
+		harborURL          = flag.String("harbor-url", "https://harbor.cyverse.org/api/v2.0/", "The base URL for the harbor instance")
+		harborProject      = flag.String("harbor-project", "de", "The project to look up images in.")
+		harborUser         = flag.String("harbor-user", "", "The user for harbor lookups.")
+		harborPass         = flag.String("harbor-pass", "", "The password for the harbor user.")
 	)
 
 	flag.Parse()
@@ -36,6 +41,19 @@ func main() {
 
 	if *analysisID == "" {
 		log.Fatal("--analysis-id must be set.")
+	}
+
+	if *harborUser == "" {
+		log.Fatal("--harbor-user must be set.")
+	}
+
+	if *harborPass == "" {
+		log.Fatal("--harbor-pass must be set")
+	}
+
+	infoGetter, err := imageinfo.NewHarborInfoGetter(*harborURL, *harborUser, *harborPass)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	infile, err := os.Open(*job)
@@ -56,7 +74,8 @@ func main() {
 		AnalysisID:             *analysisID,
 	}
 
-	workflow := batch.NewWorkflow(&inputJob, &opts)
+	maker := batch.NewWorkflowMaker(*harborProject, infoGetter, &inputJob)
+	workflow := maker.NewWorkflow(&opts)
 
 	if !*quiet {
 		var outfile *os.File

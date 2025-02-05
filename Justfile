@@ -8,6 +8,11 @@ app-exposer:
 workflow-builder:
     go build -o bin/workflow-builder cmd/workflow-builder/*.go
 
+test-imageinfo:
+    go test ./imageinfo
+
+test: test-imageinfo
+
 clean:
     #!/usr/bin/env bash
     go clean

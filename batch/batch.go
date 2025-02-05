@@ -3,11 +3,13 @@ package batch
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/argoproj/argo-workflows/v3/cmd/argo/commands/client"
 	workflowpkg "github.com/argoproj/argo-workflows/v3/pkg/apiclient/workflow"
 	v1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
+	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/model/v6"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
@@ -30,12 +32,27 @@ type BatchSubmissionOpts struct {
 	AnalysisID             string
 }
 
+type WorkflowMaker struct {
+	project string
+	getter  imageinfo.InfoGetter
+	job     *model.Job
+}
+
+// NewWorkflowMaker creates a new instance of WorkflowMaker
+func NewWorkflowMaker(project string, getter imageinfo.InfoGetter, job *model.Job) *WorkflowMaker {
+	return &WorkflowMaker{
+		project: project,
+		getter:  getter,
+		job:     job,
+	}
+}
+
 // stepTemplates creates a list of templates based on the steps
 // defined in the job description.
-func stepTemplates(job *model.Job) []v1alpha1.Template {
+func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 	var templates []v1alpha1.Template
 
-	for idx, step := range job.Steps {
+	for idx, step := range w.job.Steps {
 		var (
 			sourceParts []string
 			source      string
@@ -44,6 +61,29 @@ func stepTemplates(job *model.Job) []v1alpha1.Template {
 		// If there's an entrypoint defined, it needs to be the command in the script.
 		if step.Component.Container.EntryPoint != "" {
 			sourceParts = append(sourceParts, step.Component.Container.EntryPoint)
+		} else {
+			// It's possible that the integrator didn't bother to include the entrypoint
+			// in the definition, causing us to depend on the entrypoint defined in the
+			// image. We need to get the entrypoint in the image (if it exists), so that
+			// we can include it in the generated script that the image will run.
+			if w.getter.IsInRepo(step.Component.Container.Image.Name) {
+				project, image, _, err := w.getter.RepoParts(step.Component.Container.Image.Name)
+				if err != nil {
+					return nil, err
+				}
+
+				harborInfo, err := w.getter.GetInfo(project, image, step.Component.Container.Image.Tag)
+				if err != nil {
+					log.Println(err)
+					return nil, err
+				}
+
+				log.Printf("%+v\n", harborInfo)
+
+				if strings.TrimSpace(harborInfo.Entrypoint) != "" {
+					sourceParts = append(sourceParts, harborInfo.Entrypoint)
+				}
+			}
 		}
 
 		// Add the arguments to the source. If may include the tool
@@ -92,11 +132,11 @@ func stepTemplates(job *model.Job) []v1alpha1.Template {
 		templates = append(templates, stTmpl)
 	}
 
-	return templates
+	return templates, nil
 }
 
 // sendStatusStep generates a workflow step to send a status message to the DE.
-func sendStatusStep(name, message, state string) *v1alpha1.WorkflowStep {
+func (w *WorkflowMaker) sendStatusStep(name, message, state string) *v1alpha1.WorkflowStep {
 	return &v1alpha1.WorkflowStep{
 		Name:     name,
 		Template: "send-status",
@@ -117,20 +157,23 @@ func sendStatusStep(name, message, state string) *v1alpha1.WorkflowStep {
 
 // runStepsTemplates generates a list of templates that orchestrate the logic
 // of a workflow.
-func runStepsTemplates(job *model.Job) []v1alpha1.Template {
+func (w *WorkflowMaker) runStepsTemplates() ([]v1alpha1.Template, error) {
 	// We generate a sequence of parallel steps consisting of single steps to
 	// force the steps to run in sequence. Looks nicer in YAML than it does in
 	// in code form.
 	var templates []v1alpha1.Template
 	var runSteps []v1alpha1.ParallelSteps
 
-	stepTemplates := stepTemplates(job)
+	stepTemplates, err := w.stepTemplates()
+	if err != nil {
+		return templates, err
+	}
 
 	runSteps = append(
 		runSteps,
 		v1alpha1.ParallelSteps{
 			Steps: []v1alpha1.WorkflowStep{
-				*sendStatusStep("downloading-files-status", "downloading files", "running"),
+				*w.sendStatusStep("downloading-files-status", "downloading files", "running"),
 			},
 		},
 		v1alpha1.ParallelSteps{
@@ -143,7 +186,7 @@ func runStepsTemplates(job *model.Job) []v1alpha1.Template {
 		},
 		v1alpha1.ParallelSteps{
 			Steps: []v1alpha1.WorkflowStep{
-				*sendStatusStep("done-downloading", "done downloading inputs", "running"),
+				*w.sendStatusStep("done-downloading", "done downloading inputs", "running"),
 			},
 		},
 	)
@@ -158,7 +201,7 @@ func runStepsTemplates(job *model.Job) []v1alpha1.Template {
 		runSteps = append(runSteps,
 			v1alpha1.ParallelSteps{
 				Steps: []v1alpha1.WorkflowStep{
-					*sendStatusStep(runningName, runningMsg, statusRunning),
+					*w.sendStatusStep(runningName, runningMsg, statusRunning),
 				},
 			},
 			v1alpha1.ParallelSteps{
@@ -171,7 +214,7 @@ func runStepsTemplates(job *model.Job) []v1alpha1.Template {
 			},
 			v1alpha1.ParallelSteps{
 				Steps: []v1alpha1.WorkflowStep{
-					*sendStatusStep(doneRunningName, doneRunningMsg, statusRunning),
+					*w.sendStatusStep(doneRunningName, doneRunningMsg, statusRunning),
 				},
 			},
 		)
@@ -184,12 +227,12 @@ func runStepsTemplates(job *model.Job) []v1alpha1.Template {
 
 	templates = append(templates, stepTemplates...)
 
-	return templates
+	return templates, nil
 }
 
 // exitHandlerTemplate returns the template definition for the
 // steps taken when the workflow exits.
-func exitHandlerTemplate() *v1alpha1.Template {
+func (w *WorkflowMaker) exitHandlerTemplate() *v1alpha1.Template {
 	return &v1alpha1.Template{
 		Name: "analysis-exit-handler",
 		Steps: []v1alpha1.ParallelSteps{
@@ -247,7 +290,7 @@ func exitHandlerTemplate() *v1alpha1.Template {
 
 // sendStatusTemplate returns the template definition for the steps that send
 // status updates to the DE backend.
-func sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
+func (w *WorkflowMaker) sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	return &v1alpha1.Template{
 		Name: "send-status",
 		Inputs: v1alpha1.Inputs{
@@ -271,12 +314,12 @@ func sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 				"Content-Type: application/json",
 				"-d",
 				`{
-                    			"job_uuid" : "{{workflow.parameters.job_uuid}}",
-                       			"analysis_uuid" : "{{workflow.parameters.analysis_uuid}}",
-                          		"hostname" : "test",
-                            	"message": "{{inputs.parameters.message}}",
-                             	"state" : "{{inputs.parameters.state}}"
-            				}`,
+				    "job_uuid" : "{{workflow.parameters.job_uuid}}",
+					"analysis_uuid" : "{{workflow.parameters.analysis_uuid}}",
+     				"hostname" : "test",
+         			"message": "{{inputs.parameters.message}}",
+            		"state" : "{{inputs.parameters.state}}"
+     			}`,
 				"http://webhook-eventsource-svc.argo-events/batch",
 			},
 		},
@@ -285,10 +328,10 @@ func sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 
 // downloadFilesTemplate returns a template definition for the steps that
 // download files from the data store into the working directory volume.
-func downloadFilesTemplate(job *model.Job, opts *BatchSubmissionOpts) *v1alpha1.Template {
+func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	var inputFilesAndFolders []string
 
-	for _, stepInput := range job.Inputs() {
+	for _, stepInput := range w.job.Inputs() {
 		inputFilesAndFolders = append(
 			inputFilesAndFolders,
 			stepInput.IRODSPath(),
@@ -379,7 +422,7 @@ func downloadFilesTemplate(job *model.Job, opts *BatchSubmissionOpts) *v1alpha1.
 
 // uploadFilesTemplate returns a template used for the steps that uploads
 // files to the data store.
-func uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
+func (w *WorkflowMaker) uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	return &v1alpha1.Template{
 		Name: "upload-files",
 		Container: &apiv1.Container{
@@ -466,15 +509,19 @@ func uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 
 // NewWorkflow returns a defintion of a workflow that executes a DE batch
 // analyis. It does not submit the workflow to the cluster.
-func NewWorkflow(job *model.Job, opts *BatchSubmissionOpts) *v1alpha1.Workflow {
+func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflow {
 	var workflowTemplates []v1alpha1.Template
-	workflowTemplates = append(workflowTemplates, runStepsTemplates(job)...)
+	stepsTemplates, err := w.runStepsTemplates()
+	if err != nil {
+		return nil
+	}
+	workflowTemplates = append(workflowTemplates, stepsTemplates...)
 	workflowTemplates = append(
 		workflowTemplates,
-		*exitHandlerTemplate(),
-		*sendStatusTemplate(opts),
-		*downloadFilesTemplate(job, opts),
-		*uploadFilesTemplate(opts),
+		*w.exitHandlerTemplate(),
+		*w.sendStatusTemplate(opts),
+		*w.downloadFilesTemplate(opts),
+		*w.uploadFilesTemplate(opts),
 	)
 
 	workflow := v1alpha1.Workflow{
@@ -494,15 +541,15 @@ func NewWorkflow(job *model.Job, opts *BatchSubmissionOpts) *v1alpha1.Workflow {
 				Parameters: []v1alpha1.Parameter{
 					{
 						Name:  "username",
-						Value: v1alpha1.AnyStringPtr(job.Submitter),
+						Value: v1alpha1.AnyStringPtr(w.job.Submitter),
 					},
 					{
 						Name:  "output-folder",
-						Value: v1alpha1.AnyStringPtr(job.OutputDirectory()),
+						Value: v1alpha1.AnyStringPtr(w.job.OutputDirectory()),
 					},
 					{
 						Name:  "job_uuid",
-						Value: v1alpha1.AnyStringPtr(job.InvocationID),
+						Value: v1alpha1.AnyStringPtr(w.job.InvocationID),
 					},
 					{
 						Name:  "analysis_uuid",
