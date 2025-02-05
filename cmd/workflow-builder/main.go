@@ -9,7 +9,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/batch"
 	"github.com/cyverse-de/app-exposer/imageinfo"
-	"github.com/cyverse-de/model/v6"
+	"github.com/cyverse-de/model/v7"
 	"gopkg.in/yaml.v3"
 )
 

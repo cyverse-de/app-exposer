@@ -1,98 +1,43 @@
 package adapter
 
 import (
-	"context"
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 
-	"github.com/cockroachdb/apd"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/app-exposer/types"
-	"github.com/cyverse-de/model/v6"
-	"github.com/google/uuid"
+	"github.com/cyverse-de/model/v7"
+	"github.com/knadh/koanf"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
-	"go.opentelemetry.io/otel"
 )
 
 var log = common.Log
 
-const otelName = "github.com/cyverse-de/app-exposer/adapter"
-
-type millicoresJob struct {
-	ID                 uuid.UUID
-	Job                model.Job
-	MillicoresReserved *apd.Decimal
-}
-
 // JEXAdapter contains the application state for jex-adapter.
 type JEXAdapter struct {
-	cfg      *viper.Viper
-	detector *millicores.Detector
-	jobs     map[string]bool
-	addJob   chan millicoresJob
-	jobDone  chan uuid.UUID
-	exit     chan bool
+	cfg             *koanf.Koanf
+	detector        *millicores.Detector
+	imageInfoGetter imageinfo.InfoGetter
+	filterFiles     []string
+	logPath         string
+	irodsBase       string
 }
 
 // New returns a *JEXAdapter
-func New(cfg *viper.Viper, detector *millicores.Detector) *JEXAdapter {
+func New(cfg *koanf.Koanf, detector *millicores.Detector, imageInfoGetter imageinfo.InfoGetter) *JEXAdapter {
 	return &JEXAdapter{
-		cfg:      cfg,
-		detector: detector,
-		addJob:   make(chan millicoresJob),
-		jobDone:  make(chan uuid.UUID),
-		exit:     make(chan bool),
-		jobs:     map[string]bool{},
+		cfg:             cfg,
+		detector:        detector,
+		imageInfoGetter: imageInfoGetter,
+		logPath:         cfg.String("condor.log_path"),
+		irodsBase:       cfg.String("irods.base"),
+		filterFiles:     strings.Split(cfg.String("condor.filter_files"), ","),
 	}
-}
-
-func (j *JEXAdapter) Run() {
-	for {
-		select {
-		case mj := <-j.addJob:
-			j.jobs[mj.ID.String()] = true
-			go func(mj millicoresJob) {
-				ctx, span := otel.Tracer(otelName).Start(context.Background(), "millicores iteration")
-				defer span.End()
-
-				var err error
-
-				log.Infof("storing %s millicores reserved for %s", mj.MillicoresReserved.String(), mj.Job.InvocationID)
-				if err = j.detector.StoreMillicoresReserved(ctx, &mj.Job, mj.MillicoresReserved); err != nil {
-					log.Error(err)
-				}
-				log.Infof("done storing %s millicores reserved for %s", mj.MillicoresReserved.String(), mj.Job.InvocationID)
-
-				j.jobDone <- mj.ID
-			}(mj)
-
-		case doneJobID := <-j.jobDone:
-			delete(j.jobs, doneJobID.String())
-
-		case <-j.exit:
-			break
-		}
-	}
-}
-
-func (j *JEXAdapter) StoreMillicoresReserved(job model.Job, millicoresReserved *apd.Decimal) error {
-	newjob := millicoresJob{
-		ID:                 uuid.New(),
-		Job:                job,
-		MillicoresReserved: millicoresReserved,
-	}
-
-	j.addJob <- newjob
-
-	return nil
-}
-
-func (j *JEXAdapter) Finish() {
-	j.exit <- true
 }
 
 func (j *JEXAdapter) Routes(router types.Router) types.Router {
@@ -139,6 +84,7 @@ func (j *JEXAdapter) StopHandler(c echo.Context) error {
 
 func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	request := c.Request()
+	ctx := c.Request().Context()
 
 	log := log.WithFields(logrus.Fields{"context": "app launch"})
 
@@ -151,7 +97,12 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	log.Debug("done reading request body")
 
 	log.Debug("parsing request body JSON")
-	job, err := model.NewFromData(j.cfg, bodyBytes)
+	acfg := &model.AnalysisConfig{
+		LogPath:     j.logPath,
+		FilterFiles: j.filterFiles,
+		IRODSBase:   j.irodsBase,
+	}
+	job, err := model.NewAnalysis(acfg, bodyBytes)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -159,8 +110,6 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	log.Debug("done parsing request body JSON")
 
 	log = log.WithFields(logrus.Fields{"external_id": job.InvocationID})
-
-	// TODO: Do launch logic
 
 	log.Debug("finding number of millicores reserved")
 	millicoresReserved, err := j.detector.NumberReserved(job)
@@ -170,12 +119,13 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	}
 	log.Debug("done finding number of millicores reserved")
 
-	log.Debug("before asynchronous StoreMillicoresReserved call")
-	if err = j.StoreMillicoresReserved(*job, millicoresReserved); err != nil {
+	log.Infof("storing %s millicores reserved for %s", millicoresReserved.String(), job.InvocationID)
+	if err = j.detector.StoreMillicoresReserved(ctx, job, millicoresReserved); err != nil {
 		log.Error(err)
-		return err
 	}
-	log.Debug("after asynchronous StoreMillicoresReserved call")
+	log.Infof("done storing %s millicores reserved for %s", millicoresReserved.String(), job.InvocationID)
+
+	// TODO: Do launch logic
 
 	log.Infof("launched with %f millicores reserved", millicoresReserved)
 

@@ -16,8 +16,12 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 
+	"github.com/cyverse-de/app-exposer/adapter"
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/db"
+	"github.com/cyverse-de/app-exposer/imageinfo"
+	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/go-mod/cfg"
 	"github.com/cyverse-de/go-mod/gotelnats"
 	"github.com/cyverse-de/go-mod/logging"
@@ -62,7 +66,7 @@ func main() {
 		err        error
 		kubeconfig *string
 		c          *koanf.Koanf
-		db         *sqlx.DB
+		dbconn     *sqlx.DB
 
 		configPath = flag.String("config", cfg.DefaultConfigPath, "Path to the config file")
 		dotEnvPath = flag.String("dotenv-path", cfg.DefaultDotEnvPath, "Path to the dotenv file")
@@ -83,6 +87,7 @@ func main() {
 		getAnalysisIDService          = flag.String("get-analysis-id-service", "get-analysis-id", "The service name for the service that provides analysis ID lookups")
 		checkResourceAccessService    = flag.String("check-resource-access-service", "check-resource-access", "The name of the service that validates whether a user can access a resource")
 		userSuffix                    = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
+		defaultMillicores             = flag.Float64("default-millicores", 4000.0, "The default number of millicores reserved for an analysis.")
 		logLevel                      = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
 	)
 
@@ -145,9 +150,9 @@ func main() {
 		log.Fatal("The iRODS zone must be specified in the config file")
 	}
 
-	harborFQDN := c.String("harbor.fqdn")
-	if harborFQDN == "" {
-		log.Fatal("The harbor.fqdn setting must be specified in the config file")
+	harborURL := c.String("harbor.url")
+	if harborURL == "" {
+		harborURL = "https://harbor.cyverse.org/api/v2.0"
 	}
 
 	harborUser := c.String("harbor.user")
@@ -160,15 +165,14 @@ func main() {
 		log.Fatal("The harbor.pass setting must be specified in the config file")
 	}
 
-	// imageInfoHost := fmt.Sprintf("https://%s", harborFQDN)
-	// imageInfo, err := imageinfo.NewHarborInfoGetter(
-	// 	imageInfoHost,
-	// 	harborUser,
-	// 	harborPass,
-	// )
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	infoGetter, err := imageinfo.NewHarborInfoGetter(
+		harborURL,
+		harborUser,
+		harborPass,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	natsCluster := c.String("nats.cluster")
 	if natsCluster == "" {
@@ -223,7 +227,7 @@ func main() {
 	}
 
 	dbURI := c.String("db.uri")
-	db = otelsqlx.MustConnect("postgres", dbURI,
+	dbconn = otelsqlx.MustConnect("postgres", dbURI,
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL))
 
 	log.Infof("NATS TLS cert file is %s", *tlsCert)
@@ -239,7 +243,7 @@ func main() {
 		ViceDefaultBackendServicePort: *viceDefaultBackendServicePort,
 		GetAnalysisIDService:          *getAnalysisIDService,
 		CheckResourceAccessService:    *checkResourceAccessService,
-		db:                            db,
+		db:                            dbconn,
 		UserSuffix:                    *userSuffix,
 		IRODSZone:                     zone,
 		IngressClass:                  *ingressClass,
@@ -251,14 +255,25 @@ func main() {
 		NATSCredsFilePath:             *credsPath,
 	}
 
-	a := apps.NewApps(db, *userSuffix)
+	a := apps.NewApps(dbconn, *userSuffix)
 	go a.Run()
 	defer a.Finish()
+
 	app := NewExposerApp(
 		exposerInit,
 		a,
 		c,
 	)
+
+	dbase := db.New(dbconn)
+	detector, err := millicores.New(dbase, *defaultMillicores)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	jexAdapter := adapter.New(c, detector, infoGetter)
+	jexAdapter.Routes(app.router)
+
 	log.Printf("listening on port %d", *listenPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", strconv.Itoa(*listenPort)), app.router))
 }

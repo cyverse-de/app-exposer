@@ -10,7 +10,7 @@ import (
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/go-mod/gotelnats"
 	"github.com/cyverse-de/go-mod/pbinit"
-	"github.com/cyverse-de/model/v6"
+	"github.com/cyverse-de/model/v7"
 	"github.com/cyverse-de/p/go/qms"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/apps/v1"
