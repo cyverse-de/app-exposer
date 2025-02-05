@@ -3,7 +3,6 @@ package batch
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/argoproj/argo-workflows/v3/cmd/argo/commands/client"
@@ -74,11 +73,8 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 
 				harborInfo, err := w.getter.GetInfo(project, image, step.Component.Container.Image.Tag)
 				if err != nil {
-					log.Println(err)
 					return nil, err
 				}
-
-				log.Printf("%+v\n", harborInfo)
 
 				if strings.TrimSpace(harborInfo.Entrypoint) != "" {
 					sourceParts = append(sourceParts, harborInfo.Entrypoint)

@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -99,8 +98,6 @@ func (h *HarborInfoGetter) GetInfo(project, image, tag string) (*ImageInfo, erro
 		fmt.Sprintf("/projects/%s/repositories/%s/artifacts/%s", project, image, tag),
 	)
 
-	log.Printf("endpoint: %s", endpoint)
-
 	req, err := http.NewRequest("GET", endpoint.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %s", err)
@@ -114,8 +111,6 @@ func (h *HarborInfoGetter) GetInfo(project, image, tag string) (*ImageInfo, erro
 		return nil, fmt.Errorf("error making request: %s", err)
 	}
 	defer resp.Body.Close()
-
-	log.Printf("%+v\n", resp)
 
 	if err := json.NewDecoder(resp.Body).Decode(&replyData); err != nil {
 		return nil, fmt.Errorf("error decoding response: %s", err)
