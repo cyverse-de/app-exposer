@@ -168,7 +168,6 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	}
 
 	// TODO: set the resource requests in the batch submissions
-	// TODO: validate jobs
 
 	opts := &batch.BatchSubmissionOpts{
 		FileTransferImage:      j.fileTransferImage,
