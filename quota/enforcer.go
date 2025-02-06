@@ -1,4 +1,4 @@
-package incluster
+package quota
 
 import (
 	"context"
@@ -7,16 +7,23 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/go-mod/gotelnats"
 	"github.com/cyverse-de/go-mod/pbinit"
 	"github.com/cyverse-de/model/v7"
 	"github.com/cyverse-de/p/go/qms"
+	"github.com/jmoiron/sqlx"
+	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
+
 	v1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes"
 )
+
+var log = common.Log
 
 func shouldCountStatus(status string) bool {
 	countIt := true
@@ -36,7 +43,24 @@ func shouldCountStatus(status string) bool {
 	return countIt
 }
 
-func (i *Incluster) countJobsForUser(ctx context.Context, username string) (int, error) {
+type Enforcer struct {
+	clientset  kubernetes.Interface
+	db         *sqlx.DB
+	apps       *apps.Apps
+	nec        *nats.EncodedConn
+	userDomain string
+}
+
+func NewEnforcer(clientset kubernetes.Interface, db *sqlx.DB, ec *nats.EncodedConn, userDomain string) *Enforcer {
+	return &Enforcer{
+		clientset:  clientset,
+		db:         db,
+		nec:        ec,
+		userDomain: userDomain,
+	}
+}
+
+func (e *Enforcer) countJobsForUser(ctx context.Context, namespace, username string) (int, error) {
 	set := labels.Set(map[string]string{
 		"username": username,
 	})
@@ -45,7 +69,7 @@ func (i *Incluster) countJobsForUser(ctx context.Context, username string) (int,
 		LabelSelector: set.AsSelector().String(),
 	}
 
-	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
+	depclient := e.clientset.AppsV1().Deployments(namespace)
 	deplist, err := depclient.List(ctx, listoptions)
 	if err != nil {
 		return 0, err
@@ -67,7 +91,7 @@ func (i *Incluster) countJobsForUser(ctx context.Context, username string) (int,
 			continue
 		}
 
-		if analysisID, err = i.apps.GetAnalysisIDByExternalID(ctx, externalID); err != nil {
+		if analysisID, err = e.apps.GetAnalysisIDByExternalID(ctx, externalID); err != nil {
 			// If we failed to get it from the database, count it because it
 			// shouldn't be running.
 			log.Error(err)
@@ -75,7 +99,7 @@ func (i *Incluster) countJobsForUser(ctx context.Context, username string) (int,
 			continue
 		}
 
-		analysisStatus, err = i.apps.GetAnalysisStatus(ctx, analysisID)
+		analysisStatus, err = e.apps.GetAnalysisStatus(ctx, analysisID)
 		if err != nil {
 			// If we failed to get the status, then something is horribly wrong.
 			// Count the analysis.
@@ -101,9 +125,9 @@ const getJobLimitForUserSQL = `
 	WHERE launcher = regexp_replace($1, '-', '_')
 `
 
-func (i *Incluster) getJobLimitForUser(username string) (*int, error) {
+func (e *Enforcer) getJobLimitForUser(username string) (*int, error) {
 	var jobLimit int
-	err := i.db.QueryRow(getJobLimitForUserSQL, username).Scan(&jobLimit)
+	err := e.db.QueryRow(getJobLimitForUserSQL, username).Scan(&jobLimit)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -118,21 +142,21 @@ const getDefaultJobLimitSQL = `
 	WHERE launcher IS NULL
 `
 
-func (i *Incluster) getDefaultJobLimit() (int, error) {
+func (e *Enforcer) getDefaultJobLimit() (int, error) {
 	var defaultJobLimit int
-	if err := i.db.QueryRow(getDefaultJobLimitSQL).Scan(&defaultJobLimit); err != nil {
+	if err := e.db.QueryRow(getDefaultJobLimitSQL).Scan(&defaultJobLimit); err != nil {
 		return 0, err
 	}
 	return defaultJobLimit, nil
 }
 
-func (i *Incluster) getResourceOveragesForUser(ctx context.Context, username string) (*qms.OverageList, error) {
+func (e *Enforcer) getResourceOveragesForUser(ctx context.Context, username string) (*qms.OverageList, error) {
 	var err error
 
 	subject := "cyverse.qms.user.overages.get"
 
 	req := &qms.AllUserOveragesRequest{
-		Username: i.fixUsername(username),
+		Username: common.FixUsername(username, e.userDomain),
 	}
 
 	_, span := pbinit.InitAllUserOveragesRequest(req, subject)
@@ -142,7 +166,7 @@ func (i *Incluster) getResourceOveragesForUser(ctx context.Context, username str
 
 	if err = gotelnats.Request(
 		ctx,
-		i.NATSEncodedConn,
+		e.nec,
 		subject,
 		req,
 		resp,
@@ -221,7 +245,7 @@ func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int
 	}
 }
 
-func (i *Incluster) validateJob(ctx context.Context, job *model.Job) (int, error) {
+func (e *Enforcer) ValidateJob(ctx context.Context, job *model.Job, namespace string) (int, error) {
 
 	// Verify that the job type is supported by this service
 	if strings.ToLower(job.ExecutionTarget) != "interapps" {
@@ -229,23 +253,23 @@ func (i *Incluster) validateJob(ctx context.Context, job *model.Job) (int, error
 	}
 
 	// Get the username
-	usernameLabelValue := labelValueString(job.Submitter)
+	usernameLabelValue := common.LabelValueString(job.Submitter)
 	user := job.Submitter
 
 	// Validate the number of concurrent jobs for the user.
-	jobCount, err := i.countJobsForUser(ctx, usernameLabelValue)
+	jobCount, err := e.countJobsForUser(ctx, namespace, usernameLabelValue)
 	if err != nil {
 		return http.StatusInternalServerError, errors.Wrapf(err, "unable to determine the number of jobs that %s is currently running", user)
 	}
-	jobLimit, err := i.getJobLimitForUser(user)
+	jobLimit, err := e.getJobLimitForUser(user)
 	if err != nil {
 		return http.StatusInternalServerError, errors.Wrapf(err, "unable to determine the concurrent job limit for %s", user)
 	}
-	defaultJobLimit, err := i.getDefaultJobLimit()
+	defaultJobLimit, err := e.getDefaultJobLimit()
 	if err != nil {
 		return http.StatusInternalServerError, errors.Wrapf(err, "unable to determine the default concurrent job limit")
 	}
-	overages, err := i.getResourceOveragesForUser(ctx, user)
+	overages, err := e.getResourceOveragesForUser(ctx, user)
 	if err != nil {
 		return http.StatusInternalServerError, errors.Wrapf(err, "unable to get list of resource overages for user %s", user)
 	}

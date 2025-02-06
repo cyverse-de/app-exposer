@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/cyverse-de/app-exposer/apps"
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/permissions"
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
@@ -499,16 +500,7 @@ type ResourceInfo struct {
 }
 
 func (i *Incluster) fixUsername(username string) string {
-	var userSuffix string
-	if strings.HasPrefix(i.UserSuffix, "@") {
-		userSuffix = i.UserSuffix
-	} else {
-		userSuffix = fmt.Sprintf("@%s", i.UserSuffix)
-	}
-	if strings.HasSuffix(userSuffix, username) {
-		return username
-	}
-	return fmt.Sprintf("%s%s", username, userSuffix)
+	return common.FixUsername(username, i.UserSuffix)
 }
 
 func (i *Incluster) doResourceListing(ctx context.Context, filter map[string]string) (*ResourceInfo, error) {

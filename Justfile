@@ -11,7 +11,10 @@ workflow-builder:
 test-imageinfo:
     go test ./imageinfo
 
-test: test-imageinfo
+test-common:
+    go test ./common
+
+test: test-imageinfo test-common
 
 clean:
     #!/usr/bin/env bash
