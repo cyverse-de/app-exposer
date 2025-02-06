@@ -12,6 +12,10 @@ replace github.com/cyverse-de/batch => ./batch
 
 replace github.com/cyverse-de/apps => ./apps
 
+replace github.com/cyverse-de/quota => ./quota
+
+replace github.com/cyverse-de/common => ./common
+
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/argoproj/argo-workflows/v3 v3.6.2
