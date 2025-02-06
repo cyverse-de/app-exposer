@@ -28,7 +28,6 @@ func main() {
 		doSubmit           = flag.Bool("submit", false, "Whether to submit the workflow to the cluster.")
 		out                = flag.String("out", "", "The file the workflow will be written to.")
 		harborURL          = flag.String("harbor-url", "https://harbor.cyverse.org/api/v2.0/", "The base URL for the harbor instance")
-		harborProject      = flag.String("harbor-project", "de", "The project to look up images in.")
 		harborUser         = flag.String("harbor-user", "", "The user for harbor lookups.")
 		harborPass         = flag.String("harbor-pass", "", "The password for the harbor user.")
 	)
@@ -74,7 +73,7 @@ func main() {
 		AnalysisID:             *analysisID,
 	}
 
-	maker := batch.NewWorkflowMaker(*harborProject, infoGetter, &inputJob)
+	maker := batch.NewWorkflowMaker(infoGetter, &inputJob)
 	workflow := maker.NewWorkflow(&opts)
 
 	if !*quiet {

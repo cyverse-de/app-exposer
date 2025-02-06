@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf"
@@ -82,6 +83,10 @@ func main() {
 		listenPort                    = flag.Int("port", 60000, "(optional) The port to listen on")
 		ingressClass                  = flag.String("ingress-class", "nginx", "(optional) the ingress class to use")
 		viceProxy                     = flag.String("vice-proxy", "harbor.cyverse.org/de/vice-proxy", "The image name of the proxy to use for VICE apps. The image tag is set in the config.")
+		transferImage                 = flag.String("transfer-image", "harbor.cyverse.org/de/gocmd:latest", "(optional) Image used to transfer files to/from the data store")
+		transferWorkingDir            = flag.String("transfer-working-dir", "/de-app-work", "The working directory within the file transfer image.")
+		transferLogLevel              = flag.String("transfer-log-level", "debug", "The log level of the output of the file transfer tool.")
+		statusSenderImage             = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
 		viceDefaultBackendService     = flag.String("vice-default-backend", "vice-default-backend", "The name of the service to use as the default backend for VICE ingresses")
 		viceDefaultBackendServicePort = flag.Int("vice-default-backend-port", 80, "The port for the default backend for VICE ingresses")
 		getAnalysisIDService          = flag.String("get-analysis-id-service", "get-analysis-id", "The service name for the service that provides analysis ID lookups")
@@ -279,7 +284,16 @@ func main() {
 	jaGroup := app.router.Group("/batch")
 
 	// Create the app that handles batch functionality.
-	jexAdapter := adapter.New(c, detector, infoGetter)
+	jexAdapterInit := &adapter.Init{
+		LogPath:                c.String("condor.log_path"),
+		IRODSBase:              c.String("irods.base"),
+		FilterFiles:            strings.Split(c.String("condor.filter_files"), ","),
+		FileTransferImage:      *transferImage,
+		FileTransferWorkingDir: *transferWorkingDir,
+		FileTransferLogLevel:   *transferLogLevel,
+		StatusSenderImage:      *statusSenderImage,
+	}
+	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter)
 
 	// Set the routes for the batch app. Changes the state of the jaGroup
 	// instance at *jaGroup, so there's no return value that we care about.
