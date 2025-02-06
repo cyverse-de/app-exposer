@@ -30,9 +30,9 @@ const (
 	ShmDevice = "/dev/shm"
 )
 
-func GPUEnabled(job *model.Job) bool {
+func GPUEnabled(analysis *model.Analysis) bool {
 	gpuEnabled := false
-	for _, device := range job.Steps[0].Component.Container.Devices {
+	for _, device := range analysis.Steps[0].Component.Container.Devices {
 		if strings.HasPrefix(strings.ToLower(device.HostPath), "/dev/nvidia") {
 			gpuEnabled = true
 		}
@@ -40,7 +40,7 @@ func GPUEnabled(job *model.Job) bool {
 	return gpuEnabled
 }
 
-func cpuResourceRequest(job *model.Job) resourcev1.Quantity {
+func cpuResourceRequest(analysis *model.Analysis) resourcev1.Quantity {
 	var (
 		value resourcev1.Quantity
 		err   error
@@ -48,8 +48,8 @@ func cpuResourceRequest(job *model.Job) resourcev1.Quantity {
 
 	value = DefaultCPUResourceRequest
 
-	if job.Steps[0].Component.Container.MinCPUCores != 0 {
-		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%fm", job.Steps[0].Component.Container.MinCPUCores*1000))
+	if analysis.Steps[0].Component.Container.MinCPUCores != 0 {
+		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%fm", analysis.Steps[0].Component.Container.MinCPUCores*1000))
 		if err != nil {
 			log.Warn(err)
 			value = DefaultCPUResourceRequest
@@ -59,7 +59,7 @@ func cpuResourceRequest(job *model.Job) resourcev1.Quantity {
 	return value
 }
 
-func cpuResourceLimit(job *model.Job) resourcev1.Quantity {
+func cpuResourceLimit(analysis *model.Analysis) resourcev1.Quantity {
 	var (
 		value resourcev1.Quantity
 		err   error
@@ -67,8 +67,8 @@ func cpuResourceLimit(job *model.Job) resourcev1.Quantity {
 
 	value = DefaultCPUResourceLimit
 
-	if job.Steps[0].Component.Container.MaxCPUCores != 0 {
-		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%fm", job.Steps[0].Component.Container.MaxCPUCores*1000))
+	if analysis.Steps[0].Component.Container.MaxCPUCores != 0 {
+		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%fm", analysis.Steps[0].Component.Container.MaxCPUCores*1000))
 		if err != nil {
 			log.Warn(err)
 			value = DefaultCPUResourceLimit
@@ -77,7 +77,7 @@ func cpuResourceLimit(job *model.Job) resourcev1.Quantity {
 	return value
 }
 
-func memResourceRequest(job *model.Job) resourcev1.Quantity {
+func memResourceRequest(analysis *model.Analysis) resourcev1.Quantity {
 	var (
 		value resourcev1.Quantity
 		err   error
@@ -85,8 +85,8 @@ func memResourceRequest(job *model.Job) resourcev1.Quantity {
 
 	value = DefaultMemResourceRequest
 
-	if job.Steps[0].Component.Container.MinMemoryLimit != 0 {
-		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", job.Steps[0].Component.Container.MinMemoryLimit))
+	if analysis.Steps[0].Component.Container.MinMemoryLimit != 0 {
+		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", analysis.Steps[0].Component.Container.MinMemoryLimit))
 		if err != nil {
 			log.Warn(err)
 			value = DefaultMemResourceRequest
@@ -95,7 +95,7 @@ func memResourceRequest(job *model.Job) resourcev1.Quantity {
 	return value
 }
 
-func memResourceLimit(job *model.Job) resourcev1.Quantity {
+func memResourceLimit(analysis *model.Analysis) resourcev1.Quantity {
 	var (
 		value resourcev1.Quantity
 		err   error
@@ -103,8 +103,8 @@ func memResourceLimit(job *model.Job) resourcev1.Quantity {
 
 	value = DefaultMemResourceLimit
 
-	if job.Steps[0].Component.Container.MemoryLimit != 0 {
-		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", job.Steps[0].Component.Container.MemoryLimit))
+	if analysis.Steps[0].Component.Container.MemoryLimit != 0 {
+		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", analysis.Steps[0].Component.Container.MemoryLimit))
 		if err != nil {
 			log.Warn(err)
 			value = DefaultMemResourceLimit
@@ -113,7 +113,7 @@ func memResourceLimit(job *model.Job) resourcev1.Quantity {
 	return value
 }
 
-func storageRequest(job *model.Job) resourcev1.Quantity {
+func storageRequest(analysis *model.Analysis) resourcev1.Quantity {
 	var (
 		value resourcev1.Quantity
 		err   error
@@ -121,8 +121,8 @@ func storageRequest(job *model.Job) resourcev1.Quantity {
 
 	value = DefaultStorageRequest
 
-	if job.Steps[0].Component.Container.MinDiskSpace != 0 {
-		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", job.Steps[0].Component.Container.MinDiskSpace))
+	if analysis.Steps[0].Component.Container.MinDiskSpace != 0 {
+		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", analysis.Steps[0].Component.Container.MinDiskSpace))
 		if err != nil {
 			log.Warn(err)
 			value = DefaultStorageRequest
@@ -131,10 +131,10 @@ func storageRequest(job *model.Job) resourcev1.Quantity {
 	return value
 }
 
-func SharedMemoryAmount(job *model.Job) *resourcev1.Quantity {
+func SharedMemoryAmount(analysis *model.Analysis) *resourcev1.Quantity {
 	var shmAmount resourcev1.Quantity
 	var err error
-	for _, device := range job.Steps[0].Component.Container.Devices {
+	for _, device := range analysis.Steps[0].Component.Container.Devices {
 		if strings.HasPrefix(strings.ToLower(device.HostPath), ShmDevice) {
 			shmAmount, err = resourcev1.ParseQuantity(device.ContainerPath)
 			if err != nil {
@@ -149,16 +149,16 @@ func SharedMemoryAmount(job *model.Job) *resourcev1.Quantity {
 
 func resourceRequests(analysis *model.Analysis) apiv1.ResourceList {
 	return apiv1.ResourceList{
-		apiv1.ResourceCPU:              cpuResourceRequest(analysis), // job contains # cores
-		apiv1.ResourceMemory:           memResourceRequest(analysis), // job contains # bytes mem
-		apiv1.ResourceEphemeralStorage: storageRequest(analysis),     // job contains # bytes storage
+		apiv1.ResourceCPU:              cpuResourceRequest(analysis), // analysis contains # cores
+		apiv1.ResourceMemory:           memResourceRequest(analysis), // analysis contains # bytes mem
+		apiv1.ResourceEphemeralStorage: storageRequest(analysis),     // analysis contains # bytes storage
 	}
 }
 
 func resourceLimits(analysis *model.Analysis) apiv1.ResourceList {
 	limits := apiv1.ResourceList{
-		apiv1.ResourceCPU:    cpuResourceLimit(analysis), //job contains # cores
-		apiv1.ResourceMemory: memResourceLimit(analysis), // job contains # bytes mem
+		apiv1.ResourceCPU:    cpuResourceLimit(analysis), //analysis contains # cores
+		apiv1.ResourceMemory: memResourceLimit(analysis), // analysis contains # bytes mem
 	}
 
 	// If a GPU device is configured, then add it to the resource limits.
