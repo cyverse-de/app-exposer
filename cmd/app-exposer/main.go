@@ -281,7 +281,8 @@ func main() {
 	// Create the app that handles batch functionality.
 	jexAdapter := adapter.New(c, detector, infoGetter)
 
-	// Set the routes for the batch app.
+	// Set the routes for the batch app. Changes the state of the jaGroup
+	// instance at *jaGroup, so there's no return value that we care about.
 	jexAdapter.Routes(jaGroup)
 
 	log.Printf("listening on port %d", *listenPort)
