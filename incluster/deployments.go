@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/resourcing"
 	"github.com/cyverse-de/model/v7"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
-	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -103,7 +103,7 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 		},
 	)
 
-	shmSize := sharedMemoryAmount(job)
+	shmSize := resourcing.SharedMemoryAmount(job)
 	if shmSize != nil {
 		output = append(output,
 			apiv1.Volume{
@@ -150,111 +150,6 @@ func (i *Incluster) viceProxyCommand(job *model.Job) []string {
 	}
 
 	return output
-}
-
-var (
-	defaultCPUResourceRequest, _   = resourcev1.ParseQuantity("1000m")
-	defaultMemResourceRequest, _   = resourcev1.ParseQuantity("2Gi")
-	defaultStorageRequest, _       = resourcev1.ParseQuantity("1Gi")
-	defaultCPUResourceLimit, _     = resourcev1.ParseQuantity("4000m")
-	defaultMemResourceLimit, _     = resourcev1.ParseQuantity("8Gi")
-	viceProxyCPUResourceRequest, _ = resourcev1.ParseQuantity("100m")
-	viceProxyMemResourceRequest, _ = resourcev1.ParseQuantity("100Mi")
-	viceProxyStorageRequest, _     = resourcev1.ParseQuantity("100Mi")
-	viceProxyCPUResourceLimit, _   = resourcev1.ParseQuantity("200m")
-	viceProxyMemResourceLimit, _   = resourcev1.ParseQuantity("200Mi")
-	viceProxyStorageLimit, _       = resourcev1.ParseQuantity("200Mi")
-)
-
-func cpuResourceRequest(job *model.Job) resourcev1.Quantity {
-	var (
-		value resourcev1.Quantity
-		err   error
-	)
-
-	value = defaultCPUResourceRequest
-
-	if job.Steps[0].Component.Container.MinCPUCores != 0 {
-		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%fm", job.Steps[0].Component.Container.MinCPUCores*1000))
-		if err != nil {
-			log.Warn(err)
-			value = defaultCPUResourceRequest
-		}
-	}
-
-	return value
-}
-
-func cpuResourceLimit(job *model.Job) resourcev1.Quantity {
-	var (
-		value resourcev1.Quantity
-		err   error
-	)
-
-	value = defaultCPUResourceLimit
-
-	if job.Steps[0].Component.Container.MaxCPUCores != 0 {
-		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%fm", job.Steps[0].Component.Container.MaxCPUCores*1000))
-		if err != nil {
-			log.Warn(err)
-			value = defaultCPUResourceLimit
-		}
-	}
-	return value
-}
-
-func memResourceRequest(job *model.Job) resourcev1.Quantity {
-	var (
-		value resourcev1.Quantity
-		err   error
-	)
-
-	value = defaultMemResourceRequest
-
-	if job.Steps[0].Component.Container.MinMemoryLimit != 0 {
-		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", job.Steps[0].Component.Container.MinMemoryLimit))
-		if err != nil {
-			log.Warn(err)
-			value = defaultMemResourceRequest
-		}
-	}
-	return value
-}
-
-func memResourceLimit(job *model.Job) resourcev1.Quantity {
-	var (
-		value resourcev1.Quantity
-		err   error
-	)
-
-	value = defaultMemResourceLimit
-
-	if job.Steps[0].Component.Container.MemoryLimit != 0 {
-		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", job.Steps[0].Component.Container.MemoryLimit))
-		if err != nil {
-			log.Warn(err)
-			value = defaultMemResourceLimit
-		}
-	}
-	return value
-}
-
-func storageRequest(job *model.Job) resourcev1.Quantity {
-	var (
-		value resourcev1.Quantity
-		err   error
-	)
-
-	value = defaultStorageRequest
-
-	if job.Steps[0].Component.Container.MinDiskSpace != 0 {
-		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", job.Steps[0].Component.Container.MinDiskSpace))
-		if err != nil {
-			log.Warn(err)
-			value = defaultStorageRequest
-		}
-	}
-	return value
 }
 
 // inputStagingContainer returns the init container to be used for staging input files. This init container
@@ -372,32 +267,6 @@ func (i *Incluster) initContainers(job *model.Job) []apiv1.Container {
 	return output
 }
 
-func gpuEnabled(job *model.Job) bool {
-	gpuEnabled := false
-	for _, device := range job.Steps[0].Component.Container.Devices {
-		if strings.HasPrefix(strings.ToLower(device.HostPath), "/dev/nvidia") {
-			gpuEnabled = true
-		}
-	}
-	return gpuEnabled
-}
-
-func sharedMemoryAmount(job *model.Job) *resourcev1.Quantity {
-	var shmAmount resourcev1.Quantity
-	var err error
-	for _, device := range job.Steps[0].Component.Container.Devices {
-		if strings.HasPrefix(strings.ToLower(device.HostPath), shmDevice) {
-			shmAmount, err = resourcev1.ParseQuantity(device.ContainerPath)
-			if err != nil {
-				log.Warn(err)
-				return nil
-			}
-			return &shmAmount
-		}
-	}
-	return nil
-}
-
 func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 	analysisEnvironment := []apiv1.EnvVar{}
 	for envKey, envVal := range job.Steps[0].Environment {
@@ -426,34 +295,6 @@ func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 		},
 	)
 
-	cpuRequest := cpuResourceRequest(job)
-	memRequest := memResourceRequest(job)
-	storageRequest := storageRequest(job)
-
-	requests := apiv1.ResourceList{
-		apiv1.ResourceCPU:              cpuRequest,     // job contains # cores
-		apiv1.ResourceMemory:           memRequest,     // job contains # bytes mem
-		apiv1.ResourceEphemeralStorage: storageRequest, // job contains # bytes storage
-	}
-
-	cpuLimit := cpuResourceLimit(job)
-	memLimit := memResourceLimit(job)
-
-	limits := apiv1.ResourceList{
-		apiv1.ResourceCPU:    cpuLimit, //job contains # cores
-		apiv1.ResourceMemory: memLimit, // job contains # bytes mem
-	}
-
-	// If a GPU device is configured, then add it to the resource limits.
-	if gpuEnabled(job) {
-		gpuLimit, err := resourcev1.ParseQuantity("1")
-		if err != nil {
-			log.Warn(err)
-		} else {
-			limits[apiv1.ResourceName("nvidia.com/gpu")] = gpuLimit
-		}
-	}
-
 	volumeMounts := []apiv1.VolumeMount{}
 	if i.UseCSIDriver {
 		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
@@ -472,7 +313,7 @@ func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 			ReadOnly:  false,
 		})
 	}
-	if sharedMemoryAmount(job) != nil {
+	if resourcing.SharedMemoryAmount(job) != nil {
 		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
 			Name:      sharedMemoryVolumeName,
 			MountPath: shmDevice,
@@ -489,12 +330,9 @@ func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 		),
 		ImagePullPolicy: apiv1.PullPolicy(apiv1.PullAlways),
 		Env:             analysisEnvironment,
-		Resources: apiv1.ResourceRequirements{
-			Limits:   limits,
-			Requests: requests,
-		},
-		VolumeMounts: volumeMounts,
-		Ports:        analysisPorts(&job.Steps[0]),
+		Resources:       *resourcing.Requirements(job),
+		VolumeMounts:    volumeMounts,
+		Ports:           analysisPorts(&job.Steps[0]),
 		SecurityContext: &apiv1.SecurityContext{
 			RunAsUser:  int64Ptr(int64(job.Steps[0].Component.Container.UID)),
 			RunAsGroup: int64Ptr(int64(job.Steps[0].Component.Container.UID)),
@@ -584,14 +422,14 @@ func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 		},
 		Resources: apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
-				apiv1.ResourceCPU:              viceProxyCPUResourceLimit,
-				apiv1.ResourceMemory:           viceProxyMemResourceLimit,
-				apiv1.ResourceEphemeralStorage: viceProxyStorageLimit,
+				apiv1.ResourceCPU:              resourcing.VICEProxyCPUResourceLimit,
+				apiv1.ResourceMemory:           resourcing.VICEProxyMemResourceLimit,
+				apiv1.ResourceEphemeralStorage: resourcing.VICEProxyStorageLimit,
 			},
 			Requests: apiv1.ResourceList{
-				apiv1.ResourceCPU:              viceProxyCPUResourceRequest,
-				apiv1.ResourceMemory:           viceProxyMemResourceRequest,
-				apiv1.ResourceEphemeralStorage: viceProxyStorageRequest,
+				apiv1.ResourceCPU:              resourcing.VICEProxyCPUResourceRequest,
+				apiv1.ResourceMemory:           resourcing.VICEProxyMemResourceRequest,
+				apiv1.ResourceEphemeralStorage: resourcing.VICEProxyStorageRequest,
 			},
 		},
 		ReadinessProbe: &apiv1.Probe{
@@ -700,7 +538,7 @@ func (i *Incluster) getDeployment(ctx context.Context, job *model.Job) (*appsv1.
 	}
 
 	// Add the tolerations and node selector requirements for jobs that require a GPU.
-	if gpuEnabled(job) {
+	if resourcing.GPUEnabled(job) {
 		tolerations = append(tolerations, apiv1.Toleration{
 			Key:      gpuTolerationKey,
 			Operator: apiv1.TolerationOperator(gpuTolerationOperator),
