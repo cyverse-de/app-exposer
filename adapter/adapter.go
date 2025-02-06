@@ -4,14 +4,14 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strings"
 
+	"github.com/cyverse-de/app-exposer/apps"
+	"github.com/cyverse-de/app-exposer/batch"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/app-exposer/types"
 	"github.com/cyverse-de/model/v7"
-	"github.com/knadh/koanf"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 )
@@ -20,23 +20,41 @@ var log = common.Log
 
 // JEXAdapter contains the application state for jex-adapter.
 type JEXAdapter struct {
-	cfg             *koanf.Koanf
-	detector        *millicores.Detector
-	imageInfoGetter imageinfo.InfoGetter
-	filterFiles     []string
-	logPath         string
-	irodsBase       string
+	apps                   *apps.Apps
+	detector               *millicores.Detector
+	imageInfoGetter        imageinfo.InfoGetter
+	filterFiles            []string
+	logPath                string
+	irodsBase              string
+	fileTransferImage      string
+	fileTransferWorkingDir string
+	fileTransferLogLevel   string
+	statusSenderImage      string
+}
+
+type Init struct {
+	FilterFiles            []string
+	LogPath                string
+	IRODSBase              string
+	FileTransferImage      string
+	FileTransferWorkingDir string
+	FileTransferLogLevel   string
+	StatusSenderImage      string
 }
 
 // New returns a *JEXAdapter
-func New(cfg *koanf.Koanf, detector *millicores.Detector, imageInfoGetter imageinfo.InfoGetter) *JEXAdapter {
+func New(init *Init, apps *apps.Apps, detector *millicores.Detector, imageInfoGetter imageinfo.InfoGetter) *JEXAdapter {
 	return &JEXAdapter{
-		cfg:             cfg,
-		detector:        detector,
-		imageInfoGetter: imageInfoGetter,
-		logPath:         cfg.String("condor.log_path"),
-		irodsBase:       cfg.String("irods.base"),
-		filterFiles:     strings.Split(cfg.String("condor.filter_files"), ","),
+		apps:                   apps,
+		detector:               detector,
+		imageInfoGetter:        imageInfoGetter,
+		logPath:                init.LogPath,
+		irodsBase:              init.IRODSBase,
+		filterFiles:            init.FilterFiles,
+		fileTransferImage:      init.FileTransferImage,
+		fileTransferWorkingDir: init.FileTransferWorkingDir,
+		fileTransferLogLevel:   init.FileTransferLogLevel,
+		statusSenderImage:      init.StatusSenderImage,
 	}
 }
 
@@ -102,30 +120,59 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 		FilterFiles: j.filterFiles,
 		IRODSBase:   j.irodsBase,
 	}
-	job, err := model.NewAnalysis(acfg, bodyBytes)
+	analysis, err := model.NewAnalysis(acfg, bodyBytes)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
 	log.Debug("done parsing request body JSON")
 
-	log = log.WithFields(logrus.Fields{"external_id": job.InvocationID})
+	log = log.WithFields(logrus.Fields{"external_id": analysis.InvocationID})
 
 	log.Debug("finding number of millicores reserved")
-	millicoresReserved, err := j.detector.NumberReserved(job)
+	millicoresReserved, err := j.detector.NumberReserved(analysis)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
 	log.Debug("done finding number of millicores reserved")
 
-	log.Infof("storing %s millicores reserved for %s", millicoresReserved.String(), job.InvocationID)
-	if err = j.detector.StoreMillicoresReserved(ctx, job, millicoresReserved); err != nil {
+	log.Infof("storing %s millicores reserved for %s", millicoresReserved.String(), analysis.InvocationID)
+	if err = j.detector.StoreMillicoresReserved(ctx, analysis, millicoresReserved); err != nil {
 		log.Error(err)
 	}
-	log.Infof("done storing %s millicores reserved for %s", millicoresReserved.String(), job.InvocationID)
+	log.Infof("done storing %s millicores reserved for %s", millicoresReserved.String(), analysis.InvocationID)
 
-	// TODO: Do launch logic
+	// Look up the analysis ID
+	analysisID, err := j.apps.GetAnalysisIDByExternalID(ctx, analysis.InvocationID)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	// TODO: set the resource requests in the batch submissions
+
+	opts := &batch.BatchSubmissionOpts{
+		FileTransferImage:      j.fileTransferImage,
+		FileTransferLogLevel:   j.fileTransferLogLevel,
+		FileTransferWorkingDir: j.fileTransferWorkingDir,
+		StatusSenderImage:      j.statusSenderImage,
+		AnalysisID:             analysisID,
+	}
+
+	maker := batch.NewWorkflowMaker(j.imageInfoGetter, analysis)
+	workflow := maker.NewWorkflow(opts)
+
+	ctx, cl, err := batch.NewWorkflowServiceClient(ctx)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	if _, err = batch.SubmitWorkflow(ctx, cl, workflow); err != nil {
+		log.Error(err)
+		return err
+	}
 
 	log.Infof("launched with %f millicores reserved", millicoresReserved)
 

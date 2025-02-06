@@ -32,17 +32,15 @@ type BatchSubmissionOpts struct {
 }
 
 type WorkflowMaker struct {
-	project string
-	getter  imageinfo.InfoGetter
-	job     *model.Job
+	getter imageinfo.InfoGetter
+	job    *model.Job
 }
 
 // NewWorkflowMaker creates a new instance of WorkflowMaker
-func NewWorkflowMaker(project string, getter imageinfo.InfoGetter, job *model.Job) *WorkflowMaker {
+func NewWorkflowMaker(getter imageinfo.InfoGetter, job *model.Job) *WorkflowMaker {
 	return &WorkflowMaker{
-		project: project,
-		getter:  getter,
-		job:     job,
+		getter: getter,
+		job:    job,
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/db"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
@@ -45,7 +46,7 @@ func initTestAdapter(t *testing.T) (*JEXAdapter, sqlmock.Sqlmock) {
 	if a == nil || mock == nil {
 		var err error
 		var mockconn *sql.DB
-		cfg := getTestConfig()
+		//cfg := getTestConfig()
 
 		mockconn, mock, err = sqlmock.New()
 		if err != nil {
@@ -61,7 +62,19 @@ func initTestAdapter(t *testing.T) (*JEXAdapter, sqlmock.Sqlmock) {
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		a = New(cfg, detector, getter)
+		init := &Init{
+			FilterFiles:            []string{},
+			IRODSBase:              "",
+			LogPath:                "",
+			FileTransferImage:      "",
+			FileTransferWorkingDir: "",
+			FileTransferLogLevel:   "debug",
+			StatusSenderImage:      "",
+		}
+		app := apps.NewApps(dbconn, "@iplantcollaborative.org")
+		go app.Run()
+		defer app.Finish()
+		a = New(init, app, detector, getter)
 	}
 	return a, mock
 }
