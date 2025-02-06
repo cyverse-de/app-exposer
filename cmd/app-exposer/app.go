@@ -2,8 +2,6 @@ package main
 
 import (
 	"net/http"
-	"strings"
-	"time"
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
@@ -48,17 +46,10 @@ type ExposerAppInit struct {
 	IRODSZone                     string
 	IngressClass                  string
 	ClientSet                     kubernetes.Interface
-	NATSCluster                   string
-	NATSTLSKey                    string
-	NATSTLSCert                   string
-	NATSTLSCA                     string
-	NATSCredsFilePath             string
-	NATSMaxReconnects             int
-	NATSReconnectWait             int
 }
 
 // NewExposerApp creates and returns a newly instantiated *ExposerApp.
-func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *ExposerApp {
+func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn, c *koanf.Koanf) *ExposerApp {
 	jobStatusURL := c.String("vice.job-status.base")
 	if jobStatusURL == "" {
 		jobStatusURL = "http://job-status-listener"
@@ -77,40 +68,6 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *Expos
 	permissionsURL := c.String("permissions.base")
 	if permissionsURL == "" {
 		permissionsURL = "http://permissions"
-	}
-
-	nc, err := nats.Connect(
-		init.NATSCluster,
-		nats.UserCredentials(init.NATSCredsFilePath),
-		nats.RootCAs(init.NATSTLSCA),
-		nats.ClientCert(init.NATSTLSCert, init.NATSTLSKey),
-		nats.RetryOnFailedConnect(true),
-		nats.MaxReconnects(init.NATSMaxReconnects),
-		nats.ReconnectWait(time.Duration(init.NATSReconnectWait)*time.Second),
-		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
-			if err != nil {
-				log.Errorf("disconnected from nats: %s", err.Error())
-			} else {
-				log.Error("disconnected from nats with no error")
-			}
-		}),
-		nats.ReconnectHandler(func(nc *nats.Conn) {
-			log.Infof("reconnected to %s", nc.ConnectedUrl())
-		}),
-		nats.ClosedHandler(func(nc *nats.Conn) {
-			log.Errorf("connection closed: %s", nc.LastError().Error())
-		}),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Infof("configured servers: %s", strings.Join(nc.Servers(), " "))
-	log.Infof("connected to NATS host: %s", nc.ConnectedServerName())
-
-	conn, err := nats.NewEncodedConn(nc, "protojson")
-	if err != nil {
-		log.Fatal(err)
 	}
 
 	inclusterInit := &incluster.Init{

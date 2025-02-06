@@ -10,6 +10,7 @@ import (
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
+	"github.com/cyverse-de/app-exposer/quota"
 	"github.com/cyverse-de/app-exposer/types"
 	"github.com/cyverse-de/model/v7"
 	"github.com/labstack/echo/v4"
@@ -30,6 +31,8 @@ type JEXAdapter struct {
 	fileTransferWorkingDir string
 	fileTransferLogLevel   string
 	statusSenderImage      string
+	namespace              string
+	quotaEnforcer          *quota.Enforcer
 }
 
 type Init struct {
@@ -40,10 +43,11 @@ type Init struct {
 	FileTransferWorkingDir string
 	FileTransferLogLevel   string
 	StatusSenderImage      string
+	Namespace              string
 }
 
 // New returns a *JEXAdapter
-func New(init *Init, apps *apps.Apps, detector *millicores.Detector, imageInfoGetter imageinfo.InfoGetter) *JEXAdapter {
+func New(init *Init, apps *apps.Apps, detector *millicores.Detector, imageInfoGetter imageinfo.InfoGetter, enforcer *quota.Enforcer) *JEXAdapter {
 	return &JEXAdapter{
 		apps:                   apps,
 		detector:               detector,
@@ -55,6 +59,8 @@ func New(init *Init, apps *apps.Apps, detector *millicores.Detector, imageInfoGe
 		fileTransferWorkingDir: init.FileTransferWorkingDir,
 		fileTransferLogLevel:   init.FileTransferLogLevel,
 		statusSenderImage:      init.StatusSenderImage,
+		namespace:              init.Namespace,
+		quotaEnforcer:          enforcer,
 	}
 }
 
@@ -127,6 +133,17 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	}
 	log.Debug("done parsing request body JSON")
 
+	log.Debug("validating analysis")
+	if status, err := j.quotaEnforcer.ValidateJob(ctx, analysis, j.namespace); err != nil {
+		if validationErr, ok := err.(common.ErrorResponse); ok {
+			log.Error(validationErr)
+			return validationErr
+		}
+		log.Error(err)
+		return echo.NewHTTPError(status, err.Error())
+	}
+	log.Debug("done validating analysis")
+
 	log = log.WithFields(logrus.Fields{"external_id": analysis.InvocationID})
 
 	log.Debug("finding number of millicores reserved")
@@ -151,6 +168,7 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	}
 
 	// TODO: set the resource requests in the batch submissions
+	// TODO: validate jobs
 
 	opts := &batch.BatchSubmissionOpts{
 		FileTransferImage:      j.fileTransferImage,
