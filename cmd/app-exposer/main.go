@@ -259,20 +259,30 @@ func main() {
 	go a.Run()
 	defer a.Finish()
 
+	// app is the base app-exposer functionality.
 	app := NewExposerApp(
 		exposerInit,
 		a,
 		c,
 	)
 
+	// Set up the database abstraction needed for batch functionality.
 	dbase := db.New(dbconn)
+
+	// Create millicores handler needed for batch functionality.
 	detector, err := millicores.New(dbase, *defaultMillicores)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// We want to root the batch URLs at /batch
+	jaGroup := app.router.Group("/batch")
+
+	// Create the app that handles batch functionality.
 	jexAdapter := adapter.New(c, detector, infoGetter)
-	jexAdapter.Routes(app.router)
+
+	// Set the routes for the batch app.
+	jexAdapter.Routes(jaGroup)
 
 	log.Printf("listening on port %d", *listenPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", strconv.Itoa(*listenPort)), app.router))
