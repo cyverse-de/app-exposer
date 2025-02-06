@@ -23,6 +23,8 @@ import (
 	"github.com/cyverse-de/app-exposer/db"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
+	"github.com/cyverse-de/app-exposer/natsconn"
+	"github.com/cyverse-de/app-exposer/quota"
 	"github.com/cyverse-de/go-mod/cfg"
 	"github.com/cyverse-de/go-mod/gotelnats"
 	"github.com/cyverse-de/go-mod/logging"
@@ -240,6 +242,21 @@ func main() {
 	log.Infof("NATS CA cert file is %s", *caCert)
 	log.Infof("NATS creds file is %s", *credsPath)
 
+	necInit := &natsconn.Init{
+		NATSCluster:       natsCluster,
+		NATSTLSKey:        *tlsKey,
+		NATSTLSCert:       *tlsCert,
+		NATSTLSCA:         *caCert,
+		NATSCredsFilePath: *credsPath,
+		NATSMaxReconnects: gotelnats.DefaultMaxReconnects,
+		NATSReconnectWait: gotelnats.DefaultReconnectWait,
+	}
+
+	nec, err := natsconn.New(necInit)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	exposerInit := &ExposerAppInit{
 		Namespace:                     *namespace,
 		ViceNamespace:                 *viceNamespace,
@@ -253,11 +270,6 @@ func main() {
 		IRODSZone:                     zone,
 		IngressClass:                  *ingressClass,
 		ClientSet:                     clientset,
-		NATSCluster:                   natsCluster,
-		NATSTLSKey:                    *tlsKey,
-		NATSTLSCert:                   *tlsCert,
-		NATSTLSCA:                     *caCert,
-		NATSCredsFilePath:             *credsPath,
 	}
 
 	a := apps.NewApps(dbconn, *userSuffix)
@@ -268,6 +280,7 @@ func main() {
 	app := NewExposerApp(
 		exposerInit,
 		a,
+		nec,
 		c,
 	)
 
@@ -293,7 +306,8 @@ func main() {
 		FileTransferLogLevel:   *transferLogLevel,
 		StatusSenderImage:      *statusSenderImage,
 	}
-	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter)
+	enforcer := quota.NewEnforcer(clientset, dbconn, nec, *userSuffix)
+	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer)
 
 	// Set the routes for the batch app. Changes the state of the jaGroup
 	// instance at *jaGroup, so there's no return value that we care about.
