@@ -75,7 +75,7 @@ func (j *JEXAdapter) Routes(router types.Router) types.Router {
 	router.POST("/", j.LaunchHandler)
 	log.Info("added handler for POST /")
 
-	router.DELETE("/stop/:invocation_id", j.StopHandler)
+	router.DELETE("/stop/:id", j.StopHandler)
 	log.Info("added handler for DELETE /stop/:invocation_id")
 
 	return router
@@ -90,16 +90,26 @@ func (j *JEXAdapter) StopHandler(c echo.Context) error {
 
 	log := log.WithFields(logrus.Fields{"context": "stop app"})
 
-	invID := c.Param("invocation_id")
-	if invID == "" {
-		err = errors.New("missing job id in URL")
+	externalID := c.Param("id")
+	if externalID == "" {
+		err = errors.New("missing external id in URL")
 		log.Error(err)
 		return err
 	}
 
-	log = log.WithFields(logrus.Fields{"external_id": invID})
+	log = log.WithFields(logrus.Fields{"external_id": externalID})
 
-	// TODO: Add stop logic
+	ctx := c.Request().Context()
+	ctx, client, err := batch.NewWorkflowServiceClient(ctx)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	if _, err = batch.StopWorkflows(ctx, client, j.namespace, "external-id", externalID); err != nil {
+		log.Error(err)
+		return err
+	}
 
 	log.Info("sent stop message")
 
@@ -166,8 +176,6 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 		log.Error(err)
 		return err
 	}
-
-	// TODO: set the resource requests in the batch submissions
 
 	opts := &batch.BatchSubmissionOpts{
 		FileTransferImage:      j.fileTransferImage,
