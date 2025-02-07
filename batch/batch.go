@@ -15,6 +15,8 @@ import (
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 )
 
 var (
@@ -577,8 +579,52 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 	return &workflow
 }
 
+func (w *WorkflowMaker) SubmitWorkflow(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, workflow *v1alpha1.Workflow) (*v1alpha1.Workflow, error) {
+	creationOptions := &metav1.CreateOptions{}
+
+	return serviceClient.CreateWorkflow(ctx, &workflowpkg.WorkflowCreateRequest{
+		Namespace:     workflow.Namespace,
+		Workflow:      workflow,
+		ServerDryRun:  false,
+		CreateOptions: creationOptions,
+	})
+}
+
+func ListWorkflows(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, namespace, labelKey, analysisID string) (*v1alpha1.WorkflowList, error) {
+	req, err := labels.NewRequirement(labelKey, selection.Equals, []string{analysisID})
+	if err != nil {
+		return nil, err
+	}
+	return serviceClient.ListWorkflows(ctx, &workflowpkg.WorkflowListRequest{
+		Namespace: namespace,
+		ListOptions: &v1.ListOptions{
+			LabelSelector: req.String(),
+		},
+	})
+}
+
+func StopWorkflows(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, namespace, labelKey, analysisID string) ([]v1alpha1.Workflow, error) {
+	var retval []v1alpha1.Workflow
+	workflows, err := ListWorkflows(ctx, serviceClient, namespace, labelKey, analysisID)
+	if err != nil {
+		return nil, err
+	}
+	for _, workflow := range workflows.Items {
+		stopped, err := serviceClient.StopWorkflow(ctx, &workflowpkg.WorkflowStopRequest{
+			Namespace: namespace,
+			Name:      workflow.GetName(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		retval = append(retval, *stopped)
+	}
+	return retval, nil
+}
+
 // SubmitWorkflow submits a workflow (probably created by GenerateWorkflow()) to the cluster.
-// It does not wait for the workflow to complete.
+// It does not wait for the workflow to complete. The context passed in needs to be the same
+// one returned by NewWorkflowServiceClient.
 func SubmitWorkflow(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, workflow *v1alpha1.Workflow) (*v1alpha1.Workflow, error) {
 	creationOptions := &metav1.CreateOptions{}
 
@@ -587,6 +633,14 @@ func SubmitWorkflow(ctx context.Context, serviceClient workflowpkg.WorkflowServi
 		Workflow:      workflow,
 		ServerDryRun:  false,
 		CreateOptions: creationOptions,
+	})
+}
+
+// StopWorkflow stops and deletes a workflow. The operation is asynchronous.
+func StopWorkflow(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, namespace, name string) (*v1alpha1.Workflow, error) {
+	return serviceClient.StopWorkflow(ctx, &workflowpkg.WorkflowStopRequest{
+		Namespace: namespace,
+		Name:      name,
 	})
 }
 
