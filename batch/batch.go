@@ -9,6 +9,7 @@ import (
 	workflowpkg "github.com/argoproj/argo-workflows/v3/pkg/apiclient/workflow"
 	v1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/cyverse-de/app-exposer/imageinfo"
+	"github.com/cyverse-de/app-exposer/resourcing"
 	"github.com/cyverse-de/model/v7"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
@@ -32,24 +33,24 @@ type BatchSubmissionOpts struct {
 }
 
 type WorkflowMaker struct {
-	getter imageinfo.InfoGetter
-	job    *model.Job
+	getter   imageinfo.InfoGetter
+	analysis *model.Analysis
 }
 
 // NewWorkflowMaker creates a new instance of WorkflowMaker
-func NewWorkflowMaker(getter imageinfo.InfoGetter, job *model.Job) *WorkflowMaker {
+func NewWorkflowMaker(getter imageinfo.InfoGetter, analysis *model.Analysis) *WorkflowMaker {
 	return &WorkflowMaker{
-		getter: getter,
-		job:    job,
+		getter:   getter,
+		analysis: analysis,
 	}
 }
 
 // stepTemplates creates a list of templates based on the steps
-// defined in the job description.
+// defined in the analysis description.
 func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 	var templates []v1alpha1.Template
 
-	for idx, step := range w.job.Steps {
+	for idx, step := range w.analysis.Steps {
 		var (
 			sourceParts []string
 			source      string
@@ -105,6 +106,7 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 			Script: &v1alpha1.ScriptTemplate{
 				Source: source,
 				Container: apiv1.Container{
+					Resources: *resourcing.Requirements(w.analysis),
 					Image: fmt.Sprintf(
 						"%s:%s",
 						step.Component.Container.Image.Name,
@@ -325,7 +327,7 @@ func (w *WorkflowMaker) sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.
 func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	var inputFilesAndFolders []string
 
-	for _, stepInput := range w.job.Inputs() {
+	for _, stepInput := range w.analysis.Inputs() {
 		inputFilesAndFolders = append(
 			inputFilesAndFolders,
 			stepInput.IRODSPath(),
@@ -535,15 +537,15 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 				Parameters: []v1alpha1.Parameter{
 					{
 						Name:  "username",
-						Value: v1alpha1.AnyStringPtr(w.job.Submitter),
+						Value: v1alpha1.AnyStringPtr(w.analysis.Submitter),
 					},
 					{
 						Name:  "output-folder",
-						Value: v1alpha1.AnyStringPtr(w.job.OutputDirectory()),
+						Value: v1alpha1.AnyStringPtr(w.analysis.OutputDirectory()),
 					},
 					{
-						Name:  "job_uuid",
-						Value: v1alpha1.AnyStringPtr(w.job.InvocationID),
+						Name:  "analysis_uuid",
+						Value: v1alpha1.AnyStringPtr(w.analysis.InvocationID),
 					},
 					{
 						Name:  "analysis_uuid",
