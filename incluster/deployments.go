@@ -517,22 +517,27 @@ func (i *Incluster) getDeployment(ctx context.Context, job *model.Job) (*appsv1.
 	autoMount := false
 
 	// Add the tolerations to use by default.
-	tolerations := []apiv1.Toleration{
-		{
-			Key:      viceTolerationKey,
-			Operator: apiv1.TolerationOperator(viceTolerationOperator),
-			Value:    viceTolerationValue,
-			Effect:   apiv1.TaintEffect(viceTolerationEffect),
-		},
-	}
+	tolerations := []apiv1.Toleration{}
 
 	// Add the node selector requirements to use by default.
 	nodeSelectorRequirements := []apiv1.NodeSelectorRequirement{
 		{
-			Key:      viceAffinityKey,
-			Operator: apiv1.NodeSelectorOperator(viceAffinityOperator),
-			Values: []string{
-				viceAffinityValue,
+			Key:      analysisAffinityKey,
+			Operator: apiv1.NodeSelectorOperator(analysisAffinityOperator),
+		},
+	}
+
+	// Add the preferred node scheduling terms.
+	preferredSchedTerms := []apiv1.PreferredSchedulingTerm{
+		{
+			Weight: 1,
+			Preference: apiv1.NodeSelectorTerm{
+				MatchExpressions: []apiv1.NodeSelectorRequirement{
+					{
+						Key:      "vice",
+						Operator: apiv1.NodeSelectorOpExists,
+					},
+				},
 			},
 		},
 	}
@@ -594,6 +599,7 @@ func (i *Incluster) getDeployment(ctx context.Context, job *model.Job) (*appsv1.
 									},
 								},
 							},
+							PreferredDuringSchedulingIgnoredDuringExecution: preferredSchedTerms,
 						},
 					},
 				},
