@@ -535,6 +535,12 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 			ServiceAccountName: "argo-executor",         // TODO: Make this configurable
 			Entrypoint:         "analysis-steps",        // TODO: Make this a const
 			OnExit:             "analysis-exit-handler", // TODO: Make this a const
+			Tolerations: []apiv1.Toleration{
+				{
+					Key:      "analysis",
+					Operator: apiv1.TolerationOpExists,
+				},
+			},
 			Affinity: &apiv1.Affinity{
 				NodeAffinity: &apiv1.NodeAffinity{
 					RequiredDuringSchedulingIgnoredDuringExecution: &apiv1.NodeSelector{

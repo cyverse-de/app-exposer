@@ -517,7 +517,12 @@ func (i *Incluster) getDeployment(ctx context.Context, job *model.Job) (*appsv1.
 	autoMount := false
 
 	// Add the tolerations to use by default.
-	tolerations := []apiv1.Toleration{}
+	tolerations := []apiv1.Toleration{
+		{
+			Key:      "analysis",
+			Operator: apiv1.TolerationOpExists,
+		},
+	}
 
 	// Add the node selector requirements to use by default.
 	nodeSelectorRequirements := []apiv1.NodeSelectorRequirement{
