@@ -62,6 +62,9 @@ const (
 	gpuTolerationValue    = "true"
 	gpuTolerationEffect   = "NoSchedule"
 
+	analysisAffinityKey      = "analysis"
+	analysisAffinityOperator = "Exists"
+
 	viceAffinityKey      = "vice"
 	viceAffinityOperator = "In"
 	viceAffinityValue    = "true"

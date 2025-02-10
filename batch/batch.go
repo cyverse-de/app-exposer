@@ -535,6 +535,35 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 			ServiceAccountName: "argo-executor",         // TODO: Make this configurable
 			Entrypoint:         "analysis-steps",        // TODO: Make this a const
 			OnExit:             "analysis-exit-handler", // TODO: Make this a const
+			Affinity: &apiv1.Affinity{
+				NodeAffinity: &apiv1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &apiv1.NodeSelector{
+						NodeSelectorTerms: []apiv1.NodeSelectorTerm{
+							{
+								MatchExpressions: []apiv1.NodeSelectorRequirement{
+									{
+										Key:      "analysis",
+										Operator: apiv1.NodeSelectorOpExists,
+									},
+								},
+							},
+						},
+					},
+					PreferredDuringSchedulingIgnoredDuringExecution: []apiv1.PreferredSchedulingTerm{
+						{
+							Weight: 1,
+							Preference: apiv1.NodeSelectorTerm{
+								MatchExpressions: []apiv1.NodeSelectorRequirement{
+									{
+										Key:      "batch",
+										Operator: apiv1.NodeSelectorOpExists,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 			Arguments: v1alpha1.Arguments{
 				Parameters: []v1alpha1.Parameter{
 					{
@@ -546,7 +575,7 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 						Value: v1alpha1.AnyStringPtr(w.analysis.OutputDirectory()),
 					},
 					{
-						Name:  "analysis_uuid",
+						Name:  "job_uuid",
 						Value: v1alpha1.AnyStringPtr(w.analysis.InvocationID),
 					},
 					{
