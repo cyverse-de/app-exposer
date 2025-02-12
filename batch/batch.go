@@ -21,7 +21,6 @@ import (
 
 var (
 	defaultStorageCapacity, _ = resourcev1.ParseQuantity("5Gi")
-	defaultStorageMode        = "ReadWriteOnce"
 	defaultVolumeName         = "workdir"
 	statusRunning             = "running"
 )
