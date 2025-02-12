@@ -52,11 +52,6 @@ const (
 	downloadKind     = "download"
 	uploadKind       = "upload"
 
-	viceTolerationKey      = "vice"
-	viceTolerationOperator = "Equal"
-	viceTolerationValue    = "only"
-	viceTolerationEffect   = "NoSchedule"
-
 	gpuTolerationKey      = "gpu"
 	gpuTolerationOperator = "Equal"
 	gpuTolerationValue    = "true"
@@ -64,10 +59,6 @@ const (
 
 	analysisAffinityKey      = "analysis"
 	analysisAffinityOperator = "Exists"
-
-	viceAffinityKey      = "vice"
-	viceAffinityOperator = "In"
-	viceAffinityValue    = "true"
 
 	gpuAffinityKey      = "gpu"
 	gpuAffinityOperator = "In"
