@@ -563,6 +563,7 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 			Labels: map[string]string{
 				"analysis-uuid": opts.AnalysisID,
 				"job-uuid":      w.analysis.InvocationID,
+				"external-id":   w.analysis.InvocationID,
 			},
 		},
 		Spec: v1alpha1.WorkflowSpec{
