@@ -323,6 +323,35 @@ func (w *WorkflowMaker) sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.
 	}
 }
 
+// sendCleanupEvent returns the template definition for the steps that send
+// status updates to the DE backend.
+func (w *WorkflowMaker) sendCleanupEventTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
+	return &v1alpha1.Template{
+		Name: "send-cleanup",
+		Inputs: v1alpha1.Inputs{
+			Parameters: []v1alpha1.Parameter{
+				{
+					Name: "analysis_uuid",
+				},
+			},
+		},
+		Container: &apiv1.Container{
+			Image: opts.StatusSenderImage,
+			Command: []string{
+				"curl",
+			},
+			Args: []string{
+				"-v",
+				"-H",
+				"Content-Type: application/json",
+				"-d",
+				`{"analysis_uuid" : "{{workflow.parameters.analysis_uuid}}"}`,
+				"http://webhook-eventsource-svc.argo-events/batch/cleanup",
+			},
+		},
+	}
+}
+
 // downloadFilesTemplate returns a template definition for the steps that
 // download files from the data store into the working directory volume.
 func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
@@ -517,6 +546,7 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 		workflowTemplates,
 		*w.exitHandlerTemplate(),
 		*w.sendStatusTemplate(opts),
+		*w.sendCleanupEventTemplate(opts),
 		*w.downloadFilesTemplate(opts),
 		*w.uploadFilesTemplate(opts),
 	)
@@ -529,6 +559,10 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 		ObjectMeta: v1.ObjectMeta{
 			GenerateName: "batch-analysis-", // TODO: Make this configurable
 			Namespace:    "argo",
+			Labels: map[string]string{
+				"analysis-uuid": opts.AnalysisID,
+				"job-uuid":      w.analysis.InvocationID,
+			},
 		},
 		Spec: v1alpha1.WorkflowSpec{
 			ServiceAccountName: "argo-executor",         // TODO: Make this configurable

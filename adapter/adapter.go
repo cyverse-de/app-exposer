@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -83,6 +84,35 @@ func (j *JEXAdapter) Routes(router types.Router) types.Router {
 
 func (j *JEXAdapter) HomeHandler(c echo.Context) error {
 	return c.String(http.StatusOK, "Welcome to the JEX.\n")
+}
+
+type analysisUUIDBody struct {
+	AnalysisUUID string `json:"analysis_uuid"`
+}
+
+func (j *JEXAdapter) StopByAnalysisUUIDHandler(c echo.Context) error {
+	var (
+		err error
+		b   analysisUUIDBody
+	)
+
+	ctx := c.Request().Context()
+
+	if err = json.NewDecoder(c.Request().Body).Decode(&b); err != nil {
+		return err
+	}
+
+	ctx, client, err := batch.NewWorkflowServiceClient(ctx)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	if _, err = batch.StopWorkflows(ctx, client, j.namespace, "analysis-uuid", b.AnalysisUUID); err != nil {
+		return err
+	}
+
+	return c.NoContent(http.StatusOK)
 }
 
 func (j *JEXAdapter) StopHandler(c echo.Context) error {
