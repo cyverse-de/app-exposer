@@ -95,6 +95,7 @@ func main() {
 		checkResourceAccessService    = flag.String("check-resource-access-service", "check-resource-access", "The name of the service that validates whether a user can access a resource")
 		userSuffix                    = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
 		defaultMillicores             = flag.Float64("default-millicores", 4000.0, "The default number of millicores reserved for an analysis.")
+		argoWorkflowNS                = flag.String("workflow-namespace", "argo", "The namespace Argo Workflows run in.")
 		logLevel                      = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
 	)
 
@@ -305,6 +306,7 @@ func main() {
 		FileTransferWorkingDir: *transferWorkingDir,
 		FileTransferLogLevel:   *transferLogLevel,
 		StatusSenderImage:      *statusSenderImage,
+		Namespace:              *argoWorkflowNS,
 	}
 	enforcer := quota.NewEnforcer(clientset, dbconn, nec, *userSuffix)
 	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer)

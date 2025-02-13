@@ -3,6 +3,7 @@ package batch
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/argoproj/argo-workflows/v3/cmd/argo/commands/client"
@@ -678,14 +679,24 @@ func StopWorkflows(ctx context.Context, serviceClient workflowpkg.WorkflowServic
 		return nil, err
 	}
 	for _, workflow := range workflows.Items {
-		stopped, err := serviceClient.StopWorkflow(ctx, &workflowpkg.WorkflowStopRequest{
-			Namespace: namespace,
+		if slices.Contains([]string{"Running", "Pending"}, string(workflow.Status.Phase)) {
+			_, err := serviceClient.StopWorkflow(ctx, &workflowpkg.WorkflowStopRequest{
+				Namespace: namespace,
+				Name:      workflow.GetName(),
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if _, err = serviceClient.DeleteWorkflow(ctx, &workflowpkg.WorkflowDeleteRequest{
+			Namespace: workflow.GetNamespace(),
 			Name:      workflow.GetName(),
-		})
-		if err != nil {
+		}); err != nil {
 			return nil, err
 		}
-		retval = append(retval, *stopped)
+
+		retval = append(retval, workflow)
 	}
 	return retval, nil
 }
