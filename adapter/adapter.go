@@ -74,6 +74,7 @@ func (j *JEXAdapter) Routes(router types.Router) types.Router {
 
 	router.POST("", j.LaunchHandler)
 	router.POST("/", j.LaunchHandler)
+	router.POST("/cleanup", j.StopByAnalysisUUIDHandler)
 	log.Info("added handler for POST /")
 
 	router.DELETE("/stop/:id", j.StopHandler)
