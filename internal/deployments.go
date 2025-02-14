@@ -153,11 +153,17 @@ func (i *Internal) viceProxyCommand(job *model.Job) []string {
 }
 
 var (
-	defaultCPUResourceRequest, _ = resourcev1.ParseQuantity("1000m")
-	defaultMemResourceRequest, _ = resourcev1.ParseQuantity("2Gi")
-	defaultStorageRequest, _     = resourcev1.ParseQuantity("1Gi")
-	defaultCPUResourceLimit, _   = resourcev1.ParseQuantity("4000m")
-	defaultMemResourceLimit, _   = resourcev1.ParseQuantity("8Gi")
+	defaultCPUResourceRequest, _   = resourcev1.ParseQuantity("1000m")
+	defaultMemResourceRequest, _   = resourcev1.ParseQuantity("2Gi")
+	defaultStorageRequest, _       = resourcev1.ParseQuantity("1Gi")
+	defaultCPUResourceLimit, _     = resourcev1.ParseQuantity("4000m")
+	defaultMemResourceLimit, _     = resourcev1.ParseQuantity("8Gi")
+	viceProxyCPUResourceRequest, _ = resourcev1.ParseQuantity("100m")
+	viceProxyMemResourceRequest, _ = resourcev1.ParseQuantity("100Mi")
+	viceProxyStorageRequest, _     = resourcev1.ParseQuantity("100Mi")
+	viceProxyCPUResourceLimit, _   = resourcev1.ParseQuantity("200m")
+	viceProxyMemResourceLimit, _   = resourcev1.ParseQuantity("200Mi")
+	viceProxyStorageLimit, _       = resourcev1.ParseQuantity("200Mi")
 )
 
 func cpuResourceRequest(job *model.Job) resourcev1.Quantity {
@@ -574,6 +580,18 @@ func (i *Internal) deploymentContainers(job *model.Job) []apiv1.Container {
 					"NET_RAW",
 					"MKNOD",
 				},
+			},
+		},
+		Resources: apiv1.ResourceRequirements{
+			Limits: apiv1.ResourceList{
+				apiv1.ResourceCPU:              viceProxyCPUResourceLimit,
+				apiv1.ResourceMemory:           viceProxyMemResourceLimit,
+				apiv1.ResourceEphemeralStorage: viceProxyStorageLimit,
+			},
+			Requests: apiv1.ResourceList{
+				apiv1.ResourceCPU:              viceProxyCPUResourceRequest,
+				apiv1.ResourceMemory:           viceProxyMemResourceRequest,
+				apiv1.ResourceEphemeralStorage: viceProxyStorageRequest,
 			},
 		},
 		ReadinessProbe: &apiv1.Probe{
