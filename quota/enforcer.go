@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"slices"
-	"strings"
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
@@ -247,12 +245,6 @@ func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int
 }
 
 func (e *Enforcer) ValidateJob(ctx context.Context, job *model.Job, namespace string) (int, error) {
-
-	// Verify that the job type is supported by this service
-	if slices.Contains([]string{"interapps", "analysis"}, strings.ToLower(job.ExecutionTarget)) {
-		return http.StatusInternalServerError, fmt.Errorf("job type %s is not supported by this service", job.Type)
-	}
-
 	// Get the username
 	usernameLabelValue := common.LabelValueString(job.Submitter)
 	user := job.Submitter
