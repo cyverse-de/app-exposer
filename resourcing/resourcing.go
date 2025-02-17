@@ -16,7 +16,7 @@ var (
 	DefaultCPUResourceRequest, _   = resourcev1.ParseQuantity("1000m")
 	DefaultMemResourceRequest, _   = resourcev1.ParseQuantity("2Gi")
 	DefaultStorageRequest, _       = resourcev1.ParseQuantity("1Gi")
-	DefaultCPUResourceLimit, _     = resourcev1.ParseQuantity("4000m")
+	DefaultCPUResourceLimit, _     = resourcev1.ParseQuantity("2000m")
 	DefaultMemResourceLimit, _     = resourcev1.ParseQuantity("8Gi")
 	VICEProxyCPUResourceRequest, _ = resourcev1.ParseQuantity("100m")
 	VICEProxyMemResourceRequest, _ = resourcev1.ParseQuantity("100Mi")
