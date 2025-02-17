@@ -1,0 +1,207 @@
+# Example Batch Workflow
+#
+# This example uses argo-workflows to run an batch analysis as defined by the
+# Discovery Environment. It assumes the following:
+# * A default persistent volume provider. Used to create and maintain the
+#   working directory between steps.
+# * An argo-events installation in a k8s namespace called `argo-events`.
+# * An argo-events webhook EventSource named `webhook`. A Sensor and Trigger
+#   would be useful, but technically aren't required to run the workflow.
+# * A config-map named `irods-config` containing the environment variables
+#   needed by gocmd to connect to the data store.
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: test-
+  namespace: argo
+spec:
+  serviceAccountName: argo-executor
+  entrypoint: analysis-steps
+  onExit: analysis-exit-handler
+  arguments:
+    parameters:
+      - name: username
+        value: wregglej
+      - name: output-folder
+        value: /cyverse/home/wregglej/test/output
+      - name: job_uuid
+        value: bd965f87-29da-4cab-b651-f9b7d0294d0f
+      - name: analysis_uuid
+        value: 77f5213f-1662-4bd6-8e2a-ad447beec8a8
+  volumeClaimTemplates:
+    - metadata:
+        name: workdir
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+  templates:
+    - name: analysis-steps
+      steps:
+        - - name: downloading-files-status
+            template: send-status
+            arguments:
+              parameters:
+                - name: message
+                  value: "downloading files"
+                - name: state
+                  value: "running"
+
+        - - name: download-files
+            template: download-files
+
+        - - name: running-tools-status
+            template: send-status
+            arguments:
+              parameters:
+                - name: message
+                  value: "starting tool"
+                - name: state
+                  value: "running"
+
+        - - name: tool-0
+            template: tool-0
+
+    - name: analysis-exit-handler
+      steps:
+        - - name: uploading-files-status
+            template: send-status
+            arguments:
+              parameters:
+                - name: message
+                  value: "uploading files"
+                - name: state
+                  value: "running"
+        - - name: upload-files
+            template: upload-files
+        - - name: finished-status
+            template: send-status
+            arguments:
+              parameters:
+                - name: message
+                  value: "sending final status"
+                - name: state
+                  value: "{{workflow.status}}"
+
+    - name: download-files
+      container:
+        image: harbor.cyverse.org/de/gocmd:latest
+        args:
+          [
+            "--log_level=debug",
+            "get",
+            "/cyverse/home/wregglej/test/configMapServices.yaml",
+          ]
+        env:
+          - name: IRODS_CLIENT_USER_NAME
+            value: "{{workflow.parameters.username}}"
+          - name: IRODS_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: irods-config
+                key: IRODS_HOST
+          - name: IRODS_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: irods-config
+                key: IRODS_PORT
+          - name: IRODS_USER_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: irods-config
+                key: IRODS_USER_NAME
+          - name: IRODS_USER_PASSWORD
+            valueFrom:
+              configMapKeyRef:
+                name: irods-config
+                key: IRODS_USER_PASSWORD
+          - name: IRODS_ZONE_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: irods-config
+                key: IRODS_ZONE_NAME
+        workingDir: /de-app-work
+        volumeMounts:
+          - name: workdir
+            mountPath: /de-app-work
+
+    - name: tool-0
+      script:
+        image: harbor.cyverse.org/de/url-import:latest
+        command: ["bash"]
+        source: |
+          wc configMapServices.yaml > wc.out
+        workingDir: /de-app-work
+        volumeMounts:
+          - name: workdir
+            mountPath: /de-app-work
+
+    - name: send-status
+      inputs:
+        parameters:
+          - name: message
+          - name: state
+      container:
+        image: harbor.cyverse.org/de/url-import:latest
+        command: ["curl"]
+        args: [
+            "-v",
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            '{
+            "job_uuid" : "{{workflow.parameters.job_uuid}}",
+            "analysis_uuid" : "{{workflow.parameters.analysis_uuid}}",
+            "hostname" : "test",
+            "message": "{{inputs.parameters.message}}",
+            "state" : "{{inputs.parameters.state}}"
+            }',
+            "http://webhook-eventsource-svc.argo-events/batch",
+          ]
+
+    - name: upload-files
+      container:
+        image: harbor.cyverse.org/de/gocmd:latest
+        workingDir: /de-app-work
+        args:
+          [
+            "--log_level=debug",
+            "put",
+            "-f",
+            ".",
+            "{{workflow.parameters.output-folder}}",
+          ]
+        env:
+          - name: IRODS_CLIENT_USER_NAME
+            value: "{{workflow.parameters.username}}"
+          - name: IRODS_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: irods-config
+                key: IRODS_HOST
+          - name: IRODS_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: irods-config
+                key: IRODS_PORT
+          - name: IRODS_USER_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: irods-config
+                key: IRODS_USER_NAME
+          - name: IRODS_USER_PASSWORD
+            valueFrom:
+              configMapKeyRef:
+                name: irods-config
+                key: IRODS_USER_PASSWORD
+          - name: IRODS_ZONE_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: irods-config
+                key: IRODS_ZONE_NAME
+        volumeMounts:
+          - name: workdir
+            mountPath: /de-app-work
