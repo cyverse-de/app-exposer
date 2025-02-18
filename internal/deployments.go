@@ -163,7 +163,7 @@ var (
 	viceProxyStorageRequest, _     = resourcev1.ParseQuantity("100Mi")
 	viceProxyCPUResourceLimit, _   = resourcev1.ParseQuantity("200m")
 	viceProxyMemResourceLimit, _   = resourcev1.ParseQuantity("200Mi")
-	viceProxyStorageLimit, _       = resourcev1.ParseQuantity("200Mi")
+	viceProxyStorageLimit, _       = resourcev1.ParseQuantity("100Gi")
 )
 
 func cpuResourceRequest(job *model.Job) resourcev1.Quantity {
