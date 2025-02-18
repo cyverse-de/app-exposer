@@ -31,7 +31,7 @@ type BatchSubmissionOpts struct {
 	FileTransferLogLevel   string
 	FileTransferWorkingDir string
 	StatusSenderImage      string
-	AnalysisID             string
+	ExternalID             string
 }
 
 type WorkflowMaker struct {
@@ -282,6 +282,22 @@ func (w *WorkflowMaker) exitHandlerTemplate() *v1alpha1.Template {
 					},
 				},
 			},
+			{
+				Steps: []v1alpha1.WorkflowStep{
+					{
+						Name:     "cleanup",
+						Template: "send-cleanup",
+						Arguments: v1alpha1.Arguments{
+							Parameters: []v1alpha1.Parameter{
+								{
+									Name:  "uuid",
+									Value: v1alpha1.AnyStringPtr("{{workflow.parameters.job_uuid}}"),
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -313,8 +329,7 @@ func (w *WorkflowMaker) sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.
 				"-d",
 				`{
 				    "job_uuid" : "{{workflow.parameters.job_uuid}}",
-					"analysis_uuid" : "{{workflow.parameters.analysis_uuid}}",
-     				"hostname" : "test",
+     				"hostname" : "batch",
          			"message": "{{inputs.parameters.message}}",
             		"state" : "{{inputs.parameters.state}}"
      			}`,
@@ -329,13 +344,6 @@ func (w *WorkflowMaker) sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.
 func (w *WorkflowMaker) sendCleanupEventTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	return &v1alpha1.Template{
 		Name: "send-cleanup",
-		Inputs: v1alpha1.Inputs{
-			Parameters: []v1alpha1.Parameter{
-				{
-					Name: "analysis_uuid",
-				},
-			},
-		},
 		Container: &apiv1.Container{
 			Image: opts.StatusSenderImage,
 			Command: []string{
@@ -346,7 +354,7 @@ func (w *WorkflowMaker) sendCleanupEventTemplate(opts *BatchSubmissionOpts) *v1a
 				"-H",
 				"Content-Type: application/json",
 				"-d",
-				`{"analysis_uuid" : "{{workflow.parameters.analysis_uuid}}"}`,
+				`{"uuid" : "{{workflow.parameters.uuid}}"}`,
 				"http://webhook-eventsource-svc.argo-events/batch/cleanup",
 			},
 		},
@@ -561,9 +569,8 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 			GenerateName: "batch-analysis-", // TODO: Make this configurable
 			Namespace:    "argo",
 			Labels: map[string]string{
-				"analysis-uuid": opts.AnalysisID,
-				"job-uuid":      w.analysis.InvocationID,
-				"external-id":   w.analysis.InvocationID,
+				"job-uuid":    w.analysis.InvocationID,
+				"external-id": w.analysis.InvocationID,
 			},
 		},
 		Spec: v1alpha1.WorkflowSpec{
@@ -619,10 +626,6 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 						Name:  "job_uuid",
 						Value: v1alpha1.AnyStringPtr(w.analysis.InvocationID),
 					},
-					{
-						Name:  "analysis_uuid",
-						Value: v1alpha1.AnyStringPtr(opts.AnalysisID),
-					},
 				},
 			},
 			VolumeClaimTemplates: []apiv1.PersistentVolumeClaim{
@@ -660,8 +663,8 @@ func (w *WorkflowMaker) SubmitWorkflow(ctx context.Context, serviceClient workfl
 	})
 }
 
-func ListWorkflows(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, namespace, labelKey, analysisID string) (*v1alpha1.WorkflowList, error) {
-	req, err := labels.NewRequirement(labelKey, selection.Equals, []string{analysisID})
+func ListWorkflows(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, namespace, labelKey, externalID string) (*v1alpha1.WorkflowList, error) {
+	req, err := labels.NewRequirement(labelKey, selection.Equals, []string{externalID})
 	if err != nil {
 		return nil, err
 	}
@@ -673,9 +676,9 @@ func ListWorkflows(ctx context.Context, serviceClient workflowpkg.WorkflowServic
 	})
 }
 
-func StopWorkflows(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, namespace, labelKey, analysisID string) ([]v1alpha1.Workflow, error) {
+func StopWorkflows(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, namespace, labelKey, externalID string) ([]v1alpha1.Workflow, error) {
 	var retval []v1alpha1.Workflow
-	workflows, err := ListWorkflows(ctx, serviceClient, namespace, labelKey, analysisID)
+	workflows, err := ListWorkflows(ctx, serviceClient, namespace, labelKey, externalID)
 	if err != nil {
 		return nil, err
 	}

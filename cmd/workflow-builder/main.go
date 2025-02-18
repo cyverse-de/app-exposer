@@ -70,7 +70,7 @@ func main() {
 		FileTransferWorkingDir: *transferWorkingDir,
 		FileTransferLogLevel:   *transferLogLevel,
 		StatusSenderImage:      *statusSenderImage,
-		AnalysisID:             *analysisID,
+		ExternalID:             *analysisID,
 	}
 
 	maker := batch.NewWorkflowMaker(infoGetter, &inputJob)

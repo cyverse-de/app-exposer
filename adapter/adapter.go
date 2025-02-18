@@ -74,7 +74,7 @@ func (j *JEXAdapter) Routes(router types.Router) types.Router {
 
 	router.POST("", j.LaunchHandler)
 	router.POST("/", j.LaunchHandler)
-	router.POST("/cleanup", j.StopByAnalysisUUIDHandler)
+	router.POST("/cleanup", j.StopByUUID)
 	log.Info("added handler for POST /")
 
 	router.DELETE("/stop/:id", j.StopHandler)
@@ -87,14 +87,14 @@ func (j *JEXAdapter) HomeHandler(c echo.Context) error {
 	return c.String(http.StatusOK, "Welcome to the JEX.\n")
 }
 
-type analysisUUIDBody struct {
-	AnalysisUUID string `json:"analysis_uuid"`
+type uuidBody struct {
+	uuid string
 }
 
-func (j *JEXAdapter) StopByAnalysisUUIDHandler(c echo.Context) error {
+func (j *JEXAdapter) StopByUUID(c echo.Context) error {
 	var (
 		err error
-		b   analysisUUIDBody
+		b   uuidBody
 	)
 
 	ctx := c.Request().Context()
@@ -109,7 +109,7 @@ func (j *JEXAdapter) StopByAnalysisUUIDHandler(c echo.Context) error {
 		return err
 	}
 
-	if _, err = batch.StopWorkflows(ctx, client, j.namespace, "analysis-uuid", b.AnalysisUUID); err != nil {
+	if _, err = batch.StopWorkflows(ctx, client, j.namespace, "external-id", b.uuid); err != nil {
 		return err
 	}
 
@@ -187,7 +187,6 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 
 	log = log.WithFields(logrus.Fields{
 		"external_id": analysis.InvocationID,
-		"analysis_id": analysis.ID,
 	})
 
 	log.Debug("finding number of millicores reserved")
@@ -199,24 +198,18 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	log.Debug("done finding number of millicores reserved")
 
 	log.Infof("storing %s millicores reserved for %s", millicoresReserved.String(), analysis.InvocationID)
-	if err = j.detector.StoreMillicoresReserved(ctx, analysis, millicoresReserved); err != nil {
-		log.Error(err)
-	}
-	log.Infof("done storing %s millicores reserved for %s", millicoresReserved.String(), analysis.InvocationID)
-
-	// Look up the analysis ID
-	analysisID, err := j.apps.GetAnalysisIDByExternalID(ctx, analysis.InvocationID)
-	if err != nil {
+	if err = j.apps.SetMillicoresReserved(analysis, millicoresReserved); err != nil {
 		log.Error(err)
 		return err
 	}
+	log.Infof("done storing %s millicores reserved for %s", millicoresReserved.String(), analysis.InvocationID)
 
 	opts := &batch.BatchSubmissionOpts{
 		FileTransferImage:      j.fileTransferImage,
 		FileTransferLogLevel:   j.fileTransferLogLevel,
 		FileTransferWorkingDir: j.fileTransferWorkingDir,
 		StatusSenderImage:      j.statusSenderImage,
-		AnalysisID:             analysisID,
+		ExternalID:             analysis.InvocationID,
 	}
 
 	maker := batch.NewWorkflowMaker(j.imageInfoGetter, analysis)
