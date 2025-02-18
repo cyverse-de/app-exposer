@@ -62,8 +62,11 @@ func (d *Detector) NumberReserved(job *model.Job) (*apd.Decimal, error) {
 }
 
 func (d *Detector) StoreMillicoresReserved(context context.Context, job *model.Job, millicoresReserved *apd.Decimal) error {
-	externalID := job.InvocationID
-	err := d.db.SetMillicoresReserved(context, externalID, millicoresReserved)
-	return err
+	if job.ID != "" {
+		log.Debugf("Storing millicores reserved by analysis ID: %s", job.ID)
+		return d.db.SetMillicoresReservedByAnalysisID(context, job.ID, millicoresReserved)
 
+	}
+	log.Debugf("Storing millicores reserved by invocation ID: %s", job.InvocationID)
+	return d.db.SetMillicoresReserved(context, job.InvocationID, millicoresReserved)
 }

@@ -34,6 +34,49 @@ func New(db DatabaseAccessor) *Database {
 	}
 }
 
+func (d *Database) SetMillicoresReservedByAnalysisID(ctx context.Context, analysisID string, millicoresReserved *apd.Decimal) error {
+	var err error
+
+	ctx, span := otel.Tracer(otelName).Start(ctx, "SetMillicoresReservedByAnalysisID")
+	defer span.End()
+
+	log = log.WithFields(logrus.Fields{
+		"context":            "set millicores reserved",
+		"analysisID":         analysisID,
+		"millicoresReserved": millicoresReserved.String(),
+	})
+
+	const stmt = `
+		UPDATE jobs
+		SET millicores_reserved = $2
+		WHERE jobs.id = $1
+	`
+
+	log.Infof("job ID is %s", analysisID)
+
+	converted, err := millicoresReserved.Int64()
+	if err != nil {
+		return err
+	}
+	log.Debugf("converted millicores values %d", converted)
+
+	result, err := d.db.ExecContext(ctx, stmt, analysisID, converted)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	log.Debugf("rows affected %d", rowsAffected)
+
+	return err
+}
+
 func (d *Database) SetMillicoresReserved(context context.Context, externalID string, millicoresReserved *apd.Decimal) error {
 	var (
 		err   error
@@ -42,14 +85,6 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 
 	ctx, span := otel.Tracer(otelName).Start(context, "SetMillicoresReserved")
 	defer span.End()
-
-	log = log.WithFields(logrus.Fields{"context": "set millicores reserved", "externalID": externalID, "millicoresReserved": millicoresReserved.String()})
-
-	const stmt = `
-		UPDATE jobs
-		SET millicores_reserved = $2
-		WHERE jobs.id = $1
-	`
 
 	const jobIDQuery = `
 		SELECT job_id
@@ -70,27 +105,5 @@ func (d *Database) SetMillicoresReserved(context context.Context, externalID str
 	}
 	log.Debug("done looking up job ID")
 
-	log.Infof("job ID is %s", jobID)
-
-	converted, err := millicoresReserved.Int64()
-	if err != nil {
-		return err
-	}
-	log.Debugf("converted millicores values %d", converted)
-
-	result, err := d.db.ExecContext(ctx, stmt, jobID, converted)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-
-	log.Debugf("rows affected %d", rowsAffected)
-
-	return err
+	return d.SetMillicoresReservedByAnalysisID(ctx, jobID, millicoresReserved)
 }

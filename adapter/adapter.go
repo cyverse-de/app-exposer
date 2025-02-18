@@ -185,7 +185,10 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	}
 	log.Debug("done validating analysis")
 
-	log = log.WithFields(logrus.Fields{"external_id": analysis.InvocationID})
+	log = log.WithFields(logrus.Fields{
+		"external_id": analysis.InvocationID,
+		"analysis_id": analysis.ID,
+	})
 
 	log.Debug("finding number of millicores reserved")
 	millicoresReserved, err := j.detector.NumberReserved(analysis)
