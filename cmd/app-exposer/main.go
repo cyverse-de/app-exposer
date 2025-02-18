@@ -13,6 +13,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf"
+	"github.com/labstack/echo/v4/middleware"
 	_ "github.com/lib/pq"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
@@ -296,6 +297,7 @@ func main() {
 
 	// We want to root the batch URLs at /batch
 	jaGroup := app.router.Group("/batch")
+	jaGroup.Use(middleware.Logger())
 
 	// Create the app that handles batch functionality.
 	jexAdapterInit := &adapter.Init{

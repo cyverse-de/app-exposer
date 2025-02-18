@@ -108,7 +108,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	}
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
-	app.router.Use(middleware.Logger())
+	//app.router.Use(middleware.Logger())
 
 	ilInit := &instantlaunches.Init{
 		UserSuffix:      init.UserSuffix,
@@ -142,6 +142,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	app.router.Static("/docs", "./docs")
 
 	vice := app.router.Group("/vice")
+	vice.Use(middleware.Logger())
 	vice.POST("/launch", app.incluster.LaunchAppHandler)
 	vice.POST("/apply-labels", app.incluster.ApplyAsyncLabelsHandler)
 	vice.GET("/async-data", app.incluster.AsyncDataHandler)
@@ -181,24 +182,28 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	viceanalyses.GET("/:analysis-id/external-id", app.incluster.AdminGetExternalIDHandler)
 
 	svc := app.router.Group("/service")
+	svc.Use(middleware.Logger())
 	svc.POST("/:name", app.outcluster.CreateServiceHandler)
 	svc.PUT("/:name", app.outcluster.UpdateServiceHandler)
 	svc.GET("/:name", app.outcluster.GetServiceHandler)
 	svc.DELETE("/:name", app.outcluster.DeleteServiceHandler)
 
 	endpoint := app.router.Group("/endpoint")
+	endpoint.Use(middleware.Logger())
 	endpoint.POST("/:name", app.outcluster.CreateEndpointHandler)
 	endpoint.PUT("/:name", app.outcluster.UpdateEndpointHandler)
 	endpoint.GET("/:name", app.outcluster.GetEndpointHandler)
 	endpoint.DELETE("/:name", app.outcluster.DeleteEndpointHandler)
 
 	ingress := app.router.Group("/ingress")
+	ingress.Use(middleware.Logger())
 	ingress.POST("/:name", app.outcluster.CreateIngressHandler)
 	ingress.PUT("/:name", app.outcluster.UpdateIngressHandler)
 	ingress.GET("/:name", app.outcluster.GetIngressHandler)
 	ingress.DELETE("/:name", app.outcluster.DeleteIngressHandler)
 
 	ilgroup := app.router.Group("/instantlaunches")
+	ilgroup.Use(middleware.Logger())
 	app.instantlaunches = instantlaunches.New(app.db, ilgroup, ilInit)
 
 	return app
