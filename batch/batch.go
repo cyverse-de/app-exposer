@@ -354,7 +354,7 @@ func (w *WorkflowMaker) sendCleanupEventTemplate(opts *BatchSubmissionOpts) *v1a
 				"-H",
 				"Content-Type: application/json",
 				"-d",
-				`{"uuid" : "{{workflow.parameters.uuid}}"}`,
+				`{"uuid" : "{{workflow.parameters.job_uuid}}"}`,
 				"http://webhook-eventsource-svc.argo-events/batch/cleanup",
 			},
 		},
