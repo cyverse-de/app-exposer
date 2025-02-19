@@ -110,6 +110,10 @@ func VICEProxyMemResourceLimit() resourcev1.Quantity {
 	return viceProxyMemResourceLimit
 }
 
+func VICEProxyStorageRequest() resourcev1.Quantity {
+	return viceProxyStorageRequest
+}
+
 func VICEProxyStorageLimit() resourcev1.Quantity {
 	return viceProxyStorageLimit
 }
