@@ -88,7 +88,7 @@ func (j *JEXAdapter) HomeHandler(c echo.Context) error {
 }
 
 type uuidBody struct {
-	uuid string
+	UUID string
 }
 
 func (j *JEXAdapter) StopByUUID(c echo.Context) error {
@@ -109,7 +109,7 @@ func (j *JEXAdapter) StopByUUID(c echo.Context) error {
 		return err
 	}
 
-	if _, err = batch.StopWorkflows(ctx, client, j.namespace, "external-id", b.uuid); err != nil {
+	if _, err = batch.StopWorkflows(ctx, client, j.namespace, "external-id", b.UUID); err != nil {
 		return err
 	}
 
