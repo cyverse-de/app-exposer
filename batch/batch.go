@@ -287,14 +287,6 @@ func (w *WorkflowMaker) exitHandlerTemplate() *v1alpha1.Template {
 					{
 						Name:     "cleanup",
 						Template: "send-cleanup",
-						Arguments: v1alpha1.Arguments{
-							Parameters: []v1alpha1.Parameter{
-								{
-									Name:  "uuid",
-									Value: v1alpha1.AnyStringPtr("{{workflow.parameters.job_uuid}}"),
-								},
-							},
-						},
 					},
 				},
 			},
