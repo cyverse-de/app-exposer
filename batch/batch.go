@@ -92,12 +92,18 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 		// a named file.
 		if step.StdoutPath != "" {
 			sourceParts = append(sourceParts, fmt.Sprintf("> %s", step.StdoutPath))
+		} else {
+			// If the StdoutPath is empty, then write out stdout to a file
+			sourceParts = append(sourceParts, fmt.Sprintf("> logs/step-%d.stdout.log", idx))
 		}
 
 		// If the StderrPath is not empty, then stderr of the command needs to go to
 		// a named file.
 		if step.StderrPath != "" {
 			sourceParts = append(sourceParts, fmt.Sprintf("2> %s", step.StderrPath))
+		} else {
+			// if the StderrPath is empty, then write out the stderr to a file
+			sourceParts = append(sourceParts, fmt.Sprintf("2> logs/step-%d.stderr.log", idx))
 		}
 
 		// Assemble the source string for the script template.
@@ -114,12 +120,11 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 						step.Component.Container.Image.Name,
 						step.Component.Container.Image.Tag,
 					),
-
 					Command:    []string{"bash"},
 					WorkingDir: step.Component.Container.WorkingDirectory(),
 					VolumeMounts: []apiv1.VolumeMount{
 						{
-							Name:      "workdir",
+							Name:      defaultVolumeName,
 							MountPath: step.Component.Container.WorkingDirectory(),
 						},
 					},
@@ -169,6 +174,14 @@ func (w *WorkflowMaker) runStepsTemplates() ([]v1alpha1.Template, error) {
 
 	runSteps = append(
 		runSteps,
+		v1alpha1.ParallelSteps{
+			Steps: []v1alpha1.WorkflowStep{
+				{
+					Name:     "init-working-dir",
+					Template: "init-working-dir",
+				},
+			},
+		},
 		v1alpha1.ParallelSteps{
 			Steps: []v1alpha1.WorkflowStep{
 				*w.sendStatusStep("downloading-files-status", "downloading files", "running"),
@@ -348,6 +361,30 @@ func (w *WorkflowMaker) sendCleanupEventTemplate(opts *BatchSubmissionOpts) *v1a
 				"-d",
 				`{"uuid" : "{{workflow.parameters.job_uuid}}"}`,
 				"http://webhook-eventsource-svc.argo-events/batch/cleanup",
+			},
+		},
+	}
+}
+
+// initWorkingDirectoryTemplate initializes the working directory
+func (w *WorkflowMaker) initWorkingDirectoryTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
+	return &v1alpha1.Template{
+		Name: "init-working-dir",
+		Container: &apiv1.Container{
+			Image: opts.FileTransferImage,
+			Command: []string{
+				"mkdir",
+			},
+			Args: []string{
+				"-p",
+				"logs/",
+			},
+			WorkingDir: "/working-directory",
+			VolumeMounts: []apiv1.VolumeMount{
+				{
+					Name:      defaultVolumeName,
+					MountPath: "/working-directory",
+				},
 			},
 		},
 	}
@@ -545,6 +582,7 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 	workflowTemplates = append(workflowTemplates, stepsTemplates...)
 	workflowTemplates = append(
 		workflowTemplates,
+		*w.initWorkingDirectoryTemplate(opts),
 		*w.exitHandlerTemplate(),
 		*w.sendStatusTemplate(opts),
 		*w.sendCleanupEventTemplate(opts),
