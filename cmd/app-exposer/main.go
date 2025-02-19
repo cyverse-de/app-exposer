@@ -26,12 +26,14 @@ import (
 	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/app-exposer/natsconn"
 	"github.com/cyverse-de/app-exposer/quota"
+	"github.com/cyverse-de/app-exposer/resourcing"
 	"github.com/cyverse-de/go-mod/cfg"
 	"github.com/cyverse-de/go-mod/gotelnats"
 	"github.com/cyverse-de/go-mod/logging"
 	"github.com/cyverse-de/go-mod/otelutils"
 	"github.com/cyverse-de/go-mod/protobufjson"
 	"github.com/pkg/errors"
+	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -80,24 +82,35 @@ func main() {
 		credsPath  = flag.String("creds", gotelnats.DefaultCredsPath, "Path to the NATS creds file")
 		//maxReconnects                 = flag.Int("max-reconnects", gotelnats.DefaultMaxReconnects, "Maximum number of reconnection attempts to NATS")
 		//reconnectWait                 = flag.Int("reconnect-wait", gotelnats.DefaultReconnectWait, "Seconds to wait between reconnection attempts to NATS")
-		envPrefix                     = flag.String("env-prefix", cfg.DefaultEnvPrefix, "The prefix for environment variables")
-		namespace                     = flag.String("namespace", "default", "The namespace scope this process operates on for non-VICE calls")
-		viceNamespace                 = flag.String("vice-namespace", "vice-apps", "The namepsace that VICE apps are launched within")
-		listenPort                    = flag.Int("port", 60000, "(optional) The port to listen on")
-		ingressClass                  = flag.String("ingress-class", "nginx", "(optional) the ingress class to use")
-		viceProxy                     = flag.String("vice-proxy", "harbor.cyverse.org/de/vice-proxy", "The image name of the proxy to use for VICE apps. The image tag is set in the config.")
-		transferImage                 = flag.String("transfer-image", "harbor.cyverse.org/de/gocmd:latest", "(optional) Image used to transfer files to/from the data store")
-		transferWorkingDir            = flag.String("transfer-working-dir", "/de-app-work", "The working directory within the file transfer image.")
-		transferLogLevel              = flag.String("transfer-log-level", "debug", "The log level of the output of the file transfer tool.")
-		statusSenderImage             = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
-		viceDefaultBackendService     = flag.String("vice-default-backend", "vice-default-backend", "The name of the service to use as the default backend for VICE ingresses")
-		viceDefaultBackendServicePort = flag.Int("vice-default-backend-port", 80, "The port for the default backend for VICE ingresses")
-		getAnalysisIDService          = flag.String("get-analysis-id-service", "get-analysis-id", "The service name for the service that provides analysis ID lookups")
-		checkResourceAccessService    = flag.String("check-resource-access-service", "check-resource-access", "The name of the service that validates whether a user can access a resource")
-		userSuffix                    = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
-		defaultMillicores             = flag.Float64("default-millicores", 4000.0, "The default number of millicores reserved for an analysis.")
-		argoWorkflowNS                = flag.String("workflow-namespace", "argo", "The namespace Argo Workflows run in.")
-		logLevel                      = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
+		envPrefix                       = flag.String("env-prefix", cfg.DefaultEnvPrefix, "The prefix for environment variables")
+		namespace                       = flag.String("namespace", "default", "The namespace scope this process operates on for non-VICE calls")
+		viceNamespace                   = flag.String("vice-namespace", "vice-apps", "The namepsace that VICE apps are launched within")
+		listenPort                      = flag.Int("port", 60000, "(optional) The port to listen on")
+		ingressClass                    = flag.String("ingress-class", "nginx", "(optional) the ingress class to use")
+		viceProxy                       = flag.String("vice-proxy", "harbor.cyverse.org/de/vice-proxy", "The image name of the proxy to use for VICE apps. The image tag is set in the config.")
+		transferImage                   = flag.String("transfer-image", "harbor.cyverse.org/de/gocmd:latest", "(optional) Image used to transfer files to/from the data store")
+		transferWorkingDir              = flag.String("transfer-working-dir", "/de-app-work", "The working directory within the file transfer image.")
+		transferLogLevel                = flag.String("transfer-log-level", "debug", "The log level of the output of the file transfer tool.")
+		statusSenderImage               = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
+		viceDefaultBackendService       = flag.String("vice-default-backend", "vice-default-backend", "The name of the service to use as the default backend for VICE ingresses")
+		viceDefaultBackendServicePort   = flag.Int("vice-default-backend-port", 80, "The port for the default backend for VICE ingresses")
+		getAnalysisIDService            = flag.String("get-analysis-id-service", "get-analysis-id", "The service name for the service that provides analysis ID lookups")
+		checkResourceAccessService      = flag.String("check-resource-access-service", "check-resource-access", "The name of the service that validates whether a user can access a resource")
+		userSuffix                      = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
+		defaultMillicores               = flag.Float64("default-millicores", 4000.0, "The default number of millicores reserved for an analysis.")
+		argoWorkflowNS                  = flag.String("workflow-namespace", "argo", "The namespace Argo Workflows run in.")
+		defaultCPUResourceRequest       = flag.String("default-cpu-resource-request", "1000m", "The default CPU resource request for an analysis.")
+		defaultCPUResourceLimit         = flag.String("default-cpu-resource-limit", "2000m", "The default CPU resource limit for an analysis.")
+		defaultMemoryResourceRequest    = flag.String("default-memory-resource-request", "2Gi", "The default memory resource request for an analysis.")
+		defaultMemoryResourceLimit      = flag.String("default-memory-resource-limit", "8Gi", "The default memory resource limit for an analysis.")
+		defaultStorageResourceRequest   = flag.String("default-storage-resource-request", "1Gi", "The default storage resource request for an analysis.")
+		viceProxyCPUResourceRequest     = flag.String("vice-proxy-cpu-resource-request", "100m", "The default CPU resource request for the vice proxy.")
+		viceProxyCPUResourceLimit       = flag.String("vice-proxy-cpu-resource-limit", "200m", "The default CPU resource limit for the vice proxy.")
+		viceProxyMemoryResourceRequest  = flag.String("vice-proxy-memory-resource-request", "100Mi", "The default memory resource request for the vice proxy.")
+		viceProxyMemoryResourceLimit    = flag.String("vice-proxy-memory-resource-limit", "200Mi", "The default memory resource limit for the vice proxy.")
+		viceProxyStorageResourceRequest = flag.String("vice-proxy-storage-resource-request", "100Mi", "The default storage resource request for the vice proxy.")
+		viceProxyStorageResourceLimit   = flag.String("vice-proxy-storage-resource-limit", "100Gi", "The default storage resource limit for the vice proxy.")
+		logLevel                        = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
 	)
 
 	var tracerCtx, cancel = context.WithCancel(context.Background())
@@ -173,6 +186,26 @@ func main() {
 	if harborPass == "" {
 		log.Fatal("The harbor.pass setting must be specified in the config file")
 	}
+
+	setter := func(unparsedQuantity string, setFn func(qn resourcev1.Quantity)) {
+		v, err := resourcev1.ParseQuantity(unparsedQuantity)
+		if err != nil {
+			log.Fatal(err)
+		}
+		setFn(v)
+	}
+
+	setter(*defaultCPUResourceRequest, resourcing.SetDefaultCPUResourceRequest)
+	setter(*defaultCPUResourceLimit, resourcing.SetDefaultCPUResourceLimit)
+	setter(*defaultMemoryResourceRequest, resourcing.SetDefaultMemResourceRequest)
+	setter(*defaultMemoryResourceLimit, resourcing.SetDefaultMemResourceLimit)
+	setter(*defaultStorageResourceRequest, resourcing.SetDefaultStorageRequest)
+	setter(*viceProxyCPUResourceRequest, resourcing.SetVICEProxyCPUResourceRequest)
+	setter(*viceProxyCPUResourceLimit, resourcing.SetVICEProxyCPUResourceLimit)
+	setter(*viceProxyMemoryResourceRequest, resourcing.SetVICEProxyMemResourceRequest)
+	setter(*viceProxyMemoryResourceLimit, resourcing.SetVICEProxyMemResourceLimit)
+	setter(*viceProxyStorageResourceRequest, resourcing.SetVICEProxyStorageRequest)
+	setter(*viceProxyStorageResourceLimit, resourcing.SetVICEProxyStorageLimit)
 
 	infoGetter, err := imageinfo.NewHarborInfoGetter(
 		harborURL,

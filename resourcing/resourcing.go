@@ -13,22 +13,106 @@ import (
 var log = common.Log
 
 var (
-	DefaultCPUResourceRequest, _   = resourcev1.ParseQuantity("1000m")
-	DefaultMemResourceRequest, _   = resourcev1.ParseQuantity("2Gi")
-	DefaultStorageRequest, _       = resourcev1.ParseQuantity("1Gi")
-	DefaultCPUResourceLimit, _     = resourcev1.ParseQuantity("2000m")
-	DefaultMemResourceLimit, _     = resourcev1.ParseQuantity("8Gi")
-	VICEProxyCPUResourceRequest, _ = resourcev1.ParseQuantity("100m")
-	VICEProxyMemResourceRequest, _ = resourcev1.ParseQuantity("100Mi")
-	VICEProxyStorageRequest, _     = resourcev1.ParseQuantity("100Mi")
-	VICEProxyCPUResourceLimit, _   = resourcev1.ParseQuantity("200m")
-	VICEProxyMemResourceLimit, _   = resourcev1.ParseQuantity("200Mi")
-	VICEProxyStorageLimit, _       = resourcev1.ParseQuantity("200Mi")
+	defaultCPUResourceRequest, _   = resourcev1.ParseQuantity("1000m")
+	defaultMemResourceRequest, _   = resourcev1.ParseQuantity("2Gi")
+	defaultStorageRequest, _       = resourcev1.ParseQuantity("1Gi")
+	defaultCPUResourceLimit, _     = resourcev1.ParseQuantity("2000m")
+	defaultMemResourceLimit, _     = resourcev1.ParseQuantity("8Gi")
+	viceProxyCPUResourceRequest, _ = resourcev1.ParseQuantity("100m")
+	viceProxyMemResourceRequest, _ = resourcev1.ParseQuantity("100Mi")
+	viceProxyStorageRequest, _     = resourcev1.ParseQuantity("100Mi")
+	viceProxyCPUResourceLimit, _   = resourcev1.ParseQuantity("200m")
+	viceProxyMemResourceLimit, _   = resourcev1.ParseQuantity("200Mi")
+	viceProxyStorageLimit, _       = resourcev1.ParseQuantity("200Mi")
 )
 
 const (
 	ShmDevice = "/dev/shm"
 )
+
+func SetDefaultCPUResourceRequest(value resourcev1.Quantity) {
+	defaultCPUResourceRequest = value
+}
+
+func SetDefaultCPUResourceLimit(value resourcev1.Quantity) {
+	defaultCPUResourceLimit = value
+}
+
+func SetDefaultMemResourceRequest(value resourcev1.Quantity) {
+	defaultMemResourceRequest = value
+}
+
+func SetDefaultMemResourceLimit(value resourcev1.Quantity) {
+	defaultMemResourceLimit = value
+}
+
+func SetDefaultStorageRequest(value resourcev1.Quantity) {
+	defaultStorageRequest = value
+}
+
+func SetVICEProxyCPUResourceRequest(value resourcev1.Quantity) {
+	viceProxyCPUResourceRequest = value
+}
+
+func SetVICEProxyCPUResourceLimit(value resourcev1.Quantity) {
+	viceProxyCPUResourceLimit = value
+}
+
+func SetVICEProxyMemResourceRequest(value resourcev1.Quantity) {
+	viceProxyMemResourceRequest = value
+}
+
+func SetVICEProxyMemResourceLimit(value resourcev1.Quantity) {
+	viceProxyMemResourceLimit = value
+}
+
+func SetVICEProxyStorageRequest(value resourcev1.Quantity) {
+	viceProxyStorageRequest = value
+}
+
+func SetVICEProxyStorageLimit(value resourcev1.Quantity) {
+	viceProxyStorageLimit = value
+}
+
+func DefaultCPUResourceRequest() resourcev1.Quantity {
+	return defaultCPUResourceRequest
+}
+
+func DefaultCPUResourceLimit() resourcev1.Quantity {
+	return defaultCPUResourceLimit
+}
+
+func DefaultMemResourceRequest() resourcev1.Quantity {
+	return defaultMemResourceRequest
+}
+
+func DefaultMemResourceLimit() resourcev1.Quantity {
+	return defaultMemResourceLimit
+}
+
+func DefaultStorageRequest() resourcev1.Quantity {
+	return defaultStorageRequest
+}
+
+func VICEProxyCPUResourceRequest() resourcev1.Quantity {
+	return viceProxyCPUResourceRequest
+}
+
+func VICEProxyCPUResourceLimit() resourcev1.Quantity {
+	return viceProxyCPUResourceLimit
+}
+
+func VICEProxyMemResourceRequest() resourcev1.Quantity {
+	return viceProxyMemResourceRequest
+}
+
+func VICEProxyMemResourceLimit() resourcev1.Quantity {
+	return viceProxyMemResourceLimit
+}
+
+func VICEProxyStorageLimit() resourcev1.Quantity {
+	return viceProxyStorageLimit
+}
 
 func GPUEnabled(analysis *model.Analysis) bool {
 	gpuEnabled := false
@@ -46,13 +130,13 @@ func cpuResourceRequest(analysis *model.Analysis) resourcev1.Quantity {
 		err   error
 	)
 
-	value = DefaultCPUResourceRequest
+	value = DefaultCPUResourceRequest()
 
 	if analysis.Steps[0].Component.Container.MinCPUCores != 0 {
 		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%fm", analysis.Steps[0].Component.Container.MinCPUCores*1000))
 		if err != nil {
 			log.Warn(err)
-			value = DefaultCPUResourceRequest
+			value = DefaultCPUResourceRequest()
 		}
 	}
 
@@ -65,13 +149,13 @@ func cpuResourceLimit(analysis *model.Analysis) resourcev1.Quantity {
 		err   error
 	)
 
-	value = DefaultCPUResourceLimit
+	value = DefaultCPUResourceLimit()
 
 	if analysis.Steps[0].Component.Container.MaxCPUCores != 0 {
 		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%fm", analysis.Steps[0].Component.Container.MaxCPUCores*1000))
 		if err != nil {
 			log.Warn(err)
-			value = DefaultCPUResourceLimit
+			value = DefaultCPUResourceLimit()
 		}
 	}
 	return value
@@ -83,13 +167,13 @@ func memResourceRequest(analysis *model.Analysis) resourcev1.Quantity {
 		err   error
 	)
 
-	value = DefaultMemResourceRequest
+	value = DefaultMemResourceRequest()
 
 	if analysis.Steps[0].Component.Container.MinMemoryLimit != 0 {
 		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", analysis.Steps[0].Component.Container.MinMemoryLimit))
 		if err != nil {
 			log.Warn(err)
-			value = DefaultMemResourceRequest
+			value = DefaultMemResourceRequest()
 		}
 	}
 	return value
@@ -101,13 +185,13 @@ func memResourceLimit(analysis *model.Analysis) resourcev1.Quantity {
 		err   error
 	)
 
-	value = DefaultMemResourceLimit
+	value = DefaultMemResourceLimit()
 
 	if analysis.Steps[0].Component.Container.MemoryLimit != 0 {
 		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", analysis.Steps[0].Component.Container.MemoryLimit))
 		if err != nil {
 			log.Warn(err)
-			value = DefaultMemResourceLimit
+			value = DefaultMemResourceLimit()
 		}
 	}
 	return value
@@ -119,13 +203,13 @@ func storageRequest(analysis *model.Analysis) resourcev1.Quantity {
 		err   error
 	)
 
-	value = DefaultStorageRequest
+	value = DefaultStorageRequest()
 
 	if analysis.Steps[0].Component.Container.MinDiskSpace != 0 {
 		value, err = resourcev1.ParseQuantity(fmt.Sprintf("%d", analysis.Steps[0].Component.Container.MinDiskSpace))
 		if err != nil {
 			log.Warn(err)
-			value = DefaultStorageRequest
+			value = DefaultStorageRequest()
 		}
 	}
 	return value

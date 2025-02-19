@@ -422,14 +422,14 @@ func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 		},
 		Resources: apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
-				apiv1.ResourceCPU:              resourcing.VICEProxyCPUResourceLimit,
-				apiv1.ResourceMemory:           resourcing.VICEProxyMemResourceLimit,
-				apiv1.ResourceEphemeralStorage: resourcing.VICEProxyStorageLimit,
+				apiv1.ResourceCPU:              resourcing.VICEProxyCPUResourceLimit(),
+				apiv1.ResourceMemory:           resourcing.VICEProxyMemResourceLimit(),
+				apiv1.ResourceEphemeralStorage: resourcing.VICEProxyStorageLimit(),
 			},
 			Requests: apiv1.ResourceList{
-				apiv1.ResourceCPU:              resourcing.VICEProxyCPUResourceRequest,
-				apiv1.ResourceMemory:           resourcing.VICEProxyMemResourceRequest,
-				apiv1.ResourceEphemeralStorage: resourcing.VICEProxyStorageRequest,
+				apiv1.ResourceCPU:              resourcing.VICEProxyCPUResourceRequest(),
+				apiv1.ResourceMemory:           resourcing.VICEProxyMemResourceRequest(),
+				apiv1.ResourceEphemeralStorage: resourcing.DefaultStorageRequest(),
 			},
 		},
 		ReadinessProbe: &apiv1.Probe{
