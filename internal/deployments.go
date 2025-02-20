@@ -160,10 +160,10 @@ var (
 	defaultMemResourceLimit, _     = resourcev1.ParseQuantity("8Gi")
 	viceProxyCPUResourceRequest, _ = resourcev1.ParseQuantity("100m")
 	viceProxyMemResourceRequest, _ = resourcev1.ParseQuantity("100Mi")
-	viceProxyStorageRequest, _     = resourcev1.ParseQuantity("100Mi")
-	viceProxyCPUResourceLimit, _   = resourcev1.ParseQuantity("200m")
-	viceProxyMemResourceLimit, _   = resourcev1.ParseQuantity("200Mi")
-	viceProxyStorageLimit, _       = resourcev1.ParseQuantity("100Gi")
+	//viceProxyStorageRequest, _     = resourcev1.ParseQuantity("100Mi")
+	viceProxyCPUResourceLimit, _ = resourcev1.ParseQuantity("200m")
+	viceProxyMemResourceLimit, _ = resourcev1.ParseQuantity("200Mi")
+	//viceProxyStorageLimit, _     = resourcev1.ParseQuantity("100Gi")
 )
 
 func cpuResourceRequest(job *model.Job) resourcev1.Quantity {
@@ -584,14 +584,14 @@ func (i *Internal) deploymentContainers(job *model.Job) []apiv1.Container {
 		},
 		Resources: apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
-				apiv1.ResourceCPU:              viceProxyCPUResourceLimit,
-				apiv1.ResourceMemory:           viceProxyMemResourceLimit,
-				apiv1.ResourceEphemeralStorage: viceProxyStorageLimit,
+				apiv1.ResourceCPU:    viceProxyCPUResourceLimit,
+				apiv1.ResourceMemory: viceProxyMemResourceLimit,
+				//apiv1.ResourceEphemeralStorage: viceProxyStorageLimit,
 			},
 			Requests: apiv1.ResourceList{
-				apiv1.ResourceCPU:              viceProxyCPUResourceRequest,
-				apiv1.ResourceMemory:           viceProxyMemResourceRequest,
-				apiv1.ResourceEphemeralStorage: viceProxyStorageRequest,
+				apiv1.ResourceCPU:    viceProxyCPUResourceRequest,
+				apiv1.ResourceMemory: viceProxyMemResourceRequest,
+				//apiv1.ResourceEphemeralStorage: viceProxyStorageRequest,
 			},
 		},
 		ReadinessProbe: &apiv1.Probe{
@@ -748,6 +748,21 @@ func (i *Internal) getDeployment(ctx context.Context, job *model.Job) (*appsv1.D
 					},
 					Tolerations: tolerations,
 					Affinity: &apiv1.Affinity{
+						PodAntiAffinity: &apiv1.PodAntiAffinity{
+							PreferredDuringSchedulingIgnoredDuringExecution: []apiv1.WeightedPodAffinityTerm{
+								{
+									Weight: 100,
+									PodAffinityTerm: apiv1.PodAffinityTerm{
+										LabelSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"app-type": "interactive",
+											},
+										},
+										TopologyKey: "kubernetes.io/hostname",
+									},
+								},
+							},
+						},
 						NodeAffinity: &apiv1.NodeAffinity{
 							RequiredDuringSchedulingIgnoredDuringExecution: &apiv1.NodeSelector{
 								NodeSelectorTerms: []apiv1.NodeSelectorTerm{
