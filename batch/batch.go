@@ -417,6 +417,7 @@ func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alph
 	}
 
 	args := []string{
+		"gocmd",
 		fmt.Sprintf("--log_level=%s", opts.FileTransferLogLevel),
 		"get",
 	}
@@ -509,6 +510,7 @@ func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alph
 // before this template, though they can be defined in any order.
 func (w *WorkflowMaker) uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	args := []string{
+		"gocmd",
 		fmt.Sprintf("--log_level=%s", opts.FileTransferLogLevel),
 		"put",
 		"-f",
