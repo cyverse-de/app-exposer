@@ -138,26 +138,6 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 	return templates, nil
 }
 
-// sendStatusStep generates a workflow step to send a status message to the DE.
-func (w *WorkflowMaker) sendStatusStep(name, message, state string) *v1alpha1.WorkflowStep {
-	return &v1alpha1.WorkflowStep{
-		Name:     name,
-		Template: "send-status",
-		Arguments: v1alpha1.Arguments{
-			Parameters: []v1alpha1.Parameter{
-				{
-					Name:  "message",
-					Value: v1alpha1.AnyStringPtr(message),
-				},
-				{
-					Name:  "state",
-					Value: v1alpha1.AnyStringPtr(state),
-				},
-			},
-		},
-	}
-}
-
 // runStepsTemplates generates a list of templates that orchestrate the logic
 // of a workflow.
 func (w *WorkflowMaker) runStepsTemplates() ([]v1alpha1.Template, error) {
@@ -184,7 +164,12 @@ func (w *WorkflowMaker) runStepsTemplates() ([]v1alpha1.Template, error) {
 		},
 		v1alpha1.ParallelSteps{
 			Steps: []v1alpha1.WorkflowStep{
-				*w.sendStatusStep("downloading-files-status", "downloading files", "running"),
+				*w.sendStatusWorkflowStep(
+					"downloading-files-status",
+					"downloading files",
+					"running",
+					"begin-downloading-files",
+				),
 			},
 		},
 		v1alpha1.ParallelSteps{
@@ -197,7 +182,12 @@ func (w *WorkflowMaker) runStepsTemplates() ([]v1alpha1.Template, error) {
 		},
 		v1alpha1.ParallelSteps{
 			Steps: []v1alpha1.WorkflowStep{
-				*w.sendStatusStep("done-downloading", "done downloading inputs", "running"),
+				*w.sendStatusWorkflowStep(
+					"done-downloading",
+					"done downloading inputs",
+					"running",
+					"done-downloading-files",
+				),
 			},
 		},
 	)
@@ -212,7 +202,12 @@ func (w *WorkflowMaker) runStepsTemplates() ([]v1alpha1.Template, error) {
 		runSteps = append(runSteps,
 			v1alpha1.ParallelSteps{
 				Steps: []v1alpha1.WorkflowStep{
-					*w.sendStatusStep(runningName, runningMsg, statusRunning),
+					*w.sendStatusWorkflowStep(
+						runningName,
+						runningMsg,
+						statusRunning,
+						fmt.Sprintf("begin-step-%d", idx),
+					),
 				},
 			},
 			v1alpha1.ParallelSteps{
@@ -225,7 +220,12 @@ func (w *WorkflowMaker) runStepsTemplates() ([]v1alpha1.Template, error) {
 			},
 			v1alpha1.ParallelSteps{
 				Steps: []v1alpha1.WorkflowStep{
-					*w.sendStatusStep(doneRunningName, doneRunningMsg, statusRunning),
+					*w.sendStatusWorkflowStep(
+						doneRunningName,
+						doneRunningMsg,
+						statusRunning,
+						fmt.Sprintf("done-step-%d", idx),
+					),
 				},
 			},
 		)
@@ -249,22 +249,12 @@ func (w *WorkflowMaker) exitHandlerTemplate() *v1alpha1.Template {
 		Steps: []v1alpha1.ParallelSteps{
 			{
 				Steps: []v1alpha1.WorkflowStep{
-					{
-						Name:     "uploading-files-status",
-						Template: "send-status",
-						Arguments: v1alpha1.Arguments{
-							Parameters: []v1alpha1.Parameter{
-								{
-									Name:  "message",
-									Value: v1alpha1.AnyStringPtr("uploading files"),
-								},
-								{
-									Name:  "state",
-									Value: v1alpha1.AnyStringPtr(statusRunning),
-								},
-							},
-						},
-					},
+					*w.sendStatusWorkflowStep(
+						"uploading-files-status",
+						"uploading files",
+						statusRunning,
+						"uploading-files",
+					),
 				},
 			},
 			{
@@ -277,22 +267,12 @@ func (w *WorkflowMaker) exitHandlerTemplate() *v1alpha1.Template {
 			},
 			{
 				Steps: []v1alpha1.WorkflowStep{
-					{
-						Name:     "finished-status",
-						Template: "send-status",
-						Arguments: v1alpha1.Arguments{
-							Parameters: []v1alpha1.Parameter{
-								{
-									Name:  "message",
-									Value: v1alpha1.AnyStringPtr("sending final status"),
-								},
-								{
-									Name:  "state",
-									Value: v1alpha1.AnyStringPtr("{{workflow.status}}"),
-								},
-							},
-						},
-					},
+					*w.sendStatusWorkflowStep(
+						"finished-status",
+						"sending final status",
+						"{{workflow.status}}",
+						"finished-status",
+					),
 				},
 			},
 			{
@@ -307,8 +287,32 @@ func (w *WorkflowMaker) exitHandlerTemplate() *v1alpha1.Template {
 	}
 }
 
+func (w *WorkflowMaker) sendStatusWorkflowStep(name, msg, state, prefix string) *v1alpha1.WorkflowStep {
+	return &v1alpha1.WorkflowStep{
+		Name:     name,
+		Template: "send-status",
+		Arguments: v1alpha1.Arguments{
+			Parameters: []v1alpha1.Parameter{
+				{
+					Name:  "message",
+					Value: v1alpha1.AnyStringPtr(msg),
+				},
+				{
+					Name:  "state",
+					Value: v1alpha1.AnyStringPtr(state),
+				},
+				{
+					Name:  "log-prefix",
+					Value: v1alpha1.AnyStringPtr(prefix),
+				},
+			},
+		},
+	}
+}
+
 // sendStatusTemplate returns the template definition for the steps that send
-// status updates to the DE backend.
+// status updates to the DE backend. The init-working-dir template must be run
+// before this template, though they can be defined in any order.
 func (w *WorkflowMaker) sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	return &v1alpha1.Template{
 		Name: "send-status",
@@ -319,6 +323,9 @@ func (w *WorkflowMaker) sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.
 				},
 				{
 					Name: "state",
+				},
+				{
+					Name: "log-prefix",
 				},
 			},
 		},
@@ -339,13 +346,16 @@ func (w *WorkflowMaker) sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.
             		"state" : "{{inputs.parameters.state}}"
      			}`,
 				"http://webhook-eventsource-svc.argo-events/batch",
+				"> logs/{{inputs.parameters.log-prefix}}-send-status.stdout.log",
+				"2> logs/{{inputs.parameters.log-prefix}}-send-status.stderr.log",
 			},
 		},
 	}
 }
 
 // sendCleanupEvent returns the template definition for the steps that send
-// status updates to the DE backend.
+// status updates to the DE backend. The init-working-dir template must be run
+// before this template, though they can be defined in any order.
 func (w *WorkflowMaker) sendCleanupEventTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	return &v1alpha1.Template{
 		Name: "send-cleanup",
@@ -361,6 +371,8 @@ func (w *WorkflowMaker) sendCleanupEventTemplate(opts *BatchSubmissionOpts) *v1a
 				"-d",
 				`{"uuid" : "{{workflow.parameters.job_uuid}}"}`,
 				"http://webhook-eventsource-svc.argo-events/batch/cleanup",
+				"> logs/send-cleanup-notif.stdout.log",
+				"2> logs/send-cleanup-notif.stderr.log",
 			},
 		},
 	}
@@ -392,6 +404,8 @@ func (w *WorkflowMaker) initWorkingDirectoryTemplate(opts *BatchSubmissionOpts) 
 
 // downloadFilesTemplate returns a template definition for the steps that
 // download files from the data store into the working directory volume.
+// The init-working-dir template must be run before this template, though
+// they can be defined in any order.
 func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	var inputFilesAndFolders []string
 
@@ -401,6 +415,14 @@ func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alph
 			stepInput.IRODSPath(),
 		)
 	}
+
+	args := []string{
+		fmt.Sprintf("--log_level=%s", opts.FileTransferLogLevel),
+		"get",
+	}
+	args = append(args, inputFilesAndFolders...)
+	args = append(args, "> logs/downloads.stdout.log")
+	args = append(args, "2> logs/downloads.stderr.log")
 
 	return &v1alpha1.Template{
 		Name: "download-files",
@@ -413,12 +435,7 @@ func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alph
 					MountPath: opts.FileTransferWorkingDir,
 				},
 			},
-			Args: append([]string{
-				fmt.Sprintf("--log_level=%s", opts.FileTransferLogLevel),
-				"get",
-			},
-				inputFilesAndFolders...,
-			),
+			Args: args,
 			Env: []apiv1.EnvVar{
 				{
 					Name:  "IRODS_CLIENT_USER_NAME",
@@ -485,7 +502,8 @@ func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alph
 }
 
 // uploadFilesTemplate returns a template used for the steps that uploads
-// files to the data store.
+// files to the data store. The init-working-dir template must be run
+// before this template, though they can be defined in any order.
 func (w *WorkflowMaker) uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	return &v1alpha1.Template{
 		Name: "upload-files",
@@ -505,6 +523,8 @@ func (w *WorkflowMaker) uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1
 				"--no_root",
 				".",
 				"{{workflow.parameters.output-folder}}",
+				"> logs/uploads.stdout.log",
+				"2> logs/uploads.stderr.log",
 			},
 			Env: []apiv1.EnvVar{
 				{
