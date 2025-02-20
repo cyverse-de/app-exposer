@@ -596,6 +596,21 @@ func (i *Incluster) getDeployment(ctx context.Context, job *model.Job) (*appsv1.
 					},
 					Tolerations: tolerations,
 					Affinity: &apiv1.Affinity{
+						PodAntiAffinity: &apiv1.PodAntiAffinity{
+							PreferredDuringSchedulingIgnoredDuringExecution: []apiv1.WeightedPodAffinityTerm{
+								{
+									Weight: 100,
+									PodAffinityTerm: apiv1.PodAffinityTerm{
+										LabelSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"app-type": "interactive",
+											},
+										},
+										TopologyKey: "kubernetes.io/hostname",
+									},
+								},
+							},
+						},
 						NodeAffinity: &apiv1.NodeAffinity{
 							RequiredDuringSchedulingIgnoredDuringExecution: &apiv1.NodeSelector{
 								NodeSelectorTerms: []apiv1.NodeSelectorTerm{
