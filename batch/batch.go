@@ -329,25 +329,18 @@ func (w *WorkflowMaker) sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.
 				},
 			},
 		},
-		Container: &apiv1.Container{
-			Image: opts.StatusSenderImage,
-			Command: []string{
-				"curl",
-			},
-			Args: []string{
-				"-v",
-				"-H",
-				"Content-Type: application/json",
-				"-d",
-				`{
+		Script: &v1alpha1.ScriptTemplate{
+			Source: `
+				curl -v -H "Content-Type: application/json" -d '{
 				    "job_uuid" : "{{workflow.parameters.job_uuid}}",
      				"hostname" : "batch",
          			"message": "{{inputs.parameters.message}}",
             		"state" : "{{inputs.parameters.state}}"
-     			}`,
-				"http://webhook-eventsource-svc.argo-events/batch",
-				"> logs/{{inputs.parameters.log-prefix}}-send-status.stdout.log",
-				"2> logs/{{inputs.parameters.log-prefix}}-send-status.stderr.log",
+     			}' http://webhook-eventsource-svc.argo-events/batch > logs/{{inputs.parameters.log-prefix}}-send-status.stdout.log 2> logs/{{inputs.parameters.log-prefix}}-send-status.stderr.log
+			`,
+			Container: apiv1.Container{
+				Image:   opts.StatusSenderImage,
+				Command: []string{"bash"},
 			},
 		},
 	}
@@ -359,20 +352,13 @@ func (w *WorkflowMaker) sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.
 func (w *WorkflowMaker) sendCleanupEventTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	return &v1alpha1.Template{
 		Name: "send-cleanup",
-		Container: &apiv1.Container{
-			Image: opts.StatusSenderImage,
-			Command: []string{
-				"curl",
-			},
-			Args: []string{
-				"-v",
-				"-H",
-				"Content-Type: application/json",
-				"-d",
-				`{"uuid" : "{{workflow.parameters.job_uuid}}"}`,
-				"http://webhook-eventsource-svc.argo-events/batch/cleanup",
-				"> logs/send-cleanup-notif.stdout.log",
-				"2> logs/send-cleanup-notif.stderr.log",
+		Script: &v1alpha1.ScriptTemplate{
+			Source: `
+				curl -v -H "Content-Type: application/json" -d '{"uuid":"{{workflow.parameters.job_uuid}}"}' http://webhook-eventsource-svc.argo-events/batch/cleanup > logs/send-cleanup-notif.stdout.log 2> logs/send-cleanup-notif.stderr.log
+			`,
+			Container: apiv1.Container{
+				Image:   opts.StatusSenderImage,
+				Command: []string{"bash"},
 			},
 		},
 	}
