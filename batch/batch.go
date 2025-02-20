@@ -339,8 +339,15 @@ func (w *WorkflowMaker) sendStatusTemplate(opts *BatchSubmissionOpts) *v1alpha1.
      			}' http://webhook-eventsource-svc.argo-events/batch > logs/{{inputs.parameters.log-prefix}}-send-status.stdout.log 2> logs/{{inputs.parameters.log-prefix}}-send-status.stderr.log
 			`,
 			Container: apiv1.Container{
-				Image:   opts.StatusSenderImage,
-				Command: []string{"bash"},
+				Image:      opts.StatusSenderImage,
+				Command:    []string{"bash"},
+				WorkingDir: opts.FileTransferWorkingDir,
+				VolumeMounts: []apiv1.VolumeMount{
+					{
+						Name:      defaultVolumeName,
+						MountPath: opts.FileTransferWorkingDir,
+					},
+				},
 			},
 		},
 	}
@@ -357,8 +364,15 @@ func (w *WorkflowMaker) sendCleanupEventTemplate(opts *BatchSubmissionOpts) *v1a
 				curl -v -H "Content-Type: application/json" -d '{"uuid":"{{workflow.parameters.job_uuid}}"}' http://webhook-eventsource-svc.argo-events/batch/cleanup > logs/send-cleanup-notif.stdout.log 2> logs/send-cleanup-notif.stderr.log
 			`,
 			Container: apiv1.Container{
-				Image:   opts.StatusSenderImage,
-				Command: []string{"bash"},
+				Image:      opts.StatusSenderImage,
+				Command:    []string{"bash"},
+				WorkingDir: opts.FileTransferWorkingDir,
+				VolumeMounts: []apiv1.VolumeMount{
+					{
+						Name:      defaultVolumeName,
+						MountPath: opts.FileTransferWorkingDir,
+					},
+				},
 			},
 		},
 	}
@@ -377,11 +391,11 @@ func (w *WorkflowMaker) initWorkingDirectoryTemplate(opts *BatchSubmissionOpts) 
 				"-p",
 				"logs/",
 			},
-			WorkingDir: "/working-directory",
+			WorkingDir: opts.FileTransferWorkingDir,
 			VolumeMounts: []apiv1.VolumeMount{
 				{
 					Name:      defaultVolumeName,
-					MountPath: "/working-directory",
+					MountPath: opts.FileTransferWorkingDir,
 				},
 			},
 		},
@@ -412,72 +426,75 @@ func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alph
 
 	return &v1alpha1.Template{
 		Name: "download-files",
-		Container: &apiv1.Container{
-			Image:      opts.FileTransferImage,
-			WorkingDir: opts.FileTransferWorkingDir,
-			VolumeMounts: []apiv1.VolumeMount{
-				{
-					Name:      defaultVolumeName,
-					MountPath: opts.FileTransferWorkingDir,
+		Script: &v1alpha1.ScriptTemplate{
+			Source: strings.Join(args, " "),
+			Container: apiv1.Container{
+				Image:      opts.FileTransferImage,
+				WorkingDir: opts.FileTransferWorkingDir,
+				Command:    []string{"bash"},
+				VolumeMounts: []apiv1.VolumeMount{
+					{
+						Name:      defaultVolumeName,
+						MountPath: opts.FileTransferWorkingDir,
+					},
 				},
-			},
-			Args: args,
-			Env: []apiv1.EnvVar{
-				{
-					Name:  "IRODS_CLIENT_USER_NAME",
-					Value: "{{workflow.parameters.username}}",
-				},
-				{
-					Name: "IRODS_HOST",
-					ValueFrom: &apiv1.EnvVarSource{
-						ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
-							Key: "IRODS_HOST",
-							LocalObjectReference: apiv1.LocalObjectReference{
-								Name: "irods-config",
+				Env: []apiv1.EnvVar{
+					{
+						Name:  "IRODS_CLIENT_USER_NAME",
+						Value: "{{workflow.parameters.username}}",
+					},
+					{
+						Name: "IRODS_HOST",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_HOST",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
 							},
 						},
 					},
-				},
-				{
-					Name: "IRODS_PORT",
-					ValueFrom: &apiv1.EnvVarSource{
-						ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
-							Key: "IRODS_PORT",
-							LocalObjectReference: apiv1.LocalObjectReference{
-								Name: "irods-config",
+					{
+						Name: "IRODS_PORT",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_PORT",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
 							},
 						},
 					},
-				},
-				{
-					Name: "IRODS_USER_NAME",
-					ValueFrom: &apiv1.EnvVarSource{
-						ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
-							Key: "IRODS_USER_NAME",
-							LocalObjectReference: apiv1.LocalObjectReference{
-								Name: "irods-config",
+					{
+						Name: "IRODS_USER_NAME",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_USER_NAME",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
 							},
 						},
 					},
-				},
-				{
-					Name: "IRODS_USER_PASSWORD",
-					ValueFrom: &apiv1.EnvVarSource{
-						ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
-							Key: "IRODS_USER_PASSWORD",
-							LocalObjectReference: apiv1.LocalObjectReference{
-								Name: "irods-config",
+					{
+						Name: "IRODS_USER_PASSWORD",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_USER_PASSWORD",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
 							},
 						},
 					},
-				},
-				{
-					Name: "IRODS_ZONE_NAME",
-					ValueFrom: &apiv1.EnvVarSource{
-						ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
-							Key: "IRODS_ZONE_NAME",
-							LocalObjectReference: apiv1.LocalObjectReference{
-								Name: "irods-config",
+					{
+						Name: "IRODS_ZONE_NAME",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_ZONE_NAME",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
 							},
 						},
 					},
@@ -491,83 +508,88 @@ func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alph
 // files to the data store. The init-working-dir template must be run
 // before this template, though they can be defined in any order.
 func (w *WorkflowMaker) uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
+	args := []string{
+		fmt.Sprintf("--log_level=%s", opts.FileTransferLogLevel),
+		"put",
+		"-f",
+		"--no_root",
+		".",
+		"{{workflow.parameters.output-folder}}",
+		"> logs/uploads.stdout.log",
+		"2> logs/uploads.stderr.log",
+	}
+
 	return &v1alpha1.Template{
 		Name: "upload-files",
-		Container: &apiv1.Container{
-			Image:      opts.FileTransferImage,
-			WorkingDir: opts.FileTransferWorkingDir,
-			VolumeMounts: []apiv1.VolumeMount{
-				{
-					Name:      defaultVolumeName,
-					MountPath: opts.FileTransferWorkingDir,
+		Script: &v1alpha1.ScriptTemplate{
+			Source: strings.Join(args, " "),
+			Container: apiv1.Container{
+				Image:      opts.FileTransferImage,
+				Command:    []string{"bash"},
+				WorkingDir: opts.FileTransferWorkingDir,
+				VolumeMounts: []apiv1.VolumeMount{
+					{
+						Name:      defaultVolumeName,
+						MountPath: opts.FileTransferWorkingDir,
+					},
 				},
-			},
-			Args: []string{
-				fmt.Sprintf("--log_level=%s", opts.FileTransferLogLevel),
-				"put",
-				"-f",
-				"--no_root",
-				".",
-				"{{workflow.parameters.output-folder}}",
-				"> logs/uploads.stdout.log",
-				"2> logs/uploads.stderr.log",
-			},
-			Env: []apiv1.EnvVar{
-				{
-					Name:  "IRODS_CLIENT_USER_NAME",
-					Value: "{{workflow.parameters.username}}",
-				},
-				{
-					Name: "IRODS_HOST",
-					ValueFrom: &apiv1.EnvVarSource{
-						ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
-							Key: "IRODS_HOST",
-							LocalObjectReference: apiv1.LocalObjectReference{
-								Name: "irods-config",
+				Env: []apiv1.EnvVar{
+					{
+						Name:  "IRODS_CLIENT_USER_NAME",
+						Value: "{{workflow.parameters.username}}",
+					},
+					{
+						Name: "IRODS_HOST",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_HOST",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
 							},
 						},
 					},
-				},
-				{
-					Name: "IRODS_PORT",
-					ValueFrom: &apiv1.EnvVarSource{
-						ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
-							Key: "IRODS_PORT",
-							LocalObjectReference: apiv1.LocalObjectReference{
-								Name: "irods-config",
+					{
+						Name: "IRODS_PORT",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_PORT",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
 							},
 						},
 					},
-				},
-				{
-					Name: "IRODS_USER_NAME",
-					ValueFrom: &apiv1.EnvVarSource{
-						ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
-							Key: "IRODS_USER_NAME",
-							LocalObjectReference: apiv1.LocalObjectReference{
-								Name: "irods-config",
+					{
+						Name: "IRODS_USER_NAME",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_USER_NAME",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
 							},
 						},
 					},
-				},
-				{
-					Name: "IRODS_USER_PASSWORD",
-					ValueFrom: &apiv1.EnvVarSource{
-						ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
-							Key: "IRODS_USER_PASSWORD",
-							LocalObjectReference: apiv1.LocalObjectReference{
-								Name: "irods-config",
+					{
+						Name: "IRODS_USER_PASSWORD",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_USER_PASSWORD",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
 							},
 						},
 					},
-				},
-				{
-					Name: "IRODS_ZONE_NAME",
-					ValueFrom: &apiv1.EnvVarSource{
-						ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
-							Key: "IRODS_ZONE_NAME",
-							LocalObjectReference: apiv1.LocalObjectReference{
-								Name: "irods-config",
+					{
+						Name: "IRODS_ZONE_NAME",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_ZONE_NAME",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
 							},
 						},
 					},
