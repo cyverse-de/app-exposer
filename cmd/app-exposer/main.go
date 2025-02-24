@@ -114,7 +114,7 @@ func main() {
 		disableViceProxyMemoryResourceLimit  = flag.Bool("disable-vice-proxy-memory-resource-limit", false, "Disable memory resource limit for the vice proxy.")
 		viceProxyStorageResourceRequest      = flag.String("vice-proxy-storage-resource-request", "100Mi", "The default storage resource request for the vice proxy.")
 		viceProxyStorageResourceLimit        = flag.String("vice-proxy-storage-resource-limit", "100Gi", "The default storage resource limit for the vice proxy.")
-		disableViceProxyStorageResourceLimit = flag.Bool("disable-vice-proxy-storage-resource-limit", false, "Disable storage resource limit for the vice proxy.")
+		disableViceProxyStorageResourceLimit = flag.Bool("disable-vice-proxy-storage-resource-limit", true, "Disable storage resource limit for the vice proxy.")
 		logLevel                             = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
 	)
 
