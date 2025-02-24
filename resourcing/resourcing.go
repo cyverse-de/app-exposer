@@ -24,6 +24,12 @@ var (
 	viceProxyCPUResourceLimit, _   = resourcev1.ParseQuantity("200m")
 	viceProxyMemResourceLimit, _   = resourcev1.ParseQuantity("200Mi")
 	viceProxyStorageLimit, _       = resourcev1.ParseQuantity("200Mi")
+
+	doDefaultCPUResourceLimit   = true
+	doDefaultMemResourceLimit   = true
+	doVICEProxyCPUResourceLimit = true
+	doVICEProxyMemResourceLimit = true
+	doVICEProxyStorageLimit     = true
 )
 
 const (
@@ -38,12 +44,20 @@ func SetDefaultCPUResourceLimit(value resourcev1.Quantity) {
 	defaultCPUResourceLimit = value
 }
 
+func SetDoDefaultCPUResourceLimit(value bool) {
+	doDefaultCPUResourceLimit = value
+}
+
 func SetDefaultMemResourceRequest(value resourcev1.Quantity) {
 	defaultMemResourceRequest = value
 }
 
 func SetDefaultMemResourceLimit(value resourcev1.Quantity) {
 	defaultMemResourceLimit = value
+}
+
+func SetDoDefaultMemResourceLimit(value bool) {
+	doDefaultMemResourceLimit = value
 }
 
 func SetDefaultStorageRequest(value resourcev1.Quantity) {
@@ -58,6 +72,10 @@ func SetVICEProxyCPUResourceLimit(value resourcev1.Quantity) {
 	viceProxyCPUResourceLimit = value
 }
 
+func SetDoVICEProxyCPUResourceLimit(value bool) {
+	doVICEProxyCPUResourceLimit = value
+}
+
 func SetVICEProxyMemResourceRequest(value resourcev1.Quantity) {
 	viceProxyMemResourceRequest = value
 }
@@ -66,12 +84,20 @@ func SetVICEProxyMemResourceLimit(value resourcev1.Quantity) {
 	viceProxyMemResourceLimit = value
 }
 
+func SetDoVICEProxyMemResourceLimit(value bool) {
+	doVICEProxyMemResourceLimit = value
+}
+
 func SetVICEProxyStorageRequest(value resourcev1.Quantity) {
 	viceProxyStorageRequest = value
 }
 
 func SetVICEProxyStorageLimit(value resourcev1.Quantity) {
 	viceProxyStorageLimit = value
+}
+
+func SetDoVICEProxyStorageLimit(value bool) {
+	doVICEProxyStorageLimit = value
 }
 
 func DefaultCPUResourceRequest() resourcev1.Quantity {
@@ -244,9 +270,14 @@ func resourceRequests(analysis *model.Analysis) apiv1.ResourceList {
 }
 
 func resourceLimits(analysis *model.Analysis) apiv1.ResourceList {
-	limits := apiv1.ResourceList{
-		apiv1.ResourceCPU:    cpuResourceLimit(analysis), //analysis contains # cores
-		apiv1.ResourceMemory: memResourceLimit(analysis), // analysis contains # bytes mem
+	limits := apiv1.ResourceList{}
+
+	if doDefaultCPUResourceLimit {
+		limits[apiv1.ResourceCPU] = cpuResourceLimit(analysis)
+	}
+
+	if doDefaultMemResourceLimit {
+		limits[apiv1.ResourceMemory] = memResourceLimit(analysis)
 	}
 
 	// If a GPU device is configured, then add it to the resource limits.
@@ -262,9 +293,50 @@ func resourceLimits(analysis *model.Analysis) apiv1.ResourceList {
 	return limits
 }
 
+func VICEProxyRequirements(analysis *model.Analysis) *apiv1.ResourceRequirements {
+	retval := &apiv1.ResourceRequirements{
+		Requests: apiv1.ResourceList{
+			apiv1.ResourceCPU:              VICEProxyCPUResourceRequest(),
+			apiv1.ResourceMemory:           VICEProxyMemResourceRequest(),
+			apiv1.ResourceEphemeralStorage: VICEProxyStorageRequest(),
+		},
+	}
+
+	if !(doVICEProxyStorageLimit || doVICEProxyCPUResourceLimit || doVICEProxyMemResourceLimit) {
+		return retval
+	}
+
+	limits := apiv1.ResourceList{}
+
+	if doVICEProxyCPUResourceLimit {
+		limits[apiv1.ResourceCPU] = VICEProxyCPUResourceLimit()
+	}
+
+	if doVICEProxyMemResourceLimit {
+		limits[apiv1.ResourceMemory] = VICEProxyMemResourceLimit()
+	}
+
+	if doVICEProxyStorageLimit {
+		limits[apiv1.ResourceEphemeralStorage] = VICEProxyStorageLimit()
+	}
+
+	retval.Limits = limits
+
+	return retval
+}
+
+// Requirements returns the limits and requests needed for the analysis itself.
 func Requirements(analysis *model.Analysis) *apiv1.ResourceRequirements {
-	return &apiv1.ResourceRequirements{
+	retval := &apiv1.ResourceRequirements{
 		Limits:   resourceLimits(analysis),
 		Requests: resourceRequests(analysis),
 	}
+
+	if !(doDefaultCPUResourceLimit || doDefaultMemResourceLimit || GPUEnabled(analysis)) {
+		return retval
+	}
+
+	retval.Limits = resourceLimits(analysis)
+
+	return retval
 }
