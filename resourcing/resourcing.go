@@ -316,9 +316,9 @@ func VICEProxyRequirements(analysis *model.Analysis) *apiv1.ResourceRequirements
 		limits[apiv1.ResourceMemory] = VICEProxyMemResourceLimit()
 	}
 
-	if doVICEProxyStorageLimit {
-		limits[apiv1.ResourceEphemeralStorage] = VICEProxyStorageLimit()
-	}
+	// if doVICEProxyStorageLimit {
+	// 	limits[apiv1.ResourceEphemeralStorage] = VICEProxyStorageLimit()
+	// }
 
 	retval.Limits = limits
 
