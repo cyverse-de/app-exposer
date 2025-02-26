@@ -737,10 +737,10 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 
 		// Add the volume definitions
 		workflow.Spec.Volumes = []apiv1.Volume{}
+		hostPathType := apiv1.HostPathDirectory // We only suppport directories for now, and they need to be predefined.
 
 		for stepIndex, step := range w.analysis.Steps {
 			for volumeIndex, volume := range step.Component.Container.Volumes {
-				hostPathType := apiv1.HostPathDirectory // We only suppport directories for now, and they need to be predefined.
 				workflow.Spec.Volumes = append(
 					workflow.Spec.Volumes,
 					apiv1.Volume{
