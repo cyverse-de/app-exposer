@@ -132,6 +132,18 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 			},
 		}
 
+		// This is used to mount host paths into the container.
+		for volumeIdx, volume := range step.Component.Container.Volumes {
+			stTmpl.Script.Container.VolumeMounts = append(
+				stTmpl.Script.Container.VolumeMounts,
+				apiv1.VolumeMount{
+					Name:      fmt.Sprintf("step-%d-%d", idx, volumeIdx),
+					MountPath: volume.ContainerPath,
+					ReadOnly:  volume.ReadOnly,
+				},
+			)
+		}
+
 		templates = append(templates, stTmpl)
 	}
 
@@ -707,6 +719,42 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 			},
 			Templates: workflowTemplates,
 		},
+	}
+
+	// If the analysis uses volumes, it needs a host path mounted into the container
+	// as a volume. We define the volumes up front here and the individual workflow
+	// steps can then use them in their VolumeMounts.
+	if w.analysis.UsesVolumes() {
+		// Add a node selector that limits the hosts to those with the NFS mounts
+		// available.
+		me := &workflow.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions
+
+		*me = append(*me, apiv1.NodeSelectorRequirement{
+			Key:      "has-nfs",
+			Operator: apiv1.NodeSelectorOpIn,
+			Values:   []string{"true"},
+		})
+
+		// Add the volume definitions
+		workflow.Spec.Volumes = []apiv1.Volume{}
+		hostPathType := apiv1.HostPathDirectory // We only suppport directories for now, and they need to be predefined.
+
+		for stepIndex, step := range w.analysis.Steps {
+			for volumeIndex, volume := range step.Component.Container.Volumes {
+				workflow.Spec.Volumes = append(
+					workflow.Spec.Volumes,
+					apiv1.Volume{
+						Name: fmt.Sprintf("step-%d-%d", stepIndex, volumeIndex), // Important when referencing the volumes in the steps VolumeMounts
+						VolumeSource: apiv1.VolumeSource{
+							HostPath: &apiv1.HostPathVolumeSource{
+								Path: volume.HostPath,
+								Type: &hostPathType,
+							},
+						},
+					},
+				)
+			}
+		}
 	}
 
 	return &workflow
