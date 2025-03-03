@@ -144,6 +144,21 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 			)
 		}
 
+		// If the step is expected to mount a volume from another container
+		// then we need to add volume mounts for the corresponding secrets.
+		// Data containers are no longer supported and are replaced by static
+		// secrets that get mounted into the container.
+		for _, volumeFrom := range step.Component.Container.VolumesFrom {
+			stTmpl.Script.Container.VolumeMounts = append(
+				stTmpl.Script.Container.VolumeMounts,
+				apiv1.VolumeMount{
+					Name:      volumeFrom.NamePrefix,
+					MountPath: volumeFrom.ContainerPath,
+					ReadOnly:  volumeFrom.ReadOnly,
+				},
+			)
+		}
+
 		templates = append(templates, stTmpl)
 	}
 
@@ -754,6 +769,23 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 					},
 				)
 			}
+		}
+	}
+
+	readOnly := int32(0555)
+
+	// If the analysis uses data containers, we need to add the secrets as mountable volumes.
+	if len(w.analysis.DataContainers()) > 0 {
+		for _, volumeFrom := range w.analysis.DataContainers() {
+			workflow.Spec.Volumes = append(workflow.Spec.Volumes, apiv1.Volume{
+				Name: volumeFrom.NamePrefix, // Both the Secret and the Volume are named after the name prefix.
+				VolumeSource: apiv1.VolumeSource{
+					Secret: &apiv1.SecretVolumeSource{
+						SecretName:  volumeFrom.NamePrefix,
+						DefaultMode: &readOnly, // read and execute. Some secrets contain scripts.
+					},
+				},
+			})
 		}
 	}
 
