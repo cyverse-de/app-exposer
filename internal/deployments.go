@@ -153,11 +153,14 @@ func (i *Internal) viceProxyCommand(job *model.Job) []string {
 }
 
 var (
-	defaultCPUResourceRequest, _ = resourcev1.ParseQuantity("1000m")
-	defaultMemResourceRequest, _ = resourcev1.ParseQuantity("2Gi")
-	defaultStorageRequest, _     = resourcev1.ParseQuantity("1Gi")
-	defaultCPUResourceLimit, _   = resourcev1.ParseQuantity("4000m")
-	defaultMemResourceLimit, _   = resourcev1.ParseQuantity("8Gi")
+	defaultCPUResourceRequest, _      = resourcev1.ParseQuantity("1000m")
+	defaultMemResourceRequest, _      = resourcev1.ParseQuantity("2Gi")
+	defaultStorageRequest, _          = resourcev1.ParseQuantity("1Gi")
+	defaultCPUResourceLimit, _        = resourcev1.ParseQuantity("4000m")
+	defaultMemResourceLimit, _        = resourcev1.ParseQuantity("8Gi")
+	defaultVICEProxyCPURequest, _     = resourcev1.ParseQuantity("100m")
+	defaultVICEProxyMemRequest, _     = resourcev1.ParseQuantity("1Gi")
+	defaultVICEProxyStorageRequest, _ = resourcev1.ParseQuantity("16Gi")
 )
 
 func cpuResourceRequest(job *model.Job) resourcev1.Quantity {
@@ -546,11 +549,20 @@ func (i *Internal) defineAnalysisContainer(job *model.Job) apiv1.Container {
 func (i *Internal) deploymentContainers(job *model.Job) []apiv1.Container {
 	output := []apiv1.Container{}
 
+	requests := apiv1.ResourceList{
+		apiv1.ResourceCPU:              defaultVICEProxyCPURequest,
+		apiv1.ResourceMemory:           defaultVICEProxyMemRequest,
+		apiv1.ResourceEphemeralStorage: defaultVICEProxyStorageRequest,
+	}
+
 	output = append(output, apiv1.Container{
 		Name:            viceProxyContainerName,
 		Image:           i.ViceProxyImage,
 		Command:         i.viceProxyCommand(job),
 		ImagePullPolicy: apiv1.PullPolicy(apiv1.PullAlways),
+		Resources: apiv1.ResourceRequirements{
+			Requests: requests,
+		},
 		Ports: []apiv1.ContainerPort{
 			{
 				Name:          viceProxyPortName,
