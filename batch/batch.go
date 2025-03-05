@@ -800,9 +800,10 @@ func (w *WorkflowMaker) addDataContainers(ctx context.Context, workflow *v1alpha
 	// If the analysis uses data containers, we need to add the secrets as mountable volumes.
 	if len(w.analysis.DataContainers()) > 0 {
 		for _, volumeFrom := range w.analysis.DataContainers() {
-			fixedTag := slug.Substitute(slug.Make(volumeFrom.Tag), map[string]string{"_": "-"})
+			// Slugify the secret name and replace any underscores with dashes.
+			secretName := slug.Substitute(slug.Make(fmt.Sprintf("%s-%s", volumeFrom.NamePrefix, volumeFrom.Tag)), map[string]string{"_": "-"})
 
-			secret, err := w.getSecret(ctx, volumeFrom.NamePrefix, workflow.Namespace)
+			secret, err := w.getSecret(ctx, secretName, workflow.Namespace)
 			if err != nil {
 				return err
 			}
@@ -821,8 +822,8 @@ func (w *WorkflowMaker) addDataContainers(ctx context.Context, workflow *v1alpha
 				Name: volumeFrom.NamePrefix, // Keep the name of the volume easy, just the name prefix
 				VolumeSource: apiv1.VolumeSource{
 					Secret: &apiv1.SecretVolumeSource{
-						SecretName:  fmt.Sprintf("%s-%s", volumeFrom.NamePrefix, fixedTag), // Include the slugified version info in the SecretName
-						DefaultMode: &readOnly,                                             // read and execute. Some secrets contain scripts.
+						SecretName:  secretName, // Include the slugified version info in the SecretName
+						DefaultMode: &readOnly,  // read and execute. Some secrets contain scripts.
 						Items:       items,
 					},
 				},
