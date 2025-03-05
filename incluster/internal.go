@@ -443,6 +443,19 @@ func (i *Incluster) doExit(ctx context.Context, externalID string) error {
 		LabelSelector: set.AsSelector().String(),
 	}
 
+	// Delete the pod disruption budget
+	pdbClient := i.clientset.PolicyV1().PodDisruptionBudgets(i.ViceNamespace)
+	pdbList, err := pdbClient.List(ctx, listoptions)
+	if err != nil {
+		return err
+	}
+
+	for _, pdb := range pdbList.Items {
+		if err = pdbClient.Delete(ctx, pdb.Name, metav1.DeleteOptions{}); err != nil {
+			log.Error(err)
+		}
+	}
+
 	// Delete the ingress
 	ingressclient := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
 	ingresslist, err := ingressclient.List(ctx, listoptions)
