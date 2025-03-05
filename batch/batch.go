@@ -3,6 +3,7 @@ package batch
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -12,12 +13,14 @@ import (
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/resourcing"
 	"github.com/cyverse-de/model/v7"
+	"github.com/gosimple/slug"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/client-go/kubernetes"
 )
 
 var (
@@ -35,15 +38,17 @@ type BatchSubmissionOpts struct {
 }
 
 type WorkflowMaker struct {
-	getter   imageinfo.InfoGetter
-	analysis *model.Analysis
+	getter    imageinfo.InfoGetter
+	analysis  *model.Analysis
+	clientset kubernetes.Interface
 }
 
 // NewWorkflowMaker creates a new instance of WorkflowMaker
-func NewWorkflowMaker(getter imageinfo.InfoGetter, analysis *model.Analysis) *WorkflowMaker {
+func NewWorkflowMaker(getter imageinfo.InfoGetter, analysis *model.Analysis, clientset kubernetes.Interface) *WorkflowMaker {
 	return &WorkflowMaker{
-		getter:   getter,
-		analysis: analysis,
+		getter:    getter,
+		analysis:  analysis,
+		clientset: clientset,
 	}
 }
 
@@ -630,11 +635,11 @@ func (w *WorkflowMaker) uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1
 
 // NewWorkflow returns a defintion of a workflow that executes a DE batch
 // analyis. It does not submit the workflow to the cluster.
-func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflow {
+func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOpts) (*v1alpha1.Workflow, error) {
 	var workflowTemplates []v1alpha1.Template
 	stepsTemplates, err := w.runStepsTemplates()
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	workflowTemplates = append(workflowTemplates, stepsTemplates...)
 	workflowTemplates = append(
@@ -736,6 +741,18 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 		},
 	}
 
+	if err := w.addHostPathVolumes(&workflow); err != nil {
+		return &workflow, err
+	}
+
+	if err := w.addDataContainers(ctx, &workflow); err != nil {
+		return &workflow, err
+	}
+
+	return &workflow, nil
+}
+
+func (w *WorkflowMaker) addHostPathVolumes(workflow *v1alpha1.Workflow) error {
 	// If the analysis uses volumes, it needs a host path mounted into the container
 	// as a volume. We define the volumes up front here and the individual workflow
 	// steps can then use them in their VolumeMounts.
@@ -771,25 +788,52 @@ func (w *WorkflowMaker) NewWorkflow(opts *BatchSubmissionOpts) *v1alpha1.Workflo
 			}
 		}
 	}
+	return nil
+}
 
+// addDataContainers will add the secret volumes to the workflow based on the
+// data container definitions in the analysis definition. Modifies the workflow
+// and doesn't return a new one. Returns an error if the operation fails.
+func (w *WorkflowMaker) addDataContainers(ctx context.Context, workflow *v1alpha1.Workflow) error {
 	readOnly := int32(0555)
 
 	// If the analysis uses data containers, we need to add the secrets as mountable volumes.
 	if len(w.analysis.DataContainers()) > 0 {
 		for _, volumeFrom := range w.analysis.DataContainers() {
+			fixedTag := slug.Substitute(slug.Make(volumeFrom.Tag), map[string]string{"_": "-"})
+
+			secret, err := w.getSecret(ctx, volumeFrom.NamePrefix, workflow.Namespace)
+			if err != nil {
+				return err
+			}
+
+			// Each data key should have a corresponding annotation telling us the path
+			// the value should be mounted at.
+			items := []apiv1.KeyToPath{}
+			for key := range maps.Keys(secret.Data) {
+				items = append(items, apiv1.KeyToPath{
+					Key:  key,
+					Path: secret.ObjectMeta.Annotations[key],
+				})
+			}
+
 			workflow.Spec.Volumes = append(workflow.Spec.Volumes, apiv1.Volume{
-				Name: volumeFrom.NamePrefix, // Both the Secret and the Volume are named after the name prefix.
+				Name: volumeFrom.NamePrefix, // Keep the name of the volume easy, just the name prefix
 				VolumeSource: apiv1.VolumeSource{
 					Secret: &apiv1.SecretVolumeSource{
-						SecretName:  volumeFrom.NamePrefix,
-						DefaultMode: &readOnly, // read and execute. Some secrets contain scripts.
+						SecretName:  fmt.Sprintf("%s-%s", volumeFrom.NamePrefix, fixedTag), // Include the slugified version info in the SecretName
+						DefaultMode: &readOnly,                                             // read and execute. Some secrets contain scripts.
+						Items:       items,
 					},
 				},
 			})
 		}
 	}
+	return nil
+}
 
-	return &workflow
+func (w *WorkflowMaker) getSecret(ctx context.Context, name, namespace string) (*apiv1.Secret, error) {
+	return w.clientset.CoreV1().Secrets(namespace).Get(ctx, name, v1.GetOptions{})
 }
 
 func (w *WorkflowMaker) SubmitWorkflow(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, workflow *v1alpha1.Workflow) (*v1alpha1.Workflow, error) {

@@ -354,7 +354,7 @@ func main() {
 		Namespace:              *argoWorkflowNS,
 	}
 	enforcer := quota.NewEnforcer(clientset, dbconn, nec, *userSuffix)
-	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer)
+	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer, clientset)
 
 	// Set the routes for the batch app. Changes the state of the jaGroup
 	// instance at *jaGroup, so there's no return value that we care about.

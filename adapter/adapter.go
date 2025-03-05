@@ -16,6 +16,7 @@ import (
 	"github.com/cyverse-de/model/v7"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
 )
 
 var log = common.Log
@@ -34,6 +35,7 @@ type JEXAdapter struct {
 	statusSenderImage      string
 	namespace              string
 	quotaEnforcer          *quota.Enforcer
+	clientset              kubernetes.Interface
 }
 
 type Init struct {
@@ -48,7 +50,7 @@ type Init struct {
 }
 
 // New returns a *JEXAdapter
-func New(init *Init, apps *apps.Apps, detector *millicores.Detector, imageInfoGetter imageinfo.InfoGetter, enforcer *quota.Enforcer) *JEXAdapter {
+func New(init *Init, apps *apps.Apps, detector *millicores.Detector, imageInfoGetter imageinfo.InfoGetter, enforcer *quota.Enforcer, clientset kubernetes.Interface) *JEXAdapter {
 	return &JEXAdapter{
 		apps:                   apps,
 		detector:               detector,
@@ -62,6 +64,7 @@ func New(init *Init, apps *apps.Apps, detector *millicores.Detector, imageInfoGe
 		statusSenderImage:      init.StatusSenderImage,
 		namespace:              init.Namespace,
 		quotaEnforcer:          enforcer,
+		clientset:              clientset,
 	}
 }
 
@@ -212,8 +215,13 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 		ExternalID:             analysis.InvocationID,
 	}
 
-	maker := batch.NewWorkflowMaker(j.imageInfoGetter, analysis)
-	workflow := maker.NewWorkflow(opts)
+	maker := batch.NewWorkflowMaker(j.imageInfoGetter, analysis, j.clientset)
+	workflow, err := maker.NewWorkflow(ctx, opts)
+
+	if err != nil {
+		log.Error(err)
+		return err
+	}
 
 	ctx, cl, err := batch.NewWorkflowServiceClient(ctx)
 	if err != nil {
