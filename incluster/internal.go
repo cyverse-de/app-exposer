@@ -244,6 +244,20 @@ func (i *Incluster) UpsertDeployment(ctx context.Context, deployment *appsv1.Dep
 		}
 	}
 
+	// Create the pod disruption budget for the job.
+	pdb, err := i.createPodDisruptionBudget(ctx, job)
+	if err != nil {
+		return err
+	}
+	pdbClient := i.clientset.PolicyV1().PodDisruptionBudgets(i.ViceNamespace)
+	_, err = pdbClient.Get(ctx, job.InvocationID, metav1.GetOptions{})
+	if err != nil {
+		_, err = pdbClient.Create(ctx, pdb, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+	}
+
 	// Create the service for the job.
 	svc, err := i.getService(ctx, job)
 	if err != nil {
@@ -427,6 +441,19 @@ func (i *Incluster) doExit(ctx context.Context, externalID string) error {
 
 	listoptions := metav1.ListOptions{
 		LabelSelector: set.AsSelector().String(),
+	}
+
+	// Delete the pod disruption budget
+	pdbClient := i.clientset.PolicyV1().PodDisruptionBudgets(i.ViceNamespace)
+	pdbList, err := pdbClient.List(ctx, listoptions)
+	if err != nil {
+		return err
+	}
+
+	for _, pdb := range pdbList.Items {
+		if err = pdbClient.Delete(ctx, pdb.Name, metav1.DeleteOptions{}); err != nil {
+			log.Error(err)
+		}
 	}
 
 	// Delete the ingress
