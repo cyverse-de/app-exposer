@@ -6,17 +6,23 @@ import (
 	"flag"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/cyverse-de/app-exposer/batch"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/model/v7"
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 func main() {
 	var (
-		err      error
-		inputJob model.Job
+		err        error
+		kubeconfig *string
+		inputJob   model.Job
 
 		job                = flag.String("job", "", "The file containing the job definition. Required.")
 		transferImage      = flag.String("transfer-image", "harbor.cyverse.org/de/gocmd:latest", "(optional) Image used to transfer files to/from the data store")
@@ -31,6 +37,20 @@ func main() {
 		harborUser         = flag.String("harbor-user", "", "The user for harbor lookups.")
 		harborPass         = flag.String("harbor-pass", "", "The password for the harbor user.")
 	)
+
+	kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+
+	// Prefer the value in the KUBECONFIG env var.
+	// If the value is not set, then check for the HOME directory.
+	// If that is not set, then require the user to specify a path.
+	if kubeconfigEnv := os.Getenv("KUBECONFIG"); kubeconfigEnv != "" {
+		kubeconfig = flag.String("kubeconfig", kubeconfigEnv, "absolute path to the kubeconfig file")
+	} else if home := os.Getenv("HOME"); home != "" {
+		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+	} else {
+		// If the home directory doesn't exist, then allow the user to specify a path.
+		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	}
 
 	flag.Parse()
 
@@ -48,6 +68,26 @@ func main() {
 
 	if *harborPass == "" {
 		log.Fatal("--harbor-pass must be set")
+	}
+
+	var config *rest.Config
+	if *kubeconfig != "" {
+		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
+		if err != nil {
+			log.Fatal(errors.Wrapf(err, "error building config from flags using kubeconfig %s", *kubeconfig))
+		}
+	} else {
+		// If the home directory doesn't exist and the user doesn't specify a path,
+		// then assume that we're running inside a cluster.
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			log.Fatal(errors.Wrapf(err, "error loading the config inside the cluster"))
+		}
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "error creating clientset from config"))
 	}
 
 	infoGetter, err := imageinfo.NewHarborInfoGetter(*harborURL, *harborUser, *harborPass)
@@ -73,8 +113,11 @@ func main() {
 		ExternalID:             *analysisID,
 	}
 
-	maker := batch.NewWorkflowMaker(infoGetter, &inputJob)
-	workflow := maker.NewWorkflow(&opts)
+	maker := batch.NewWorkflowMaker(infoGetter, &inputJob, clientset)
+	workflow, err := maker.NewWorkflow(context.Background(), &opts)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if !*quiet {
 		var outfile *os.File
