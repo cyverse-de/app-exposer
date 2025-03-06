@@ -38,18 +38,18 @@ func main() {
 		harborPass         = flag.String("harbor-pass", "", "The password for the harbor user.")
 	)
 
-	// if cluster is set, then
-	if cluster := os.Getenv("CLUSTER"); cluster != "" {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+
+	// Prefer the value in the KUBECONFIG env var.
+	// If the value is not set, then check for the HOME directory.
+	// If that is not set, then require the user to specify a path.
+	if kubeconfigEnv := os.Getenv("KUBECONFIG"); kubeconfigEnv != "" {
+		kubeconfig = flag.String("kubeconfig", kubeconfigEnv, "absolute path to the kubeconfig file")
+	} else if home := os.Getenv("HOME"); home != "" {
+		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
 	} else {
-		// If the home directory exists, then assume that the kube config will be read
-		// from ~/.kube/config.
-		if home := os.Getenv("HOME"); home != "" {
-			kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-		} else {
-			// If the home directory doesn't exist, then allow the user to specify a path.
-			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-		}
+		// If the home directory doesn't exist, then allow the user to specify a path.
+		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	}
 
 	flag.Parse()
