@@ -38,8 +38,6 @@ func main() {
 		harborPass         = flag.String("harbor-pass", "", "The password for the harbor user.")
 	)
 
-	kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-
 	// Prefer the value in the KUBECONFIG env var.
 	// If the value is not set, then check for the HOME directory.
 	// If that is not set, then require the user to specify a path.
