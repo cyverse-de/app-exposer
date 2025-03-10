@@ -154,11 +154,17 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 		// Data containers are no longer supported and are replaced by static
 		// secrets that get mounted into the container.
 		for _, volumeFrom := range step.Component.Container.VolumesFrom {
+			var containerPath string
+			if volumeFrom.ContainerPath == "" {
+				containerPath = "/mnt/discoenv"
+			} else {
+				containerPath = volumeFrom.ContainerPath
+			}
 			stTmpl.Script.Container.VolumeMounts = append(
 				stTmpl.Script.Container.VolumeMounts,
 				apiv1.VolumeMount{
 					Name:      volumeFrom.NamePrefix,
-					MountPath: volumeFrom.ContainerPath,
+					MountPath: containerPath,
 					ReadOnly:  volumeFrom.ReadOnly,
 				},
 			)
