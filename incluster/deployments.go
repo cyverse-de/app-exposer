@@ -183,11 +183,11 @@ func (i *Incluster) inputStagingContainer(job *model.Job) apiv1.Container {
 					"SYS_CHROOT",
 					"SETFCAP",
 					"FSETID",
-					"NET_RAW",
 					"MKNOD",
 				},
 				Add: []apiv1.Capability{
 					"NET_ADMIN",
+					"NET_RAW",
 				},
 			},
 		},
