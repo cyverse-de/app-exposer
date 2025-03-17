@@ -186,6 +186,9 @@ func (i *Incluster) inputStagingContainer(job *model.Job) apiv1.Container {
 					"NET_RAW",
 					"MKNOD",
 				},
+				Add: []apiv1.Capability{
+					"NET_ADMIN",
+				},
 			},
 		},
 	}
