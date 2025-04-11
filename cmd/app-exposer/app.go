@@ -5,6 +5,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/httphandlers"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/instantlaunches"
 	"github.com/cyverse-de/app-exposer/outcluster"
@@ -25,6 +26,7 @@ import (
 type ExposerApp struct {
 	outcluster      *outcluster.Outcluster
 	incluster       *incluster.Incluster
+	handlers        *httphandlers.HTTPHandlers
 	namespace       string
 	clientset       kubernetes.Interface
 	router          *echo.Echo
@@ -98,13 +100,16 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		NATSEncodedConn:               conn,
 	}
 
+	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, apps)
+
 	app := &ExposerApp{
 		outcluster: outcluster.New(init.ClientSet, init.Namespace, init.IngressClass),
-		incluster:  incluster.New(inclusterInit, init.db, init.ClientSet, apps),
+		incluster:  incluster,
 		namespace:  init.Namespace,
 		clientset:  init.ClientSet,
 		router:     echo.New(),
 		db:         init.db,
+		handlers:   httphandlers.New(incluster, apps, init.ClientSet),
 	}
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
@@ -143,43 +148,43 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	vice := app.router.Group("/vice")
 	vice.Use(middleware.Logger())
-	vice.POST("/launch", app.incluster.LaunchAppHandler)
-	vice.POST("/apply-labels", app.incluster.ApplyAsyncLabelsHandler)
-	vice.GET("/async-data", app.incluster.AsyncDataHandler)
-	vice.GET("/listing", app.incluster.FilterableResourcesHandler)
-	vice.POST("/:id/download-input-files", app.incluster.TriggerDownloadsHandler)
-	vice.POST("/:id/save-output-files", app.incluster.TriggerUploadsHandler)
-	vice.POST("/:id/exit", app.incluster.ExitHandler)
-	vice.POST("/:id/save-and-exit", app.incluster.SaveAndExitHandler)
-	vice.GET("/:analysis-id/pods", app.incluster.PodsHandler)
-	vice.GET("/:analysis-id/logs", app.incluster.LogsHandler)
-	vice.POST("/:analysis-id/time-limit", app.incluster.TimeLimitUpdateHandler)
-	vice.GET("/:analysis-id/time-limit", app.incluster.GetTimeLimitHandler)
-	vice.GET("/:host/url-ready", app.incluster.URLReadyHandler)
-	vice.GET("/:host/description", app.incluster.DescribeAnalysisHandler)
+	vice.POST("/launch", app.handlers.LaunchAppHandler)
+	vice.POST("/apply-labels", app.handlers.ApplyAsyncLabelsHandler)
+	vice.GET("/async-data", app.handlers.AsyncDataHandler)
+	vice.GET("/listing", app.handlers.FilterableResourcesHandler)
+	vice.POST("/:id/download-input-files", app.handlers.TriggerDownloadsHandler)
+	vice.POST("/:id/save-output-files", app.handlers.TriggerUploadsHandler)
+	vice.POST("/:id/exit", app.handlers.ExitHandler)
+	vice.POST("/:id/save-and-exit", app.handlers.SaveAndExitHandler)
+	vice.GET("/:analysis-id/pods", app.handlers.PodsHandler)
+	vice.GET("/:analysis-id/logs", app.handlers.LogsHandler)
+	vice.POST("/:analysis-id/time-limit", app.handlers.TimeLimitUpdateHandler)
+	vice.GET("/:analysis-id/time-limit", app.handlers.GetTimeLimitHandler)
+	vice.GET("/:host/url-ready", app.handlers.URLReadyHandler)
+	vice.GET("/:host/description", app.handlers.DescribeAnalysisHandler)
 
 	vicelisting := vice.Group("/listing")
-	vicelisting.GET("/", app.incluster.FilterableResourcesHandler)
-	vicelisting.GET("/deployments", app.incluster.FilterableDeploymentsHandler)
-	vicelisting.GET("/pods", app.incluster.FilterablePodsHandler)
-	vicelisting.GET("/configmaps", app.incluster.FilterableConfigMapsHandler)
-	vicelisting.GET("/services", app.incluster.FilterableServicesHandler)
-	vicelisting.GET("/ingresses", app.incluster.FilterableIngressesHandler)
+	vicelisting.GET("/", app.handlers.FilterableResourcesHandler)
+	vicelisting.GET("/deployments", app.handlers.FilterableDeploymentsHandler)
+	vicelisting.GET("/pods", app.handlers.FilterablePodsHandler)
+	vicelisting.GET("/configmaps", app.handlers.FilterableConfigMapsHandler)
+	vicelisting.GET("/services", app.handlers.FilterableServicesHandler)
+	vicelisting.GET("/ingresses", app.handlers.FilterableIngressesHandler)
 
 	viceadmin := vice.Group("/admin")
-	viceadmin.GET("/listing", app.incluster.AdminFilterableResourcesHandler)
-	viceadmin.GET("/:host/description", app.incluster.AdminDescribeAnalysisHandler)
-	viceadmin.GET("/:host/url-ready", app.incluster.AdminURLReadyHandler)
+	viceadmin.GET("/listing", app.handlers.AdminFilterableResourcesHandler)
+	viceadmin.GET("/:host/description", app.handlers.AdminDescribeAnalysisHandler)
+	viceadmin.GET("/:host/url-ready", app.handlers.AdminURLReadyHandler)
 
 	viceanalyses := viceadmin.Group("/analyses")
-	viceanalyses.GET("/", app.incluster.AdminFilterableResourcesHandler)
-	viceanalyses.POST("/:analysis-id/download-input-files", app.incluster.AdminTriggerDownloadsHandler)
-	viceanalyses.POST("/:analysis-id/save-output-files", app.incluster.AdminTriggerUploadsHandler)
-	viceanalyses.POST("/:analysis-id/exit", app.incluster.AdminExitHandler)
-	viceanalyses.POST("/:analysis-id/save-and-exit", app.incluster.AdminSaveAndExitHandler)
-	viceanalyses.GET("/:analysis-id/time-limit", app.incluster.AdminGetTimeLimitHandler)
-	viceanalyses.POST("/:analysis-id/time-limit", app.incluster.AdminTimeLimitUpdateHandler)
-	viceanalyses.GET("/:analysis-id/external-id", app.incluster.AdminGetExternalIDHandler)
+	viceanalyses.GET("/", app.handlers.AdminFilterableResourcesHandler)
+	viceanalyses.POST("/:analysis-id/download-input-files", app.handlers.AdminTriggerDownloadsHandler)
+	viceanalyses.POST("/:analysis-id/save-output-files", app.handlers.AdminTriggerUploadsHandler)
+	viceanalyses.POST("/:analysis-id/exit", app.handlers.AdminExitHandler)
+	viceanalyses.POST("/:analysis-id/save-and-exit", app.handlers.AdminSaveAndExitHandler)
+	viceanalyses.GET("/:analysis-id/time-limit", app.handlers.AdminGetTimeLimitHandler)
+	viceanalyses.POST("/:analysis-id/time-limit", app.handlers.AdminTimeLimitUpdateHandler)
+	viceanalyses.GET("/:analysis-id/external-id", app.handlers.AdminGetExternalIDHandler)
 
 	svc := app.router.Group("/service")
 	svc.Use(middleware.Logger())

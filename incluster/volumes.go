@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v7"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
@@ -28,19 +29,19 @@ type IRODSFSPathMapping struct {
 }
 
 func (i *Incluster) getZoneMountPath() string {
-	return fmt.Sprintf("%s/%s", csiDriverLocalMountPath, i.IRODSZone)
+	return fmt.Sprintf("%s/%s", constants.CSIDriverLocalMountPath, i.IRODSZone)
 }
 
 func (i *Incluster) getCSIDataVolumeHandle(job *model.Job) string {
-	return fmt.Sprintf("%s-handle-%s", csiDriverDataVolumeNamePrefix, job.InvocationID)
+	return fmt.Sprintf("%s-handle-%s", constants.CSIDriverDataVolumeNamePrefix, job.InvocationID)
 }
 
 func (i *Incluster) getCSIDataVolumeName(job *model.Job) string {
-	return fmt.Sprintf("%s-%s", csiDriverDataVolumeNamePrefix, job.InvocationID)
+	return fmt.Sprintf("%s-%s", constants.CSIDriverDataVolumeNamePrefix, job.InvocationID)
 }
 
 func (i *Incluster) getCSIDataVolumeClaimName(job *model.Job) string {
-	return fmt.Sprintf("%s-%s", csiDriverDataVolumeClaimNamePrefix, job.InvocationID)
+	return fmt.Sprintf("%s-%s", constants.CSIDriverDataVolumeClaimNamePrefix, job.InvocationID)
 }
 
 func (i *Incluster) getInputPathMappings(job *model.Job) ([]IRODSFSPathMapping, error) {
@@ -66,7 +67,7 @@ func (i *Incluster) getInputPathMappings(job *model.Job) ([]IRODSFSPathMapping, 
 					return nil, fmt.Errorf("unknown step input type - %s", stepInput.Type)
 				}
 
-				mountPath := fmt.Sprintf("%s/%s", csiDriverInputVolumeMountPath, filepath.Base(irodsPath))
+				mountPath := fmt.Sprintf("%s/%s", constants.CSIDriverInputVolumeMountPath, filepath.Base(irodsPath))
 				// check if mountPath is already used by other input
 				if existingIRODSPath, ok := mappingMap[mountPath]; ok {
 					// exists - error
@@ -94,7 +95,7 @@ func (i *Incluster) getOutputPathMapping(job *model.Job) IRODSFSPathMapping {
 	// mount a single collection for output
 	return IRODSFSPathMapping{
 		IRODSPath:           job.OutputDirectory(),
-		MappingPath:         csiDriverOutputVolumeMountPath,
+		MappingPath:         constants.CSIDriverOutputVolumeMountPath,
 		ResourceType:        "dir",
 		ReadOnly:            false,
 		CreateDir:           true,
@@ -129,7 +130,7 @@ func (i *Incluster) getSharedPathMapping() IRODSFSPathMapping {
 }
 
 func (i *Incluster) getCSIDataVolumeLabels(ctx context.Context, job *model.Job) (map[string]string, error) {
-	labels, err := i.labelsFromJob(ctx, job)
+	labels, err := i.LabelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -192,10 +193,10 @@ func (i *Incluster) getPersistentVolumes(ctx context.Context, job *model.Job) ([
 					apiv1.ReadWriteMany,
 				},
 				PersistentVolumeReclaimPolicy: apiv1.PersistentVolumeReclaimRetain,
-				StorageClassName:              csiDriverStorageClassName,
+				StorageClassName:              constants.CSIDriverStorageClassName,
 				PersistentVolumeSource: apiv1.PersistentVolumeSource{
 					CSI: &apiv1.CSIPersistentVolumeSource{
-						Driver:       csiDriverName,
+						Driver:       constants.CSIDriverName,
 						VolumeHandle: i.getCSIDataVolumeHandle(job),
 						VolumeAttributes: map[string]string{
 							"client":              "irodsfuse",
@@ -222,12 +223,12 @@ func (i *Incluster) getPersistentVolumes(ctx context.Context, job *model.Job) ([
 // not call the k8s API.
 func (i *Incluster) getPersistentVolumeClaims(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolumeClaim, error) {
 	if i.UseCSIDriver {
-		labels, err := i.labelsFromJob(ctx, job)
+		labels, err := i.LabelsFromJob(ctx, job)
 		if err != nil {
 			return nil, err
 		}
 
-		storageclassname := csiDriverStorageClassName
+		storageclassname := constants.CSIDriverStorageClassName
 		volumeClaims := []*apiv1.PersistentVolumeClaim{}
 
 		dataVolumeClaim := &apiv1.PersistentVolumeClaim{
@@ -286,7 +287,7 @@ func (i *Incluster) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMou
 
 		dataVolumeMount := &apiv1.VolumeMount{
 			Name:      i.getCSIDataVolumeClaimName(job),
-			MountPath: csiDriverLocalMountPath,
+			MountPath: constants.CSIDriverLocalMountPath,
 		}
 
 		volumeMounts = append(volumeMounts, dataVolumeMount)

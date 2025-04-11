@@ -3,6 +3,7 @@ package common
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 
 	"github.com/sirupsen/logrus"
 )
@@ -78,4 +79,14 @@ func NewErrorResponse(err error) ErrorResponse {
 		errorResponse = ErrorResponse{Message: val.Error()}
 	}
 	return errorResponse
+}
+
+func FilterMap(values url.Values) map[string]string {
+	q := map[string]string{}
+
+	for k, v := range values {
+		q[k] = v[0]
+	}
+
+	return q
 }

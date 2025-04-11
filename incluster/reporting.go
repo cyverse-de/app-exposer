@@ -2,16 +2,10 @@ package incluster
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"net/http"
-	"net/url"
-	"strings"
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
-	"github.com/cyverse-de/app-exposer/permissions"
-	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -62,7 +56,7 @@ func getListOptions(customLabels map[string]string, missingLabels []string) meta
 	}
 }
 
-func (i *Incluster) deploymentList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*v1.DeploymentList, error) {
+func (i *Incluster) DeploymentList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*v1.DeploymentList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 
 	depList, err := i.clientset.AppsV1().Deployments(namespace).List(ctx, listOptions)
@@ -116,16 +110,6 @@ func (i *Incluster) ingressList(ctx context.Context, namespace string, customLab
 	}
 
 	return ingList, nil
-}
-
-func filterMap(values url.Values) map[string]string {
-	q := map[string]string{}
-
-	for k, v := range values {
-		q[k] = v[0]
-	}
-
-	return q
 }
 
 // MetaInfo contains useful information provided by multiple resource types.
@@ -334,8 +318,8 @@ func ingressInfo(ingress *netv1.Ingress) *IngressInfo {
 	}
 }
 
-func (i *Incluster) getFilteredDeployments(ctx context.Context, filter map[string]string) ([]DeploymentInfo, error) {
-	depList, err := i.deploymentList(ctx, i.ViceNamespace, filter, []string{})
+func (i *Incluster) GetFilteredDeployments(ctx context.Context, filter map[string]string) ([]DeploymentInfo, error) {
+	depList, err := i.DeploymentList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return nil, err
 	}
@@ -350,22 +334,7 @@ func (i *Incluster) getFilteredDeployments(ctx context.Context, filter map[strin
 	return deployments, nil
 }
 
-// FilterableDeploymentsHandler lists all of the deployments.
-func (i *Incluster) FilterableDeploymentsHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	filter := filterMap(c.Request().URL.Query())
-
-	deployments, err := i.getFilteredDeployments(ctx, filter)
-	if err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusOK, map[string][]DeploymentInfo{
-		"deployments": deployments,
-	})
-}
-
-func (i *Incluster) getFilteredPods(ctx context.Context, filter map[string]string) ([]PodInfo, error) {
+func (i *Incluster) GetFilteredPods(ctx context.Context, filter map[string]string) ([]PodInfo, error) {
 	podList, err := i.podList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return nil, err
@@ -381,22 +350,7 @@ func (i *Incluster) getFilteredPods(ctx context.Context, filter map[string]strin
 	return pods, nil
 }
 
-// FilterablePodsHandler returns a listing of the pods in a VICE analysis.
-func (i *Incluster) FilterablePodsHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	filter := filterMap(c.Request().URL.Query())
-
-	pods, err := i.getFilteredPods(ctx, filter)
-	if err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusOK, map[string][]PodInfo{
-		"pods": pods,
-	})
-}
-
-func (i *Incluster) getFilteredConfigMaps(ctx context.Context, filter map[string]string) ([]ConfigMapInfo, error) {
+func (i *Incluster) GetFilteredConfigMaps(ctx context.Context, filter map[string]string) ([]ConfigMapInfo, error) {
 	cmList, err := i.configmapsList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return nil, err
@@ -412,22 +366,7 @@ func (i *Incluster) getFilteredConfigMaps(ctx context.Context, filter map[string
 	return cms, nil
 }
 
-// FilterableConfigMapsHandler lists configmaps in use by VICE apps.
-func (i *Incluster) FilterableConfigMapsHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	filter := filterMap(c.Request().URL.Query())
-
-	cms, err := i.getFilteredConfigMaps(ctx, filter)
-	if err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusOK, map[string][]ConfigMapInfo{
-		"configmaps": cms,
-	})
-}
-
-func (i *Incluster) getFilteredServices(ctx context.Context, filter map[string]string) ([]ServiceInfo, error) {
+func (i *Incluster) GetFilteredServices(ctx context.Context, filter map[string]string) ([]ServiceInfo, error) {
 	svcList, err := i.serviceList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return nil, err
@@ -443,22 +382,7 @@ func (i *Incluster) getFilteredServices(ctx context.Context, filter map[string]s
 	return svcs, nil
 }
 
-// FilterableServicesHandler lists services in use by VICE apps.
-func (i *Incluster) FilterableServicesHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	filter := filterMap(c.Request().URL.Query())
-
-	svcs, err := i.getFilteredServices(ctx, filter)
-	if err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusOK, map[string][]ServiceInfo{
-		"services": svcs,
-	})
-}
-
-func (i *Incluster) getFilteredIngresses(ctx context.Context, filter map[string]string) ([]IngressInfo, error) {
+func (i *Incluster) GetFilteredIngresses(ctx context.Context, filter map[string]string) ([]IngressInfo, error) {
 	ingList, err := i.ingressList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return nil, err
@@ -474,21 +398,6 @@ func (i *Incluster) getFilteredIngresses(ctx context.Context, filter map[string]
 	return ingresses, nil
 }
 
-// FilterableIngressesHandler lists ingresses in use by VICE apps.
-func (i *Incluster) FilterableIngressesHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	filter := filterMap(c.Request().URL.Query())
-
-	ingresses, err := i.getFilteredIngresses(ctx, filter)
-	if err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusOK, map[string][]IngressInfo{
-		"ingresses": ingresses,
-	})
-}
-
 // ResourceInfo contains all of the k8s resource information about a running VICE analysis
 // that we know of and care about.
 type ResourceInfo struct {
@@ -499,32 +408,32 @@ type ResourceInfo struct {
 	Ingresses   []IngressInfo    `json:"ingresses"`
 }
 
-func (i *Incluster) fixUsername(username string) string {
+func (i *Incluster) FixUsername(username string) string {
 	return common.FixUsername(username, i.UserSuffix)
 }
 
-func (i *Incluster) doResourceListing(ctx context.Context, filter map[string]string) (*ResourceInfo, error) {
-	deployments, err := i.getFilteredDeployments(ctx, filter)
+func (i *Incluster) DoResourceListing(ctx context.Context, filter map[string]string) (*ResourceInfo, error) {
+	deployments, err := i.GetFilteredDeployments(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	pods, err := i.getFilteredPods(ctx, filter)
+	pods, err := i.GetFilteredPods(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	cms, err := i.getFilteredConfigMaps(ctx, filter)
+	cms, err := i.GetFilteredConfigMaps(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	svcs, err := i.getFilteredServices(ctx, filter)
+	svcs, err := i.GetFilteredServices(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	ingresses, err := i.getFilteredIngresses(ctx, filter)
+	ingresses, err := i.GetFilteredIngresses(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -536,138 +445,6 @@ func (i *Incluster) doResourceListing(ctx context.Context, filter map[string]str
 		Services:    svcs,
 		Ingresses:   ingresses,
 	}, nil
-}
-
-// AdminDescribeAnalysisHandler returns a listing entry for a single analysis
-// asssociated with the host/subdomain passed in as 'host' from the URL.
-func (i *Incluster) AdminDescribeAnalysisHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	host := c.Param("host")
-
-	filter := map[string]string{
-		"subdomain": host,
-	}
-
-	listing, err := i.doResourceListing(ctx, filter)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	return c.JSON(http.StatusOK, listing)
-
-}
-
-// DescribeAnalysisHandler returns a listing entry for a single analysis associated
-// with the host/subdomain passed in as 'host' from the URL.
-func (i *Incluster) DescribeAnalysisHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-
-	log.Info("in DescribeAnalysisHandler")
-	host := c.Param("host")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter must be set")
-	}
-
-	log.Infof("user: %s, user suffix: %s, host: %s", user, i.UserSuffix, host)
-
-	// Since some usernames don't come through the labelling process unscathed, we have to use
-	// the user ID.
-	fixedUser := i.fixUsername(user)
-	_, err := i.apps.GetUserID(ctx, fixedUser)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("user %s not found", fixedUser))
-		}
-		return err
-	}
-
-	log.Infof("2 user: %s, user suffix: %s, host: %s", user, i.UserSuffix, host)
-
-	filter := map[string]string{
-		"subdomain": host,
-	}
-
-	listing, err := i.doResourceListing(ctx, filter)
-	if err != nil {
-		return err
-	}
-
-	// the permissions checks occur after the listing because it's possible for the listing to happen
-	// before the subdomain is set in the database, causing an error to get percolated up to the UI.
-	// Waiting until the Deployments list contains at least one item should guarantee that the subdomain
-	// is set in the database.
-	if len(listing.Deployments) > 0 {
-		externalID := listing.Deployments[0].ExternalID
-		analysisID, err := i.apps.GetAnalysisIDByExternalID(ctx, externalID)
-		if err != nil {
-			return err
-		}
-
-		// Make sure the user has permissions to look up info about this analysis.
-		p := &permissions.Permissions{
-			BaseURL: i.PermissionsURL,
-		}
-
-		allowed, err := p.IsAllowed(ctx, user, analysisID)
-		if err != nil {
-			return err
-		}
-
-		if !allowed {
-			return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("user %s cannot access analysis %s", user, analysisID))
-		}
-	}
-
-	return c.JSON(http.StatusOK, listing)
-}
-
-// FilterableResourcesHandler returns all of the k8s resources associated with a VICE analysis
-// but checks permissions to see if the requesting user has permission to access the resource.
-func (i *Incluster) FilterableResourcesHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter must be set")
-	}
-
-	// Since some usernames don't come through the labelling process unscathed, we have to use
-	// the user ID.
-	user = i.fixUsername(user)
-	userID, err := i.apps.GetUserID(ctx, user)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("user %s not found", user))
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	filter := filterMap(c.Request().URL.Query())
-	delete(filter, "user")
-
-	filter["user-id"] = userID
-
-	log.Debugf("user ID is %s", userID)
-
-	listing, err := i.doResourceListing(ctx, filter)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	return c.JSON(http.StatusOK, listing)
-
-}
-
-// AdminFilterableResourcesHandler returns all of the k8s resources associated with a VICE analysis.
-func (i *Incluster) AdminFilterableResourcesHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	filter := filterMap(c.Request().URL.Query())
-
-	listing, err := i.doResourceListing(ctx, filter)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	return c.JSON(http.StatusOK, listing)
 }
 
 func populateAnalysisID(ctx context.Context, a *apps.Apps, existingLabels map[string]string) (map[string]string, error) {
@@ -716,7 +493,7 @@ func (i *Incluster) relabelDeployments(ctx context.Context) []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
 
-	deployments, err := i.deploymentList(ctx, i.ViceNamespace, filter, []string{"subdomain"})
+	deployments, err := i.DeploymentList(ctx, i.ViceNamespace, filter, []string{"subdomain"})
 	if err != nil {
 		errors = append(errors, err)
 		return errors
@@ -881,24 +658,3 @@ func (i *Incluster) ApplyAsyncLabels(ctx context.Context) []error {
 
 	return errors
 }
-
-// ApplyAsyncLabelsHandler is the http handler for triggering the application
-// of labels on running VICE analyses.
-func (i *Incluster) ApplyAsyncLabelsHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	errs := i.ApplyAsyncLabels(ctx)
-
-	if len(errs) > 0 {
-		var errMsg strings.Builder
-		for _, err := range errs {
-			log.Error(err)
-			fmt.Fprintf(&errMsg, "%s\n", err.Error())
-		}
-
-		return c.String(http.StatusInternalServerError, errMsg.String())
-	}
-	return c.NoContent(http.StatusOK)
-}
-
-// GetAsyncData returns the data that would be applied as labels as a
-// JSON-encoded map instead.

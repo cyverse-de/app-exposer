@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v7"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +34,7 @@ func excludesFileContents(job *model.Job) *bytes.Buffer {
 // call the k8s API to actually create the ConfigMap, just returns the object
 // that can be passed to the API.
 func (i *Incluster) excludesConfigMap(ctx context.Context, job *model.Job) (*apiv1.ConfigMap, error) {
-	labels, err := i.labelsFromJob(ctx, job)
+	labels, err := i.LabelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +45,7 @@ func (i *Incluster) excludesConfigMap(ctx context.Context, job *model.Job) (*api
 			Labels: labels,
 		},
 		Data: map[string]string{
-			excludesFileName: excludesFileContents(job).String(),
+			constants.ExcludesFileName: excludesFileContents(job).String(),
 		},
 	}, nil
 }
@@ -85,7 +86,7 @@ func inputPathListContents(job *model.Job, pathListIdentifier string) (*bytes.Bu
 // files for the VICE analysis. This does NOT call the k8s API to actually
 // create the ConfigMap, just returns the object that can be passed to the API.
 func (i *Incluster) inputPathListConfigMap(ctx context.Context, job *model.Job) (*apiv1.ConfigMap, error) {
-	labels, err := i.labelsFromJob(ctx, job)
+	labels, err := i.LabelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +102,7 @@ func (i *Incluster) inputPathListConfigMap(ctx context.Context, job *model.Job) 
 			Labels: labels,
 		},
 		Data: map[string]string{
-			inputPathListFileName: fileContents.String(),
+			constants.InputPathListFileName: fileContents.String(),
 		},
 	}, nil
 }
