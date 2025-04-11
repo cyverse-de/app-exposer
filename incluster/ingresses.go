@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v7"
 	apiv1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -25,7 +26,7 @@ func (i *Incluster) getIngress(ctx context.Context, job *model.Job, svc *apiv1.S
 		defaultPort int32
 	)
 
-	labels, err := i.labelsFromJob(ctx, job)
+	labels, err := i.LabelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -33,14 +34,14 @@ func (i *Incluster) getIngress(ctx context.Context, job *model.Job, svc *apiv1.S
 
 	// Find the proxy port, use it as the default
 	for _, port := range svc.Spec.Ports {
-		if port.Name == viceProxyPortName {
+		if port.Name == constants.VICEProxyPortName {
 			defaultPort = port.Port
 		}
 	}
 
 	// Handle if the defaultPort isn't set yet.
 	if defaultPort == 0 {
-		return nil, fmt.Errorf("port %s was not found in the service", viceProxyPortName)
+		return nil, fmt.Errorf("port %s was not found in the service", constants.VICEProxyPortName)
 	}
 
 	// default backend, should point at the VICE default backend, which redirects

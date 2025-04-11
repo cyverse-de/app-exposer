@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/resourcing"
 	"github.com/cyverse-de/model/v7"
 	appsv1 "k8s.io/api/apps/v1"
@@ -43,7 +44,7 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 
 	if len(job.FilterInputsWithoutTickets()) > 0 {
 		output = append(output, apiv1.Volume{
-			Name: inputPathListVolumeName,
+			Name: constants.InputPathListVolumeName,
 			VolumeSource: apiv1.VolumeSource{
 				ConfigMap: &apiv1.ConfigMapVolumeSource{
 					LocalObjectReference: apiv1.LocalObjectReference{
@@ -57,7 +58,7 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 	if i.UseCSIDriver {
 		output = append(output,
 			apiv1.Volume{
-				Name: workingDirVolumeName,
+				Name: constants.WorkingDirVolumeName,
 				VolumeSource: apiv1.VolumeSource{
 					EmptyDir: &apiv1.EmptyDirVolumeSource{},
 				},
@@ -74,16 +75,16 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 	} else {
 		output = append(output,
 			apiv1.Volume{
-				Name: fileTransfersVolumeName,
+				Name: constants.FileTransfersVolumeName,
 				VolumeSource: apiv1.VolumeSource{
 					EmptyDir: &apiv1.EmptyDirVolumeSource{},
 				},
 			},
 			apiv1.Volume{
-				Name: porklockConfigVolumeName,
+				Name: constants.PorklockConfigVolumeName,
 				VolumeSource: apiv1.VolumeSource{
 					Secret: &apiv1.SecretVolumeSource{
-						SecretName: porklockConfigSecretName,
+						SecretName: constants.PorklockConfigSecretName,
 					},
 				},
 			},
@@ -92,7 +93,7 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 
 	output = append(output,
 		apiv1.Volume{
-			Name: excludesVolumeName,
+			Name: constants.ExcludesVolumeName,
 			VolumeSource: apiv1.VolumeSource{
 				ConfigMap: &apiv1.ConfigMapVolumeSource{
 					LocalObjectReference: apiv1.LocalObjectReference{
@@ -107,7 +108,7 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 	if shmSize != nil {
 		output = append(output,
 			apiv1.Volume{
-				Name: sharedMemoryVolumeName,
+				Name: constants.SharedMemoryVolumeName,
 				VolumeSource: apiv1.VolumeSource{
 					EmptyDir: &apiv1.EmptyDirVolumeSource{
 						Medium:    "Memory",
@@ -136,7 +137,7 @@ func (i *Incluster) viceProxyCommand(job *model.Job) []string {
 
 	output := []string{
 		"vice-proxy",
-		"--listen-addr", fmt.Sprintf("0.0.0.0:%d", viceProxyPort),
+		"--listen-addr", fmt.Sprintf("0.0.0.0:%d", constants.VICEProxyPort),
 		"--backend-url", backendURL,
 		"--ws-backend-url", backendURL,
 		"--frontend-url", frontURL.String(),
@@ -156,22 +157,22 @@ func (i *Incluster) viceProxyCommand(job *model.Job) []string {
 // is only used when iRODS CSI driver integration is disabled.
 func (i *Incluster) inputStagingContainer(job *model.Job) apiv1.Container {
 	return apiv1.Container{
-		Name:            fileTransfersInitContainerName,
+		Name:            constants.FileTransfersInitContainerName,
 		Image:           fmt.Sprintf("%s:%s", i.PorklockImage, i.PorklockTag),
 		Command:         append(fileTransferCommand(job), "--no-service"),
 		ImagePullPolicy: apiv1.PullPolicy(apiv1.PullAlways),
-		WorkingDir:      inputPathListMountPath,
+		WorkingDir:      constants.InputPathListMountPath,
 		VolumeMounts:    i.fileTransfersVolumeMounts(job),
 		Ports: []apiv1.ContainerPort{
 			{
-				Name:          fileTransfersPortName,
-				ContainerPort: fileTransfersPort,
+				Name:          constants.FileTransfersPortName,
+				ContainerPort: constants.FileTransfersPort,
 				Protocol:      apiv1.Protocol("TCP"),
 			},
 		},
 		SecurityContext: &apiv1.SecurityContext{
-			RunAsUser:  int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-			RunAsGroup: int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+			RunAsUser:  constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+			RunAsGroup: constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
 			Capabilities: &apiv1.Capabilities{
 				Drop: []apiv1.Capability{
 					"SETPCAP",
@@ -208,28 +209,28 @@ func (i *Incluster) workingDirPrepContainer(job *model.Job) apiv1.Container {
 		"bash",
 		"-c",
 		strings.Join([]string{
-			fmt.Sprintf("ln -s \"%s\" \"data\"", csiDriverLocalMountPath),
+			fmt.Sprintf("ln -s \"%s\" \"data\"", constants.CSIDriverLocalMountPath),
 			fmt.Sprintf("ln -s \"%s/home\" .", i.getZoneMountPath()),
 		}, " && "),
 	}
 
 	// Build the init container spec.
 	initContainer := apiv1.Container{
-		Name:            workingDirInitContainerName,
+		Name:            constants.WorkingDirInitContainerName,
 		Image:           fmt.Sprintf("%s:%s", i.PorklockImage, i.PorklockTag),
 		Command:         workingDirInitCommand,
 		ImagePullPolicy: apiv1.PullPolicy(apiv1.PullAlways),
-		WorkingDir:      workingDirInitContainerMountPath,
+		WorkingDir:      constants.WorkingDirInitContainerMountPath,
 		VolumeMounts: []apiv1.VolumeMount{
 			{
-				Name:      workingDirVolumeName,
-				MountPath: workingDirInitContainerMountPath,
+				Name:      constants.WorkingDirVolumeName,
+				MountPath: constants.WorkingDirInitContainerMountPath,
 				ReadOnly:  false,
 			},
 		},
 		SecurityContext: &apiv1.SecurityContext{
-			RunAsUser:  int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-			RunAsGroup: int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+			RunAsUser:  constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+			RunAsGroup: constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
 			Capabilities: &apiv1.Capabilities{
 				Drop: []apiv1.Capability{
 					"SETPCAP",
@@ -301,7 +302,7 @@ func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 	volumeMounts := []apiv1.VolumeMount{}
 	if i.UseCSIDriver {
 		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
-			Name:      workingDirVolumeName,
+			Name:      constants.WorkingDirVolumeName,
 			MountPath: workingDirMountPath(job),
 			ReadOnly:  false,
 		})
@@ -311,21 +312,21 @@ func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 		}
 	} else {
 		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
-			Name:      fileTransfersVolumeName,
+			Name:      constants.FileTransfersVolumeName,
 			MountPath: workingDirMountPath(job),
 			ReadOnly:  false,
 		})
 	}
 	if resourcing.SharedMemoryAmount(job) != nil {
 		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
-			Name:      sharedMemoryVolumeName,
-			MountPath: shmDevice,
+			Name:      constants.SharedMemoryVolumeName,
+			MountPath: constants.ShmDevice,
 			ReadOnly:  false,
 		})
 	}
 
 	analysisContainer := apiv1.Container{
-		Name: analysisContainerName,
+		Name: constants.AnalysisContainerName,
 		Image: fmt.Sprintf(
 			"%s:%s",
 			job.Steps[0].Component.Container.Image.Name,
@@ -337,8 +338,8 @@ func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 		VolumeMounts:    volumeMounts,
 		Ports:           analysisPorts(&job.Steps[0]),
 		SecurityContext: &apiv1.SecurityContext{
-			RunAsUser:  int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-			RunAsGroup: int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+			RunAsUser:  constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+			RunAsGroup: constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
 			// Capabilities: &apiv1.Capabilities{
 			// 	Drop: []apiv1.Capability{
 			// 		"SETPCAP",
@@ -394,20 +395,20 @@ func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 	output := []apiv1.Container{}
 
 	output = append(output, apiv1.Container{
-		Name:            viceProxyContainerName,
+		Name:            constants.VICEProxyContainerName,
 		Image:           i.ViceProxyImage,
 		Command:         i.viceProxyCommand(job),
 		ImagePullPolicy: apiv1.PullPolicy(apiv1.PullAlways),
 		Ports: []apiv1.ContainerPort{
 			{
-				Name:          viceProxyPortName,
-				ContainerPort: viceProxyPort,
+				Name:          constants.VICEProxyPortName,
+				ContainerPort: constants.VICEProxyPort,
 				Protocol:      apiv1.Protocol("TCP"),
 			},
 		},
 		SecurityContext: &apiv1.SecurityContext{
-			RunAsUser:  int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-			RunAsGroup: int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+			RunAsUser:  constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+			RunAsGroup: constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
 			Capabilities: &apiv1.Capabilities{
 				Drop: []apiv1.Capability{
 					"SETPCAP",
@@ -427,7 +428,7 @@ func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 		ReadinessProbe: &apiv1.Probe{
 			ProbeHandler: apiv1.ProbeHandler{
 				HTTPGet: &apiv1.HTTPGetAction{
-					Port:   intstr.FromInt(int(viceProxyPort)),
+					Port:   intstr.FromInt(int(constants.VICEProxyPort)),
 					Scheme: apiv1.URISchemeHTTP,
 					Path:   "/",
 				},
@@ -437,22 +438,22 @@ func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 
 	if !i.UseCSIDriver {
 		output = append(output, apiv1.Container{
-			Name:            fileTransfersContainerName,
+			Name:            constants.FileTransfersContainerName,
 			Image:           fmt.Sprintf("%s:%s", i.PorklockImage, i.PorklockTag),
 			Command:         fileTransferCommand(job),
 			ImagePullPolicy: apiv1.PullPolicy(apiv1.PullAlways),
-			WorkingDir:      inputPathListMountPath,
+			WorkingDir:      constants.InputPathListMountPath,
 			VolumeMounts:    i.fileTransfersVolumeMounts(job),
 			Ports: []apiv1.ContainerPort{
 				{
-					Name:          fileTransfersPortName,
-					ContainerPort: fileTransfersPort,
+					Name:          constants.FileTransfersPortName,
+					ContainerPort: constants.FileTransfersPort,
 					Protocol:      apiv1.Protocol("TCP"),
 				},
 			},
 			SecurityContext: &apiv1.SecurityContext{
-				RunAsUser:  int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-				RunAsGroup: int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+				RunAsUser:  constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+				RunAsGroup: constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
 				Capabilities: &apiv1.Capabilities{
 					Drop: []apiv1.Capability{
 						"SETPCAP",
@@ -472,7 +473,7 @@ func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 			ReadinessProbe: &apiv1.Probe{
 				ProbeHandler: apiv1.ProbeHandler{
 					HTTPGet: &apiv1.HTTPGetAction{
-						Port:   intstr.FromInt(int(fileTransfersPort)),
+						Port:   intstr.FromInt(int(constants.FileTransfersPort)),
 						Scheme: apiv1.URISchemeHTTP,
 						Path:   "/",
 					},
@@ -498,10 +499,10 @@ func (i *Incluster) imagePullSecrets(_ *model.Job) []apiv1.LocalObjectReference 
 	return []apiv1.LocalObjectReference{}
 }
 
-// getDeployment assembles and returns the Deployment for the VICE analysis. It does
+// GetDeployment assembles and returns the Deployment for the VICE analysis. It does
 // not call the k8s API.
-func (i *Incluster) getDeployment(ctx context.Context, job *model.Job) (*appsv1.Deployment, error) {
-	labels, err := i.labelsFromJob(ctx, job)
+func (i *Incluster) GetDeployment(ctx context.Context, job *model.Job) (*appsv1.Deployment, error) {
+	labels, err := i.LabelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -519,8 +520,8 @@ func (i *Incluster) getDeployment(ctx context.Context, job *model.Job) (*appsv1.
 	// Add the node selector requirements to use by default.
 	nodeSelectorRequirements := []apiv1.NodeSelectorRequirement{
 		{
-			Key:      analysisAffinityKey,
-			Operator: apiv1.NodeSelectorOperator(analysisAffinityOperator),
+			Key:      constants.AnalysisAffinityKey,
+			Operator: apiv1.NodeSelectorOperator(constants.AnalysisAffinityOperator),
 		},
 	}
 
@@ -542,17 +543,17 @@ func (i *Incluster) getDeployment(ctx context.Context, job *model.Job) (*appsv1.
 	// Add the tolerations and node selector requirements for jobs that require a GPU.
 	if resourcing.GPUEnabled(job) {
 		tolerations = append(tolerations, apiv1.Toleration{
-			Key:      gpuTolerationKey,
-			Operator: apiv1.TolerationOperator(gpuTolerationOperator),
-			Value:    gpuTolerationValue,
-			Effect:   apiv1.TaintEffect(gpuTolerationEffect),
+			Key:      constants.GPUTolerationKey,
+			Operator: apiv1.TolerationOperator(constants.GPUTolerationOperator),
+			Value:    constants.GPUTolerationValue,
+			Effect:   apiv1.TaintEffect(constants.GPUTolerationEffect),
 		})
 
 		nodeSelectorRequirements = append(nodeSelectorRequirements, apiv1.NodeSelectorRequirement{
-			Key:      gpuAffinityKey,
-			Operator: apiv1.NodeSelectorOperator(gpuAffinityOperator),
+			Key:      constants.GPUAffinityKey,
+			Operator: apiv1.NodeSelectorOperator(constants.GPUAffinityOperator),
 			Values: []string{
-				gpuAffinityValue,
+				constants.GPUAffinityValue,
 			},
 		})
 	}
@@ -563,7 +564,7 @@ func (i *Incluster) getDeployment(ctx context.Context, job *model.Job) (*appsv1.
 			Labels: labels,
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: int32Ptr(1),
+			Replicas: constants.Int32Ptr(1),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"external-id": job.InvocationID,
@@ -582,9 +583,9 @@ func (i *Incluster) getDeployment(ctx context.Context, job *model.Job) (*appsv1.
 					ImagePullSecrets:             i.imagePullSecrets(job),
 					AutomountServiceAccountToken: &autoMount,
 					SecurityContext: &apiv1.PodSecurityContext{
-						RunAsUser:  int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-						RunAsGroup: int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-						FSGroup:    int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+						RunAsUser:  constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+						RunAsGroup: constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
+						FSGroup:    constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
 					},
 					Tolerations: tolerations,
 					Affinity: &apiv1.Affinity{

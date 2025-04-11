@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v7"
 
 	apiv1 "k8s.io/api/core/v1"
@@ -14,7 +15,7 @@ import (
 // getService assembles and returns the Service needed for the VICE analysis.
 // It does not call the k8s API.
 func (i *Incluster) getService(ctx context.Context, job *model.Job) (*apiv1.Service, error) {
-	labels, err := i.labelsFromJob(ctx, job)
+	labels, err := i.LabelsFromJob(ctx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -30,16 +31,16 @@ func (i *Incluster) getService(ctx context.Context, job *model.Job) (*apiv1.Serv
 			},
 			Ports: []apiv1.ServicePort{
 				{
-					Name:       fileTransfersPortName,
+					Name:       constants.FileTransfersPortName,
 					Protocol:   apiv1.ProtocolTCP,
-					Port:       fileTransfersPort,
-					TargetPort: intstr.FromString(fileTransfersPortName),
+					Port:       constants.FileTransfersPort,
+					TargetPort: intstr.FromString(constants.FileTransfersPortName),
 				},
 				{
-					Name:       viceProxyPortName,
+					Name:       constants.VICEProxyPortName,
 					Protocol:   apiv1.ProtocolTCP,
-					Port:       viceProxyServicePort,
-					TargetPort: intstr.FromString(viceProxyPortName),
+					Port:       constants.VICEProxyServicePort,
+					TargetPort: intstr.FromString(constants.VICEProxyPortName),
 				},
 			},
 		},

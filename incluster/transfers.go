@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v7"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -51,10 +52,10 @@ func fileTransferCommand(job *model.Job) []string {
 		"/vice-file-transfers",
 		"--listen-port", "60001",
 		"--user", job.Submitter,
-		"--excludes-file", path.Join(excludesMountPath, excludesFileName),
-		"--path-list-file", path.Join(inputPathListMountPath, inputPathListFileName),
+		"--excludes-file", path.Join(constants.ExcludesMountPath, constants.ExcludesFileName),
+		"--path-list-file", path.Join(constants.InputPathListMountPath, constants.InputPathListFileName),
 		"--upload-destination", job.OutputDirectory(),
-		"--irods-config", irodsConfigFilePath,
+		"--irods-config", constants.IRODSConfigFilePath,
 		"--invocation-id", job.InvocationID,
 	}
 	for _, fm := range job.FileMetadata {
@@ -69,26 +70,26 @@ func fileTransferCommand(job *model.Job) []string {
 func (i *Incluster) fileTransfersVolumeMounts(job *model.Job) []apiv1.VolumeMount {
 	retval := []apiv1.VolumeMount{
 		{
-			Name:      porklockConfigVolumeName,
-			MountPath: porklockConfigMountPath,
+			Name:      constants.PorklockConfigVolumeName,
+			MountPath: constants.PorklockConfigMountPath,
 			ReadOnly:  true,
 		},
 		{
-			Name:      fileTransfersVolumeName,
-			MountPath: fileTransfersInputsMountPath,
+			Name:      constants.FileTransfersVolumeName,
+			MountPath: constants.FileTransfersInputsMountPath,
 			ReadOnly:  false,
 		},
 		{
-			Name:      excludesVolumeName,
-			MountPath: excludesMountPath,
+			Name:      constants.ExcludesVolumeName,
+			MountPath: constants.ExcludesMountPath,
 			ReadOnly:  true,
 		},
 	}
 
 	if len(job.FilterInputsWithoutTickets()) > 0 {
 		retval = append(retval, apiv1.VolumeMount{
-			Name:      inputPathListVolumeName,
-			MountPath: inputPathListMountPath,
+			Name:      constants.InputPathListVolumeName,
+			MountPath: constants.InputPathListMountPath,
 			ReadOnly:  true,
 		})
 	}
@@ -108,7 +109,7 @@ func requestTransfer(ctx context.Context, svc apiv1.Service, reqpath string) (*t
 	svcurl := url.URL{}
 
 	svcurl.Scheme = "http"
-	svcurl.Host = fmt.Sprintf("%s.%s:%d", svc.Name, svc.Namespace, fileTransfersPort)
+	svcurl.Host = fmt.Sprintf("%s.%s:%d", svc.Name, svc.Namespace, constants.FileTransfersPort)
 	svcurl.Path = reqpath
 
 	req, reqerr := http.NewRequestWithContext(ctx, http.MethodPost, svcurl.String(), nil)
@@ -154,7 +155,7 @@ func getTransferDetails(ctx context.Context, svc apiv1.Service, reqpath string) 
 	svcurl := url.URL{}
 
 	svcurl.Scheme = "http"
-	svcurl.Host = fmt.Sprintf("%s.%s:%d", svc.Name, svc.Namespace, fileTransfersPort)
+	svcurl.Host = fmt.Sprintf("%s.%s:%d", svc.Name, svc.Namespace, constants.FileTransfersPort)
 	svcurl.Path = reqpath
 
 	req, reqerr := http.NewRequestWithContext(ctx, http.MethodGet, svcurl.String(), nil)
@@ -198,10 +199,10 @@ func isFinished(status string) bool {
 	}
 }
 
-// doFileTransfer handles requests to initial file transfers for a VICE
+// DoFileTransfer handles requests to initial file transfers for a VICE
 // analysis. We only need the ID of the job, nothing is required in the
 // body of the request.
-func (i *Incluster) doFileTransfer(ctx context.Context, externalID, reqpath, kind string, async bool) error {
+func (i *Incluster) DoFileTransfer(ctx context.Context, externalID, reqpath, kind string, async bool) error {
 	ctx, span := otel.Tracer(otelName).Start(ctx, "doFileTransfer")
 	defer span.End()
 
