@@ -16,6 +16,8 @@ replace github.com/cyverse-de/quota => ./quota
 
 replace github.com/cyverse-de/common => ./common
 
+replace github.com/cyverse-de/adapter => ./adapter
+
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/argoproj/argo-workflows/v3 v3.6.2

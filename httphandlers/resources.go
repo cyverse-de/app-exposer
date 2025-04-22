@@ -9,7 +9,6 @@ import (
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/permissions"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
 )
 
 // FilterableDeploymentsHandler lists all of the deployments.

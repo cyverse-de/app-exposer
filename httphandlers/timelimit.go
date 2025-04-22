@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
 )
 
 // TimeLimitUpdateHandler handles requests to update the time limit on an already running VICE app.

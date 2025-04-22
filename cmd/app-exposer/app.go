@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 
+	"github.com/cyverse-de/app-exposer/adapter"
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/httphandlers"
@@ -48,6 +49,7 @@ type ExposerAppInit struct {
 	IRODSZone                     string
 	IngressClass                  string
 	ClientSet                     kubernetes.Interface
+	batchadapter                  *adapter.JEXAdapter
 }
 
 // NewExposerApp creates and returns a newly instantiated *ExposerApp.
@@ -109,7 +111,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		clientset:  init.ClientSet,
 		router:     echo.New(),
 		db:         init.db,
-		handlers:   httphandlers.New(incluster, apps, init.ClientSet),
+		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter),
 	}
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
@@ -145,6 +147,15 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	app.router.GET("/", app.Greeting).Name = "greeting"
 	app.router.Static("/docs", "./docs")
+
+	batchGroup := app.router.Group("/batch")
+	batchGroup.Use(middleware.Logger())
+	batchGroup.GET("", app.handlers.BatchHomeHandler)
+	batchGroup.GET("/", app.handlers.BatchHomeHandler)
+	batchGroup.POST("", app.handlers.BatchLaunchHandler)
+	batchGroup.POST("/", app.handlers.BatchLaunchHandler)
+	batchGroup.POST("/cleanup", app.handlers.BatchStopByUUID)
+	batchGroup.DELETE("/stop/:id", app.handlers.BatchStopHandler)
 
 	vice := app.router.Group("/vice")
 	vice.Use(middleware.Logger())

@@ -9,6 +9,7 @@ import (
 
 	"github.com/cockroachdb/apd"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v7"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -246,4 +247,31 @@ func (a *Apps) SetMillicoresReserved(job *model.Job, millicores *apd.Decimal) er
 	a.addJob <- newjob
 
 	return nil
+}
+
+const externalIDsByStatusQuery = `
+	SELECT DISTINCT js.external_id
+	  FROM jobs j
+	  JOIN job_steps js ON j.id = js.job_id
+	  JOIN job_types jt ON js.job_type_id = jt.id
+     WHERE j.status = $1
+       AND jt.system_id = $2;
+`
+
+type ExternalID struct {
+	ExternalID string `db:"external_id"`
+}
+
+// ListExternalIDsByStatus lists the external IDs of analyses based on their status.
+func (a *Apps) ListExternalIDs(ctx context.Context, status constants.AnalysisStatus, kind constants.AnalysisKind) ([]string, error) {
+	var (
+		err error
+		ids []string
+	)
+
+	if err = a.DB.Select(&ids, externalIDsByStatusQuery, status, constants.Interactive); err != nil {
+		return ids, err
+	}
+
+	return ids, nil
 }

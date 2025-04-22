@@ -1,10 +1,7 @@
 package adapter
 
 import (
-	"encoding/json"
-	"errors"
-	"io"
-	"net/http"
+	"context"
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/batch"
@@ -12,7 +9,6 @@ import (
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/app-exposer/quota"
-	"github.com/cyverse-de/app-exposer/types"
 	"github.com/cyverse-de/model/v7"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
@@ -26,14 +22,14 @@ type JEXAdapter struct {
 	apps                   *apps.Apps
 	detector               *millicores.Detector
 	imageInfoGetter        imageinfo.InfoGetter
-	filterFiles            []string
-	logPath                string
-	irodsBase              string
-	fileTransferImage      string
-	fileTransferWorkingDir string
-	fileTransferLogLevel   string
-	statusSenderImage      string
-	namespace              string
+	FilterFiles            []string
+	LogPath                string
+	IRODSBase              string
+	FileTransferImage      string
+	FileTransferWorkingDir string
+	FileTransferLogLevel   string
+	StatusSenderImage      string
+	Namespace              string
 	quotaEnforcer          *quota.Enforcer
 	clientset              kubernetes.Interface
 }
@@ -55,130 +51,35 @@ func New(init *Init, apps *apps.Apps, detector *millicores.Detector, imageInfoGe
 		apps:                   apps,
 		detector:               detector,
 		imageInfoGetter:        imageInfoGetter,
-		logPath:                init.LogPath,
-		irodsBase:              init.IRODSBase,
-		filterFiles:            init.FilterFiles,
-		fileTransferImage:      init.FileTransferImage,
-		fileTransferWorkingDir: init.FileTransferWorkingDir,
-		fileTransferLogLevel:   init.FileTransferLogLevel,
-		statusSenderImage:      init.StatusSenderImage,
-		namespace:              init.Namespace,
+		LogPath:                init.LogPath,
+		IRODSBase:              init.IRODSBase,
+		FilterFiles:            init.FilterFiles,
+		FileTransferImage:      init.FileTransferImage,
+		FileTransferWorkingDir: init.FileTransferWorkingDir,
+		FileTransferLogLevel:   init.FileTransferLogLevel,
+		StatusSenderImage:      init.StatusSenderImage,
+		Namespace:              init.Namespace,
 		quotaEnforcer:          enforcer,
 		clientset:              clientset,
 	}
 }
 
-func (j *JEXAdapter) Routes(router types.Router) types.Router {
-	log := log.WithFields(logrus.Fields{"context": "adding routes"})
-
-	router.GET("", j.HomeHandler)
-	router.GET("/", j.HomeHandler)
-	log.Info("added handler for GET /")
-
-	router.POST("", j.LaunchHandler)
-	router.POST("/", j.LaunchHandler)
-	router.POST("/cleanup", j.StopByUUID)
-	log.Info("added handler for POST /")
-
-	router.DELETE("/stop/:id", j.StopHandler)
-	log.Info("added handler for DELETE /stop/:invocation_id")
-
-	return router
-}
-
-func (j *JEXAdapter) HomeHandler(c echo.Context) error {
-	return c.String(http.StatusOK, "Welcome to the JEX.\n")
-}
-
-type uuidBody struct {
-	UUID string
-}
-
-func (j *JEXAdapter) StopByUUID(c echo.Context) error {
-	var (
-		err error
-		b   uuidBody
-	)
-
-	ctx := c.Request().Context()
-
-	if err = json.NewDecoder(c.Request().Body).Decode(&b); err != nil {
-		return err
-	}
-
+func (j *JEXAdapter) StopWorkflow(ctx context.Context, externalID string) error {
 	ctx, client, err := batch.NewWorkflowServiceClient(ctx)
 	if err != nil {
-		log.Error(err)
 		return err
 	}
 
-	if _, err = batch.StopWorkflows(ctx, client, j.namespace, "external-id", b.UUID); err != nil {
+	if _, err = batch.StopWorkflows(ctx, client, j.Namespace, "external-id", externalID); err != nil {
 		return err
 	}
 
-	return c.NoContent(http.StatusOK)
+	return nil
 }
 
-func (j *JEXAdapter) StopHandler(c echo.Context) error {
-	var err error
-
-	log := log.WithFields(logrus.Fields{"context": "stop app"})
-
-	externalID := c.Param("id")
-	if externalID == "" {
-		err = errors.New("missing external id in URL")
-		log.Error(err)
-		return err
-	}
-
-	log = log.WithFields(logrus.Fields{"external_id": externalID})
-
-	ctx := c.Request().Context()
-	ctx, client, err := batch.NewWorkflowServiceClient(ctx)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-
-	if _, err = batch.StopWorkflows(ctx, client, j.namespace, "external-id", externalID); err != nil {
-		log.Error(err)
-		return err
-	}
-
-	log.Info("sent stop message")
-
-	return c.NoContent(http.StatusOK)
-}
-
-func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
-	request := c.Request()
-	ctx := c.Request().Context()
-
-	log := log.WithFields(logrus.Fields{"context": "app launch"})
-
-	log.Debug("reading request body")
-	bodyBytes, err := io.ReadAll(request.Body)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	log.Debug("done reading request body")
-
-	log.Debug("parsing request body JSON")
-	acfg := &model.AnalysisConfig{
-		LogPath:     j.logPath,
-		FilterFiles: j.filterFiles,
-		IRODSBase:   j.irodsBase,
-	}
-	analysis, err := model.NewAnalysis(acfg, bodyBytes)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	log.Debug("done parsing request body JSON")
-
+func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysis) error {
 	log.Debug("validating analysis")
-	if status, err := j.quotaEnforcer.ValidateJob(ctx, analysis, j.namespace); err != nil {
+	if status, err := j.quotaEnforcer.ValidateJob(ctx, analysis, j.Namespace); err != nil {
 		if validationErr, ok := err.(common.ErrorResponse); ok {
 			log.Error(validationErr)
 			return validationErr
@@ -208,10 +109,10 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	log.Infof("done storing %s millicores reserved for %s", millicoresReserved.String(), analysis.InvocationID)
 
 	opts := &batch.BatchSubmissionOpts{
-		FileTransferImage:      j.fileTransferImage,
-		FileTransferLogLevel:   j.fileTransferLogLevel,
-		FileTransferWorkingDir: j.fileTransferWorkingDir,
-		StatusSenderImage:      j.statusSenderImage,
+		FileTransferImage:      j.FileTransferImage,
+		FileTransferLogLevel:   j.FileTransferLogLevel,
+		FileTransferWorkingDir: j.FileTransferWorkingDir,
+		StatusSenderImage:      j.StatusSenderImage,
 		ExternalID:             analysis.InvocationID,
 	}
 
@@ -219,22 +120,19 @@ func (j *JEXAdapter) LaunchHandler(c echo.Context) error {
 	workflow, err := maker.NewWorkflow(ctx, opts)
 
 	if err != nil {
-		log.Error(err)
 		return err
 	}
 
 	ctx, cl, err := batch.NewWorkflowServiceClient(ctx)
 	if err != nil {
-		log.Error(err)
 		return err
 	}
 
 	if _, err = batch.SubmitWorkflow(ctx, cl, workflow); err != nil {
-		log.Error(err)
 		return err
 	}
 
 	log.Infof("launched with %f millicores reserved", millicoresReserved)
 
-	return c.NoContent(http.StatusOK)
+	return nil
 }

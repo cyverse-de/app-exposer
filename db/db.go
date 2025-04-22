@@ -16,21 +16,13 @@ var log = common.Log
 
 const otelName = "github.com/cyverse-de/jex-adapter/db"
 
-// DatabaseAccessor is an interface for iteracting with a database. Its main
-// reason for existing is to abstract out whether a transaction is being used.
-type DatabaseAccessor interface {
-	QueryRowxContext(context.Context, string, ...interface{}) *sqlx.Row
-	QueryxContext(context.Context, string, ...interface{}) (*sqlx.Rows, error)
-	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
-}
-
 type Database struct {
-	db DatabaseAccessor
+	db *sqlx.DB
 }
 
-func New(db DatabaseAccessor) *Database {
+func New(db *sqlx.DB) *Database {
 	return &Database{
-		db: db,
+		db,
 	}
 }
 

@@ -69,5 +69,28 @@ const (
 	ShmDevice = "/dev/shm"
 )
 
+type AnalysisStatus string
+
+const (
+	Running   AnalysisStatus = "Running"
+	Completed AnalysisStatus = "Completed"
+	Failed    AnalysisStatus = "Failed"
+)
+
+// AnalysisKind corresponds to the job types in the database. We've started using the term
+// "analysis" instead of job and type is a reserved word in Go.
+type AnalysisKind string
+
+const (
+	// Interactive analyses are VICE analyses.
+	Interactive AnalysisKind = "interactive"
+
+	// Internal analyses are tools like URL import that aren't accessible directly by the user.
+	Internal AnalysisKind = "internal"
+
+	// Executable analyses are batch analyses.
+	Executable AnalysisKind = "executable"
+)
+
 func Int32Ptr(i int32) *int32 { return &i }
 func Int64Ptr(i int64) *int64 { return &i }

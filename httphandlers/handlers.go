@@ -5,12 +5,15 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/adapter"
 	"github.com/cyverse-de/app-exposer/apps"
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
 	"k8s.io/client-go/kubernetes"
 )
+
+var log = common.Log
 
 var otelName = "github.com/cyverse-de/app-exposer/handlers"
 
@@ -18,13 +21,17 @@ type HTTPHandlers struct {
 	incluster *incluster.Incluster
 	apps      *apps.Apps
 	clientset kubernetes.Interface
+	//db           *db.Database
+	batchadapter *adapter.JEXAdapter
 }
 
-func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface) *HTTPHandlers {
+func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface, batchadapter *adapter.JEXAdapter) *HTTPHandlers {
 	return &HTTPHandlers{
 		incluster,
 		apps,
 		clientset,
+		//db,
+		batchadapter,
 	}
 }
 
