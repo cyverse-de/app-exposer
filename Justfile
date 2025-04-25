@@ -17,10 +17,10 @@ test-common:
 test: test-imageinfo test-common
 
 fmt-docs:
-    swag fmt -g app.go -d cmd/app-exposer/,httphandlers/
+    swag fmt -g app.go -d cmd/app-exposer/,httphandlers/,common/
 
 docs: fmt-docs
-    swag init -g app.go -d cmd/app-exposer/,httphandlers/
+    swag init -g app.go -d cmd/app-exposer/,httphandlers/,common/
 
 clean:
     #!/usr/bin/env bash

@@ -49,6 +49,8 @@ type ExternalIDResp struct {
 //	@Produces		json
 //	@Param			analysis-id	path		string	true	"analysis UUID"	minLength(36)	maxLength(36)
 //	@Success		200			{object}	ExternalIDResp
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Failure		400			{object}	common.ErrorResponse	"id parameter is empty"
 //	@Router			/vice/admin/analyses/{analysis-id}/external-id [get]
 func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
 	var (

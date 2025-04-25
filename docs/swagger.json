@@ -35,12 +35,39 @@
                         "schema": {
                             "$ref": "#/definitions/httphandlers.ExternalIDResp"
                         }
+                    },
+                    "400": {
+                        "description": "id parameter is empty",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
                     }
                 }
             }
         }
     },
     "definitions": {
+        "common.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "details": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "error_code": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
         "httphandlers.ExternalIDResp": {
             "type": "object",
             "properties": {

@@ -1,5 +1,15 @@
 basePath: /
 definitions:
+  common.ErrorResponse:
+    properties:
+      details:
+        additionalProperties: true
+        type: object
+      error_code:
+        type: string
+      message:
+        type: string
+    type: object
   httphandlers.ExternalIDResp:
     properties:
       'external_id example:':
@@ -34,5 +44,13 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/httphandlers.ExternalIDResp'
+        "400":
+          description: id parameter is empty
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
       summary: Returns external ID
 swagger: "2.0"
