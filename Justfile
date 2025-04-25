@@ -2,7 +2,7 @@ default: build
 
 build: app-exposer workflow-builder
 
-app-exposer:
+app-exposer: docs
     go build -o bin/app-exposer cmd/app-exposer/*.go
 
 workflow-builder:
@@ -15,6 +15,10 @@ test-common:
     go test ./common
 
 test: test-imageinfo test-common
+
+docs:
+    swag fmt -g app.go -d cmd/app-exposer/,httphandlers/
+    swag init -g app.go -d cmd/app-exposer/,httphandlers/
 
 clean:
     #!/usr/bin/env bash

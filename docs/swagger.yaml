@@ -1,0 +1,12 @@
+basePath: /
+host: localhost:60000
+info:
+  contact: {}
+  description: The app-exposer API for the Discovery Environment's VICE feature.
+  license:
+    name: 3-Clause BSD License
+    url: https://github.com/cyverse-de/app-exposer?tab=License-1-ov-file#readme
+  title: app-exposer
+  version: "1.0"
+paths: {}
+swagger: "2.0"

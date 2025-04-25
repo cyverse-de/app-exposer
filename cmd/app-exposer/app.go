@@ -52,6 +52,16 @@ type ExposerAppInit struct {
 	batchadapter                  *adapter.JEXAdapter
 }
 
+//	@title			app-exposer
+//	@version		1.0
+//	@description	The app-exposer API for the Discovery Environment's VICE feature.
+//
+//	@license.name	3-Clause BSD License
+//	@license.url	https://github.com/cyverse-de/app-exposer?tab=License-1-ov-file#readme
+//
+//	@host			localhost:60000
+//	@BasePath		/
+//
 // NewExposerApp creates and returns a newly instantiated *ExposerApp.
 func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn, c *koanf.Koanf) *ExposerApp {
 	jobStatusURL := c.String("vice.job-status.base")
