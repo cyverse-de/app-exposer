@@ -18,6 +18,9 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+
+	_ "github.com/cyverse-de/app-exposer/docs"
+	echoSwagger "github.com/swaggo/echo-swagger"
 	//"github.com/labstack/gommon/log"
 )
 
@@ -156,7 +159,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	}
 
 	app.router.GET("/", app.Greeting).Name = "greeting"
-	app.router.Static("/docs", "./docs")
+	app.router.GET("/docs/*", echoSwagger.WrapHandler)
 
 	batchGroup := app.router.Group("/batch")
 	batchGroup.Use(middleware.Logger())
