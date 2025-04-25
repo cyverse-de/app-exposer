@@ -12,7 +12,8 @@ definitions:
     type: object
   httphandlers.ExternalIDResp:
     properties:
-      'external_id example:':
+      external_id:
+        example: bb52aefb-e021-4ece-89e5-fd73ce30643c
         type: string
     type: object
 host: localhost:60000

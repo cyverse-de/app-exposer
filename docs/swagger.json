@@ -71,8 +71,9 @@
         "httphandlers.ExternalIDResp": {
             "type": "object",
             "properties": {
-                "external_id example:": {
-                    "type": "string"
+                "external_id": {
+                    "type": "string",
+                    "example": "bb52aefb-e021-4ece-89e5-fd73ce30643c"
                 }
             }
         }

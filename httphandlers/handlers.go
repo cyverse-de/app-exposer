@@ -36,7 +36,7 @@ func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.I
 }
 
 type ExternalIDResp struct {
-	ExternalID string `json:"external_id example:"bb52aefb-e021-4ece-89e5-fd73ce30643c"`
+	ExternalID string `json:"external_id" example:"bb52aefb-e021-4ece-89e5-fd73ce30643c"`
 }
 
 // AdminGetExternalIDHandler returns the external ID associated with the analysis ID.
