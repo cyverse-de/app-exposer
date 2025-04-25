@@ -1,4 +1,10 @@
 basePath: /
+definitions:
+  httphandlers.ExternalIDResp:
+    properties:
+      'external_id example:':
+        type: string
+    type: object
 host: localhost:60000
 info:
   contact: {}
@@ -8,5 +14,25 @@ info:
     url: https://github.com/cyverse-de/app-exposer?tab=License-1-ov-file#readme
   title: app-exposer
   version: "1.0"
-paths: {}
+paths:
+  /vice/admin/analyses/{analysis-id}/external-id:
+    get:
+      description: |-
+        Returns the external ID associated with the provided analysis ID.
+        Only returns the first external ID in multi-step analyses.
+      operationId: admin-get-external-id
+      parameters:
+      - description: analysis UUID
+        in: path
+        maxLength: 36
+        minLength: 36
+        name: analysis-id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httphandlers.ExternalIDResp'
+      summary: Returns external ID
 swagger: "2.0"

@@ -35,8 +35,21 @@ func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.I
 	}
 }
 
+type ExternalIDResp struct {
+	ExternalID string `json:"external_id example:"bb52aefb-e021-4ece-89e5-fd73ce30643c"`
+}
+
 // AdminGetExternalIDHandler returns the external ID associated with the analysis ID.
 // There is only one external ID for each VICE analysis, unlike non-VICE analyses.
+//
+//	@ID				admin-get-external-id
+//	@Summary		Returns external ID
+//	@Description	Returns the external ID associated with the provided analysis ID.
+//	@Description	Only returns the first external ID in multi-step analyses.
+//	@Produces		json
+//	@Param			analysis-id	path		string	true	"analysis UUID"	minLength(36)	maxLength(36)
+//	@Success		200			{object}	ExternalIDResp
+//	@Router			/vice/admin/analyses/{analysis-id}/external-id [get]
 func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
 	var (
 		err        error
@@ -57,11 +70,11 @@ func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
 		return err
 	}
 
-	outputMap := map[string]string{
-		"externalID": externalID,
+	retval := ExternalIDResp{
+		ExternalID: externalID,
 	}
 
-	return c.JSON(http.StatusOK, outputMap)
+	return c.JSON(http.StatusOK, retval)
 }
 
 // ApplyAsyncLabelsHandler is the http handler for triggering the application
