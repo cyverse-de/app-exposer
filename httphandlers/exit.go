@@ -6,7 +6,6 @@ import (
 
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -120,4 +119,58 @@ func (h *HTTPHandlers) AdminSaveAndExitHandler(c echo.Context) error {
 
 	log.Info("admin leaving save and exit")
 	return nil
+}
+
+func (h *HTTPHandlers) TerminateAllAnalyses(c echo.Context) error {
+	var (
+		terminatedVICE  []string
+		failedVICE      []string
+		terminatedBatch []string
+		failedBatch     []string
+	)
+
+	ctx := c.Request().Context()
+
+	// Get the list of running analyses.
+	interactiveIDs, err := h.apps.ListExternalIDs(ctx, constants.Running, constants.Interactive)
+	if err != nil {
+		return err
+	}
+
+	// We'll always attempt to kill off the batch analyses.
+	batchIDs, err := h.apps.ListExternalIDs(ctx, constants.Running, constants.Executable)
+	if err != nil {
+		return err
+	}
+
+	for _, id := range interactiveIDs {
+		log.Infof("stopping VICE analysis %s", id)
+		if err = h.incluster.DoExit(ctx, id); err != nil {
+			log.Error(err)
+			failedVICE = append(failedVICE, id)
+			continue
+		}
+		terminatedVICE = append(terminatedVICE, id)
+		log.Debugf("done stopping VICE analysis %s", id)
+	}
+
+	for _, id := range batchIDs {
+		log.Infof("stopping batch analysis %s", id)
+		if err = h.batchadapter.StopWorkflow(ctx, id); err != nil {
+			log.Error(err)
+			failedBatch = append(failedBatch, id)
+			continue
+		}
+		terminatedBatch = append(terminatedBatch, id)
+		log.Debugf("done stopping batch analysis %s", id)
+	}
+
+	retval := map[string][]string{
+		"vice":         terminatedVICE,
+		"failed_vice":  failedVICE,
+		"batch":        terminatedBatch,
+		"failed_batch": failedBatch,
+	}
+
+	return c.JSON(http.StatusOK, retval)
 }

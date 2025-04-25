@@ -13,7 +13,6 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf"
-	"github.com/labstack/echo/v4/middleware"
 	_ "github.com/lib/pq"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
@@ -302,32 +301,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	exposerInit := &ExposerAppInit{
-		Namespace:                     *namespace,
-		ViceNamespace:                 *viceNamespace,
-		ViceProxyImage:                proxyImage,
-		ViceDefaultBackendService:     *viceDefaultBackendService,
-		ViceDefaultBackendServicePort: *viceDefaultBackendServicePort,
-		GetAnalysisIDService:          *getAnalysisIDService,
-		CheckResourceAccessService:    *checkResourceAccessService,
-		db:                            dbconn,
-		UserSuffix:                    *userSuffix,
-		IRODSZone:                     zone,
-		IngressClass:                  *ingressClass,
-		ClientSet:                     clientset,
-	}
-
 	a := apps.NewApps(dbconn, *userSuffix)
 	go a.Run()
 	defer a.Finish()
-
-	// app is the base app-exposer functionality.
-	app := NewExposerApp(
-		exposerInit,
-		a,
-		nec,
-		c,
-	)
 
 	// Set up the database abstraction needed for batch functionality.
 	dbase := db.New(dbconn)
@@ -337,10 +313,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// We want to root the batch URLs at /batch
-	jaGroup := app.router.Group("/batch")
-	jaGroup.Use(middleware.Logger())
 
 	// Create the app that handles batch functionality.
 	jexAdapterInit := &adapter.Init{
@@ -356,9 +328,29 @@ func main() {
 	enforcer := quota.NewEnforcer(clientset, dbconn, nec, *userSuffix)
 	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer, clientset)
 
-	// Set the routes for the batch app. Changes the state of the jaGroup
-	// instance at *jaGroup, so there's no return value that we care about.
-	jexAdapter.Routes(jaGroup)
+	exposerInit := &ExposerAppInit{
+		Namespace:                     *namespace,
+		ViceNamespace:                 *viceNamespace,
+		ViceProxyImage:                proxyImage,
+		ViceDefaultBackendService:     *viceDefaultBackendService,
+		ViceDefaultBackendServicePort: *viceDefaultBackendServicePort,
+		GetAnalysisIDService:          *getAnalysisIDService,
+		CheckResourceAccessService:    *checkResourceAccessService,
+		db:                            dbconn,
+		UserSuffix:                    *userSuffix,
+		IRODSZone:                     zone,
+		IngressClass:                  *ingressClass,
+		ClientSet:                     clientset,
+		batchadapter:                  jexAdapter,
+	}
+
+	// app is the base app-exposer functionality.
+	app := NewExposerApp(
+		exposerInit,
+		a,
+		nec,
+		c,
+	)
 
 	log.Printf("listening on port %d", *listenPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", strconv.Itoa(*listenPort)), app.router))
