@@ -10,10 +10,26 @@ definitions:
       message:
         type: string
     type: object
+  httphandlers.AnalysisLaunch:
+    type: object
+  httphandlers.AsyncData:
+    properties:
+      analysisID:
+        type: string
+      ipAddr:
+        type: string
+      subdomain:
+        type: string
+    type: object
   httphandlers.ExternalIDResp:
     properties:
       external_id:
         example: bb52aefb-e021-4ece-89e5-fd73ce30643c
+        type: string
+    type: object
+  httphandlers.uuidBody:
+    properties:
+      uuid:
         type: string
     type: object
 host: localhost:60000
@@ -26,6 +42,76 @@ info:
   title: app-exposer
   version: "1.0"
 paths:
+  /batch/launch:
+    post:
+      description: Launch a batch analysis
+      operationId: batch-launch
+      parameters:
+      - description: Analysis Definition
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httphandlers.AnalysisLaunch'
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Launch a batch analysis
+  /batch/stop/{id}:
+    delete:
+      description: Stop a batch analysis by its external UUID
+      operationId: batch-stop
+      parameters:
+      - description: External UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Stop a batch analysis by its external UUID
+  /cleanup:
+    post:
+      consumes:
+      - application/json
+      description: Stop a batch analysis by its external UUID
+      operationId: batch-cleanup
+      parameters:
+      - description: External UUID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httphandlers.uuidBody'
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Stop a batch analysis by its external UUID
   /vice/admin/analyses/{analysis-id}/external-id:
     get:
       description: |-
@@ -54,4 +140,48 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Returns external ID
+  /vice/apply-labels:
+    post:
+      description: |-
+        Asynchronously applies labels to all running VICE analyses.
+        The application of the labels may not be complete by the time the response is returned.
+      operationId: apply-async-labels
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Applies labels to running VICE analyses.
+  /vice/async-data:
+    get:
+      description: |-
+        Returns data that is applied to analyses outside of an API call.
+        The returned data is not returned asynchronously, despite the name of the call.
+      operationId: async-data
+      parameters:
+      - description: External ID
+        in: query
+        name: external-id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httphandlers.AsyncData'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Returns data that is generately asynchronously from the job launch.
 swagger: "2.0"

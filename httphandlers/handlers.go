@@ -89,7 +89,7 @@ func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
 //	@Success		200
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Failure		400	{object}	common.ErrorResponse
-//	@Router			/vice/apply-labels
+//	@Router			/vice/apply-labels [post]
 func (h *HTTPHandlers) ApplyAsyncLabelsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	errs := h.incluster.ApplyAsyncLabels(ctx)
@@ -122,7 +122,7 @@ type AsyncData struct {
 //	@Success		200			{object}	AsyncData
 //	@Failure		500			{object}	common.ErrorResponse
 //	@Failure		400			{object}	common.ErrorResponse
-//	@Router			/vice/async-data
+//	@Router			/vice/async-data [get]
 func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	externalID := c.QueryParam("external-id")
