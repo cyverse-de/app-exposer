@@ -22,19 +22,22 @@ type VICELogEntry struct {
 // LogsHandler handles requests to access the analysis container logs for a pod in a running
 // VICE app. Needs the 'id' and 'pod-name' mux Vars.
 //
-// Query Parameters:
-//
-//	previous - Converted to a boolean, should be either true or false. Return previously
-//	           terminated container logs.
-//	since - Converted to a int64. The number of seconds before the current time at which
-//	        to begin showing logs. Yeah, that's a sentence.
-//	since-time - Converted to an int64. The number of seconds since the epoch for the time at
-//	            which to begin showing logs.
-//	tail-lines - Converted to an int64. The number of lines from the end of the log to show.
-//	timestamps - Converted to a boolean, should be either true or false. Whether or not to
-//	             display timestamps at the beginning of each log line.
-//	container - String containing the name of the container to display logs from. Defaults
-//	            the value 'analysis', since this is VICE-specific.
+//	@ID				logs
+//	@Summary		Return the logs for a running analysis
+//	@Description	Handlers requests to access the container logs for a pod in a running
+//	@Description	VICE app.
+//	@Produce		json
+//	@Param			previous	query		bool	false	"Whether to return previously terminated container logs"
+//	@Param			since		query		int64	false	"The number of seconds in the past to begin showing logs"
+//	@Param			since-time	query		int64	false	"The number of seconds since the epoch to begin showing logs"
+//	@Param			tail-lines	query		int64	false	"The number of lines from the end of the log to show"
+//	@Param			timestamps	query		bool	false	"Whether to display timestamps at the beginning of each log line"
+//	@Param			container	query		string	false	"The name of the container to display logs from"
+//	@Success		200			{object}	VICELogEntry
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		403			{object}	common.ErrorResponse
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Router			/vice/{analysis-id}/logs [get]
 func (h *HTTPHandlers) LogsHandler(c echo.Context) error {
 	var (
 		err        error

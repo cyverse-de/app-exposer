@@ -399,6 +399,80 @@ const docTemplate = `{
                 }
             }
         },
+        "/vice/{analysis-id}/logs": {
+            "get": {
+                "description": "Handlers requests to access the container logs for a pod in a running\nVICE app.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Return the logs for a running analysis",
+                "operationId": "logs",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "description": "Whether to return previously terminated container logs",
+                        "name": "previous",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "The number of seconds in the past to begin showing logs",
+                        "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "The number of seconds since the epoch to begin showing logs",
+                        "name": "since-time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "The number of lines from the end of the log to show",
+                        "name": "tail-lines",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Whether to display timestamps at the beginning of each log line",
+                        "name": "timestamps",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "The name of the container to display logs from",
+                        "name": "container",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.VICELogEntry"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/{host}/url-ready": {
             "get": {
                 "description": "Returns whether or not a VICE app is ready\nfor users to access it. This version will check the user's permissions\nand return an error if they aren't allowed to access the running app.",
@@ -600,6 +674,20 @@ const docTemplate = `{
             "properties": {
                 "ready": {
                     "type": "boolean"
+                }
+            }
+        },
+        "httphandlers.VICELogEntry": {
+            "type": "object",
+            "properties": {
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "since_time": {
+                    "type": "string"
                 }
             }
         },

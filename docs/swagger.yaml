@@ -51,6 +51,15 @@ definitions:
       ready:
         type: boolean
     type: object
+  httphandlers.VICELogEntry:
+    properties:
+      lines:
+        items:
+          type: string
+        type: array
+      since_time:
+        type: string
+    type: object
   httphandlers.uuidBody:
     properties:
       uuid:
@@ -136,6 +145,57 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Stop a batch analysis by its external UUID
+  /vice/{analysis-id}/logs:
+    get:
+      description: |-
+        Handlers requests to access the container logs for a pod in a running
+        VICE app.
+      operationId: logs
+      parameters:
+      - description: Whether to return previously terminated container logs
+        in: query
+        name: previous
+        type: boolean
+      - description: The number of seconds in the past to begin showing logs
+        in: query
+        name: since
+        type: integer
+      - description: The number of seconds since the epoch to begin showing logs
+        in: query
+        name: since-time
+        type: integer
+      - description: The number of lines from the end of the log to show
+        in: query
+        name: tail-lines
+        type: integer
+      - description: Whether to display timestamps at the beginning of each log line
+        in: query
+        name: timestamps
+        type: boolean
+      - description: The name of the container to display logs from
+        in: query
+        name: container
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httphandlers.VICELogEntry'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Return the logs for a running analysis
   /vice/{host}/url-ready:
     get:
       description: |-
