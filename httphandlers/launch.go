@@ -14,9 +14,17 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-// LaunchAppHandler is the HTTP handler that orchestrates the launching of a VICE analysis inside
-// the k8s cluster. This get passed to the router to be associated with a route. The Job
-// is passed in as the body of the request.
+//	@ID				launch-app
+//	@Summary		Launch a VICE analysis
+//	@Description	The HTTP handler that orchestrates the launching of a VICE analysis inside
+//	@Description	the k8s cluster. This gets passed to the router to be associated with a route. The Job
+//	@Description	is passed in as the body of the request.
+//	@Accept			json
+//	@Param			request	body	AnalysisLaunch	true	"The request body containing the analysis details"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/launch [post]
 func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	var (
 		job *model.Job
@@ -70,9 +78,24 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	return nil
 }
 
-// URLReadyHandler returns whether or not a VICE app is ready
-// for users to access it. This version will check the user's permissions
-// and return an error if they aren't allowed to access the running app.
+type URLReadyResponse struct {
+	Ready bool `json:"ready"`
+}
+
+//	@ID				url-ready
+//	@Summary		Check if a VICE app is ready for users to access it.
+//	@Description	Returns whether or not a VICE app is ready
+//	@Description	for users to access it. This version will check the user's permissions
+//	@Description	and return an error if they aren't allowed to access the running app.
+//	@Produce		json
+//	@Param			user	query		string	true	"A user's username"
+//	@Param			host	path		string	true	"The subdomain of the analysis. AKA the ingress name"
+//	@Success		200		{object}	URLReadyResponse
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		403		{object}	common.ErrorResponse
+//	@Failure		404		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Router			/vice/{host}/url-ready [get]
 func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 	var (
 		ingressExists bool
@@ -89,7 +112,7 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 
 	// Since some usernames don't come through the labelling process unscathed, we have to use
 	// the user ID.
-	fixedUser := h.incluster.FixUsername(user)
+	fixedUser := common.FixUsername(user, h.incluster.UserSuffix)
 	_, err := h.apps.GetUserID(ctx, fixedUser)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -140,8 +163,8 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 		}
 	}
 
-	data := map[string]bool{
-		"ready": ingressExists && serviceExists && podReady,
+	data := URLReadyResponse{
+		Ready: ingressExists && serviceExists && podReady,
 	}
 
 	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, id)
@@ -166,10 +189,19 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, data)
 }
 
-// AdminURLReadyHandler handles requests to check the status of a running VICE app in K8s.
-// This will return an overall status and status for the individual containers in
-// the app's pod. Uses the state of the readiness checks in K8s, along with the
-// existence of the various resources created for the app.
+//	@ID				admin-url-ready
+//	@Summary		Checks the status of a running VICE app in K8s
+//	@Description	Handles requests to check the status of a running VICE app in K8s.
+//	@Description	This will return an overall status and status for the individual containers in
+//	@Description	the app's pod. Uses the state of the readiness checks in K8s, along with the
+//	@Description	existence of the various resources created for the app.
+//	@Produce		json
+//	@Param			host	path		string	true	"The subdomain of the analysis"
+//	@Success		200		{object}	URLReadyResponse
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		404		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Router			/vice/admin/{host}/url-ready [get]
 func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 	var (
 		ingressExists bool
@@ -220,8 +252,8 @@ func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 		}
 	}
 
-	data := map[string]bool{
-		"ready": ingressExists && serviceExists && podReady,
+	data := URLReadyResponse{
+		Ready: ingressExists && serviceExists && podReady,
 	}
 
 	return c.JSON(http.StatusOK, data)

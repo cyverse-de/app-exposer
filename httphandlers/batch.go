@@ -82,8 +82,6 @@ func (h *HTTPHandlers) BatchStopHandler(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
-type AnalysisLaunch model.Analysis
-
 // @ID				batch-launch
 // @Summary		Launch a batch analysis
 // @Description	Launch a batch analysis

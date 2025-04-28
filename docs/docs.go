@@ -256,6 +256,51 @@ const docTemplate = `{
                 }
             }
         },
+        "/vice/admin/{host}/url-ready": {
+            "get": {
+                "description": "Handles requests to check the status of a running VICE app in K8s.\nThis will return an overall status and status for the individual containers in\nthe app's pod. Uses the state of the readiness checks in K8s, along with the\nexistence of the various resources created for the app.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Checks the status of a running VICE app in K8s",
+                "operationId": "admin-url-ready",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The subdomain of the analysis",
+                        "name": "host",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.URLReadyResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/apply-labels": {
             "post": {
                 "description": "Asynchronously applies labels to all running VICE analyses.\nThe application of the labels may not be complete by the time the response is returned.",
@@ -303,6 +348,102 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/launch": {
+            "post": {
+                "description": "The HTTP handler that orchestrates the launching of a VICE analysis inside\nthe k8s cluster. This gets passed to the router to be associated with a route. The Job\nis passed in as the body of the request.",
+                "consumes": [
+                    "application/json"
+                ],
+                "summary": "Launch a VICE analysis",
+                "operationId": "launch-app",
+                "parameters": [
+                    {
+                        "description": "The request body containing the analysis details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.AnalysisLaunch"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{host}/url-ready": {
+            "get": {
+                "description": "Returns whether or not a VICE app is ready\nfor users to access it. This version will check the user's permissions\nand return an error if they aren't allowed to access the running app.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Check if a VICE app is ready for users to access it.",
+                "operationId": "url-ready",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "A user's username",
+                        "name": "user",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "The subdomain of the analysis. AKA the ingress name",
+                        "name": "host",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.URLReadyResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
@@ -451,6 +592,14 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "httphandlers.URLReadyResponse": {
+            "type": "object",
+            "properties": {
+                "ready": {
+                    "type": "boolean"
                 }
             }
         },

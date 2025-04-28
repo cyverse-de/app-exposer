@@ -46,6 +46,11 @@ definitions:
           type: string
         type: array
     type: object
+  httphandlers.URLReadyResponse:
+    properties:
+      ready:
+        type: boolean
+    type: object
   httphandlers.uuidBody:
     properties:
       uuid:
@@ -131,6 +136,48 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Stop a batch analysis by its external UUID
+  /vice/{host}/url-ready:
+    get:
+      description: |-
+        Returns whether or not a VICE app is ready
+        for users to access it. This version will check the user's permissions
+        and return an error if they aren't allowed to access the running app.
+      operationId: url-ready
+      parameters:
+      - description: A user's username
+        in: query
+        name: user
+        required: true
+        type: string
+      - description: The subdomain of the analysis. AKA the ingress name
+        in: path
+        name: host
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httphandlers.URLReadyResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Check if a VICE app is ready for users to access it.
   /vice/{id}/exit:
     post:
       description: |-
@@ -184,6 +231,40 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Save files and terminate VICE analysis
+  /vice/admin/{host}/url-ready:
+    get:
+      description: |-
+        Handles requests to check the status of a running VICE app in K8s.
+        This will return an overall status and status for the individual containers in
+        the app's pod. Uses the state of the readiness checks in K8s, along with the
+        existence of the various resources created for the app.
+      operationId: admin-url-ready
+      parameters:
+      - description: The subdomain of the analysis
+        in: path
+        name: host
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httphandlers.URLReadyResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Checks the status of a running VICE app in K8s
   /vice/admin/analyses/{}/save-and-exit:
     post:
       description: |-
@@ -328,4 +409,32 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Returns data that is generately asynchronously from the job launch.
+  /vice/launch:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        The HTTP handler that orchestrates the launching of a VICE analysis inside
+        the k8s cluster. This gets passed to the router to be associated with a route. The Job
+        is passed in as the body of the request.
+      operationId: launch-app
+      parameters:
+      - description: The request body containing the analysis details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httphandlers.AnalysisLaunch'
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Launch a VICE analysis
 swagger: "2.0"

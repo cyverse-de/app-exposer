@@ -9,6 +9,7 @@ import (
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
+	"github.com/cyverse-de/model/v7"
 	"github.com/labstack/echo/v4"
 	"k8s.io/client-go/kubernetes"
 )
@@ -16,6 +17,8 @@ import (
 var log = common.Log
 
 var otelName = "github.com/cyverse-de/app-exposer/handlers"
+
+type AnalysisLaunch model.Analysis
 
 type HTTPHandlers struct {
 	incluster *incluster.Incluster
