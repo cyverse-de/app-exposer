@@ -81,6 +81,15 @@ func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
 
 // ApplyAsyncLabelsHandler is the http handler for triggering the application
 // of labels on running VICE analyses.
+//
+//	@ID				apply-async-labels
+//	@Summary		Applies labels to running VICE analyses.
+//	@Description	Asynchronously applies labels to all running VICE analyses.
+//	@Description	The application of the labels may not be complete by the time the response is returned.
+//	@Success		200
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Router			/vice/apply-labels
 func (h *HTTPHandlers) ApplyAsyncLabelsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	errs := h.incluster.ApplyAsyncLabels(ctx)
@@ -97,7 +106,23 @@ func (h *HTTPHandlers) ApplyAsyncLabelsHandler(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
+type AsyncData struct {
+	AnalysisID string `json:"analysisID"`
+	Subdomain  string `json:"subdomain"`
+	IPAddr     string `json:"ipAddr"`
+}
+
 // AsyncDataHandler returns data that is generately asynchronously from the job launch.
+//
+//	@ID				async-data
+//	@Summary		Returns data that is generately asynchronously from the job launch.
+//	@Description	Returns data that is applied to analyses outside of an API call.
+//	@Description	The returned data is not returned asynchronously, despite the name of the call.
+//	@Param			external-id	query		string	true	"External ID"
+//	@Success		200			{object}	AsyncData
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Router			/vice/async-data
 func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	externalID := c.QueryParam("external-id")
@@ -134,9 +159,9 @@ func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"analysisID": analysisID,
-		"subdomain":  subdomain,
-		"ipAddr":     ipAddr,
+	return c.JSON(http.StatusOK, AsyncData{
+		AnalysisID: analysisID,
+		Subdomain:  subdomain,
+		IPAddr:     ipAddr,
 	})
 }
