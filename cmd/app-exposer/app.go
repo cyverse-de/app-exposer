@@ -197,6 +197,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	viceadmin := vice.Group("/admin")
 	viceadmin.GET("/listing", app.handlers.AdminFilterableResourcesHandler)
+	viceadmin.POST("/terminate-all", app.handlers.TerminateAllAnalysesHandler)
 	viceadmin.GET("/:host/description", app.handlers.AdminDescribeAnalysisHandler)
 	viceadmin.GET("/:host/url-ready", app.handlers.AdminURLReadyHandler)
 

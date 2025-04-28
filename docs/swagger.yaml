@@ -27,6 +27,25 @@ definitions:
         example: bb52aefb-e021-4ece-89e5-fd73ce30643c
         type: string
     type: object
+  httphandlers.TerminateAllResponse:
+    properties:
+      batch:
+        items:
+          type: string
+        type: array
+      failed_batch:
+        items:
+          type: string
+        type: array
+      failed_vice:
+        items:
+          type: string
+        type: array
+      vice:
+        items:
+          type: string
+        type: array
+    type: object
   httphandlers.uuidBody:
     properties:
       uuid:
@@ -112,6 +131,110 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Stop a batch analysis by its external UUID
+  /vice/{id}/exit:
+    post:
+      description: |-
+        Terminates the VICE analysis deployment and cleans up
+        resources asscociated with it. Does not save outputs first. Uses
+        the external-id label to find all of the objects in the configured
+        namespace associated with the job. Deletes the following objects:
+        ingresses, services, deployments, and configmaps.
+      operationId: exit
+      parameters:
+      - description: The external ID of the VICE analysis
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Terminates a VICE analysis
+  /vice/{id}/save-and-exit:
+    post:
+      description: |-
+        Handles requests to save the output files in iRODS and then exit.
+        The exit portion will only occur if the save operation succeeds. The operation is
+        performed inside of a goroutine so that the caller isn't waiting for hours/days for
+        output file transfers to complete.
+      operationId: save-and-exit
+      parameters:
+      - description: external ID of the analysis
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Save files and terminate VICE analysis
+  /vice/admin/analyses/{}/save-and-exit:
+    post:
+      description: |-
+        Handles requests to save the output files in iRODS and
+        then exit. This version of the call operates based on the analysis ID and does
+        not require user information to be required by the caller. Otherwise, the docs
+        for the VICESaveAndExit function apply here as well.
+      operationId: admin-save-and-exit
+      parameters:
+      - description: Analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Admin endpoint to trigger output file transfer and analysis exit
+  /vice/admin/analyses/{analysis-id}/exit:
+    post:
+      description: |-
+        Terminates the VICE analysis based on the analysisID and
+        and should not require any user information to be provided. Otherwise, the
+        documentation for VICEExit applies here as well.
+      operationId: admin-exit
+      parameters:
+      - description: The external ID of the VICE analysis
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Terminates a VICE analysis
   /vice/admin/analyses/{analysis-id}/external-id:
     get:
       description: |-
@@ -140,6 +263,27 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Returns external ID
+  /vice/admin/terminate-all:
+    post:
+      description: |-
+        Terminates all analyses marked as running in the DE database.
+        Does not check for analyses in the cluster but not marked as running in the database.
+        Terminates both VICE and batch analyses.
+      operationId: terminate-all-analyses
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httphandlers.TerminateAllResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Terminates all analyses
   /vice/apply-labels:
     post:
       description: |-

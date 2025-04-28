@@ -119,6 +119,39 @@
                 }
             }
         },
+        "/vice/admin/analyses/{analysis-id}/exit": {
+            "post": {
+                "description": "Terminates the VICE analysis based on the analysisID and\nand should not require any user information to be provided. Otherwise, the\ndocumentation for VICEExit applies here as well.",
+                "summary": "Terminates a VICE analysis",
+                "operationId": "admin-exit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The external ID of the VICE analysis",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/admin/analyses/{analysis-id}/external-id": {
             "get": {
                 "description": "Returns the external ID associated with the provided analysis ID.\nOnly returns the first external ID in multi-step analyses.",
@@ -144,6 +177,66 @@
                     },
                     "400": {
                         "description": "id parameter is empty",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/analyses/{}/save-and-exit": {
+            "post": {
+                "description": "Handles requests to save the output files in iRODS and\nthen exit. This version of the call operates based on the analysis ID and does\nnot require user information to be required by the caller. Otherwise, the docs\nfor the VICESaveAndExit function apply here as well.",
+                "summary": "Admin endpoint to trigger output file transfer and analysis exit",
+                "operationId": "admin-save-and-exit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/terminate-all": {
+            "post": {
+                "description": "Terminates all analyses marked as running in the DE database.\nDoes not check for analyses in the cluster but not marked as running in the database.\nTerminates both VICE and batch analyses.",
+                "summary": "Terminates all analyses",
+                "operationId": "terminate-all-analyses",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.TerminateAllResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
@@ -216,6 +309,72 @@
                     }
                 }
             }
+        },
+        "/vice/{id}/exit": {
+            "post": {
+                "description": "Terminates the VICE analysis deployment and cleans up\nresources asscociated with it. Does not save outputs first. Uses\nthe external-id label to find all of the objects in the configured\nnamespace associated with the job. Deletes the following objects:\ningresses, services, deployments, and configmaps.",
+                "summary": "Terminates a VICE analysis",
+                "operationId": "exit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The external ID of the VICE analysis",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{id}/save-and-exit": {
+            "post": {
+                "description": "Handles requests to save the output files in iRODS and then exit.\nThe exit portion will only occur if the save operation succeeds. The operation is\nperformed inside of a goroutine so that the caller isn't waiting for hours/days for\noutput file transfers to complete.",
+                "summary": "Save files and terminate VICE analysis",
+                "operationId": "save-and-exit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "external ID of the analysis",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -257,6 +416,35 @@
                 "external_id": {
                     "type": "string",
                     "example": "bb52aefb-e021-4ece-89e5-fd73ce30643c"
+                }
+            }
+        },
+        "httphandlers.TerminateAllResponse": {
+            "type": "object",
+            "properties": {
+                "batch": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "failed_batch": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "failed_vice": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "vice": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
