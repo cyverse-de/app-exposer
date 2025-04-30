@@ -223,6 +223,36 @@
                 }
             }
         },
+        "/vice/admin/listing": {
+            "get": {
+                "description": "Returns k8s resources in the cluster based on the filter. The query\nparameters are used as the filter and are not listed as params here.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists resources based on a filter",
+                "operationId": "admin-filterable-resources",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.ResourceInfo"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/admin/terminate-all": {
             "post": {
                 "description": "Terminates all analyses marked as running in the DE database.\nDoes not check for analyses in the cluster but not marked as running in the database.\nTerminates both VICE and batch analyses.",
@@ -233,6 +263,42 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/httphandlers.TerminateAllResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/{host}/description": {
+            "get": {
+                "description": "Returns a listing entry for a single analysis\nassociated with the host/subdomain passed in as 'host' from the URL.",
+                "summary": "Lists resources by subdomain",
+                "operationId": "admin-describe-analysis",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Host/Subdomain",
+                        "name": "host",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.ResourceInfo"
                         }
                     },
                     "400": {
@@ -393,6 +459,207 @@
                 }
             }
         },
+        "/vice/listing": {
+            "get": {
+                "description": "Returns all of the k8s resources associated with a VICE analysis\nbut checks permissions to see if the requesting user has permission\nto access the resource. The rest of the query map is used to filter\nresources returned from the handler.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Returns resources for a VICE analysis",
+                "operationId": "filterable-resources",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "username",
+                        "name": "user",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.ResourceInfo"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/listing/configmaps": {
+            "get": {
+                "description": "Lists configmaps in use by VICE apps. The query parameters\nare used to filter the results and aren't listed as parameters.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists configmaps in use by VICE apps.",
+                "operationId": "filterable-configmaps",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.FilteredConfigMapsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/listing/deployments": {
+            "get": {
+                "description": "Returns a filtered listing of deployments in use by VICE apps.\nThe key-value pairs in the query string are used to filter the deployments.\nThe key-value pairs are not listed as parameters.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists all of the deployments.",
+                "operationId": "filterable-deployments",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.FilteredDeploymentsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/listing/ingresses": {
+            "get": {
+                "description": "Lists ingresses in use by VICE apps. The query parameters\nare used to filter the results and aren't listed as parameters.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists ingresses in use by VICE apps.",
+                "operationId": "filterable-ingresses",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.FilteredIngressesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/listing/pods": {
+            "get": {
+                "description": "Returns a filtered listing of pods in use by VICE apps.\nThe key-value pairs in the query string are used to filter the pods.\nThe key-value pairs are not listed as parameters.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Returns a listing of the pods in a VICE analysis.",
+                "operationId": "filterable-pods",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.FilteredPodsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/listing/services": {
+            "get": {
+                "description": "Lists services in use by VICE apps. The query parameters\nare used to filter the results and aren't listed as parameters.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists services in use by VICE apps.",
+                "operationId": "filterable-services",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.FilteredServicesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/{analysis-id}/logs": {
             "get": {
                 "description": "Handlers requests to access the container logs for a pod in a running\nVICE app.",
@@ -454,6 +721,63 @@
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{host}/description": {
+            "get": {
+                "description": "Returns a listing entry for a single analysis associated\nwith the host/subdomain passed in as 'host' from the URL.\nThe user passed in must have access to the VICE analysis.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Returns resources by user and subdomain.",
+                "operationId": "describe-analysis",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "username",
+                        "name": "user",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "subdomain",
+                        "name": "host",
+                        "in": "path"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.ResourceInfo"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
@@ -590,6 +914,64 @@
                     }
                 }
             }
+        },
+        "/vice{analysis-id}/pods": {
+            "get": {
+                "description": "Lists the k8s pods associated with the provided external-id. For now\njust returns pod info in the format `{\"pods\" : [{}]}`",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists the k8s pods associated with the provided external-id",
+                "operationId": "list-pods",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Username",
+                        "name": "user",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.ListPodsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -608,8 +990,598 @@
                 }
             }
         },
+        "github_com_cyverse-de_model_v7.Container": {
+            "type": "object",
+            "properties": {
+                "container_devices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.Device"
+                    }
+                },
+                "container_volumes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.Volume"
+                    }
+                },
+                "container_volumes_from": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.VolumesFrom"
+                    }
+                },
+                "cpu_shares": {
+                    "type": "integer"
+                },
+                "entrypoint": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "image": {
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.ContainerImage"
+                },
+                "interactive_apps": {
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.InteractiveApps"
+                },
+                "max_cpu_cores": {
+                    "description": "The maximum number of cores the container needs.",
+                    "type": "number"
+                },
+                "memory_limit": {
+                    "description": "The maximum the container is allowed to have.",
+                    "type": "integer"
+                },
+                "min_cpu_cores": {
+                    "description": "The minimum number of cores the container needs.",
+                    "type": "number"
+                },
+                "min_disk_space": {
+                    "description": "The minimum amount of disk space that the container needs.",
+                    "type": "integer"
+                },
+                "min_memory_limit": {
+                    "description": "The minimum the container needs.",
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "network_mode": {
+                    "type": "string"
+                },
+                "pids_limit": {
+                    "type": "integer"
+                },
+                "ports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.Ports"
+                    }
+                },
+                "skip_tmp_mount": {
+                    "type": "boolean"
+                },
+                "uid": {
+                    "type": "integer"
+                },
+                "working_directory": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.ContainerImage": {
+            "type": "object",
+            "properties": {
+                "auth": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "osg_image_path": {
+                    "type": "string"
+                },
+                "tag": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.Device": {
+            "type": "object",
+            "properties": {
+                "cgroup_permissions": {
+                    "type": "string"
+                },
+                "container_path": {
+                    "type": "string"
+                },
+                "host_path": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.ExtraInfo": {
+            "type": "object",
+            "properties": {
+                "htcondor": {
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.HTCondorExtraInfo"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.FileMetadata": {
+            "type": "object",
+            "properties": {
+                "attr": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.HTCondorExtraInfo": {
+            "type": "object",
+            "properties": {
+                "extra_requirements": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.InteractiveApps": {
+            "type": "object",
+            "properties": {
+                "backend_url": {
+                    "description": "Only used if you need to override the default backendURL, which should be\nhttp://\u003ccontainer_name\u003e.",
+                    "type": "string"
+                },
+                "cas_url": {
+                    "description": "The base URL for the CAS server.",
+                    "type": "string"
+                },
+                "cas_validate": {
+                    "description": "The path to the validate endpoint on the CAS server.",
+                    "type": "string"
+                },
+                "frontend_url": {
+                    "description": "The URL for the frontend of the application. Will get prefixed with the job\nid.",
+                    "type": "string"
+                },
+                "proxy_image": {
+                    "description": "The docker image for the reverse proxy that runs on the cluster with the\njob steps.",
+                    "type": "string"
+                },
+                "proxy_name": {
+                    "description": "The name of the container for the reverse proxy.",
+                    "type": "string"
+                },
+                "ssl_cert_path": {
+                    "description": "The path to the SSL cert file on the Condor nodes.",
+                    "type": "string"
+                },
+                "ssl_key_path": {
+                    "description": "The path to the SSL key file on the Condor nodes.",
+                    "type": "string"
+                },
+                "websocket_path": {
+                    "description": "If websocket handling requires a special path in the app. The default is to\nhave this be empty.",
+                    "type": "string"
+                },
+                "websocket_port": {
+                    "description": "If websocket handling requires a special port in the app. The default is to\nuse the same port as the backend URL.",
+                    "type": "string"
+                },
+                "websocket_proto": {
+                    "description": "If websocket handling requires a protocol other than ws://.",
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.Ports": {
+            "type": "object",
+            "properties": {
+                "bind_to_host": {
+                    "type": "boolean"
+                },
+                "container_port": {
+                    "type": "integer"
+                },
+                "host_port": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.Step": {
+            "type": "object",
+            "properties": {
+                "component": {
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepComponent"
+                },
+                "config": {
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepConfig"
+                },
+                "environment": {
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepEnvironment"
+                },
+                "input": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepInput"
+                    }
+                },
+                "log-file": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepOutput"
+                    }
+                },
+                "stderr": {
+                    "type": "string"
+                },
+                "stdin": {
+                    "type": "string"
+                },
+                "stdout": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.StepComponent": {
+            "type": "object",
+            "properties": {
+                "container": {
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.Container"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "interactive": {
+                    "type": "boolean"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "restricted": {
+                    "type": "boolean"
+                },
+                "time_limit_seconds": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.StepConfig": {
+            "type": "object",
+            "properties": {
+                "input": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepInput"
+                    }
+                },
+                "output": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepOutput"
+                    }
+                },
+                "params": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepParam"
+                    }
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.StepEnvironment": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "string"
+            }
+        },
+        "github_com_cyverse-de_model_v7.StepInput": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "multiplicity": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "property": {
+                    "type": "string"
+                },
+                "retain": {
+                    "type": "boolean"
+                },
+                "ticket": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.StepOutput": {
+            "type": "object",
+            "properties": {
+                "multiplicity": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "property": {
+                    "type": "string"
+                },
+                "qual-id": {
+                    "type": "string"
+                },
+                "retain": {
+                    "type": "boolean"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.StepParam": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "order": {
+                    "type": "integer"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.Volume": {
+            "type": "object",
+            "properties": {
+                "container_path": {
+                    "type": "string"
+                },
+                "host_path": {
+                    "type": "string"
+                },
+                "mode": {
+                    "type": "string"
+                },
+                "read_only": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "github_com_cyverse-de_model_v7.VolumesFrom": {
+            "type": "object",
+            "properties": {
+                "auth": {
+                    "type": "string"
+                },
+                "container_path": {
+                    "type": "string"
+                },
+                "host_path": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "name_prefix": {
+                    "type": "string"
+                },
+                "read_only": {
+                    "type": "boolean"
+                },
+                "tag": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "httphandlers.AnalysisLaunch": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+                "app_description": {
+                    "type": "string"
+                },
+                "app_id": {
+                    "type": "string"
+                },
+                "app_name": {
+                    "type": "string"
+                },
+                "archive_logs": {
+                    "type": "boolean"
+                },
+                "batch_id": {
+                    "type": "string"
+                },
+                "condor_id": {
+                    "type": "string"
+                },
+                "condor_log_path": {
+                    "description": "comes from config, not upstream service",
+                    "type": "string"
+                },
+                "config_file": {
+                    "description": "path to the job configuration file (not from upstream)",
+                    "type": "string"
+                },
+                "create_output_subdir": {
+                    "type": "boolean"
+                },
+                "date_completed": {
+                    "type": "string"
+                },
+                "date_started": {
+                    "type": "string"
+                },
+                "date_submitted": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "execution_target": {
+                    "type": "string"
+                },
+                "exit_code": {
+                    "type": "integer"
+                },
+                "extra": {
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.ExtraInfo"
+                },
+                "failure_count": {
+                    "type": "integer"
+                },
+                "failure_threshold": {
+                    "type": "integer"
+                },
+                "file-metadata": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.FileMetadata"
+                    }
+                },
+                "filter_files": {
+                    "description": "comes from config, not upstream service",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "group": {
+                    "description": "untested for now",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "input_path_list": {
+                    "description": "path to a list of inputs (not from upstream).",
+                    "type": "string"
+                },
+                "input_ticket_list": {
+                    "description": "path to a list of inputs with tickets (not from upstream).",
+                    "type": "string"
+                },
+                "irods_base": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "nfs_base": {
+                    "type": "string"
+                },
+                "notify": {
+                    "type": "boolean"
+                },
+                "now_date": {
+                    "type": "string"
+                },
+                "output_dir": {
+                    "description": "the value parsed out of the JSON. Use OutputDirectory() instead.",
+                    "type": "string"
+                },
+                "output_dir_ticket": {
+                    "description": "the write ticket for output_dir (assumes output_dir is set correctly).",
+                    "type": "string"
+                },
+                "output_ticket_list": {
+                    "description": "path to the file of the output dest with ticket (not from upstream).",
+                    "type": "string"
+                },
+                "request_type": {
+                    "type": "string"
+                },
+                "run-on-nfs": {
+                    "type": "boolean"
+                },
+                "skip-parent-meta": {
+                    "type": "boolean"
+                },
+                "steps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.Step"
+                    }
+                },
+                "submission_date": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "user_groups": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "user_home": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "uuid": {
+                    "type": "string"
+                },
+                "wiki_url": {
+                    "type": "string"
+                }
+            }
         },
         "httphandlers.AsyncData": {
             "type": "object",
@@ -631,6 +1603,72 @@
                 "external_id": {
                     "type": "string",
                     "example": "bb52aefb-e021-4ece-89e5-fd73ce30643c"
+                }
+            }
+        },
+        "httphandlers.FilteredConfigMapsResponse": {
+            "type": "object",
+            "properties": {
+                "configmaps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.ConfigMapInfo"
+                    }
+                }
+            }
+        },
+        "httphandlers.FilteredDeploymentsResponse": {
+            "type": "object",
+            "properties": {
+                "deployments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.DeploymentInfo"
+                    }
+                }
+            }
+        },
+        "httphandlers.FilteredIngressesResponse": {
+            "type": "object",
+            "properties": {
+                "ingresses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.IngressInfo"
+                    }
+                }
+            }
+        },
+        "httphandlers.FilteredPodsResponse": {
+            "type": "object",
+            "properties": {
+                "pods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.PodInfo"
+                    }
+                }
+            }
+        },
+        "httphandlers.FilteredServicesResponse": {
+            "type": "object",
+            "properties": {
+                "services": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.ServiceInfo"
+                    }
+                }
+            }
+        },
+        "httphandlers.ListPodsResponse": {
+            "type": "object",
+            "properties": {
+                "pods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.RetPod"
+                    }
                 }
             }
         },
@@ -690,6 +1728,687 @@
             "properties": {
                 "uuid": {
                     "type": "string"
+                }
+            }
+        },
+        "incluster.ConfigMapInfo": {
+            "type": "object",
+            "properties": {
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.DeploymentInfo": {
+            "type": "object",
+            "properties": {
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "command": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "group": {
+                    "type": "integer"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "user": {
+                    "type": "integer"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.IngressInfo": {
+            "type": "object",
+            "properties": {
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "defaultBackend": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "rules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.IngressRule"
+                    }
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.PodInfo": {
+            "type": "object",
+            "properties": {
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "containerStatuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerStatus"
+                    }
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "initContainerStatuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerStatus"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "phase": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.ResourceInfo": {
+            "type": "object",
+            "properties": {
+                "configMaps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.ConfigMapInfo"
+                    }
+                },
+                "deployments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.DeploymentInfo"
+                    }
+                },
+                "ingresses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.IngressInfo"
+                    }
+                },
+                "pods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.PodInfo"
+                    }
+                },
+                "services": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.ServiceInfo"
+                    }
+                }
+            }
+        },
+        "incluster.RetPod": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.ServiceInfo": {
+            "type": "object",
+            "properties": {
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "ports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.ServiceInfoPort"
+                    }
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.ServiceInfoPort": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "nodePort": {
+                    "type": "integer"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "protocol": {
+                    "type": "string"
+                },
+                "targetPort": {
+                    "type": "integer"
+                },
+                "targetPortName": {
+                    "type": "string"
+                }
+            }
+        },
+        "resource.Quantity": {
+            "type": "object",
+            "properties": {
+                "Format": {
+                    "type": "string",
+                    "enum": [
+                        "DecimalExponent",
+                        "BinarySI",
+                        "DecimalSI"
+                    ],
+                    "x-enum-comments": {
+                        "BinarySI": "e.g., 12Mi (12 * 2^20)",
+                        "DecimalExponent": "e.g., 12e6",
+                        "DecimalSI": "e.g., 12M  (12 * 10^6)"
+                    },
+                    "x-enum-varnames": [
+                        "DecimalExponent",
+                        "BinarySI",
+                        "DecimalSI"
+                    ]
+                }
+            }
+        },
+        "v1.ContainerState": {
+            "type": "object",
+            "properties": {
+                "running": {
+                    "description": "Details about a running container\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ContainerStateRunning"
+                        }
+                    ]
+                },
+                "terminated": {
+                    "description": "Details about a terminated container\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ContainerStateTerminated"
+                        }
+                    ]
+                },
+                "waiting": {
+                    "description": "Details about a waiting container\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ContainerStateWaiting"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.ContainerStateRunning": {
+            "type": "object",
+            "properties": {
+                "startedAt": {
+                    "description": "Time at which the container was last (re-)started\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ContainerStateTerminated": {
+            "type": "object",
+            "properties": {
+                "containerID": {
+                    "description": "Container's ID in the format '\u003ctype\u003e://\u003ccontainer_id\u003e'\n+optional",
+                    "type": "string"
+                },
+                "exitCode": {
+                    "description": "Exit status from the last termination of the container",
+                    "type": "integer"
+                },
+                "finishedAt": {
+                    "description": "Time at which the container last terminated\n+optional",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "Message regarding the last termination of the container\n+optional",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "(brief) reason from the last termination of the container\n+optional",
+                    "type": "string"
+                },
+                "signal": {
+                    "description": "Signal from the last termination of the container\n+optional",
+                    "type": "integer"
+                },
+                "startedAt": {
+                    "description": "Time at which previous execution of the container started\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ContainerStateWaiting": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "description": "Message regarding why the container is not yet running.\n+optional",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "(brief) reason the container is not yet running.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ContainerStatus": {
+            "type": "object",
+            "properties": {
+                "allocatedResources": {
+                    "description": "AllocatedResources represents the compute resources allocated for this container by the\nnode. Kubelet sets this value to Container.Resources.Requests upon successful pod admission\nand after successfully admitting desired pod resize.\n+featureGate=InPlacePodVerticalScaling\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceList"
+                        }
+                    ]
+                },
+                "containerID": {
+                    "description": "ContainerID is the ID of the container in the format '\u003ctype\u003e://\u003ccontainer_id\u003e'.\nWhere type is a container runtime identifier, returned from Version call of CRI API\n(for example \"containerd\").\n+optional",
+                    "type": "string"
+                },
+                "image": {
+                    "description": "Image is the name of container image that the container is running.\nThe container image may not match the image used in the PodSpec,\nas it may have been resolved by the runtime.\nMore info: https://kubernetes.io/docs/concepts/containers/images.",
+                    "type": "string"
+                },
+                "imageID": {
+                    "description": "ImageID is the image ID of the container's image. The image ID may not\nmatch the image ID of the image used in the PodSpec, as it may have been\nresolved by the runtime.",
+                    "type": "string"
+                },
+                "lastState": {
+                    "description": "LastTerminationState holds the last termination state of the container to\nhelp debug container crashes and restarts. This field is not\npopulated if the container is still running and RestartCount is 0.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ContainerState"
+                        }
+                    ]
+                },
+                "name": {
+                    "description": "Name is a DNS_LABEL representing the unique name of the container.\nEach container in a pod must have a unique name across all container types.\nCannot be updated.",
+                    "type": "string"
+                },
+                "ready": {
+                    "description": "Ready specifies whether the container is currently passing its readiness check.\nThe value will change as readiness probes keep executing. If no readiness\nprobes are specified, this field defaults to true once the container is\nfully started (see Started field).\n\nThe value is typically used to determine whether a container is ready to\naccept traffic.",
+                    "type": "boolean"
+                },
+                "resources": {
+                    "description": "Resources represents the compute resource requests and limits that have been successfully\nenacted on the running container after it has been started or has been successfully resized.\n+featureGate=InPlacePodVerticalScaling\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceRequirements"
+                        }
+                    ]
+                },
+                "restartCount": {
+                    "description": "RestartCount holds the number of times the container has been restarted.\nKubelet makes an effort to always increment the value, but there\nare cases when the state may be lost due to node restarts and then the value\nmay be reset to 0. The value is never negative.",
+                    "type": "integer"
+                },
+                "started": {
+                    "description": "Started indicates whether the container has finished its postStart lifecycle hook\nand passed its startup probe.\nInitialized as false, becomes true after startupProbe is considered\nsuccessful. Resets to false when the container is restarted, or if kubelet\nloses state temporarily. In both cases, startup probes will run again.\nIs always true when no startupProbe is defined and container is running and\nhas passed the postStart lifecycle hook. The null value must be treated the\nsame as false.\n+optional",
+                    "type": "boolean"
+                },
+                "state": {
+                    "description": "State holds details about the container's current condition.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ContainerState"
+                        }
+                    ]
+                },
+                "volumeMounts": {
+                    "description": "Status of volume mounts.\n+optional\n+patchMergeKey=mountPath\n+patchStrategy=merge\n+listType=map\n+listMapKey=mountPath\n+featureGate=RecursiveReadOnlyMounts",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.VolumeMountStatus"
+                    }
+                }
+            }
+        },
+        "v1.HTTPIngressPath": {
+            "type": "object",
+            "properties": {
+                "backend": {
+                    "description": "backend defines the referenced service endpoint to which the traffic\nwill be forwarded to.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.IngressBackend"
+                        }
+                    ]
+                },
+                "path": {
+                    "description": "path is matched against the path of an incoming request. Currently it can\ncontain characters disallowed from the conventional \"path\" part of a URL\nas defined by RFC 3986. Paths must begin with a '/' and must be present\nwhen using PathType with value \"Exact\" or \"Prefix\".\n+optional",
+                    "type": "string"
+                },
+                "pathType": {
+                    "description": "pathType determines the interpretation of the path matching. PathType can\nbe one of the following values:\n* Exact: Matches the URL path exactly.\n* Prefix: Matches based on a URL path prefix split by '/'. Matching is\n  done on a path element by element basis. A path element refers is the\n  list of labels in the path split by the '/' separator. A request is a\n  match for path p if every p is an element-wise prefix of p of the\n  request path. Note that if the last element of the path is a substring\n  of the last element in request path, it is not a match (e.g. /foo/bar\n  matches /foo/bar/baz, but does not match /foo/barbaz).\n* ImplementationSpecific: Interpretation of the Path matching is up to\n  the IngressClass. Implementations can treat this as a separate PathType\n  or treat it identically to Prefix or Exact path types.\nImplementations are required to support all path types.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PathType"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.HTTPIngressRuleValue": {
+            "type": "object",
+            "properties": {
+                "paths": {
+                    "description": "paths is a collection of paths that map requests to backends.\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.HTTPIngressPath"
+                    }
+                }
+            }
+        },
+        "v1.IngressBackend": {
+            "type": "object",
+            "properties": {
+                "resource": {
+                    "description": "resource is an ObjectRef to another Kubernetes resource in the namespace\nof the Ingress object. If resource is specified, a service.Name and\nservice.Port must not be specified.\nThis is a mutually exclusive setting with \"Service\".\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.TypedLocalObjectReference"
+                        }
+                    ]
+                },
+                "service": {
+                    "description": "service references a service as a backend.\nThis is a mutually exclusive setting with \"Resource\".\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.IngressServiceBackend"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.IngressRule": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "description": "host is the fully qualified domain name of a network host, as defined by RFC 3986.\nNote the following deviations from the \"host\" part of the\nURI as defined in RFC 3986:\n1. IPs are not allowed. Currently an IngressRuleValue can only apply to\n   the IP in the Spec of the parent Ingress.\n2. The `:` delimiter is not respected because ports are not allowed.\n\t  Currently the port of an Ingress is implicitly :80 for http and\n\t  :443 for https.\nBoth these may change in the future.\nIncoming requests are matched against the host before the\nIngressRuleValue. If the host is unspecified, the Ingress routes all\ntraffic based on the specified IngressRuleValue.\n\nhost can be \"precise\" which is a domain name without the terminating dot of\na network host (e.g. \"foo.bar.com\") or \"wildcard\", which is a domain name\nprefixed with a single wildcard label (e.g. \"*.foo.com\").\nThe wildcard character '*' must appear by itself as the first DNS label and\nmatches only a single label. You cannot have a wildcard label by itself (e.g. Host == \"*\").\nRequests will be matched against the Host field in the following way:\n1. If host is precise, the request matches this rule if the http host header is equal to Host.\n2. If host is a wildcard, then the request matches this rule if the http host header\nis to equal to the suffix (removing the first label) of the wildcard rule.\n+optional",
+                    "type": "string"
+                },
+                "http": {
+                    "description": "+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.HTTPIngressRuleValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.IngressServiceBackend": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "name is the referenced service. The service must exist in\nthe same namespace as the Ingress object.",
+                    "type": "string"
+                },
+                "port": {
+                    "description": "port of the referenced service. A port name or port number\nis required for a IngressServiceBackend.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ServiceBackendPort"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PathType": {
+            "type": "string",
+            "enum": [
+                "Exact",
+                "Prefix",
+                "ImplementationSpecific"
+            ],
+            "x-enum-varnames": [
+                "PathTypeExact",
+                "PathTypePrefix",
+                "PathTypeImplementationSpecific"
+            ]
+        },
+        "v1.RecursiveReadOnlyMode": {
+            "type": "string",
+            "enum": [
+                "Disabled",
+                "IfPossible",
+                "Enabled"
+            ],
+            "x-enum-varnames": [
+                "RecursiveReadOnlyDisabled",
+                "RecursiveReadOnlyIfPossible",
+                "RecursiveReadOnlyEnabled"
+            ]
+        },
+        "v1.ResourceClaim": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name must match the name of one entry in pod.spec.resourceClaims of\nthe Pod where this field is used. It makes that resource available\ninside a container.",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ResourceList": {
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#/definitions/resource.Quantity"
+            }
+        },
+        "v1.ResourceRequirements": {
+            "type": "object",
+            "properties": {
+                "claims": {
+                    "description": "Claims lists the names of resources, defined in spec.resourceClaims,\nthat are used by this container.\n\nThis is an alpha field and requires enabling the\nDynamicResourceAllocation feature gate.\n\nThis field is immutable. It can only be set for containers.\n\n+listType=map\n+listMapKey=name\n+featureGate=DynamicResourceAllocation\n+optional",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ResourceClaim"
+                    }
+                },
+                "limits": {
+                    "description": "Limits describes the maximum amount of compute resources allowed.\nMore info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceList"
+                        }
+                    ]
+                },
+                "requests": {
+                    "description": "Requests describes the minimum amount of compute resources required.\nIf Requests is omitted for a container, it defaults to Limits if that is explicitly specified,\notherwise to an implementation-defined value. Requests cannot exceed Limits.\nMore info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceList"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.ServiceBackendPort": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "name is the name of the port on the Service.\nThis is a mutually exclusive setting with \"Number\".\n+optional",
+                    "type": "string"
+                },
+                "number": {
+                    "description": "number is the numerical port number (e.g. 80) on the Service.\nThis is a mutually exclusive setting with \"Name\".\n+optional",
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.TypedLocalObjectReference": {
+            "type": "object",
+            "properties": {
+                "apiGroup": {
+                    "description": "APIGroup is the group for the resource being referenced.\nIf APIGroup is not specified, the specified Kind must be in the core API group.\nFor any other third-party types, APIGroup is required.\n+optional",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind is the type of resource being referenced",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is the name of resource being referenced",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.VolumeMountStatus": {
+            "type": "object",
+            "properties": {
+                "mountPath": {
+                    "description": "MountPath corresponds to the original VolumeMount.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name corresponds to the name of the original VolumeMount.",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "ReadOnly corresponds to the original VolumeMount.\n+optional",
+                    "type": "boolean"
+                },
+                "recursiveReadOnly": {
+                    "description": "RecursiveReadOnly must be set to Disabled, Enabled, or unspecified (for non-readonly mounts).\nAn IfPossible value in the original VolumeMount must be translated to Disabled or Enabled,\ndepending on the mount result.\n+featureGate=RecursiveReadOnlyMounts\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.RecursiveReadOnlyMode"
+                        }
+                    ]
                 }
             }
         }
