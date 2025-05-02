@@ -119,6 +119,42 @@
                 }
             }
         },
+        "/vice/admin/analyses/{analysis-id}/download-input-files": {
+            "post": {
+                "description": "Handles requests to trigger file downloads\nwithout requiring user information in the request and also operates from\nthe analysis UUID rather than the external ID. For use with tools that\nrequire the caller to have administrative privileges.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Administratively trigger file downloads to an analysis",
+                "operationId": "admin-trigger-downloads",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/admin/analyses/{analysis-id}/exit": {
             "post": {
                 "description": "Terminates the VICE analysis based on the analysisID and\nand should not require any user information to be provided. Otherwise, the\ndocumentation for VICEExit applies here as well.",
@@ -177,6 +213,42 @@
                     },
                     "400": {
                         "description": "id parameter is empty",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/analyses/{analysis-id}/save-output-files": {
+            "post": {
+                "description": "Handles requests to trigger file uploads without\nrequiring user information in the request, while also operating from the\nanalysis UUID rather than the external UUID. For use with tools that\nrequire the caller to have administrative privileges.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Administratively trigger output file uploads from an analysis",
+                "operationId": "admin-trigger-uploads",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
@@ -1020,6 +1092,42 @@
                 }
             }
         },
+        "/vice/{id}/download-input-files": {
+            "post": {
+                "description": "Triggers input downloads for an analysis",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Triggers input downloads for an analysis",
+                "operationId": "trigger-downloads",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "External ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/{id}/exit": {
             "post": {
                 "description": "Terminates the VICE analysis deployment and cleans up\nresources asscociated with it. Does not save outputs first. Uses\nthe external-id label to find all of the objects in the configured\nnamespace associated with the job. Deletes the following objects:\ningresses, services, deployments, and configmaps.",
@@ -1062,6 +1170,42 @@
                     {
                         "type": "string",
                         "description": "external ID of the analysis",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{id}/save-output-files": {
+            "post": {
+                "description": "Triggers output uploads from a running analysis.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Triggers output uploads from an analysis",
+                "operationId": "trigger-uploads",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "External ID",
                         "name": "id",
                         "in": "path",
                         "required": true

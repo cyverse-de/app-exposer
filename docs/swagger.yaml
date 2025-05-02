@@ -1413,6 +1413,30 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Check if a VICE app is ready for users to access it.
+  /vice/{id}/download-input-files:
+    post:
+      description: Triggers input downloads for an analysis
+      operationId: trigger-downloads
+      parameters:
+      - description: External ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Triggers input downloads for an analysis
   /vice/{id}/exit:
     post:
       description: |-
@@ -1466,6 +1490,30 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Save files and terminate VICE analysis
+  /vice/{id}/save-output-files:
+    post:
+      description: Triggers output uploads from a running analysis.
+      operationId: trigger-uploads
+      parameters:
+      - description: External ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Triggers output uploads from an analysis
   /vice/admin/{host}/description:
     get:
       description: |-
@@ -1552,6 +1600,34 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Admin endpoint to trigger output file transfer and analysis exit
+  /vice/admin/analyses/{analysis-id}/download-input-files:
+    post:
+      description: |-
+        Handles requests to trigger file downloads
+        without requiring user information in the request and also operates from
+        the analysis UUID rather than the external ID. For use with tools that
+        require the caller to have administrative privileges.
+      operationId: admin-trigger-downloads
+      parameters:
+      - description: Analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Administratively trigger file downloads to an analysis
   /vice/admin/analyses/{analysis-id}/exit:
     post:
       description: |-
@@ -1605,6 +1681,34 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Returns external ID
+  /vice/admin/analyses/{analysis-id}/save-output-files:
+    post:
+      description: |-
+        Handles requests to trigger file uploads without
+        requiring user information in the request, while also operating from the
+        analysis UUID rather than the external UUID. For use with tools that
+        require the caller to have administrative privileges.
+      operationId: admin-trigger-uploads
+      parameters:
+      - description: Analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Administratively trigger output file uploads from an analysis
   /vice/admin/analyses/{analysis-id}/time-limit:
     get:
       description: Gets an analysis's time limit without requiring user info.
