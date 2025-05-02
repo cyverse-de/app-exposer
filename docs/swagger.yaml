@@ -701,6 +701,11 @@ definitions:
       targetPortName:
         type: string
     type: object
+  incluster.TimeLimit:
+    properties:
+      time_limit:
+        type: string
+    type: object
   resource.Quantity:
     properties:
       Format:
@@ -1257,6 +1262,74 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Return the logs for a running analysis
+  /vice/{analysis-id}/time-limit:
+    get:
+      description: Gets the time limit for an analysis on behalf of a user.
+      operationId: get-time-limit
+      parameters:
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      - description: Analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/incluster.TimeLimit'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Gets the time limit for an analysis on behalf of a user.
+    post:
+      description: |-
+        Updates the time limit on a running VICE app for a user. The user
+        must have access to the analysis. The time limit is increased by a
+        pre-configured amount.
+      operationId: time-limit-update
+      parameters:
+      - description: Analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/incluster.TimeLimit'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Handles requests to update the time limit on an already running VICE
+        app.
   /vice/{host}/description:
     get:
       description: |-
@@ -1532,6 +1605,57 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Returns external ID
+  /vice/admin/analyses/{analysis-id}/time-limit:
+    get:
+      description: Gets an analysis's time limit without requiring user info.
+      operationId: admin-get-time-limit
+      parameters:
+      - description: Analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/incluster.TimeLimit'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Gets an analysis's time limit without requiring user info.
+    post:
+      description: Updates the time limit on an analysis without requiring user information.
+      operationId: admin-time-limit-update
+      parameters:
+      - description: Analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/incluster.TimeLimit'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Updates the time limit on an analysis without requiring user information
   /vice/admin/listing:
     get:
       description: |-

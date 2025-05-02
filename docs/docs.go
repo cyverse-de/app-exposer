@@ -196,6 +196,82 @@ const docTemplate = `{
                 }
             }
         },
+        "/vice/admin/analyses/{analysis-id}/time-limit": {
+            "get": {
+                "description": "Gets an analysis's time limit without requiring user info.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Gets an analysis's time limit without requiring user info.",
+                "operationId": "admin-get-time-limit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.TimeLimit"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Updates the time limit on an analysis without requiring user information.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Updates the time limit on an analysis without requiring user information",
+                "operationId": "admin-time-limit-update",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.TimeLimit"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/admin/analyses/{}/save-and-exit": {
             "post": {
                 "description": "Handles requests to save the output files in iRODS and\nthen exit. This version of the call operates based on the analysis ID and does\nnot require user information to be required by the caller. Otherwise, the docs\nfor the VICESaveAndExit function apply here as well.",
@@ -717,6 +793,101 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/httphandlers.VICELogEntry"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{analysis-id}/time-limit": {
+            "get": {
+                "description": "Gets the time limit for an analysis on behalf of a user.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Gets the time limit for an analysis on behalf of a user.",
+                "operationId": "get-time-limit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Username",
+                        "name": "user",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.TimeLimit"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Updates the time limit on a running VICE app for a user. The user\nmust have access to the analysis. The time limit is increased by a\npre-configured amount.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Handles requests to update the time limit on an already running VICE app.",
+                "operationId": "time-limit-update",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.TimeLimit"
                         }
                     },
                     "400": {
@@ -2019,6 +2190,14 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "targetPortName": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.TimeLimit": {
+            "type": "object",
+            "properties": {
+                "time_limit": {
                     "type": "string"
                 }
             }
