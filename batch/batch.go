@@ -200,35 +200,41 @@ func (w *WorkflowMaker) runStepsTemplates() ([]v1alpha1.Template, error) {
 				},
 			},
 		},
-		v1alpha1.ParallelSteps{
-			Steps: []v1alpha1.WorkflowStep{
-				*w.sendStatusWorkflowStep(
-					"downloading-files-status",
-					"downloading files",
-					"running",
-					"begin-downloading-files",
-				),
-			},
-		},
-		v1alpha1.ParallelSteps{
-			Steps: []v1alpha1.WorkflowStep{
-				{
-					Name:     "download-files",
-					Template: "download-files",
+	)
+
+	if len(w.analysis.Inputs()) > 0 {
+		runSteps = append(
+			runSteps,
+			v1alpha1.ParallelSteps{
+				Steps: []v1alpha1.WorkflowStep{
+					*w.sendStatusWorkflowStep(
+						"downloading-files-status",
+						"downloading files",
+						"running",
+						"begin-downloading-files",
+					),
 				},
 			},
-		},
-		v1alpha1.ParallelSteps{
-			Steps: []v1alpha1.WorkflowStep{
-				*w.sendStatusWorkflowStep(
-					"done-downloading",
-					"done downloading inputs",
-					"running",
-					"done-downloading-files",
-				),
+			v1alpha1.ParallelSteps{
+				Steps: []v1alpha1.WorkflowStep{
+					{
+						Name:     "download-files",
+						Template: "download-files",
+					},
+				},
 			},
-		},
-	)
+			v1alpha1.ParallelSteps{
+				Steps: []v1alpha1.WorkflowStep{
+					*w.sendStatusWorkflowStep(
+						"done-downloading",
+						"done downloading inputs",
+						"running",
+						"done-downloading-files",
+					),
+				},
+			},
+		)
+	}
 
 	for idx, st := range stepTemplates {
 		runningName := fmt.Sprintf("running-%d", idx)
