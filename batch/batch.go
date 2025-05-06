@@ -182,7 +182,11 @@ func (w *WorkflowMaker) runStepsTemplates() ([]v1alpha1.Template, error) {
 	// We generate a sequence of parallel steps consisting of single steps to
 	// force the steps to run in sequence. Looks nicer in YAML than it does in
 	// in code form.
+
+	// templates contains the template defintions used by the steps.
 	var templates []v1alpha1.Template
+
+	// runSteps contains the actual steps run in the workflow.
 	var runSteps []v1alpha1.ParallelSteps
 
 	stepTemplates, err := w.stepTemplates()
