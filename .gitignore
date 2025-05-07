@@ -4,3 +4,4 @@ configs/local.yml
 configs/local.yaml
 swagger-ui/
 docs/swagger.json
+local-config/
