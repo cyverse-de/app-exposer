@@ -81,7 +81,7 @@ func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, apps *apps.App
 			statusURL: init.JobStatusURL,
 		},
 		apps:          apps,
-		quotaEnforcer: quota.NewEnforcer(clientset, db, init.NATSEncodedConn, init.UserSuffix),
+		quotaEnforcer: quota.NewEnforcer(clientset, db, apps, init.NATSEncodedConn, init.UserSuffix),
 	}
 }
 

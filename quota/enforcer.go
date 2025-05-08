@@ -50,10 +50,17 @@ type Enforcer struct {
 	userDomain string
 }
 
-func NewEnforcer(clientset kubernetes.Interface, db *sqlx.DB, ec *nats.EncodedConn, userDomain string) *Enforcer {
+func NewEnforcer(
+	clientset kubernetes.Interface,
+	db *sqlx.DB,
+	a *apps.Apps,
+	ec *nats.EncodedConn,
+	userDomain string,
+) *Enforcer {
 	return &Enforcer{
 		clientset:  clientset,
 		db:         db,
+		apps:       a,
 		nec:        ec,
 		userDomain: userDomain,
 	}
