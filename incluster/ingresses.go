@@ -81,10 +81,15 @@ func (i *Incluster) getIngress(ctx context.Context, job *model.Job, svc *apiv1.S
 		},
 	})
 
+	annotations := map[string]string{
+		"nginx.ingress.kubernetes.io/proxy-body-size": "4096m",
+	}
+
 	return &netv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   job.InvocationID,
-			Labels: labels,
+			Name:        job.InvocationID,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: netv1.IngressSpec{
 			DefaultBackend:   defaultBackend, // default backend, not the service backend
