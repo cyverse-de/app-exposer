@@ -30,16 +30,16 @@ type JSLPublisher struct {
 // AnalysisStatus contains the data needed to post a status update to the
 // notification-agent service.
 type AnalysisStatus struct {
-	Host    string
-	State   messaging.JobState
-	Message string
+	Hostname string
+	State    messaging.JobState
+	Message  string
 }
 
 func (j *JSLPublisher) postStatus(ctx context.Context, jobID, msg string, jobState messaging.JobState) error {
 	status := &AnalysisStatus{
-		Host:    hostname(),
-		State:   jobState,
-		Message: msg,
+		Hostname: hostname(),
+		State:    jobState,
+		Message:  msg,
 	}
 
 	u, err := url.Parse(j.statusURL)

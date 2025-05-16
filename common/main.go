@@ -17,8 +17,6 @@ var Log = logrus.WithFields(logrus.Fields{
 
 // ErrorResponse represents an HTTP response body containing error information. This type implements
 // the error interface so that it can be returned as an error from from existing functions.
-//
-// swagger:response errorResponse
 type ErrorResponse struct {
 	Message   string                  `json:"message"`
 	ErrorCode string                  `json:"error_code,omitempty"`

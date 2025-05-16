@@ -18,6 +18,9 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+
+	_ "github.com/cyverse-de/app-exposer/docs"
+	echoSwagger "github.com/swaggo/echo-swagger"
 	//"github.com/labstack/gommon/log"
 )
 
@@ -52,6 +55,16 @@ type ExposerAppInit struct {
 	batchadapter                  *adapter.JEXAdapter
 }
 
+//	@title			app-exposer
+//	@version		1.0
+//	@description	The app-exposer API for the Discovery Environment's VICE feature.
+//
+//	@license.name	3-Clause BSD License
+//	@license.url	https://github.com/cyverse-de/app-exposer?tab=License-1-ov-file#readme
+//
+//	@host			localhost:60000
+//	@BasePath		/
+//
 // NewExposerApp creates and returns a newly instantiated *ExposerApp.
 func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn, c *koanf.Koanf) *ExposerApp {
 	jobStatusURL := c.String("vice.job-status.base")
@@ -146,7 +159,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	}
 
 	app.router.GET("/", app.Greeting).Name = "greeting"
-	app.router.Static("/docs", "./docs")
+	app.router.GET("/docs/*", echoSwagger.WrapHandler)
 
 	batchGroup := app.router.Group("/batch")
 	batchGroup.Use(middleware.Logger())
@@ -184,6 +197,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	viceadmin := vice.Group("/admin")
 	viceadmin.GET("/listing", app.handlers.AdminFilterableResourcesHandler)
+	viceadmin.POST("/terminate-all", app.handlers.TerminateAllAnalysesHandler)
 	viceadmin.GET("/:host/description", app.handlers.AdminDescribeAnalysisHandler)
 	viceadmin.GET("/:host/url-ready", app.handlers.AdminURLReadyHandler)
 

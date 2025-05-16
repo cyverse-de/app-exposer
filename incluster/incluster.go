@@ -81,7 +81,7 @@ func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, apps *apps.App
 			statusURL: init.JobStatusURL,
 		},
 		apps:          apps,
-		quotaEnforcer: quota.NewEnforcer(clientset, db, init.NATSEncodedConn, init.UserSuffix),
+		quotaEnforcer: quota.NewEnforcer(clientset, db, apps, init.NATSEncodedConn, init.UserSuffix),
 	}
 }
 
@@ -485,7 +485,11 @@ func dbTimestampToLocal(t time.Time) time.Time {
 	return t
 }
 
-func (i *Incluster) GetTimeLimit(ctx context.Context, userID, id string) (map[string]string, error) {
+type TimeLimit struct {
+	TimeLimit string `json:"time_limit"`
+}
+
+func (i *Incluster) GetTimeLimit(ctx context.Context, userID, id string) (*TimeLimit, error) {
 	var err error
 
 	var timeLimit pq.NullTime
@@ -493,21 +497,21 @@ func (i *Incluster) GetTimeLimit(ctx context.Context, userID, id string) (map[st
 		return nil, errors.Wrapf(err, "error retrieving time limit for user %s on analysis %s", userID, id)
 	}
 
-	outputMap := map[string]string{}
+	retval := &TimeLimit{}
 	if timeLimit.Valid {
 		v, err := timeLimit.Value()
 		if err != nil {
 			return nil, errors.Wrapf(err, "error getting time limit for user %s on analysis %s", userID, id)
 		}
-		outputMap["time_limit"] = fmt.Sprintf("%d", dbTimestampToLocal(v.(time.Time)).Unix())
+		retval.TimeLimit = fmt.Sprintf("%d", dbTimestampToLocal(v.(time.Time)).Unix())
 	} else {
-		outputMap["time_limit"] = "null"
+		retval.TimeLimit = "null"
 	}
 
-	return outputMap, nil
+	return retval, nil
 }
 
-func (i *Incluster) UpdateTimeLimit(ctx context.Context, user, id string) (map[string]string, error) {
+func (i *Incluster) UpdateTimeLimit(ctx context.Context, user, id string) (*TimeLimit, error) {
 	var (
 		err    error
 		userID string
@@ -526,18 +530,18 @@ func (i *Incluster) UpdateTimeLimit(ctx context.Context, user, id string) (map[s
 		return nil, errors.Wrapf(err, "error extending time limit for user %s on analysis %s", userID, id)
 	}
 
-	outputMap := map[string]string{}
+	retval := &TimeLimit{}
 	if newTimeLimit.Valid {
 		v, err := newTimeLimit.Value()
 		if err != nil {
 			return nil, errors.Wrapf(err, "error getting new time limit for user %s on analysis %s", userID, id)
 		}
-		outputMap["time_limit"] = fmt.Sprintf("%d", dbTimestampToLocal(v.(time.Time)).Unix())
+		retval.TimeLimit = fmt.Sprintf("%d", dbTimestampToLocal(v.(time.Time)).Unix())
 	} else {
 		return nil, errors.Wrapf(err, "the time limit for analysis %s was null after extension", id)
 	}
 
-	return outputMap, nil
+	return retval, nil
 }
 
 func (i *Incluster) ValidateJob(ctx context.Context, job *model.Job) (int, error) {

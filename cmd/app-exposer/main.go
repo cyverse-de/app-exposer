@@ -325,7 +325,7 @@ func main() {
 		StatusSenderImage:      *statusSenderImage,
 		Namespace:              *argoWorkflowNS,
 	}
-	enforcer := quota.NewEnforcer(clientset, dbconn, nec, *userSuffix)
+	enforcer := quota.NewEnforcer(clientset, dbconn, a, nec, *userSuffix)
 	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer, clientset)
 
 	exposerInit := &ExposerAppInit{

@@ -19,6 +19,15 @@ type uuidBody struct {
 	UUID string
 }
 
+// @ID				batch-cleanup
+// @Summary		Stop a batch analysis by its external UUID
+// @Description	Stop a batch analysis by its external UUID
+// @Accept			json
+// @Param			request	body	uuidBody	true	"External UUID"
+// @Success		200
+// @Failure		400	{object}	common.ErrorResponse
+// @Failure		500	{object}	common.ErrorResponse
+// @router			/cleanup [post]
 func (h *HTTPHandlers) BatchStopByUUID(c echo.Context) error {
 	var (
 		err error
@@ -39,6 +48,14 @@ func (h *HTTPHandlers) BatchStopByUUID(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
+// @ID				batch-stop
+// @Summary		Stop a batch analysis by its external UUID
+// @Description	Stop a batch analysis by its external UUID
+// @Param			id	path	string	true	"External UUID"
+// @Success		200
+// @Failure		400	{object}	common.ErrorResponse
+// @Failure		500	{object}	common.ErrorResponse
+// @router			/batch/stop/{id} [delete]
 func (h *HTTPHandlers) BatchStopHandler(c echo.Context) error {
 	var err error
 
@@ -65,6 +82,14 @@ func (h *HTTPHandlers) BatchStopHandler(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
+// @ID				batch-launch
+// @Summary		Launch a batch analysis
+// @Description	Launch a batch analysis
+// @Param			request	body	AnalysisLaunch	true	"Analysis Definition"
+// @Success		200
+// @Failure		400	{object}	common.ErrorResponse
+// @Failure		500	{object}	common.ErrorResponse
+// @router			/batch/launch [post]
 func (h *HTTPHandlers) BatchLaunchHandler(c echo.Context) error {
 	request := c.Request()
 	ctx := c.Request().Context()
