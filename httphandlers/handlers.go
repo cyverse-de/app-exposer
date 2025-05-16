@@ -9,6 +9,7 @@ import (
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
+	"github.com/cyverse-de/model/v7"
 	"github.com/labstack/echo/v4"
 	"k8s.io/client-go/kubernetes"
 )
@@ -16,6 +17,8 @@ import (
 var log = common.Log
 
 var otelName = "github.com/cyverse-de/app-exposer/handlers"
+
+type AnalysisLaunch model.Analysis
 
 type HTTPHandlers struct {
 	incluster *incluster.Incluster
@@ -35,8 +38,23 @@ func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.I
 	}
 }
 
+type ExternalIDResp struct {
+	ExternalID string `json:"external_id" example:"bb52aefb-e021-4ece-89e5-fd73ce30643c"`
+}
+
 // AdminGetExternalIDHandler returns the external ID associated with the analysis ID.
 // There is only one external ID for each VICE analysis, unlike non-VICE analyses.
+//
+//	@ID				admin-get-external-id
+//	@Summary		Returns external ID
+//	@Description	Returns the external ID associated with the provided analysis ID.
+//	@Description	Only returns the first external ID in multi-step analyses.
+//	@Produces		json
+//	@Param			analysis-id	path		string	true	"analysis UUID"	minLength(36)	maxLength(36)
+//	@Success		200			{object}	ExternalIDResp
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Failure		400			{object}	common.ErrorResponse	"id parameter is empty"
+//	@Router			/vice/admin/analyses/{analysis-id}/external-id [get]
 func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
 	var (
 		err        error
@@ -57,15 +75,24 @@ func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
 		return err
 	}
 
-	outputMap := map[string]string{
-		"externalID": externalID,
+	retval := ExternalIDResp{
+		ExternalID: externalID,
 	}
 
-	return c.JSON(http.StatusOK, outputMap)
+	return c.JSON(http.StatusOK, retval)
 }
 
 // ApplyAsyncLabelsHandler is the http handler for triggering the application
 // of labels on running VICE analyses.
+//
+//	@ID				apply-async-labels
+//	@Summary		Applies labels to running VICE analyses.
+//	@Description	Asynchronously applies labels to all running VICE analyses.
+//	@Description	The application of the labels may not be complete by the time the response is returned.
+//	@Success		200
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Router			/vice/apply-labels [post]
 func (h *HTTPHandlers) ApplyAsyncLabelsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	errs := h.incluster.ApplyAsyncLabels(ctx)
@@ -82,7 +109,23 @@ func (h *HTTPHandlers) ApplyAsyncLabelsHandler(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
+type AsyncData struct {
+	AnalysisID string `json:"analysisID"`
+	Subdomain  string `json:"subdomain"`
+	IPAddr     string `json:"ipAddr"`
+}
+
 // AsyncDataHandler returns data that is generately asynchronously from the job launch.
+//
+//	@ID				async-data
+//	@Summary		Returns data that is generately asynchronously from the job launch.
+//	@Description	Returns data that is applied to analyses outside of an API call.
+//	@Description	The returned data is not returned asynchronously, despite the name of the call.
+//	@Param			external-id	query		string	true	"External ID"
+//	@Success		200			{object}	AsyncData
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Router			/vice/async-data [get]
 func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	externalID := c.QueryParam("external-id")
@@ -119,9 +162,9 @@ func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"analysisID": analysisID,
-		"subdomain":  subdomain,
-		"ipAddr":     ipAddr,
+	return c.JSON(http.StatusOK, AsyncData{
+		AnalysisID: analysisID,
+		Subdomain:  subdomain,
+		IPAddr:     ipAddr,
 	})
 }
