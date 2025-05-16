@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strings"
 
+	"al.essio.dev/pkg/shellescape"
 	"github.com/argoproj/argo-workflows/v3/cmd/argo/commands/client"
 	workflowpkg "github.com/argoproj/argo-workflows/v3/pkg/apiclient/workflow"
 	v1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
@@ -41,6 +43,14 @@ type WorkflowMaker struct {
 	getter    imageinfo.InfoGetter
 	analysis  *model.Analysis
 	clientset kubernetes.Interface
+}
+
+func escapePath(p string) string {
+	parts := strings.Split(p, string(filepath.Separator))
+	for idx, part := range parts {
+		parts[idx] = shellescape.Quote(part)
+	}
+	return strings.Join(parts, string(filepath.Separator))
 }
 
 // NewWorkflowMaker creates a new instance of WorkflowMaker
@@ -96,7 +106,7 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 		// If the StdoutPath is not empty, then stdout of the command needs to go to
 		// a named file.
 		if step.StdoutPath != "" {
-			sourceParts = append(sourceParts, fmt.Sprintf("> %s", step.StdoutPath))
+			sourceParts = append(sourceParts, fmt.Sprintf("> %s", escapePath(step.StdoutPath)))
 		} else {
 			// If the StdoutPath is empty, then write out stdout to a file
 			sourceParts = append(sourceParts, fmt.Sprintf("> logs/step-%d.stdout.log", idx))
@@ -105,7 +115,7 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 		// If the StderrPath is not empty, then stderr of the command needs to go to
 		// a named file.
 		if step.StderrPath != "" {
-			sourceParts = append(sourceParts, fmt.Sprintf("2> %s", step.StderrPath))
+			sourceParts = append(sourceParts, fmt.Sprintf("2> %s", escapePath(step.StderrPath)))
 		} else {
 			// if the StderrPath is empty, then write out the stderr to a file
 			sourceParts = append(sourceParts, fmt.Sprintf("2> logs/step-%d.stderr.log", idx))
@@ -460,7 +470,7 @@ func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alph
 	for _, stepInput := range w.analysis.Inputs() {
 		inputFilesAndFolders = append(
 			inputFilesAndFolders,
-			stepInput.IRODSPath(),
+			escapePath(stepInput.IRODSPath()),
 		)
 	}
 

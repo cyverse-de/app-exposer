@@ -15,6 +15,7 @@ replace github.com/cyverse-de/common => ./common
 replace github.com/cyverse-de/adapter => ./adapter
 
 require (
+	al.essio.dev/pkg/shellescape v1.6.0
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/argoproj/argo-workflows/v3 v3.6.5
 	github.com/cockroachdb/apd v1.1.0
