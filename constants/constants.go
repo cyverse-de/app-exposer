@@ -29,6 +29,10 @@ const (
 	WorkingDirInitContainerName      = "working-dir-init"
 	WorkingDirInitContainerMountPath = "/working-dir"
 
+	// The persistent data volume name. The volume is used to persist data locally across restarts.
+	LocalDirVolumeName = "analysis-data"
+	LocalDirMountPath  = "/mnt/analysis-data"
+
 	VICEProxyContainerName = "vice-proxy"
 	VICEProxyPort          = int32(60002)
 	VICEProxyPortName      = "tcp-proxy"
