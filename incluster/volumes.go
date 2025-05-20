@@ -250,7 +250,26 @@ func (i *Incluster) getPersistentVolumeClaims(ctx context.Context, job *model.Jo
 			},
 		}
 
-		volumeClaims = append(volumeClaims, dataVolumeClaim)
+		// This is for locally persistent analysis data. It should survive
+		// analysis restarts, but will get cleaned up if the analysis is
+		// stopped and restarted.
+		persistentVolumeClaim := &apiv1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: constants.LocalDirVolumeName,
+			},
+			Spec: apiv1.PersistentVolumeClaimSpec{
+				AccessModes: []apiv1.PersistentVolumeAccessMode{
+					apiv1.ReadWriteOnce,
+				},
+				Resources: apiv1.VolumeResourceRequirements{
+					Requests: apiv1.ResourceList{
+						apiv1.ResourceStorage: defaultStorageCapacity,
+					},
+				},
+			},
+		}
+
+		volumeClaims = append(volumeClaims, dataVolumeClaim, persistentVolumeClaim)
 		return volumeClaims, nil
 	}
 
@@ -282,8 +301,16 @@ func (i *Incluster) getPersistentVolumeSources(job *model.Job) ([]*apiv1.Volume,
 // getPersistentVolumeMounts returns the volume mount for the VICE analysis. It does
 // not call the k8s API.
 func (i *Incluster) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMount {
+	volumeMounts := []*apiv1.VolumeMount{}
+
+	analysisDataVolumeMount := &apiv1.VolumeMount{
+		Name:      constants.LocalDirVolumeName,
+		MountPath: constants.LocalDirMountPath,
+	}
+
+	volumeMounts = append(volumeMounts, analysisDataVolumeMount)
+
 	if i.UseCSIDriver {
-		volumeMounts := []*apiv1.VolumeMount{}
 
 		dataVolumeMount := &apiv1.VolumeMount{
 			Name:      i.getCSIDataVolumeClaimName(job),
@@ -291,8 +318,8 @@ func (i *Incluster) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMou
 		}
 
 		volumeMounts = append(volumeMounts, dataVolumeMount)
-		return volumeMounts
+
 	}
 
-	return nil
+	return volumeMounts
 }
