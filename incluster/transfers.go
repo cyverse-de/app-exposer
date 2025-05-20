@@ -75,7 +75,7 @@ func (i *Incluster) fileTransfersVolumeMounts(job *model.Job) []apiv1.VolumeMoun
 			ReadOnly:  true,
 		},
 		{
-			Name:      constants.FileTransfersVolumeName,
+			Name:      constants.WorkingDirVolumeName, // Reuse the WorkingDirVolumeName even for the initContainers.
 			MountPath: constants.FileTransfersInputsMountPath,
 			ReadOnly:  false,
 		},

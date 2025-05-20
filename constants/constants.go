@@ -16,7 +16,6 @@ const (
 	CSIDriverLocalMountPath            = "/data-store"
 
 	// The file transfers volume serves as the working directory when IRODS CSI Driver integration is disabled.
-	FileTransfersVolumeName        = "input-files"
 	FileTransfersContainerName     = "input-files"
 	FileTransfersInitContainerName = "input-files-init"
 	FileTransfersInputsMountPath   = "/input-files"
