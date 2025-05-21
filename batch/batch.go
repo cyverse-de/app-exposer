@@ -742,7 +742,7 @@ func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOp
 					},
 					{
 						Name:  "output-folder",
-						Value: v1alpha1.AnyStringPtr(w.analysis.OutputDirectory()),
+						Value: v1alpha1.AnyStringPtr(escapePath(w.analysis.OutputDirectory())),
 					},
 					{
 						Name:  "job_uuid",
