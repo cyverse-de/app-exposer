@@ -101,7 +101,11 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 		// Add the arguments to the source. If may include the tool
 		// executable, it may already have been added to the source as the
 		// entrypoint.
-		sourceParts = append(sourceParts, step.Arguments()...)
+		args := step.Arguments()
+		for a, arg := range args {
+			args[a] = escapePath(arg)
+		}
+		sourceParts = append(sourceParts, args...)
 
 		// If the StdoutPath is not empty, then stdout of the command needs to go to
 		// a named file.
