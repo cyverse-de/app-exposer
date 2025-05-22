@@ -87,7 +87,7 @@ func main() {
 		listenPort                           = flag.Int("port", 60000, "(optional) The port to listen on")
 		ingressClass                         = flag.String("ingress-class", "nginx", "(optional) the ingress class to use")
 		viceProxy                            = flag.String("vice-proxy", "harbor.cyverse.org/de/vice-proxy", "The image name of the proxy to use for VICE apps. The image tag is set in the config.")
-		transferImage                        = flag.String("transfer-image", "harbor.cyverse.org/de/gocmd:latest", "(optional) Image used to transfer files to/from the data store")
+		transferImage                        = flag.String("transfer-image", "harbor.cyverse.org/de/filetransfers:latest", "(optional) Image used to transfer files to/from the data store")
 		transferWorkingDir                   = flag.String("transfer-working-dir", "/de-app-work", "The working directory within the file transfer image.")
 		transferLogLevel                     = flag.String("transfer-log-level", "debug", "The log level of the output of the file transfer tool.")
 		statusSenderImage                    = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
