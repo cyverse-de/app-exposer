@@ -484,6 +484,7 @@ func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alph
 		"get",
 	}
 	args = append(args, inputFilesAndFolders...)
+	args = append(args, ".")
 	args = append(args, "> logs/downloads.stdout.log")
 	args = append(args, "2> logs/downloads.stderr.log")
 
