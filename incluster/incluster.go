@@ -57,6 +57,7 @@ type Init struct {
 	KeycloakClientSecret          string
 	IRODSZone                     string
 	IngressClass                  string
+	LocalStorageClass             string
 	NATSEncodedConn               *nats.EncodedConn
 }
 

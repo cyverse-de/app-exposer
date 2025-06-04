@@ -236,6 +236,7 @@ func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*api
 			AccessModes: []apiv1.PersistentVolumeAccessMode{
 				apiv1.ReadWriteOnce,
 			},
+			StorageClassName: &i.LocalStorageClass,
 			Resources: apiv1.VolumeResourceRequirements{
 				Requests: apiv1.ResourceList{
 					apiv1.ResourceStorage: defaultStorageCapacity,
