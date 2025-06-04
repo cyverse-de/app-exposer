@@ -76,26 +76,6 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 		// If there's an entrypoint defined, it needs to be the command in the script.
 		if step.Component.Container.EntryPoint != "" {
 			sourceParts = append(sourceParts, step.Component.Container.EntryPoint)
-		} else {
-			// It's possible that the integrator didn't bother to include the entrypoint
-			// in the definition, causing us to depend on the entrypoint defined in the
-			// image. We need to get the entrypoint in the image (if it exists), so that
-			// we can include it in the generated script that the image will run.
-			if w.getter.IsInRepo(step.Component.Container.Image.Name) {
-				project, image, _, err := w.getter.RepoParts(step.Component.Container.Image.Name)
-				if err != nil {
-					return nil, err
-				}
-
-				harborInfo, err := w.getter.GetInfo(project, image, step.Component.Container.Image.Tag)
-				if err != nil {
-					return nil, err
-				}
-
-				if strings.TrimSpace(harborInfo.Entrypoint) != "" {
-					sourceParts = append(sourceParts, harborInfo.Entrypoint)
-				}
-			}
 		}
 
 		// Add the arguments to the source. If may include the tool
