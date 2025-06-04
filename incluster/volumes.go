@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/app-exposer/resourcing"
 	"github.com/cyverse-de/model/v7"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
@@ -219,9 +220,33 @@ func (i *Incluster) getPersistentVolumes(ctx context.Context, job *model.Job) ([
 	return nil, nil
 }
 
-// getPersistentVolumeClaims returns the PersistentVolumes for the VICE analysis. It does
+// getVolumeClaims returns the volume claims needed for the VICE analysis. It does
 // not call the k8s API.
-func (i *Incluster) getPersistentVolumeClaims(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolumeClaim, error) {
+func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolumeClaim, error) {
+	volumeClaims := []*apiv1.PersistentVolumeClaim{}
+
+	// This is for local persistent analysis data. It should survive
+	// analysis restarts, but will get cleaned up if the analysis is
+	// stopped and restarted.
+	persistentVolumeClaim := &apiv1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: constants.LocalDirVolumeName,
+		},
+		Spec: apiv1.PersistentVolumeClaimSpec{
+			AccessModes: []apiv1.PersistentVolumeAccessMode{
+				apiv1.ReadWriteOnce,
+			},
+			StorageClassName: &i.LocalStorageClass,
+			Resources: apiv1.VolumeResourceRequirements{
+				Requests: apiv1.ResourceList{
+					apiv1.ResourceStorage: defaultStorageCapacity,
+				},
+			},
+		},
+	}
+
+	volumeClaims = append(volumeClaims, persistentVolumeClaim)
+
 	if i.UseCSIDriver {
 		labels, err := i.LabelsFromJob(ctx, job)
 		if err != nil {
@@ -229,7 +254,6 @@ func (i *Incluster) getPersistentVolumeClaims(ctx context.Context, job *model.Jo
 		}
 
 		storageclassname := constants.CSIDriverStorageClassName
-		volumeClaims := []*apiv1.PersistentVolumeClaim{}
 
 		dataVolumeClaim := &apiv1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
@@ -251,10 +275,9 @@ func (i *Incluster) getPersistentVolumeClaims(ctx context.Context, job *model.Jo
 		}
 
 		volumeClaims = append(volumeClaims, dataVolumeClaim)
-		return volumeClaims, nil
 	}
 
-	return nil, nil
+	return volumeClaims, nil
 }
 
 // getPersistentVolumeSources returns the volumes for the VICE analysis. It does
@@ -282,8 +305,18 @@ func (i *Incluster) getPersistentVolumeSources(job *model.Job) ([]*apiv1.Volume,
 // getPersistentVolumeMounts returns the volume mount for the VICE analysis. It does
 // not call the k8s API.
 func (i *Incluster) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMount {
+	volumeMounts := []*apiv1.VolumeMount{}
+
+	// This is the volume mount for the local persistent volume.
+	analysisDataVolumeMount := &apiv1.VolumeMount{
+		Name:      constants.WorkingDirVolumeName,
+		MountPath: workingDirMountPath(job),
+		ReadOnly:  false,
+	}
+
+	volumeMounts = append(volumeMounts, analysisDataVolumeMount)
+
 	if i.UseCSIDriver {
-		volumeMounts := []*apiv1.VolumeMount{}
 
 		dataVolumeMount := &apiv1.VolumeMount{
 			Name:      i.getCSIDataVolumeClaimName(job),
@@ -291,8 +324,111 @@ func (i *Incluster) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMou
 		}
 
 		volumeMounts = append(volumeMounts, dataVolumeMount)
-		return volumeMounts
+
 	}
 
-	return nil
+	return volumeMounts
+}
+
+// deploymentVolumes returns the Volume objects needed for the VICE analyis
+// Deployment. This does NOT call the k8s API to actually create the Volumes,
+// it returns the objects that can be included in the Deployment object that
+// will get passed to the k8s API later. Also not that these are the Volumes,
+// not the container-specific VolumeMounts.
+func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
+	output := []apiv1.Volume{}
+
+	if len(job.FilterInputsWithoutTickets()) > 0 {
+		output = append(output, apiv1.Volume{
+			Name: constants.InputPathListVolumeName,
+			VolumeSource: apiv1.VolumeSource{
+				ConfigMap: &apiv1.ConfigMapVolumeSource{
+					LocalObjectReference: apiv1.LocalObjectReference{
+						Name: inputPathListConfigMapName(job),
+					},
+				},
+			},
+		})
+	}
+
+	// TODO: Remove this commented out code once it's shown that the VolumeClaimTemplate stuff is working.
+	// output = append(output,
+	// 	apiv1.Volume{
+	// 		Name: constants.WorkingDirVolumeName,
+	// 		VolumeSource: apiv1.VolumeSource{
+	// 			EmptyDir: &apiv1.EmptyDirVolumeSource{},
+	// 		},
+	// 	},
+	// )
+
+	if i.UseCSIDriver {
+		volumeSources, err := i.getPersistentVolumeSources(job)
+		if err != nil {
+			log.Warn(err)
+		} else {
+			for _, volumeSource := range volumeSources {
+				output = append(output, *volumeSource)
+			}
+		}
+	} else {
+		output = append(output,
+			apiv1.Volume{
+				Name: constants.PorklockConfigVolumeName,
+				VolumeSource: apiv1.VolumeSource{
+					Secret: &apiv1.SecretVolumeSource{
+						SecretName: constants.PorklockConfigSecretName,
+					},
+				},
+			},
+		)
+	}
+
+	output = append(output,
+		apiv1.Volume{
+			Name: constants.ExcludesVolumeName,
+			VolumeSource: apiv1.VolumeSource{
+				ConfigMap: &apiv1.ConfigMapVolumeSource{
+					LocalObjectReference: apiv1.LocalObjectReference{
+						Name: excludesConfigMapName(job),
+					},
+				},
+			},
+		},
+	)
+
+	shmSize := resourcing.SharedMemoryAmount(job)
+	if shmSize != nil {
+		output = append(output,
+			apiv1.Volume{
+				Name: constants.SharedMemoryVolumeName,
+				VolumeSource: apiv1.VolumeSource{
+					EmptyDir: &apiv1.EmptyDirVolumeSource{
+						Medium:    "Memory",
+						SizeLimit: shmSize,
+					},
+				},
+			},
+		)
+	}
+
+	return output
+}
+
+func (i *Incluster) deploymentVolumeMounts(job *model.Job) []apiv1.VolumeMount {
+	volumeMounts := []apiv1.VolumeMount{}
+
+	persistentVolumeMounts := i.getPersistentVolumeMounts(job)
+	for _, persistentVolumeMount := range persistentVolumeMounts {
+		volumeMounts = append(volumeMounts, *persistentVolumeMount)
+	}
+
+	if resourcing.SharedMemoryAmount(job) != nil {
+		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
+			Name:      constants.SharedMemoryVolumeName,
+			MountPath: constants.ShmDevice,
+			ReadOnly:  false,
+		})
+	}
+
+	return volumeMounts
 }
