@@ -53,6 +53,7 @@ type ExposerAppInit struct {
 	IngressClass                  string
 	ClientSet                     kubernetes.Interface
 	batchadapter                  *adapter.JEXAdapter
+	ImagePullSecretName           string
 }
 
 //	@title			app-exposer
@@ -94,7 +95,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		UseCSIDriver:                  c.Bool("vice.use_csi_driver"),
 		InputPathListIdentifier:       c.String("path_list.file_identifier"),
 		TicketInputPathListIdentifier: c.String("tickets_path_list.file_identifier"),
-		ImagePullSecretName:           c.String("vice.image-pull-secret"),
+		ImagePullSecretName:           init.ImagePullSecretName,
 		ViceProxyImage:                init.ViceProxyImage,
 		FrontendBaseURL:               c.String("k8s.frontend.base"),
 		ViceDefaultBackendService:     init.ViceDefaultBackendService,

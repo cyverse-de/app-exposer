@@ -37,6 +37,7 @@ type BatchSubmissionOpts struct {
 	FileTransferWorkingDir string
 	StatusSenderImage      string
 	ExternalID             string
+	ImagePullSecretName    string
 }
 
 type WorkflowMaker struct {
@@ -680,6 +681,9 @@ func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOp
 			ServiceAccountName: "argo-executor",         // TODO: Make this configurable
 			Entrypoint:         "analysis-steps",        // TODO: Make this a const
 			OnExit:             "analysis-exit-handler", // TODO: Make this a const
+			ImagePullSecrets: []apiv1.LocalObjectReference{
+				{Name: opts.ImagePullSecretName},
+			},
 			Tolerations: []apiv1.Toleration{
 				{
 					Key:      "analysis",

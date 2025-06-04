@@ -30,6 +30,7 @@ type JEXAdapter struct {
 	FileTransferLogLevel   string
 	StatusSenderImage      string
 	Namespace              string
+	ImagePullSecretName    string
 	quotaEnforcer          *quota.Enforcer
 	clientset              kubernetes.Interface
 }
@@ -43,6 +44,7 @@ type Init struct {
 	FileTransferLogLevel   string
 	StatusSenderImage      string
 	Namespace              string
+	ImagePullSecretName    string
 }
 
 // New returns a *JEXAdapter
@@ -59,6 +61,7 @@ func New(init *Init, apps *apps.Apps, detector *millicores.Detector, imageInfoGe
 		FileTransferLogLevel:   init.FileTransferLogLevel,
 		StatusSenderImage:      init.StatusSenderImage,
 		Namespace:              init.Namespace,
+		ImagePullSecretName:    init.ImagePullSecretName,
 		quotaEnforcer:          enforcer,
 		clientset:              clientset,
 	}
@@ -114,6 +117,7 @@ func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysi
 		FileTransferWorkingDir: j.FileTransferWorkingDir,
 		StatusSenderImage:      j.StatusSenderImage,
 		ExternalID:             analysis.InvocationID,
+		ImagePullSecretName:    j.ImagePullSecretName,
 	}
 
 	maker := batch.NewWorkflowMaker(j.imageInfoGetter, analysis, j.clientset)

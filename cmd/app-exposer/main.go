@@ -314,6 +314,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	imagePullSecretName := c.String("vice.image-pull-secret")
+
 	// Create the app that handles batch functionality.
 	jexAdapterInit := &adapter.Init{
 		LogPath:                c.String("condor.log_path"),
@@ -324,6 +326,7 @@ func main() {
 		FileTransferLogLevel:   *transferLogLevel,
 		StatusSenderImage:      *statusSenderImage,
 		Namespace:              *argoWorkflowNS,
+		ImagePullSecretName:    imagePullSecretName,
 	}
 	enforcer := quota.NewEnforcer(clientset, dbconn, a, nec, *userSuffix)
 	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer, clientset)
@@ -342,6 +345,7 @@ func main() {
 		IngressClass:                  *ingressClass,
 		ClientSet:                     clientset,
 		batchadapter:                  jexAdapter,
+		ImagePullSecretName:           imagePullSecretName,
 	}
 
 	// app is the base app-exposer functionality.
