@@ -30,7 +30,6 @@ const (
 
 	// The persistent data volume name. The volume is used to persist data locally across restarts.
 	LocalDirVolumeName = "analysis-data"
-	LocalDirMountPath  = "/mnt/analysis-data"
 
 	VICEProxyContainerName = "vice-proxy"
 	VICEProxyPort          = int32(60002)
