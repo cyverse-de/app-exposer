@@ -16,7 +16,6 @@ const (
 	CSIDriverLocalMountPath            = "/data-store"
 
 	// The file transfers volume serves as the working directory when IRODS CSI Driver integration is disabled.
-	FileTransfersVolumeName        = "input-files"
 	FileTransfersContainerName     = "input-files"
 	FileTransfersInitContainerName = "input-files-init"
 	FileTransfersInputsMountPath   = "/input-files"
@@ -28,6 +27,9 @@ const (
 	WorkingDirVolumeName             = "working-dir"
 	WorkingDirInitContainerName      = "working-dir-init"
 	WorkingDirInitContainerMountPath = "/working-dir"
+
+	// The persistent data volume name. The volume is used to persist data locally across restarts.
+	LocalDirVolumeName = "analysis-data"
 
 	VICEProxyContainerName = "vice-proxy"
 	VICEProxyPort          = int32(60002)

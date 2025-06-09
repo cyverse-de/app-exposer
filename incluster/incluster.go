@@ -57,6 +57,7 @@ type Init struct {
 	KeycloakClientSecret          string
 	IRODSZone                     string
 	IngressClass                  string
+	LocalStorageClass             string
 	NATSEncodedConn               *nats.EncodedConn
 }
 
@@ -190,21 +191,20 @@ func (i *Incluster) UpsertDeployment(ctx context.Context, deployment *appsv1.Dep
 		}
 	}
 
-	// Create the persistent volumes and persistent volume claims for the job.
-	volumes, err := i.getPersistentVolumes(ctx, job)
+	persistentVolumes, err := i.getPersistentVolumes(ctx, job)
 	if err != nil {
 		return err
 	}
 
-	volumeclaims, err := i.getPersistentVolumeClaims(ctx, job)
+	volumeClaims, err := i.getVolumeClaims(ctx, job)
 	if err != nil {
 		return err
 	}
 
-	if len(volumes) > 0 {
+	if len(persistentVolumes) > 0 {
 		pvclient := i.clientset.CoreV1().PersistentVolumes()
 
-		for _, volume := range volumes {
+		for _, volume := range persistentVolumes {
 			_, err = pvclient.Get(ctx, volume.GetName(), metav1.GetOptions{})
 			if err != nil {
 				_, err = pvclient.Create(ctx, volume, metav1.CreateOptions{})
@@ -220,10 +220,10 @@ func (i *Incluster) UpsertDeployment(ctx context.Context, deployment *appsv1.Dep
 		}
 	}
 
-	if len(volumeclaims) > 0 {
+	if len(volumeClaims) > 0 {
 		pvcclient := i.clientset.CoreV1().PersistentVolumeClaims(i.ViceNamespace)
 
-		for _, volumeClaim := range volumeclaims {
+		for _, volumeClaim := range volumeClaims {
 			_, err = pvcclient.Get(ctx, volumeClaim.GetName(), metav1.GetOptions{})
 			if err != nil {
 				_, err = pvcclient.Create(ctx, volumeClaim, metav1.CreateOptions{})

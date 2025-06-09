@@ -34,94 +34,6 @@ func analysisPorts(step *model.Step) []apiv1.ContainerPort {
 	return ports
 }
 
-// deploymentVolumes returns the Volume objects needed for the VICE analyis
-// Deployment. This does NOT call the k8s API to actually create the Volumes,
-// it returns the objects that can be included in the Deployment object that
-// will get passed to the k8s API later. Also not that these are the Volumes,
-// not the container-specific VolumeMounts.
-func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
-	output := []apiv1.Volume{}
-
-	if len(job.FilterInputsWithoutTickets()) > 0 {
-		output = append(output, apiv1.Volume{
-			Name: constants.InputPathListVolumeName,
-			VolumeSource: apiv1.VolumeSource{
-				ConfigMap: &apiv1.ConfigMapVolumeSource{
-					LocalObjectReference: apiv1.LocalObjectReference{
-						Name: inputPathListConfigMapName(job),
-					},
-				},
-			},
-		})
-	}
-
-	if i.UseCSIDriver {
-		output = append(output,
-			apiv1.Volume{
-				Name: constants.WorkingDirVolumeName,
-				VolumeSource: apiv1.VolumeSource{
-					EmptyDir: &apiv1.EmptyDirVolumeSource{},
-				},
-			},
-		)
-		volumeSources, err := i.getPersistentVolumeSources(job)
-		if err != nil {
-			log.Warn(err)
-		} else {
-			for _, volumeSource := range volumeSources {
-				output = append(output, *volumeSource)
-			}
-		}
-	} else {
-		output = append(output,
-			apiv1.Volume{
-				Name: constants.FileTransfersVolumeName,
-				VolumeSource: apiv1.VolumeSource{
-					EmptyDir: &apiv1.EmptyDirVolumeSource{},
-				},
-			},
-			apiv1.Volume{
-				Name: constants.PorklockConfigVolumeName,
-				VolumeSource: apiv1.VolumeSource{
-					Secret: &apiv1.SecretVolumeSource{
-						SecretName: constants.PorklockConfigSecretName,
-					},
-				},
-			},
-		)
-	}
-
-	output = append(output,
-		apiv1.Volume{
-			Name: constants.ExcludesVolumeName,
-			VolumeSource: apiv1.VolumeSource{
-				ConfigMap: &apiv1.ConfigMapVolumeSource{
-					LocalObjectReference: apiv1.LocalObjectReference{
-						Name: excludesConfigMapName(job),
-					},
-				},
-			},
-		},
-	)
-
-	shmSize := resourcing.SharedMemoryAmount(job)
-	if shmSize != nil {
-		output = append(output,
-			apiv1.Volume{
-				Name: constants.SharedMemoryVolumeName,
-				VolumeSource: apiv1.VolumeSource{
-					EmptyDir: &apiv1.EmptyDirVolumeSource{
-						Medium:    "Memory",
-						SizeLimit: shmSize,
-					},
-				},
-			},
-		)
-	}
-
-	return output
-}
-
 func (i *Incluster) getFrontendURL(job *model.Job) *url.URL {
 	// This should be parsed in main(), so we shouldn't worry about it here.
 	frontURL, _ := url.Parse(i.FrontendBaseURL)
@@ -299,31 +211,7 @@ func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 		},
 	)
 
-	volumeMounts := []apiv1.VolumeMount{}
-	if i.UseCSIDriver {
-		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
-			Name:      constants.WorkingDirVolumeName,
-			MountPath: workingDirMountPath(job),
-			ReadOnly:  false,
-		})
-		persistentVolumeMounts := i.getPersistentVolumeMounts(job)
-		for _, persistentVolumeMount := range persistentVolumeMounts {
-			volumeMounts = append(volumeMounts, *persistentVolumeMount)
-		}
-	} else {
-		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
-			Name:      constants.FileTransfersVolumeName,
-			MountPath: workingDirMountPath(job),
-			ReadOnly:  false,
-		})
-	}
-	if resourcing.SharedMemoryAmount(job) != nil {
-		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
-			Name:      constants.SharedMemoryVolumeName,
-			MountPath: constants.ShmDevice,
-			ReadOnly:  false,
-		})
-	}
+	volumeMounts := i.deploymentVolumeMounts(job)
 
 	analysisContainer := apiv1.Container{
 		Name: constants.AnalysisContainerName,

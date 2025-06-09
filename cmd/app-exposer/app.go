@@ -54,6 +54,7 @@ type ExposerAppInit struct {
 	ClientSet                     kubernetes.Interface
 	batchadapter                  *adapter.JEXAdapter
 	ImagePullSecretName           string
+	LocalStorageClass             string
 }
 
 //	@title			app-exposer
@@ -114,6 +115,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		IRODSZone:                     init.IRODSZone,
 		IngressClass:                  init.IngressClass,
 		NATSEncodedConn:               conn,
+		LocalStorageClass:             init.LocalStorageClass,
 	}
 
 	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, apps)
