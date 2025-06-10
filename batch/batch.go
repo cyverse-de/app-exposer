@@ -46,11 +46,16 @@ type WorkflowMaker struct {
 }
 
 func escapePath(p string) string {
-	parts := strings.Split(p, string(filepath.Separator))
-	for idx, part := range parts {
-		parts[idx] = shellescape.Quote(part)
+	parts := strings.Split(strings.TrimSpace(p), string(filepath.Separator))
+	var joinable []string
+	for _, part := range parts {
+		if part != "" {
+			joinable = append(joinable, shellescape.Quote(part))
+		} else {
+			joinable = append(joinable, part)
+		}
 	}
-	return strings.Join(parts, string(filepath.Separator))
+	return strings.Join(joinable, string(filepath.Separator))
 }
 
 // NewWorkflowMaker creates a new instance of WorkflowMaker
