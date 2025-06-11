@@ -700,6 +700,7 @@ func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOp
 			Labels: map[string]string{
 				"job-uuid":    w.analysis.InvocationID,
 				"external-id": w.analysis.InvocationID,
+				"username":    w.analysis.Submitter,
 			},
 		},
 		Spec: v1alpha1.WorkflowSpec{
