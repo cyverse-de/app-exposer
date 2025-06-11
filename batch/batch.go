@@ -156,7 +156,7 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 		for _, volumeFrom := range step.Component.Container.VolumesFrom {
 			var containerPath string
 			if volumeFrom.ContainerPath == "" {
-				containerPath = "/mnt/discoenv"
+				containerPath = fmt.Sprintf("/mnt/%s", sluggy(volumeFrom.NamePrefix))
 			} else {
 				containerPath = volumeFrom.ContainerPath
 			}
@@ -174,6 +174,19 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 	}
 
 	return templates, nil
+}
+
+func sluggy(in string) string {
+	return strings.TrimSpace(
+		strings.Trim(
+			slug.Substitute(
+				slug.Make(in),
+				map[string]string{"_": "-"},
+			),
+			"-",
+		),
+	)
+
 }
 
 // runStepsTemplates generates a list of templates that orchestrate the logic

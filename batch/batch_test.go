@@ -18,3 +18,17 @@ func TestEscapePath(t *testing.T) {
 		}
 	}
 }
+
+func TestSluggy(t *testing.T) {
+	testStrings := map[string]string{
+		"foo_bar-baz_":  "foo-bar-baz",
+		" foo_bar-baz ": "foo-bar-baz",
+	}
+
+	for input, expected := range testStrings {
+		output := sluggy(input)
+		if output != expected {
+			t.Errorf("expected '%s', got '%s'", expected, output)
+		}
+	}
+}
