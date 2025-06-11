@@ -588,8 +588,6 @@ func (w *WorkflowMaker) uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1
 		"--no_root",
 		".",
 		"{{workflow.parameters.output-folder}}",
-		"> logs/uploads.stdout.log",
-		"2> logs/uploads.stderr.log",
 	}
 
 	return &v1alpha1.Template{
