@@ -19,20 +19,12 @@ var log = common.Log
 
 // JEXAdapter contains the application state for jex-adapter.
 type JEXAdapter struct {
-	apps                   *apps.Apps
-	detector               *millicores.Detector
-	imageInfoGetter        imageinfo.InfoGetter
-	FilterFiles            []string
-	LogPath                string
-	IRODSBase              string
-	FileTransferImage      string
-	FileTransferWorkingDir string
-	FileTransferLogLevel   string
-	StatusSenderImage      string
-	Namespace              string
-	ImagePullSecretName    string
-	quotaEnforcer          *quota.Enforcer
-	clientset              kubernetes.Interface
+	Init
+	apps            *apps.Apps
+	detector        *millicores.Detector
+	imageInfoGetter imageinfo.InfoGetter
+	quotaEnforcer   *quota.Enforcer
+	clientset       kubernetes.Interface
 }
 
 type Init struct {
@@ -45,25 +37,18 @@ type Init struct {
 	StatusSenderImage      string
 	Namespace              string
 	ImagePullSecretName    string
+	DoWorkflowCleanup      bool
 }
 
 // New returns a *JEXAdapter
 func New(init *Init, apps *apps.Apps, detector *millicores.Detector, imageInfoGetter imageinfo.InfoGetter, enforcer *quota.Enforcer, clientset kubernetes.Interface) *JEXAdapter {
 	return &JEXAdapter{
-		apps:                   apps,
-		detector:               detector,
-		imageInfoGetter:        imageInfoGetter,
-		LogPath:                init.LogPath,
-		IRODSBase:              init.IRODSBase,
-		FilterFiles:            init.FilterFiles,
-		FileTransferImage:      init.FileTransferImage,
-		FileTransferWorkingDir: init.FileTransferWorkingDir,
-		FileTransferLogLevel:   init.FileTransferLogLevel,
-		StatusSenderImage:      init.StatusSenderImage,
-		Namespace:              init.Namespace,
-		ImagePullSecretName:    init.ImagePullSecretName,
-		quotaEnforcer:          enforcer,
-		clientset:              clientset,
+		Init:            *init,
+		quotaEnforcer:   enforcer,
+		clientset:       clientset,
+		apps:            apps,
+		detector:        detector,
+		imageInfoGetter: imageInfoGetter,
 	}
 }
 
@@ -120,7 +105,7 @@ func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysi
 		ImagePullSecretName:    j.ImagePullSecretName,
 	}
 
-	maker := batch.NewWorkflowMaker(j.imageInfoGetter, analysis, j.clientset)
+	maker := batch.NewWorkflowMaker(j.imageInfoGetter, analysis, j.clientset, j.DoWorkflowCleanup)
 	workflow, err := maker.NewWorkflow(ctx, opts)
 
 	if err != nil {

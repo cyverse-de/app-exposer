@@ -41,9 +41,10 @@ type BatchSubmissionOpts struct {
 }
 
 type WorkflowMaker struct {
-	getter    imageinfo.InfoGetter
-	analysis  *model.Analysis
-	clientset kubernetes.Interface
+	getter            imageinfo.InfoGetter
+	analysis          *model.Analysis
+	clientset         kubernetes.Interface
+	doWorkflowCleanup bool
 }
 
 func escapePath(p string) string {
@@ -60,11 +61,12 @@ func escapePath(p string) string {
 }
 
 // NewWorkflowMaker creates a new instance of WorkflowMaker
-func NewWorkflowMaker(getter imageinfo.InfoGetter, analysis *model.Analysis, clientset kubernetes.Interface) *WorkflowMaker {
+func NewWorkflowMaker(getter imageinfo.InfoGetter, analysis *model.Analysis, clientset kubernetes.Interface, doWorkflowCleanup bool) *WorkflowMaker {
 	return &WorkflowMaker{
-		getter:    getter,
-		analysis:  analysis,
-		clientset: clientset,
+		getter:            getter,
+		analysis:          analysis,
+		clientset:         clientset,
+		doWorkflowCleanup: doWorkflowCleanup,
 	}
 }
 
@@ -305,7 +307,7 @@ func (w *WorkflowMaker) runStepsTemplates() ([]v1alpha1.Template, error) {
 // exitHandlerTemplate returns the template definition for the
 // steps taken when the workflow exits.
 func (w *WorkflowMaker) exitHandlerTemplate() *v1alpha1.Template {
-	return &v1alpha1.Template{
+	t := &v1alpha1.Template{
 		Name: "analysis-exit-handler",
 		Steps: []v1alpha1.ParallelSteps{
 			{
@@ -336,7 +338,12 @@ func (w *WorkflowMaker) exitHandlerTemplate() *v1alpha1.Template {
 					),
 				},
 			},
-			{
+		},
+	}
+
+	if w.doWorkflowCleanup {
+		t.Steps = append(t.Steps,
+			v1alpha1.ParallelSteps{
 				Steps: []v1alpha1.WorkflowStep{
 					{
 						Name:     "cleanup",
@@ -344,8 +351,10 @@ func (w *WorkflowMaker) exitHandlerTemplate() *v1alpha1.Template {
 					},
 				},
 			},
-		},
+		)
 	}
+
+	return t
 }
 
 func (w *WorkflowMaker) sendStatusWorkflowStep(name, msg, state, prefix string) *v1alpha1.WorkflowStep {

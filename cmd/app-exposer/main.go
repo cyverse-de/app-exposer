@@ -116,6 +116,7 @@ func main() {
 		viceProxyStorageResourceLimit        = flag.String("vice-proxy-storage-resource-limit", "100Gi", "The default storage resource limit for the vice proxy.")
 		disableViceProxyStorageResourceLimit = flag.Bool("disable-vice-proxy-storage-resource-limit", true, "Disable storage resource limit for the vice proxy.")
 		logLevel                             = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
+		doWorkflowCleanup                    = flag.Bool("do-workflow-cleanup", true, "Whether to clean up workflows that are finished.")
 	)
 
 	var tracerCtx, cancel = context.WithCancel(context.Background())
@@ -328,6 +329,7 @@ func main() {
 		StatusSenderImage:      *statusSenderImage,
 		Namespace:              *argoWorkflowNS,
 		ImagePullSecretName:    imagePullSecretName,
+		DoWorkflowCleanup:      *doWorkflowCleanup,
 	}
 	enforcer := quota.NewEnforcer(clientset, dbconn, a, nec, *userSuffix)
 	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer, clientset)
