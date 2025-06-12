@@ -10,7 +10,6 @@ import (
 	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/app-exposer/quota"
 	"github.com/cyverse-de/model/v7"
-	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 )
@@ -66,35 +65,35 @@ func (j *JEXAdapter) StopWorkflow(ctx context.Context, externalID string) error 
 }
 
 func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysis) error {
-	log.Debug("validating analysis")
-	if status, err := j.quotaEnforcer.ValidateJob(ctx, analysis, j.Namespace); err != nil {
-		if validationErr, ok := err.(common.ErrorResponse); ok {
-			log.Error(validationErr)
-			return validationErr
-		}
-		log.Error(err)
-		return echo.NewHTTPError(status, err.Error())
-	}
-	log.Debug("done validating analysis")
+	// log.Debug("validating analysis")
+	// if status, err := j.quotaEnforcer.ValidateJob(ctx, analysis, j.Namespace); err != nil {
+	// 	if validationErr, ok := err.(common.ErrorResponse); ok {
+	// 		log.Error(validationErr)
+	// 		return validationErr
+	// 	}
+	// 	log.Error(err)
+	// 	return echo.NewHTTPError(status, err.Error())
+	// }
+	// log.Debug("done validating analysis")
 
 	log = log.WithFields(logrus.Fields{
 		"external_id": analysis.InvocationID,
 	})
 
-	log.Debug("finding number of millicores reserved")
-	millicoresReserved, err := j.detector.NumberReserved(analysis)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	log.Debug("done finding number of millicores reserved")
+	// log.Debug("finding number of millicores reserved")
+	// millicoresReserved, err := j.detector.NumberReserved(analysis)
+	// if err != nil {
+	// 	log.Error(err)
+	// 	return err
+	// }
+	// log.Debug("done finding number of millicores reserved")
 
-	log.Infof("storing %s millicores reserved for %s", millicoresReserved.String(), analysis.InvocationID)
-	if err = j.apps.SetMillicoresReserved(analysis, millicoresReserved); err != nil {
-		log.Error(err)
-		return err
-	}
-	log.Infof("done storing %s millicores reserved for %s", millicoresReserved.String(), analysis.InvocationID)
+	// log.Infof("storing %s millicores reserved for %s", millicoresReserved.String(), analysis.InvocationID)
+	// if err = j.apps.SetMillicoresReserved(analysis, millicoresReserved); err != nil {
+	// 	log.Error(err)
+	// 	return err
+	// }
+	// log.Infof("done storing %s millicores reserved for %s", millicoresReserved.String(), analysis.InvocationID)
 
 	opts := &batch.BatchSubmissionOpts{
 		FileTransferImage:      j.FileTransferImage,
@@ -121,7 +120,7 @@ func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysi
 		return err
 	}
 
-	log.Infof("launched with %f millicores reserved", millicoresReserved)
+	// log.Infof("launched with %f millicores reserved", millicoresReserved)
 
 	return nil
 }
