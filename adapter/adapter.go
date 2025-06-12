@@ -37,7 +37,7 @@ type Init struct {
 	StatusSenderImage      string
 	Namespace              string
 	ImagePullSecretName    string
-	DoWorkflowCleanup      bool
+	BatchExitHandlerImage  string
 }
 
 // New returns a *JEXAdapter
@@ -103,9 +103,10 @@ func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysi
 		StatusSenderImage:      j.StatusSenderImage,
 		ExternalID:             analysis.InvocationID,
 		ImagePullSecretName:    j.ImagePullSecretName,
+		BatchExitHandlerImage:  j.BatchExitHandlerImage,
 	}
 
-	maker := batch.NewWorkflowMaker(j.imageInfoGetter, analysis, j.clientset, j.DoWorkflowCleanup)
+	maker := batch.NewWorkflowMaker(j.imageInfoGetter, analysis, j.clientset)
 	workflow, err := maker.NewWorkflow(ctx, opts)
 
 	if err != nil {

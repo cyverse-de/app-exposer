@@ -38,13 +38,13 @@ type BatchSubmissionOpts struct {
 	StatusSenderImage      string
 	ExternalID             string
 	ImagePullSecretName    string
+	BatchExitHandlerImage  string
 }
 
 type WorkflowMaker struct {
-	getter            imageinfo.InfoGetter
-	analysis          *model.Analysis
-	clientset         kubernetes.Interface
-	doWorkflowCleanup bool
+	getter    imageinfo.InfoGetter
+	analysis  *model.Analysis
+	clientset kubernetes.Interface
 }
 
 func escapePath(p string) string {
@@ -61,12 +61,11 @@ func escapePath(p string) string {
 }
 
 // NewWorkflowMaker creates a new instance of WorkflowMaker
-func NewWorkflowMaker(getter imageinfo.InfoGetter, analysis *model.Analysis, clientset kubernetes.Interface, doWorkflowCleanup bool) *WorkflowMaker {
+func NewWorkflowMaker(getter imageinfo.InfoGetter, analysis *model.Analysis, clientset kubernetes.Interface) *WorkflowMaker {
 	return &WorkflowMaker{
-		getter:            getter,
-		analysis:          analysis,
-		clientset:         clientset,
-		doWorkflowCleanup: doWorkflowCleanup,
+		getter:    getter,
+		analysis:  analysis,
+		clientset: clientset,
 	}
 }
 
@@ -306,52 +305,108 @@ func (w *WorkflowMaker) runStepsTemplates() ([]v1alpha1.Template, error) {
 
 // exitHandlerTemplate returns the template definition for the
 // steps taken when the workflow exits.
-func (w *WorkflowMaker) exitHandlerTemplate() *v1alpha1.Template {
+func (w *WorkflowMaker) exitHandlerTemplate(opts *BatchSubmissionOpts) *v1alpha1.Template {
 	t := &v1alpha1.Template{
 		Name: "analysis-exit-handler",
-		Steps: []v1alpha1.ParallelSteps{
-			{
-				Steps: []v1alpha1.WorkflowStep{
-					*w.sendStatusWorkflowStep(
-						"uploading-files-status",
-						"uploading files",
-						statusRunning,
-						"uploading-files",
-					),
-				},
-			},
-			{
-				Steps: []v1alpha1.WorkflowStep{
+		Script: &v1alpha1.ScriptTemplate{
+			Source: `batch-exit-handler`,
+			Container: apiv1.Container{
+				Image:      opts.BatchExitHandlerImage,
+				Command:    []string{"bash"},
+				WorkingDir: opts.FileTransferWorkingDir,
+				VolumeMounts: []apiv1.VolumeMount{
 					{
-						Name:     "upload-files",
-						Template: "upload-files",
+						Name:      defaultVolumeName,
+						MountPath: opts.FileTransferWorkingDir,
 					},
 				},
-			},
-			{
-				Steps: []v1alpha1.WorkflowStep{
-					*w.sendStatusWorkflowStep(
-						"finished-status",
-						"sending final status",
-						"{{workflow.status}}",
-						"finished-status",
-					),
+				Env: []apiv1.EnvVar{
+					{
+						Name:  "UUID",
+						Value: w.analysis.InvocationID,
+					},
+					{
+						Name:  "WORKFLOW_STATUS",
+						Value: "{{workflow.status}}",
+					},
+					{
+						Name:  "USERNAME",
+						Value: "{{workflow.parameters.username}}",
+					},
+					{
+						Name:  "STATUS_URL",
+						Value: "http://webhook-eventsource-svc.argo-events/batch",
+					},
+					{
+						Name:  "CLEANUP_URL",
+						Value: "http://webhook-eventsource-svc.argo-events/batch/cleanup",
+					},
+					{
+						Name:  "OUTPUT_FOLDER",
+						Value: escapePath(w.analysis.OutputDirectory()),
+					},
+					{
+						Name:  "IRODS_CLIENT_USER_NAME",
+						Value: "{{workflow.parameters.username}}",
+					},
+					{
+						Name: "IRODS_HOST",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_HOST",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
+							},
+						},
+					},
+					{
+						Name: "IRODS_PORT",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_PORT",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
+							},
+						},
+					},
+					{
+						Name: "IRODS_USER_NAME",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_USER_NAME",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
+							},
+						},
+					},
+					{
+						Name: "IRODS_USER_PASSWORD",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_USER_PASSWORD",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
+							},
+						},
+					},
+					{
+						Name: "IRODS_ZONE_NAME",
+						ValueFrom: &apiv1.EnvVarSource{
+							ConfigMapKeyRef: &apiv1.ConfigMapKeySelector{
+								Key: "IRODS_ZONE_NAME",
+								LocalObjectReference: apiv1.LocalObjectReference{
+									Name: "irods-config",
+								},
+							},
+						},
+					},
 				},
 			},
 		},
-	}
-
-	if w.doWorkflowCleanup {
-		t.Steps = append(t.Steps,
-			v1alpha1.ParallelSteps{
-				Steps: []v1alpha1.WorkflowStep{
-					{
-						Name:     "cleanup",
-						Template: "send-cleanup",
-					},
-				},
-			},
-		)
 	}
 
 	return t
@@ -682,7 +737,7 @@ func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOp
 	workflowTemplates = append(
 		workflowTemplates,
 		*w.initWorkingDirectoryTemplate(opts),
-		*w.exitHandlerTemplate(),
+		*w.exitHandlerTemplate(opts),
 		*w.sendStatusTemplate(opts),
 		*w.sendCleanupEventTemplate(opts),
 		*w.downloadFilesTemplate(opts),
@@ -704,9 +759,9 @@ func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOp
 			},
 		},
 		Spec: v1alpha1.WorkflowSpec{
-			ServiceAccountName: "argo-executor",         // TODO: Make this configurable
-			Entrypoint:         "analysis-steps",        // TODO: Make this a const
-			OnExit:             "analysis-exit-handler", // TODO: Make this a const
+			ServiceAccountName: "argo-executor",
+			Entrypoint:         "analysis-steps",
+			OnExit:             "analysis-exit-handler",
 			ImagePullSecrets: []apiv1.LocalObjectReference{
 				{Name: opts.ImagePullSecretName},
 			},

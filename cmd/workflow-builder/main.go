@@ -36,7 +36,6 @@ func main() {
 		harborURL          = flag.String("harbor-url", "https://harbor.cyverse.org/api/v2.0/", "The base URL for the harbor instance")
 		harborUser         = flag.String("harbor-user", "", "The user for harbor lookups.")
 		harborPass         = flag.String("harbor-pass", "", "The password for the harbor user.")
-		doWorkflowCleanup  = flag.Bool("do-workflow-cleanup", true, "Whether to clean up workflows that are finished.")
 	)
 
 	// Prefer the value in the KUBECONFIG env var.
@@ -112,7 +111,7 @@ func main() {
 		ExternalID:             *analysisID,
 	}
 
-	maker := batch.NewWorkflowMaker(infoGetter, &inputJob, clientset, *doWorkflowCleanup)
+	maker := batch.NewWorkflowMaker(infoGetter, &inputJob, clientset)
 	workflow, err := maker.NewWorkflow(context.Background(), &opts)
 	if err != nil {
 		log.Fatal(err)
