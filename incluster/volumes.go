@@ -230,7 +230,7 @@ func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*api
 	// stopped and restarted.
 	persistentVolumeClaim := &apiv1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: constants.LocalDirVolumeName,
+			Name: constants.WorkingDirVolumeName,
 		},
 		Spec: apiv1.PersistentVolumeClaimSpec{
 			AccessModes: []apiv1.PersistentVolumeAccessMode{
