@@ -283,9 +283,18 @@ func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*api
 // getPersistentVolumeSources returns the volumes for the VICE analysis. It does
 // not call the k8s API.
 func (i *Incluster) getPersistentVolumeSources(job *model.Job) ([]*apiv1.Volume, error) {
-	if i.UseCSIDriver {
-		volumes := []*apiv1.Volume{}
+	volumes := []*apiv1.Volume{
+		{
+			Name: constants.WorkingDirVolumeName,
+			VolumeSource: apiv1.VolumeSource{
+				PersistentVolumeClaim: &apiv1.PersistentVolumeClaimVolumeSource{
+					ClaimName: constants.WorkingDirVolumeName,
+				},
+			},
+		},
+	}
 
+	if i.UseCSIDriver {
 		dataVolume := &apiv1.Volume{
 			Name: i.getCSIDataVolumeClaimName(job),
 			VolumeSource: apiv1.VolumeSource{
@@ -296,10 +305,9 @@ func (i *Incluster) getPersistentVolumeSources(job *model.Job) ([]*apiv1.Volume,
 		}
 
 		volumes = append(volumes, dataVolume)
-		return volumes, nil
 	}
 
-	return nil, nil
+	return volumes, nil
 }
 
 // getPersistentVolumeMounts returns the volume mount for the VICE analysis. It does
