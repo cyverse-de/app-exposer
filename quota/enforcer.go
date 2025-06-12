@@ -195,6 +195,30 @@ func buildLimitError(code, msg string, defaultJobLimit, jobCount int, jobLimit *
 	}
 }
 
+func checkOverages(user string, overages *qms.OverageList) (int, error) {
+	var inOverage bool
+	code := "ERR_RESOURCE_OVERAGE"
+	details := make(map[string]interface{})
+
+	for _, ov := range overages.Overages {
+		if ov.Usage >= ov.Quota && ov.ResourceName == "cpu.hours" {
+			inOverage = true
+			details[ov.ResourceName] = fmt.Sprintf("quota: %f, usage: %f", ov.Quota, ov.Usage)
+		}
+	}
+
+	if inOverage {
+		msg := fmt.Sprintf("%s has resource overages.", user)
+		return http.StatusBadRequest, common.ErrorResponse{
+			ErrorCode: code,
+			Message:   msg,
+			Details:   &details,
+		}
+	}
+
+	return http.StatusOK, nil
+}
+
 func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int, overages *qms.OverageList) (int, error) {
 	switch {
 
@@ -223,27 +247,7 @@ func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int
 		return http.StatusBadRequest, buildLimitError(code, msg, defaultJobLimit, jobCount, jobLimit)
 
 	case overages != nil && len(overages.Overages) != 0:
-		var inOverage bool
-		code := "ERR_RESOURCE_OVERAGE"
-		details := make(map[string]interface{})
-
-		for _, ov := range overages.Overages {
-			if ov.Usage >= ov.Quota && ov.ResourceName == "cpu.hours" {
-				inOverage = true
-				details[ov.ResourceName] = fmt.Sprintf("quota: %f, usage: %f", ov.Quota, ov.Usage)
-			}
-		}
-
-		if inOverage {
-			msg := fmt.Sprintf("%s has resource overages.", user)
-			return http.StatusBadRequest, common.ErrorResponse{
-				ErrorCode: code,
-				Message:   msg,
-				Details:   &details,
-			}
-		}
-
-		return http.StatusOK, nil
+		return checkOverages(user, overages)
 
 	// In every other case, we can permit the job to be launched.
 	default:
@@ -275,4 +279,19 @@ func (e *Enforcer) ValidateJob(ctx context.Context, job *model.Job, namespace st
 	}
 
 	return validateJobLimits(user, defaultJobLimit, jobCount, jobLimit, overages)
+}
+
+func (e *Enforcer) ValidateBatchJob(ctx context.Context, job *model.Job, namespace string) (int, error) {
+	user := job.Submitter
+
+	overages, err := e.getResourceOveragesForUser(ctx, user)
+	if err != nil {
+		return http.StatusInternalServerError, errors.Wrapf(err, "unable to get list of resource overages for user %s", user)
+	}
+
+	if overages != nil && len(overages.Overages) != 0 {
+		return checkOverages(user, overages)
+	}
+
+	return http.StatusOK, nil
 }
