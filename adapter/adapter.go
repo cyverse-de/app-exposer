@@ -67,7 +67,7 @@ func (j *JEXAdapter) StopWorkflow(ctx context.Context, externalID string) error 
 
 func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysis) error {
 	log.Debug("validating analysis")
-	if status, err := j.quotaEnforcer.ValidateJob(ctx, analysis, j.Namespace); err != nil {
+	if status, err := j.quotaEnforcer.ValidateBatchJob(ctx, analysis, j.Namespace); err != nil {
 		if validationErr, ok := err.(common.ErrorResponse); ok {
 			log.Error(validationErr)
 			return validationErr
