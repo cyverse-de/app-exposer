@@ -19,6 +19,10 @@ var (
 	defaultStorageCapacity, _ = resourcev1.ParseQuantity("5Gi")
 )
 
+func persistentVolumeName(analysis *model.Analysis) string {
+	return fmt.Sprintf("%s-%s", constants.WorkingDirVolumeName, analysis.InvocationID)
+}
+
 // IRODSFSPathMapping defines a single path mapping that can be used by the iRODS CSI driver to create a mount point.
 type IRODSFSPathMapping struct {
 	IRODSPath           string `yaml:"irods_path" json:"irods_path"`
@@ -230,7 +234,7 @@ func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*api
 	// stopped and restarted.
 	persistentVolumeClaim := &apiv1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: constants.WorkingDirVolumeName,
+			Name: persistentVolumeName(job),
 		},
 		Spec: apiv1.PersistentVolumeClaimSpec{
 			AccessModes: []apiv1.PersistentVolumeAccessMode{
@@ -283,12 +287,13 @@ func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*api
 // getPersistentVolumeSources returns the volumes for the VICE analysis. It does
 // not call the k8s API.
 func (i *Incluster) getPersistentVolumeSources(job *model.Job) ([]*apiv1.Volume, error) {
+	pVolName := persistentVolumeName(job)
 	volumes := []*apiv1.Volume{
 		{
-			Name: constants.WorkingDirVolumeName,
+			Name: pVolName,
 			VolumeSource: apiv1.VolumeSource{
 				PersistentVolumeClaim: &apiv1.PersistentVolumeClaimVolumeSource{
-					ClaimName: constants.WorkingDirVolumeName,
+					ClaimName: pVolName,
 				},
 			},
 		},
@@ -317,7 +322,7 @@ func (i *Incluster) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMou
 
 	// This is the volume mount for the local persistent volume.
 	analysisDataVolumeMount := &apiv1.VolumeMount{
-		Name:      constants.WorkingDirVolumeName,
+		Name:      persistentVolumeName(job),
 		MountPath: workingDirMountPath(job),
 		ReadOnly:  false,
 	}
