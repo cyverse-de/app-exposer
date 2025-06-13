@@ -229,12 +229,18 @@ func (i *Incluster) getPersistentVolumes(ctx context.Context, job *model.Job) ([
 func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolumeClaim, error) {
 	volumeClaims := []*apiv1.PersistentVolumeClaim{}
 
+	labels, err := i.LabelsFromJob(ctx, job)
+	if err != nil {
+		return nil, err
+	}
+
 	// This is for local persistent analysis data. It should survive
 	// analysis restarts, but will get cleaned up if the analysis is
 	// stopped and restarted.
 	persistentVolumeClaim := &apiv1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: persistentVolumeName(job),
+			Name:   persistentVolumeName(job),
+			Labels: labels,
 		},
 		Spec: apiv1.PersistentVolumeClaimSpec{
 			AccessModes: []apiv1.PersistentVolumeAccessMode{
@@ -252,11 +258,6 @@ func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*api
 	volumeClaims = append(volumeClaims, persistentVolumeClaim)
 
 	if i.UseCSIDriver {
-		labels, err := i.LabelsFromJob(ctx, job)
-		if err != nil {
-			return nil, err
-		}
-
 		storageclassname := constants.CSIDriverStorageClassName
 
 		dataVolumeClaim := &apiv1.PersistentVolumeClaim{
