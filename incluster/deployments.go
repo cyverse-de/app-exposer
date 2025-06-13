@@ -135,7 +135,7 @@ func (i *Incluster) workingDirPrepContainer(job *model.Job) apiv1.Container {
 		WorkingDir:      constants.WorkingDirInitContainerMountPath,
 		VolumeMounts: []apiv1.VolumeMount{
 			{
-				Name:      constants.WorkingDirVolumeName,
+				Name:      persistentVolumeName(job),
 				MountPath: constants.WorkingDirInitContainerMountPath,
 				ReadOnly:  false,
 			},
