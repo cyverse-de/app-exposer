@@ -308,6 +308,11 @@ definitions:
       url:
         type: string
     type: object
+  httphandlers.AnalysisInClusterResponse:
+    properties:
+      found:
+        type: boolean
+    type: object
   httphandlers.AnalysisLaunch:
     properties:
       app_description:
@@ -1801,6 +1806,56 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Updates the time limit on an analysis without requiring user information
+  /vice/admin/is-deployed/analysis-id/{analysis-id}:
+    get:
+      description: Returns whether a deployment for the analysis with the provided
+        external ID is present in the cluster, regardless of its state
+      operationId: admin-analysis-in-cluster-by-id
+      parameters:
+      - description: analysis id
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httphandlers.AnalysisInClusterResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Returns whether a deployment for an analysis is in the cluster
+  /vice/admin/is-deployed/external-id/{external-id}:
+    get:
+      description: Returns whether a deployment for the analysis with the provided
+        external ID is present in the cluster, regardless of its state
+      operationId: admin-analysis-in-cluster-by-external-id
+      parameters:
+      - description: external id
+        in: path
+        name: external-id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httphandlers.AnalysisInClusterResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Returns whether a deployment for an analysis is in the cluster
   /vice/admin/listing:
     get:
       description: |-

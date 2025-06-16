@@ -377,6 +377,78 @@ const docTemplate = `{
                 }
             }
         },
+        "/vice/admin/is-deployed/analysis-id/{analysis-id}": {
+            "get": {
+                "description": "Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state",
+                "summary": "Returns whether a deployment for an analysis is in the cluster",
+                "operationId": "admin-analysis-in-cluster-by-id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "analysis id",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.AnalysisInClusterResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/is-deployed/external-id/{external-id}": {
+            "get": {
+                "description": "Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state",
+                "summary": "Returns whether a deployment for an analysis is in the cluster",
+                "operationId": "admin-analysis-in-cluster-by-external-id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "external id",
+                        "name": "external-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.AnalysisInClusterResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/admin/listing": {
             "get": {
                 "description": "Returns k8s resources in the cluster based on the filter. The query\nparameters are used as the filter and are not listed as params here.",
@@ -1740,6 +1812,14 @@ const docTemplate = `{
                 },
                 "url": {
                     "type": "string"
+                }
+            }
+        },
+        "httphandlers.AnalysisInClusterResponse": {
+            "type": "object",
+            "properties": {
+                "found": {
+                    "type": "boolean"
                 }
             }
         },

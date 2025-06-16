@@ -13,6 +13,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -509,4 +510,28 @@ func (i *Incluster) GetDeployment(ctx context.Context, job *model.Job) (*appsv1.
 	}
 
 	return deployment, nil
+}
+
+// IsAnalysisInClsuter returns true when the provided analysis already has a deplyoment
+// configured in the cluster. It may return true if the deployment is in the process of
+// being Terminated, Pending, or in a CrashLoop, so don't depend on this to tell you if
+// it's in a good state.
+func (i *Incluster) IsAnalysisInCluster(ctx context.Context, externalID string) (bool, error) {
+	var (
+		found bool
+		err   error
+	)
+	lbls := labels.Set(map[string]string{
+		"app-type":    "interactive",
+		"external-id": externalID,
+	})
+	opts := metav1.ListOptions{
+		LabelSelector: lbls.String(),
+	}
+	list, err := i.clientset.CoreV1().Pods(i.ViceNamespace).List(ctx, opts)
+	if err != nil {
+		return found, err
+	}
+	found = len(list.Items) > 0
+	return found, nil
 }

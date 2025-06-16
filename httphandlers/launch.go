@@ -14,17 +14,17 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-//	@ID				launch-app
-//	@Summary		Launch a VICE analysis
-//	@Description	The HTTP handler that orchestrates the launching of a VICE analysis inside
-//	@Description	the k8s cluster. This gets passed to the router to be associated with a route. The Job
-//	@Description	is passed in as the body of the request.
-//	@Accept			json
-//	@Param			request	body	AnalysisLaunch	true	"The request body containing the analysis details"
-//	@Success		200
-//	@Failure		400	{object}	common.ErrorResponse
-//	@Failure		500	{object}	common.ErrorResponse
-//	@Router			/vice/launch [post]
+// @ID				launch-app
+// @Summary		Launch a VICE analysis
+// @Description	The HTTP handler that orchestrates the launching of a VICE analysis inside
+// @Description	the k8s cluster. This gets passed to the router to be associated with a route. The Job
+// @Description	is passed in as the body of the request.
+// @Accept			json
+// @Param			request	body	AnalysisLaunch	true	"The request body containing the analysis details"
+// @Success		200
+// @Failure		400	{object}	common.ErrorResponse
+// @Failure		500	{object}	common.ErrorResponse
+// @Router			/vice/launch [post]
 func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	var (
 		job *model.Job
@@ -82,20 +82,20 @@ type URLReadyResponse struct {
 	Ready bool `json:"ready"`
 }
 
-//	@ID				url-ready
-//	@Summary		Check if a VICE app is ready for users to access it.
-//	@Description	Returns whether or not a VICE app is ready
-//	@Description	for users to access it. This version will check the user's permissions
-//	@Description	and return an error if they aren't allowed to access the running app.
-//	@Produce		json
-//	@Param			user	query		string	true	"A user's username"
-//	@Param			host	path		string	true	"The subdomain of the analysis. AKA the ingress name"
-//	@Success		200		{object}	URLReadyResponse
-//	@Failure		400		{object}	common.ErrorResponse
-//	@Failure		403		{object}	common.ErrorResponse
-//	@Failure		404		{object}	common.ErrorResponse
-//	@Failure		500		{object}	common.ErrorResponse
-//	@Router			/vice/{host}/url-ready [get]
+// @ID				url-ready
+// @Summary		Check if a VICE app is ready for users to access it.
+// @Description	Returns whether or not a VICE app is ready
+// @Description	for users to access it. This version will check the user's permissions
+// @Description	and return an error if they aren't allowed to access the running app.
+// @Produce		json
+// @Param			user	query		string	true	"A user's username"
+// @Param			host	path		string	true	"The subdomain of the analysis. AKA the ingress name"
+// @Success		200		{object}	URLReadyResponse
+// @Failure		400		{object}	common.ErrorResponse
+// @Failure		403		{object}	common.ErrorResponse
+// @Failure		404		{object}	common.ErrorResponse
+// @Failure		500		{object}	common.ErrorResponse
+// @Router			/vice/{host}/url-ready [get]
 func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 	var (
 		ingressExists bool
@@ -189,19 +189,19 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, data)
 }
 
-//	@ID				admin-url-ready
-//	@Summary		Checks the status of a running VICE app in K8s
-//	@Description	Handles requests to check the status of a running VICE app in K8s.
-//	@Description	This will return an overall status and status for the individual containers in
-//	@Description	the app's pod. Uses the state of the readiness checks in K8s, along with the
-//	@Description	existence of the various resources created for the app.
-//	@Produce		json
-//	@Param			host	path		string	true	"The subdomain of the analysis"
-//	@Success		200		{object}	URLReadyResponse
-//	@Failure		400		{object}	common.ErrorResponse
-//	@Failure		404		{object}	common.ErrorResponse
-//	@Failure		500		{object}	common.ErrorResponse
-//	@Router			/vice/admin/{host}/url-ready [get]
+// @ID				admin-url-ready
+// @Summary		Checks the status of a running VICE app in K8s
+// @Description	Handles requests to check the status of a running VICE app in K8s.
+// @Description	This will return an overall status and status for the individual containers in
+// @Description	the app's pod. Uses the state of the readiness checks in K8s, along with the
+// @Description	existence of the various resources created for the app.
+// @Produce		json
+// @Param			host	path		string	true	"The subdomain of the analysis"
+// @Success		200		{object}	URLReadyResponse
+// @Failure		400		{object}	common.ErrorResponse
+// @Failure		404		{object}	common.ErrorResponse
+// @Failure		500		{object}	common.ErrorResponse
+// @Router			/vice/admin/{host}/url-ready [get]
 func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 	var (
 		ingressExists bool
@@ -257,4 +257,79 @@ func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, data)
+}
+
+type AnalysisInClusterResponse struct {
+	Found bool `json:"found"`
+}
+
+// AdminAnalysisInClusterByExternalID returns whether the provided external ID is
+// associated with any Deployments in the cluster, regardless of state. Does
+// not check for any other resource types. Does not check if the requesting user
+// has access to the analysis.
+//
+//	@ID				admin-analysis-in-cluster-by-external-id
+//	@Summary		Returns whether a deployment for an analysis is in the cluster
+//	@Description	Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state
+//	@Produces		json
+//	@Param			external-id	path		string	true	"external id"
+//	@Success		200			{object}	AnalysisInClusterResponse
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Router			/vice/admin/is-deployed/external-id/{external-id} [get]
+func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error {
+	ctx := c.Request().Context()
+	externalID := c.Param("external-id")
+	if externalID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "external-id is not set")
+	}
+
+	found, err := h.incluster.IsAnalysisInCluster(ctx, externalID)
+	if err != nil {
+		return err
+	}
+	retval := AnalysisInClusterResponse{
+		Found: found,
+	}
+	return c.JSON(http.StatusOK, retval)
+}
+
+// AdminAnalysisInClusterByID returns whether the provided analysis ID is
+// associated with any Deployments in the cluster, regardless of state. Does
+// not check for any other resource types. Does not check if the requesting user
+// has access to the analysis.
+//
+//	@ID				admin-analysis-in-cluster-by-id
+//	@Summary		Returns whether a deployment for an analysis is in the cluster
+//	@Description	Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state
+//	@Produces		json
+//	@Param			analysis-id	path		string	true	"analysis id"
+//	@Success		200			{object}	AnalysisInClusterResponse
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Router			/vice/admin/is-deployed/analysis-id/{analysis-id} [get]
+func (h *HTTPHandlers) AdminAnalysisInClusterByID(c echo.Context) error {
+	var (
+		externalID string
+		analysisID string
+		found      bool
+		err        error
+	)
+	ctx := c.Request().Context()
+	analysisID = c.Param("analysis-id")
+	if analysisID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is not set")
+	}
+	externalID, err = h.incluster.GetExternalIDByAnalysisID(ctx, analysisID)
+	if err != nil {
+		return err
+	}
+	found, err = h.incluster.IsAnalysisInCluster(ctx, externalID)
+	if err != nil {
+		return err
+	}
+	retval := AnalysisInClusterResponse{
+		Found: found,
+	}
+	return c.JSON(http.StatusOK, retval)
 }
