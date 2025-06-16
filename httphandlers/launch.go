@@ -39,6 +39,16 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 		return err
 	}
 
+	found, err := h.incluster.IsAnalysisInCluster(ctx, job.InvocationID)
+	if err != nil {
+		return err
+	}
+
+	// If the deployment for this invocation ID is already in the cluster, there's nothing to do.
+	if found {
+		return c.NoContent(http.StatusOK)
+	}
+
 	if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
 		if validationErr, ok := err.(common.ErrorResponse); ok {
 			return validationErr
@@ -75,7 +85,7 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 		return err
 	}
 
-	return nil
+	return c.NoContent(http.StatusOK)
 }
 
 type URLReadyResponse struct {
