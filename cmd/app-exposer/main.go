@@ -145,6 +145,10 @@ func main() {
 
 	log := log.WithFields(logrus.Fields{"context": "main"})
 
+	if !strings.HasPrefix(*userSuffix, "@") {
+		*userSuffix = fmt.Sprintf("@%s", *userSuffix)
+	}
+
 	log.Infof("Reading config from %s", *configPath)
 	if _, err = os.Open(*configPath); err != nil {
 		log.Fatal(*configPath)
