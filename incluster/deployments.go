@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/resourcing"
@@ -119,12 +118,7 @@ func (i *Incluster) workingDirPrepContainer(job *model.Job) apiv1.Container {
 
 	// Build the command used to initialize the working directory.
 	workingDirInitCommand := []string{
-		"bash",
-		"-c",
-		strings.Join([]string{
-			fmt.Sprintf("ln -s \"%s\" \"data\"", constants.CSIDriverLocalMountPath),
-			fmt.Sprintf("ln -s \"%s/home\" .", i.getZoneMountPath()),
-		}, " && "),
+		"init_working_dir.sh",
 	}
 
 	// Build the init container spec.
