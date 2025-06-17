@@ -119,6 +119,8 @@ func (i *Incluster) workingDirPrepContainer(job *model.Job) apiv1.Container {
 	// Build the command used to initialize the working directory.
 	workingDirInitCommand := []string{
 		"init_working_dir.sh",
+		constants.CSIDriverLocalMountPath,
+		i.getZoneMountPath(),
 	}
 
 	// Build the init container spec.
