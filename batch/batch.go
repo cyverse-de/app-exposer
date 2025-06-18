@@ -12,6 +12,7 @@ import (
 	"github.com/argoproj/argo-workflows/v3/cmd/argo/commands/client"
 	workflowpkg "github.com/argoproj/argo-workflows/v3/pkg/apiclient/workflow"
 	v1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/resourcing"
 	"github.com/cyverse-de/model/v7"
@@ -753,9 +754,10 @@ func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOp
 			GenerateName: "batch-analysis-", // TODO: Make this configurable
 			Namespace:    "argo",
 			Labels: map[string]string{
-				"job-uuid":    w.analysis.InvocationID,
-				"external-id": w.analysis.InvocationID,
-				"username":    w.analysis.Submitter,
+				constants.LabelKeyJobUUID:    w.analysis.InvocationID,
+				constants.LabelKeyExternalID: w.analysis.InvocationID,
+				constants.LabelKeyUsername:   w.analysis.Submitter,
+				constants.LabelKeyAppType:    constants.LabelValueBatch,
 			},
 		},
 		Spec: v1alpha1.WorkflowSpec{
