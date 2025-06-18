@@ -423,6 +423,11 @@ definitions:
       wiki_url:
         type: string
     type: object
+  httphandlers.AnalysisStatus:
+    properties:
+      status:
+        type: string
+    type: object
   httphandlers.AsyncData:
     properties:
       analysisID:
@@ -1216,6 +1221,54 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Stop a batch analysis by its external UUID
+  /info/analysis/status/by/analysis-id/{analysis-id}:
+    get:
+      description: Returns the status of an analysis identified by its analysis ID.
+      operationId: analysis-status-by-analysis-id
+      parameters:
+      - description: analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httphandlers.AnalysisStatus'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Returns the status of an analysis
+  /info/analysis/status/by/external-id/{external-id}:
+    get:
+      description: Returns the status of an analysis identified by its external ID.
+      operationId: analysis-status-by-external-id
+      parameters:
+      - description: external ID
+        in: path
+        name: external-id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httphandlers.AnalysisStatus'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Returns the status of an analysis
   /vice/{analysis-id}/logs:
     get:
       description: |-

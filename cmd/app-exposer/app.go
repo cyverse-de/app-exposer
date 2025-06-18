@@ -173,6 +173,11 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	batchGroup.POST("/cleanup", app.handlers.BatchStopByUUID)
 	batchGroup.DELETE("/stop/:id", app.handlers.BatchStopHandler)
 
+	info := app.router.Group("/info")
+	info.Use(middleware.Logger())
+	info.GET("/analysis/status/by/external-id/:external-id", app.handlers.AnalysisStatusByExternalID)
+	info.GET("/analysis/status/by/analysis-id/:analysis-id", app.handlers.AnalysisStatusByAnalysisID)
+
 	vice := app.router.Group("/vice")
 	vice.Use(middleware.Logger())
 	vice.POST("/launch", app.handlers.LaunchAppHandler)

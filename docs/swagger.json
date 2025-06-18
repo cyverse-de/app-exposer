@@ -119,6 +119,78 @@
                 }
             }
         },
+        "/info/analysis/status/by/analysis-id/{analysis-id}": {
+            "get": {
+                "description": "Returns the status of an analysis identified by its analysis ID.",
+                "summary": "Returns the status of an analysis",
+                "operationId": "analysis-status-by-analysis-id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.AnalysisStatus"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/info/analysis/status/by/external-id/{external-id}": {
+            "get": {
+                "description": "Returns the status of an analysis identified by its external ID.",
+                "summary": "Returns the status of an analysis",
+                "operationId": "analysis-status-by-external-id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "external ID",
+                        "name": "external-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.AnalysisStatus"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/admin/analyses/{analysis-id}/download-input-files": {
             "post": {
                 "description": "Handles requests to trigger file downloads\nwithout requiring user information in the request and also operates from\nthe analysis UUID rather than the external ID. For use with tools that\nrequire the caller to have administrative privileges.",
@@ -1974,6 +2046,14 @@
                     "type": "string"
                 },
                 "wiki_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "httphandlers.AnalysisStatus": {
+            "type": "object",
+            "properties": {
+                "status": {
                     "type": "string"
                 }
             }
