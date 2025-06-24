@@ -18,6 +18,8 @@ import (
 	"github.com/cyverse-de/app-exposer/httphandlers"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 )
 
 func analysisStatus(appExposerURL, externalID string) (constants.AnalysisStatus, error) {
@@ -128,16 +130,18 @@ func main() {
 	wfClientSet := wfclientset.NewForConfigOrDie(config)
 	wfAPI := wfClientSet.ArgoprojV1alpha1().Workflows(*namespace)
 
-	// listReqs, err := labels.NewRequirement(
-	// 	constants.LabelKeyAppType,
-	// 	selection.Equals,
-	// 	[]string{constants.LabelValueBatch},
-	// )
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	listReqs, err := labels.NewRequirement(
+		constants.LabelKeyAppType,
+		selection.Equals,
+		[]string{constants.LabelValueBatch},
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	wfList, err := wfAPI.List(ctx, v1.ListOptions{})
+	wfList, err := wfAPI.List(ctx, v1.ListOptions{
+		LabelSelector: listReqs.String(),
+	})
 
 	for _, wf := range wfList.Items {
 		fmt.Printf("%s\t%s\n", wf.Status.Phase, wf.Name)
