@@ -138,6 +138,27 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: listen-port
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: workflow-cleanup
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      concurrencyPolicy: Forbid
+      successfulJobHistoryLimit: 3
+      failedJobHistoryLimit: 5
+      template:
+        spec:
+          containers:
+            - name: workflow-cleanup
+              image: harbor.cyverse.org/de/app-exposer
+              imagePullPolicy: IfNotPresent
+              command:
+                - workflow-cleanup
+          restartPolicy: OnFailure
 # ---
 # apiVersion: batch/v1beta1
 # kind: CronJob
