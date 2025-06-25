@@ -145,19 +145,23 @@ metadata:
   name: workflow-cleanup
 spec:
   schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
   jobTemplate:
     spec:
-      concurrencyPolicy: Forbid
-      successfulJobHistoryLimit: 3
-      failedJobHistoryLimit: 5
       template:
         spec:
+          serviceAccountName: app-exposer
           containers:
             - name: workflow-cleanup
               image: harbor.cyverse.org/de/app-exposer
               imagePullPolicy: IfNotPresent
               command:
                 - workflow-cleanup
+              env:
+                - name: CLUSTER
+                  value: "1"
           restartPolicy: OnFailure
 # ---
 # apiVersion: batch/v1beta1

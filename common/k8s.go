@@ -16,6 +16,10 @@ import (
 func KubeConfig() *string {
 	var kubeconfig *string
 
+	if cluster := os.Getenv("CLUSTER"); cluster != "" {
+		return flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	}
+
 	// Prefer the value in the KUBECONFIG env var.
 	// If the value is not set, then check for the HOME directory.
 	// If that is not set, then require the user to specify a path.
@@ -38,18 +42,21 @@ func RESTConfig(kubeconfig string) (*rest.Config, error) {
 		err    error
 		config *rest.Config
 	)
-	if kubeconfig != "" {
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			err = errors.Wrapf(err, "error building config from flags using kubeconfig %s", kubeconfig)
-		}
-	} else {
-		// If the home directory doesn't exist and the user doesn't specify a path,
-		// then assume that we're running inside a cluster.
+
+	if cluster := os.Getenv("CLUSTER"); cluster != "" {
 		config, err = rest.InClusterConfig()
 		if err != nil {
 			err = errors.Wrapf(err, "error loading the config inside the cluster")
 		}
+	} else {
+		if kubeconfig == "" {
+			return nil, errors.New("either --kubeconfig or CLUSTER=1 must be set")
+		}
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			err = errors.Wrapf(err, "error building config from flags using kubeconfig %s", kubeconfig)
+		}
 	}
+
 	return config, err
 }

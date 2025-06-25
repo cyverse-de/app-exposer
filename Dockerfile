@@ -15,6 +15,7 @@ ENV GOARCH=amd64
 
 RUN just app-exposer
 RUN cp ./bin/app-exposer /bin/app-exposer
+RUN cp ./bin/workflow-cleanup /bin/workflow-cleanup
 
 COPY --from=swagger /usr/bin/swagger /usr/bin/
 RUN swagger generate spec -o ./docs/swagger.json --scan-models
