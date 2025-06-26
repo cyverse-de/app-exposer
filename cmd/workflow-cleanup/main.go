@@ -148,34 +148,34 @@ func main() {
 
 		// If the workflow is completed, make sure the status in the DE matches.
 		if wf.Status.Phase.Completed() {
-			log.Printf("%s is Completed according to Argo\n", wf.Name)
+			log.Printf("\t%s is Completed according to Argo\n", wf.Name)
 
 			externalID := wf.ObjectMeta.Labels[constants.LabelKeyExternalID]
-			log.Printf("%s has an external ID of %s\n", wf.Name, externalID)
+			log.Printf("\t%s has an external ID of %s\n", wf.Name, externalID)
 
 			status, err := analysisStatus(*appExposerURL, externalID)
 			if err != nil {
-				log.Printf("%s\n", err)
+				log.Printf("\t%s\n", err)
 				continue
 			}
-			log.Printf("%s has a DE status of %s\n", wf.Name, status)
+			log.Printf("\t%s has a DE status of %s\n", wf.Name, status)
 
 			translatedStatus := workflowStatusToDEStatus(wf.Status.Phase)
 
 			if status != translatedStatus {
-				log.Printf("%s has a DE status of %s and it should be %s. Fixing...\n", wf.Name, status, translatedStatus)
+				log.Printf("\t%s has a DE status of %s and it should be %s. Fixing...\n", wf.Name, status, translatedStatus)
 				if err = sendStatus(*setStatusURL, externalID, "setting status from workflow-cleanup", translatedStatus); err != nil {
-					log.Printf("%s\n", err)
+					log.Printf("\t%s\n", err)
 					continue
 				}
-				log.Printf("Done fixing the DE status for %s to %s\n", wf.Name, translatedStatus)
+				log.Printf("\tDone fixing the DE status for %s to %s\n", wf.Name, translatedStatus)
 			} else {
-				log.Printf("%s has matching statuses in the DE and Argo, sending clean up request...\n", wf.Name)
+				log.Printf("\t%s has matching statuses in the DE and Argo, sending clean up request...\n", wf.Name)
 				if err = sendCleanupMessage(*cleanUpURL, externalID); err != nil {
-					log.Printf("%s\n", err)
+					log.Printf("\t%s\n", err)
 					continue
 				}
-				log.Printf("Successfully sent a clean up request for %s\n", wf.Name)
+				log.Printf("\tSuccessfully sent a clean up request for %s\n", wf.Name)
 			}
 		}
 	}
