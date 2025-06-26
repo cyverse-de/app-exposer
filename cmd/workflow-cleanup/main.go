@@ -144,38 +144,38 @@ func main() {
 	})
 
 	for _, wf := range wfList.Items {
-		fmt.Printf("%s\t%s\n", wf.Status.Phase, wf.Name)
+		log.Printf("%s\t%s\n", wf.Status.Phase, wf.Name)
 
 		// If the workflow is completed, make sure the status in the DE matches.
 		if wf.Status.Phase.Completed() {
-			fmt.Printf("%s is Completed according to Argo\n", wf.Name)
+			log.Printf("%s is Completed according to Argo\n", wf.Name)
 
 			externalID := wf.ObjectMeta.Labels[constants.LabelKeyExternalID]
-			fmt.Printf("%s has an external ID of %s\n", wf.Name, externalID)
+			log.Printf("%s has an external ID of %s\n", wf.Name, externalID)
 
 			status, err := analysisStatus(*appExposerURL, externalID)
 			if err != nil {
 				log.Printf("%s\n", err)
 				continue
 			}
-			fmt.Printf("%s has a DE status of %s\n", wf.Name, status)
+			log.Printf("%s has a DE status of %s\n", wf.Name, status)
 
 			translatedStatus := workflowStatusToDEStatus(wf.Status.Phase)
 
 			if status != translatedStatus {
-				fmt.Printf("%s has a DE status of %s and it should be %s. Fixing...\n", wf.Name, status, translatedStatus)
+				log.Printf("%s has a DE status of %s and it should be %s. Fixing...\n", wf.Name, status, translatedStatus)
 				if err = sendStatus(*setStatusURL, externalID, "setting status from workflow-cleanup", translatedStatus); err != nil {
 					log.Printf("%s\n", err)
 					continue
 				}
-				fmt.Printf("Done fixing the DE status for %s to %s\n", wf.Name, translatedStatus)
+				log.Printf("Done fixing the DE status for %s to %s\n", wf.Name, translatedStatus)
 			} else {
-				fmt.Printf("%s has matching statuses in the DE and Argo, sending clean up request...\n", wf.Name)
+				log.Printf("%s has matching statuses in the DE and Argo, sending clean up request...\n", wf.Name)
 				if err = sendCleanupMessage(*cleanUpURL, externalID); err != nil {
 					log.Printf("%s\n", err)
 					continue
 				}
-				fmt.Printf("Successfully sent a clean up request for %s\n", wf.Name)
+				log.Printf("Successfully sent a clean up request for %s\n", wf.Name)
 			}
 		}
 	}
