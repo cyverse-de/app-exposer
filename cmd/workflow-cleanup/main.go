@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	wfclientset "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
@@ -116,10 +117,10 @@ func main() {
 		namespace     = flag.String("namespace", "argo", "The namespace to use when looking up workflows")
 		appExposerURL = flag.String("app-exposer-url", "http://app-exposer", "The URL to use when connecting to app-exposer")
 		setStatusURL  = flag.String("set-status-url", "http://webhook-eventsource-svc.argo-events/batch", "The URL to use when updating the status")
+		kubeconfig    = flag.String("kubeconfig", os.Getenv("KUBECONFIG"), "absolute path to the kubeconfig file")
 	)
 
 	ctx := context.Background()
-	kubeconfig := common.KubeConfig()
 	flag.Parse()
 
 	config, err := common.RESTConfig(*kubeconfig)

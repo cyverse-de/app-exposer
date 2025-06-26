@@ -65,11 +65,11 @@ func main() {
 	log.Logger.SetReportCaller(true)
 
 	var (
-		err        error
-		kubeconfig *string
-		c          *koanf.Koanf
-		dbconn     *sqlx.DB
+		err    error
+		c      *koanf.Koanf
+		dbconn *sqlx.DB
 
+		kubeconfig = flag.String("kubeconfig", os.Getenv("KUBECONFIG"), "absolute path to the kubeconfig file")
 		configPath = flag.String("config", cfg.DefaultConfigPath, "Path to the config file")
 		dotEnvPath = flag.String("dotenv-path", cfg.DefaultDotEnvPath, "Path to the dotenv file")
 		tlsCert    = flag.String("tlscert", gotelnats.DefaultTLSCertPath, "Path to the NATS TLS cert file")
@@ -120,8 +120,6 @@ func main() {
 	defer cancel()
 	shutdown := otelutils.TracerProviderFromEnv(tracerCtx, serviceName, func(e error) { log.Fatal(e) })
 	defer shutdown()
-
-	kubeconfig = common.KubeConfig()
 
 	flag.Parse()
 	logging.SetupLogging(*logLevel)

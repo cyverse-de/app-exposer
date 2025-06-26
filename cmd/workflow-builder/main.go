@@ -18,9 +18,8 @@ import (
 
 func main() {
 	var (
-		err        error
-		kubeconfig *string
-		inputJob   model.Job
+		err      error
+		inputJob model.Job
 
 		job                = flag.String("job", "", "The file containing the job definition. Required.")
 		transferImage      = flag.String("transfer-image", "harbor.cyverse.org/de/gocmd:latest", "(optional) Image used to transfer files to/from the data store")
@@ -34,9 +33,8 @@ func main() {
 		harborURL          = flag.String("harbor-url", "https://harbor.cyverse.org/api/v2.0/", "The base URL for the harbor instance")
 		harborUser         = flag.String("harbor-user", "", "The user for harbor lookups.")
 		harborPass         = flag.String("harbor-pass", "", "The password for the harbor user.")
+		kubeconfig         = flag.String("kubeconfig", os.Getenv("KUBECONFIG"), "absolute path to the kubeconfig file")
 	)
-
-	kubeconfig = common.KubeConfig()
 
 	flag.Parse()
 
