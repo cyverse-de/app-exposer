@@ -1,6 +1,8 @@
 package httphandlers
 
 import (
+	"database/sql"
+	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -18,6 +20,7 @@ type AnalysisStatus struct {
 //	@Param			external-id	path		string	true	"external ID"
 //	@Success		200			{object}	AnalysisStatus
 //	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		404			{object}	common.ErrorResponse
 //	@Failure		500			{object}	common.ErrorResponse
 //	@Router			/info/analysis/status/by/external-id/{external-id} [get]
 func (h *HTTPHandlers) AnalysisStatusByExternalID(c echo.Context) error {
@@ -30,6 +33,9 @@ func (h *HTTPHandlers) AnalysisStatusByExternalID(c echo.Context) error {
 
 	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("analysis ID for external ID %s not found", externalID))
+		}
 		return err
 	}
 
@@ -51,6 +57,7 @@ func (h *HTTPHandlers) AnalysisStatusByExternalID(c echo.Context) error {
 //	@Param			analysis-id	path		string	true	"analysis ID"
 //	@Success		200			{object}	AnalysisStatus
 //	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		404			{object}	common.ErrorResponse
 //	@Failure		500			{object}	common.ErrorResponse
 //	@Router			/info/analysis/status/by/analysis-id/{analysis-id} [get]
 func (h *HTTPHandlers) AnalysisStatusByAnalysisID(c echo.Context) error {
@@ -63,6 +70,9 @@ func (h *HTTPHandlers) AnalysisStatusByAnalysisID(c echo.Context) error {
 
 	status, err := h.apps.GetAnalysisStatus(ctx, analysisID)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no status found for analysis ID %s", analysisID))
+		}
 		return err
 	}
 
