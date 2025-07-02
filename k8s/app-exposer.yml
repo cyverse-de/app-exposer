@@ -73,8 +73,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: CLUSTER
-              value: "1"
             - name: USER_SUFFIX
               valueFrom:
                 secretKeyRef:
@@ -138,23 +136,25 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: listen-port
-# ---
-# apiVersion: batch/v1beta1
-# kind: CronJob
-# metadata:
-#   name: app-exposer-curl
-# spec:
-#   schedule: "*/1 * * * *"
-#   jobTemplate:
-#     spec:
-#       template:
-#         spec:
-#           containers:
-#           - name: app-exposer-curl
-#             image: curlimages/curl:7.69.1
-#             args:
-#             - -L
-#             - -X
-#             - POST
-#             - http://app-exposer/vice/apply-labels
-#           restartPolicy: OnFailure
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: workflow-cleanup
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: app-exposer
+          containers:
+            - name: workflow-cleanup
+              image: harbor.cyverse.org/de/app-exposer
+              imagePullPolicy: IfNotPresent
+              command:
+                - workflow-cleanup
+          restartPolicy: OnFailure
