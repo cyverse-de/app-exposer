@@ -224,6 +224,20 @@ func (i *Incluster) getPersistentVolumes(ctx context.Context, job *model.Job) ([
 	return nil, nil
 }
 
+// getPersistentVolumeCapacity returns the desired capacity of the local persistent volume for a job.
+func (i *Incluster) getPersistentVolumeCapacity(job *model.Job) resourcev1.Quantity {
+
+	// Get the maximum requested disk space.
+	var capacityToRequest int64 = defaultStorageCapacity.Value()
+	for _, step := range job.Steps {
+		if step.Component.Container.MinDiskSpace > capacityToRequest {
+			capacityToRequest = step.Component.Container.MinDiskSpace
+		}
+	}
+
+	return *resourcev1.NewQuantity(capacityToRequest, resourcev1.BinarySI)
+}
+
 // getVolumeClaims returns the volume claims needed for the VICE analysis. It does
 // not call the k8s API.
 func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolumeClaim, error) {
@@ -249,7 +263,7 @@ func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*api
 			StorageClassName: &i.LocalStorageClass,
 			Resources: apiv1.VolumeResourceRequirements{
 				Requests: apiv1.ResourceList{
-					apiv1.ResourceStorage: defaultStorageCapacity,
+					apiv1.ResourceStorage: i.getPersistentVolumeCapacity(job),
 				},
 			},
 		},
