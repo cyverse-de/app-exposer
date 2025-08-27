@@ -78,3 +78,29 @@ func TestPersistentVolumeCapacity(t *testing.T) {
 		})
 	}
 }
+
+func TestPersistentVolumeDisplay(t *testing.T) {
+	i := newIncluster()
+
+	// Build the list of test cases.
+	var testCases = []struct {
+		capacities  []int64
+		expected    string
+		description string
+	}{
+		{[]int64{0}, "5Gi", "no capacity specified"},
+		{[]int64{10 * gib, 20 * gib}, "20Gi", "highest capacity greater than default"},
+		{[]int64{32 * gib}, "32Gi", "highest capacity equal to 32 gib"},
+		{[]int64{64 * gib}, "64Gi", "highest capacity greater than 32 gib"},
+		{[]int64{4096 * gib, 5 * gib}, "4Ti", "highest capacity of 4 tib"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.description, func(t *testing.T) {
+			job := jobWithDiskRequirements(testCase.capacities...)
+			capacity := i.getPersistentVolumeCapacity(job)
+			actual := capacity.String()
+			assert.Equal(t, testCase.expected, actual)
+		})
+	}
+}
