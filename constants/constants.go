@@ -71,6 +71,18 @@ const (
 	ShmDevice = "/dev/shm"
 )
 
+const (
+	// Common label Keys
+	LabelKeyJobUUID    = "job-uuid"
+	LabelKeyExternalID = "external-id"
+	LabelKeyUsername   = "username"
+	LabelKeyAppType    = "app-type"
+
+	// Common label values
+	LabelValueBatch       = "batch"
+	LabelValueInteractive = "interactive"
+)
+
 type AnalysisStatus string
 
 const (

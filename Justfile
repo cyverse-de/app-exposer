@@ -1,12 +1,15 @@
 default: build
 
-build: docs app-exposer workflow-builder
+build: docs app-exposer workflow-builder workflow-cleanup
 
 app-exposer:
     go build -o bin/app-exposer cmd/app-exposer/*.go
 
 workflow-builder:
     go build -o bin/workflow-builder cmd/workflow-builder/*.go
+
+workflow-cleanup:
+    go build -o bin/workflow-cleanup cmd/workflow-cleanup/*.go
 
 test-imageinfo:
     go test ./imageinfo
@@ -30,4 +33,7 @@ clean:
     fi
     if [ -f bin/workflow-builder ]; then
         rm bin/workflow-builder
+    fi
+    if [ -f bin/workflow-cleanup ]; then
+        rm bin/workflow-cleanup
     fi
