@@ -82,7 +82,10 @@ func (i *Incluster) getIngress(ctx context.Context, job *model.Job, svc *apiv1.S
 	})
 
 	annotations := map[string]string{
-		"nginx.ingress.kubernetes.io/proxy-body-size": "4096m",
+		"nginx.ingress.kubernetes.io/proxy-body-size":       "4096m",
+		"nginx.ingress.kubernetes.io/proxy-read-timeout":    "48h",  // Insane, but might cut down on support requests
+		"nginx.ingress.kubernetes.io/proxy-send-timeout":    "48h",  // Also insane.
+		"nginx.ingress.kubernetes.io/proxy-connect-timeout": "5000", // Slightly less insane.
 	}
 
 	return &netv1.Ingress{
