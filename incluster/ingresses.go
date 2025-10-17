@@ -83,9 +83,19 @@ func (i *Incluster) getIngress(ctx context.Context, job *model.Job, svc *apiv1.S
 
 	annotations := map[string]string{
 		"nginx.ingress.kubernetes.io/proxy-body-size":       "4096m",
-		"nginx.ingress.kubernetes.io/proxy-read-timeout":    "48h",  // Insane, but might cut down on support requests
-		"nginx.ingress.kubernetes.io/proxy-send-timeout":    "48h",  // Also insane.
-		"nginx.ingress.kubernetes.io/proxy-connect-timeout": "5000", // Slightly less insane.
+		"nginx.ingress.kubernetes.io/proxy-read-timeout":    "172800", // Insane, but might cut down on support requests
+		"nginx.ingress.kubernetes.io/proxy-send-timeout":    "172800", // Also insane.
+		"nginx.ingress.kubernetes.io/proxy-connect-timeout": "5000",   // Slightly less insane.
+		"nginx.ingress.kubernetes.io/server-snippets": `location / {
+	proxy_set_header Upgrade $http_upgrade;
+	proxy_http_version 1.1;
+	proxy_set_header X-Forwarded-Host $http_host;
+	proxy_set_header X-Forwarded-Proto $scheme;
+	proxy_set_header X-Forwarded-For $remote_addr;
+	proxy_set_header Host $host;
+	proxy_set_header Connection "upgrade";
+	proxy_cache_bypass $http_upgrade;
+}`,
 	}
 
 	return &netv1.Ingress{
