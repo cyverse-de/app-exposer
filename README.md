@@ -47,6 +47,14 @@ Run:
 
 For configuration, use `example-config.yml` as a reference. You'll need to either port-forward to or run `job-status-listener` locally and reference the correct port in the config.
 
+## Command-Line Flags
+
+### Authentication Control
+
+`--disable-vice-proxy-auth` (default: `false`)
+
+Disables authentication in the vice-proxy sidecar containers for VICE applications. When set to `true`, the `--disable-auth` flag is passed to vice-proxy, allowing unauthenticated access to VICE applications. This is intended for development, testing, or scenarios where authentication is handled elsewhere. In production environments, this should remain `false` (the default) to enforce authentication via Keycloak.
+
 ## Initializing the Swagger docs with `swag`
 
 The command used to initialize the `./docs` directory with the `swag` tool was

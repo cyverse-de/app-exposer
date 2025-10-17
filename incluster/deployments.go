@@ -62,6 +62,11 @@ func (i *Incluster) viceProxyCommand(job *model.Job) []string {
 		"--keycloak-client-secret", i.KeycloakClientSecret,
 	}
 
+	// Conditionally add --disable-auth flag when authentication is disabled
+	if i.DisableViceProxyAuth {
+		output = append(output, "--disable-auth")
+	}
+
 	return output
 }
 

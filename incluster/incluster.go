@@ -58,6 +58,7 @@ type Init struct {
 	IRODSZone                     string
 	IngressClass                  string
 	LocalStorageClass             string
+	DisableViceProxyAuth          bool
 	NATSEncodedConn               *nats.EncodedConn
 }
 

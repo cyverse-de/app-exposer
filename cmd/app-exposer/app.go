@@ -55,6 +55,7 @@ type ExposerAppInit struct {
 	batchadapter                  *adapter.JEXAdapter
 	ImagePullSecretName           string
 	LocalStorageClass             string
+	DisableViceProxyAuth          bool
 }
 
 //	@title			app-exposer
@@ -114,6 +115,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		KeycloakClientSecret:          c.String("keycloak.client-secret"),
 		IRODSZone:                     init.IRODSZone,
 		IngressClass:                  init.IngressClass,
+		DisableViceProxyAuth:          init.DisableViceProxyAuth,
 		NATSEncodedConn:               conn,
 		LocalStorageClass:             init.LocalStorageClass,
 	}

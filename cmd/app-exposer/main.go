@@ -117,6 +117,7 @@ func main() {
 		disableViceProxyStorageResourceLimit = flag.Bool("disable-vice-proxy-storage-resource-limit", true, "Disable storage resource limit for the vice proxy.")
 		logLevel                             = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
 		batchExitHandlerImage                = flag.String("batch-exit-handler-image", "harbor.cyverse.org/de/batch-exit-handler:latest", "The image to use for the exitHandler in batch workflows")
+		disableViceProxyAuth                 = flag.Bool("disable-vice-proxy-auth", false, "Disable authentication in the vice-proxy sidecar. When true, allows unauthenticated access to VICE applications.")
 	)
 
 	var tracerCtx, cancel = context.WithCancel(context.Background())
@@ -354,6 +355,7 @@ func main() {
 		batchadapter:                  jexAdapter,
 		ImagePullSecretName:           imagePullSecretName,
 		LocalStorageClass:             *localStorageClass,
+		DisableViceProxyAuth:          *disableViceProxyAuth,
 	}
 
 	// app is the base app-exposer functionality.
