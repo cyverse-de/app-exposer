@@ -1,4 +1,4 @@
-//nolint
+// nolint
 package instantlaunches
 
 import (
@@ -59,7 +59,7 @@ func TestAddInstantLaunchHandler(t *testing.T) {
 
 	mock.ExpectQuery("INSERT INTO instant_launches").WillReturnRows(rows)
 
-	req := httptest.NewRequest("PUT", "http://localhost/instantlaunches", bytes.NewReader(v))
+	req := httptest.NewRequest("PUT", "http://localhost/instantlaunches?user=test", bytes.NewReader(v))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -186,9 +186,13 @@ func TestUpdateInstantLaunchHandler(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{"id", "quick_launch_id", "added_by", "added_on"}).
 		AddRow("0", "0", "test@iplantcollaborative.org", "today")
+	rows2 := sqlmock.NewRows([]string{"id", "quick_launch_id", "added_by", "added_on"}).
+		AddRow("0", "0", "test@iplantcollaborative.org", "today")
 
-	mock.ExpectQuery("UPDATE ONLY instant_launches").
+	mock.ExpectQuery("SELECT i.id, i.quick_launch_id, i.added_by, i.added_on FROM instant_launches i").
 		WillReturnRows(rows)
+	mock.ExpectQuery("UPDATE ONLY instant_launches").
+		WillReturnRows(rows2)
 
 	expected := &InstantLaunch{
 		QuickLaunchID: "0",
@@ -198,7 +202,7 @@ func TestUpdateInstantLaunchHandler(t *testing.T) {
 	v, err := json.Marshal(expected)
 	assert.NoError(err, "should not error")
 
-	req := httptest.NewRequest("POST", "http://localhost/instantlaunches/0", bytes.NewReader(v))
+	req := httptest.NewRequest("POST", "http://localhost/instantlaunches/0?user=test", bytes.NewReader(v))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -247,10 +251,14 @@ func TestDeleteInstantLaunchHandler(t *testing.T) {
 	}
 	defer app.DB.Close()
 
+	rows := sqlmock.NewRows([]string{"id", "quick_launch_id", "added_by", "added_on"}).
+		AddRow("0", "0", "test@iplantcollaborative.org", "today")
+	mock.ExpectQuery("SELECT i.id, i.quick_launch_id, i.added_by, i.added_on FROM instant_launches i").
+		WillReturnRows(rows)
 	mock.ExpectExec("DELETE FROM instant_launches").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	req := httptest.NewRequest("DELETE", "http://localhost/instantlaunches/0", nil)
+	req := httptest.NewRequest("DELETE", "http://localhost/instantlaunches/0?user=test", nil)
 	rec := httptest.NewRecorder()
 
 	c := router.NewContext(req, rec)
