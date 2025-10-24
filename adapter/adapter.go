@@ -65,17 +65,21 @@ func (j *JEXAdapter) StopWorkflow(ctx context.Context, externalID string) error 
 	return nil
 }
 
-func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysis) error {
-	log.Debug("validating analysis")
-	if status, err := j.quotaEnforcer.ValidateBatchJob(ctx, analysis, j.Namespace); err != nil {
-		if validationErr, ok := err.(common.ErrorResponse); ok {
-			log.Error(validationErr)
-			return validationErr
+func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysis, disableTracking bool) error {
+	if !disableTracking {
+		log.Debug("validating analysis")
+		if status, err := j.quotaEnforcer.ValidateBatchJob(ctx, analysis, j.Namespace); err != nil {
+			if validationErr, ok := err.(common.ErrorResponse); ok {
+				log.Error(validationErr)
+				return validationErr
+			}
+			log.Error(err)
+			return echo.NewHTTPError(status, err.Error())
 		}
-		log.Error(err)
-		return echo.NewHTTPError(status, err.Error())
+		log.Debug("done validating analysis")
+	} else {
+		log.Info("Resource tracking disabled for batch job, skipping validation")
 	}
-	log.Debug("done validating analysis")
 
 	log = log.WithFields(logrus.Fields{
 		"external_id": analysis.InvocationID,
