@@ -79,7 +79,18 @@ components:
       description: The username of the user that launched the analysis.
       schema:
         type: string
-  
+
+    disableResourceTracking:
+      name: disable-resource-tracking
+      in: query
+      required: false
+      description: >
+        When set to true, bypasses resource quota and concurrent job limit enforcement.
+        Intended for service-to-service calls only. Defaults to false.
+      schema:
+        type: boolean
+        default: false
+
   responses:
     InternalError:
       description: An internal error occurred.
