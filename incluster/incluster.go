@@ -545,6 +545,10 @@ func (i *Incluster) UpdateTimeLimit(ctx context.Context, user, id string) (*Time
 	return retval, nil
 }
 
-func (i *Incluster) ValidateJob(ctx context.Context, job *model.Job) (int, error) {
+func (i *Incluster) ValidateJob(ctx context.Context, job *model.Job, disableTracking bool) (int, error) {
+	if disableTracking {
+		log.Info("Resource tracking disabled for job, skipping validation")
+		return http.StatusOK, nil
+	}
 	return i.quotaEnforcer.ValidateJob(ctx, job, i.ViceNamespace)
 }
