@@ -20,7 +20,8 @@ import (
 // @Description	the k8s cluster. This gets passed to the router to be associated with a route. The Job
 // @Description	is passed in as the body of the request.
 // @Accept			json
-// @Param			request	body	AnalysisLaunch	true	"The request body containing the analysis details"
+// @Param			request						body	AnalysisLaunch	true	"The request body containing the analysis details"
+// @Param			disable-resource-tracking	query	boolean			false	"Bypass resource tracking"	default(false)
 // @Success		200
 // @Failure		400	{object}	common.ErrorResponse
 // @Failure		500	{object}	common.ErrorResponse
@@ -49,7 +50,13 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 		return c.NoContent(http.StatusOK)
 	}
 
-	if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
+	// Parse disable-resource-tracking query parameter
+	disableTracking := false
+	if c.QueryParam("disable-resource-tracking") == "true" {
+		disableTracking = true
+	}
+
+	if status, err := h.incluster.ValidateJob(ctx, job, disableTracking); err != nil {
 		if validationErr, ok := err.(common.ErrorResponse); ok {
 			return validationErr
 		}

@@ -85,7 +85,8 @@ func (h *HTTPHandlers) BatchStopHandler(c echo.Context) error {
 // @ID				batch-launch
 // @Summary		Launch a batch analysis
 // @Description	Launch a batch analysis
-// @Param			request	body	AnalysisLaunch	true	"Analysis Definition"
+// @Param			request						body	AnalysisLaunch	true	"Analysis Definition"
+// @Param			disable-resource-tracking	query	boolean			false	"Bypass resource tracking"	default(false)
 // @Success		200
 // @Failure		400	{object}	common.ErrorResponse
 // @Failure		500	{object}	common.ErrorResponse
@@ -117,7 +118,13 @@ func (h *HTTPHandlers) BatchLaunchHandler(c echo.Context) error {
 	}
 	log.Debug("done parsing request body JSON")
 
-	if err = h.batchadapter.LaunchWorkflow(ctx, analysis); err != nil {
+	// Parse disable-resource-tracking query parameter
+	disableTracking := false
+	if c.QueryParam("disable-resource-tracking") == "true" {
+		disableTracking = true
+	}
+
+	if err = h.batchadapter.LaunchWorkflow(ctx, analysis, disableTracking); err != nil {
 		log.Error(err)
 		return err
 	}
