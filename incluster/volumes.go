@@ -9,7 +9,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/resourcing"
-	"github.com/cyverse-de/model/v7"
+	"github.com/cyverse-de/model/v9"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

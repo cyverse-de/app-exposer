@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/cyverse-de/model/v7"
+	"github.com/cyverse-de/model/v9"
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"

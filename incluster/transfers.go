@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/cyverse-de/app-exposer/constants"
-	"github.com/cyverse-de/model/v7"
+	"github.com/cyverse-de/model/v9"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
