@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -34,8 +33,6 @@ import (
 	"github.com/pkg/errors"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog" // pull in to set klog output to stderr
 
 	"github.com/uptrace/opentelemetry-go-extra/otelsql"
@@ -68,11 +65,11 @@ func main() {
 	log.Logger.SetReportCaller(true)
 
 	var (
-		err        error
-		kubeconfig *string
-		c          *koanf.Koanf
-		dbconn     *sqlx.DB
+		err    error
+		c      *koanf.Koanf
+		dbconn *sqlx.DB
 
+		kubeconfig = flag.String("kubeconfig", os.Getenv("KUBECONFIG"), "absolute path to the kubeconfig file")
 		configPath = flag.String("config", cfg.DefaultConfigPath, "Path to the config file")
 		dotEnvPath = flag.String("dotenv-path", cfg.DefaultDotEnvPath, "Path to the dotenv file")
 		tlsCert    = flag.String("tlscert", gotelnats.DefaultTLSCertPath, "Path to the NATS TLS cert file")
@@ -124,20 +121,6 @@ func main() {
 	defer cancel()
 	shutdown := otelutils.TracerProviderFromEnv(tracerCtx, serviceName, func(e error) { log.Fatal(e) })
 	defer shutdown()
-
-	// if cluster is set, then
-	if cluster := os.Getenv("CLUSTER"); cluster != "" {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	} else {
-		// If the home directory exists, then assume that the kube config will be read
-		// from ~/.kube/config.
-		if home := os.Getenv("HOME"); home != "" {
-			kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-		} else {
-			// If the home directory doesn't exist, then allow the user to specify a path.
-			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-		}
-	}
 
 	flag.Parse()
 	logging.SetupLogging(*logLevel)
@@ -254,19 +237,9 @@ func main() {
 	log.Printf("listen port is set to %d\n", *listenPort)
 	log.Printf("kubeconfig is set to '%s', and may be blank", *kubeconfig)
 
-	var config *rest.Config
-	if *kubeconfig != "" {
-		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
-		if err != nil {
-			log.Fatal(errors.Wrapf(err, "error building config from flags using kubeconfig %s", *kubeconfig))
-		}
-	} else {
-		// If the home directory doesn't exist and the user doesn't specify a path,
-		// then assume that we're running inside a cluster.
-		config, err = rest.InClusterConfig()
-		if err != nil {
-			log.Fatal(errors.Wrapf(err, "error loading the config inside the cluster"))
-		}
+	config, err := common.RESTConfig(*kubeconfig)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	config.Wrap(wrapOtelTransport)
