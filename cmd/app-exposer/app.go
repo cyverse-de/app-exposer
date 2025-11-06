@@ -56,6 +56,7 @@ type ExposerAppInit struct {
 	ImagePullSecretName           string
 	LocalStorageClass             string
 	DisableViceProxyAuth          bool
+	BypassUsers                   []string
 }
 
 //	@title			app-exposer
@@ -118,6 +119,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		DisableViceProxyAuth:          init.DisableViceProxyAuth,
 		NATSEncodedConn:               conn,
 		LocalStorageClass:             init.LocalStorageClass,
+		BypassUsers:                   init.BypassUsers,
 	}
 
 	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, apps)

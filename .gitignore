@@ -5,3 +5,4 @@ configs/local.yaml
 swagger-ui/
 docs/swagger.json
 local-config/
+build.json

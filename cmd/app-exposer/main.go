@@ -323,6 +323,18 @@ func main() {
 
 	imagePullSecretName := c.String("vice.image-pull-secret")
 
+	// Load the resource tracking bypass users from config and normalize them
+	bypassUsers := c.Strings("resource_tracking.bypass_users")
+	// Normalize all usernames by adding the user suffix if not present
+	for i, user := range bypassUsers {
+		bypassUsers[i] = common.FixUsername(user, *userSuffix)
+	}
+	if len(bypassUsers) == 0 {
+		log.Info("Resource tracking bypass is disabled: no users in bypass whitelist")
+	} else {
+		log.Infof("Resource tracking bypass is enabled for %d user(s): %v", len(bypassUsers), bypassUsers)
+	}
+
 	// Create the app that handles batch functionality.
 	jexAdapterInit := &adapter.Init{
 		LogPath:                c.String("condor.log_path"),
@@ -335,6 +347,8 @@ func main() {
 		Namespace:              *argoWorkflowNS,
 		ImagePullSecretName:    imagePullSecretName,
 		BatchExitHandlerImage:  *batchExitHandlerImage,
+		BypassUsers:            bypassUsers,
+		UserSuffix:             *userSuffix,
 	}
 	enforcer := quota.NewEnforcer(clientset, dbconn, a, nec, *userSuffix)
 	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer, clientset)
@@ -356,6 +370,7 @@ func main() {
 		ImagePullSecretName:           imagePullSecretName,
 		LocalStorageClass:             *localStorageClass,
 		DisableViceProxyAuth:          *disableViceProxyAuth,
+		BypassUsers:                   bypassUsers,
 	}
 
 	// app is the base app-exposer functionality.

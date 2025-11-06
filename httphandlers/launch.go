@@ -20,7 +20,8 @@ import (
 // @Description	the k8s cluster. This gets passed to the router to be associated with a route. The Job
 // @Description	is passed in as the body of the request.
 // @Accept			json
-// @Param			request	body	AnalysisLaunch	true	"The request body containing the analysis details"
+// @Param			request						body	AnalysisLaunch	true	"The request body containing the analysis details"
+// @Param			disable-resource-tracking	query	boolean			false	"Bypass resource tracking"	default(false)
 // @Success		200
 // @Failure		400	{object}	common.ErrorResponse
 // @Failure		500	{object}	common.ErrorResponse

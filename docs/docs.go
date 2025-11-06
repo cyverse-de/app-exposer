@@ -33,6 +33,13 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/httphandlers.AnalysisLaunch"
                         }
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Bypass resource tracking",
+                        "name": "disable-resource-tracking",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -664,6 +671,13 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/httphandlers.AnalysisLaunch"
                         }
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Bypass resource tracking",
+                        "name": "disable-resource-tracking",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -903,18 +917,21 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
+                        "format": "int64",
                         "description": "The number of seconds in the past to begin showing logs",
                         "name": "since",
                         "in": "query"
                     },
                     {
                         "type": "integer",
+                        "format": "int64",
                         "description": "The number of seconds since the epoch to begin showing logs",
                         "name": "since-time",
                         "in": "query"
                     },
                     {
                         "type": "integer",
+                        "format": "int64",
                         "description": "The number of lines from the end of the log to show",
                         "name": "tail-lines",
                         "in": "query"
@@ -2441,6 +2458,11 @@ const docTemplate = `{
                         "DecimalExponent": "e.g., 12e6",
                         "DecimalSI": "e.g., 12M  (12 * 10^6)"
                     },
+                    "x-enum-descriptions": [
+                        "e.g., 12e6",
+                        "e.g., 12Mi (12 * 2^20)",
+                        "e.g., 12M  (12 * 10^6)"
+                    ],
                     "x-enum-varnames": [
                         "DecimalExponent",
                         "BinarySI",

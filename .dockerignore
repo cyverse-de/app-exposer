@@ -1,0 +1,44 @@
+# Git files
+.git
+.gitignore
+
+# Build artifacts
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test files
+*.test
+*.out
+
+# Documentation (except what we need)
+README.md
+*.md
+!docs/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+
+# Development files
+Justfile
+build.sh
+
+# Kubernetes and deployment configs
+*.yaml
+*.yml
+!go.yml
+
+# Misc
+.DS_Store
+Thumbs.db

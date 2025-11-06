@@ -85,7 +85,8 @@ func (h *HTTPHandlers) BatchStopHandler(c echo.Context) error {
 // @ID				batch-launch
 // @Summary		Launch a batch analysis
 // @Description	Launch a batch analysis
-// @Param			request	body	AnalysisLaunch	true	"Analysis Definition"
+// @Param			request						body	AnalysisLaunch	true	"Analysis Definition"
+// @Param			disable-resource-tracking	query	boolean			false	"Bypass resource tracking"	default(false)
 // @Success		200
 // @Failure		400	{object}	common.ErrorResponse
 // @Failure		500	{object}	common.ErrorResponse

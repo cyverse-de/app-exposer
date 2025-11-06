@@ -38,6 +38,8 @@ type Init struct {
 	Namespace              string
 	ImagePullSecretName    string
 	BatchExitHandlerImage  string
+	BypassUsers            []string
+	UserSuffix             string
 }
 
 // New returns a *JEXAdapter
@@ -65,17 +67,32 @@ func (j *JEXAdapter) StopWorkflow(ctx context.Context, externalID string) error 
 	return nil
 }
 
-func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysis) error {
-	log.Debug("validating analysis")
-	if status, err := j.quotaEnforcer.ValidateBatchJob(ctx, analysis, j.Namespace); err != nil {
-		if validationErr, ok := err.(common.ErrorResponse); ok {
-			log.Error(validationErr)
-			return validationErr
+// isUserInBypassWhitelist checks if the given username is in the resource tracking bypass whitelist.
+func (j *JEXAdapter) isUserInBypassWhitelist(username string) bool {
+	normalizedUser := common.FixUsername(username, j.UserSuffix)
+	for _, allowedUser := range j.BypassUsers {
+		if normalizedUser == allowedUser {
+			return true
 		}
-		log.Error(err)
-		return echo.NewHTTPError(status, err.Error())
 	}
-	log.Debug("done validating analysis")
+	return false
+}
+
+func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysis) error {
+	if j.isUserInBypassWhitelist(analysis.Submitter) {
+		log.Infof("Resource tracking disabled for user %s (in bypass whitelist), skipping validation for batch job %s", analysis.Submitter, analysis.InvocationID)
+	} else {
+		log.Infof("Resource tracking enabled for user %s, validating batch job %s", analysis.Submitter, analysis.InvocationID)
+		if status, err := j.quotaEnforcer.ValidateBatchJob(ctx, analysis, j.Namespace); err != nil {
+			if validationErr, ok := err.(common.ErrorResponse); ok {
+				log.Error(validationErr)
+				return validationErr
+			}
+			log.Error(err)
+			return echo.NewHTTPError(status, err.Error())
+		}
+		log.Info("Validation successful for batch job")
+	}
 
 	log = log.WithFields(logrus.Fields{
 		"external_id": analysis.InvocationID,
