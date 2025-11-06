@@ -24,18 +24,22 @@ Usage: $0 [OPTIONS]
 OPTIONS:
     -d, --dockerfile PATH       Path to Dockerfile (default: Dockerfile)
     -i, --image NAME            Image name (default: harbor.cyverse.org/de/app-exposer)
-    -t, --tag TAG               Image tag (default: latest)
+    -t, --tag TAG               Image tag for building and pushing (default: latest)
     -o, --output FILE           Output JSON file path (default: build.json)
-    -p, --push                  Push image after building
+    -p, --push                  Push image after building (by tag, not digest)
     -c, --context PATH          Build context directory (default: .)
     --platform PLATFORM         Target platform (default: linux/amd64)
     --runtime RUNTIME           Container runtime: docker or podman (default: docker)
     --docker-build-flags FLAGS  Extra flags for docker build (ignored with podman)
     -h, --help                  Show this help message
 
+Note: The build.json output uses the sha256 digest in the 'tag' field for Skaffold compatibility,
+      ensuring that Kubernetes pulls the exact image that was built.
+
 Examples:
     $0 -i harbor.cyverse.org/de/app-exposer -t v1.0.0 -o build.json
     $0 -i harbor.cyverse.org/de/app-exposer -t latest -o artifacts.json -p
+    $0 -i harbor.cyverse.org/de/app-exposer -o build.json    # Uses 'latest' tag
     $0 -d custom.Dockerfile -i harbor.cyverse.org/de/app-exposer -o build.json -c /path/to/context
     $0 --runtime podman -i harbor.cyverse.org/de/app-exposer -t v1.0.0 -o build.json
     $0 --runtime docker --docker-build-flags '--network host --no-cache' -i harbor.cyverse.org/de/app-exposer -o build.json
@@ -156,25 +160,44 @@ else
         "$BUILD_CONTEXT"
 fi
 
-# Push the image if requested
+# Push the image if requested (always push by tag, not digest)
 if [[ "$PUSH_IMAGE" == "true" ]]; then
     echo "Pushing image: $FULL_IMAGE_TAG"
     $RUNTIME push "$FULL_IMAGE_TAG"
 fi
 
-# Create the build JSON output in Skaffold format
+# Extract sha256 digest from the built image
+echo "Extracting sha256 digest from built image..."
+SHA256_DIGEST=$($RUNTIME inspect --format='{{index .RepoDigests 0}}' "$FULL_IMAGE_TAG" 2>/dev/null || true)
+
+# If RepoDigests is empty (image not pushed), get the image ID instead
+if [[ -z "$SHA256_DIGEST" ]]; then
+    IMAGE_ID=$($RUNTIME inspect --format='{{.Id}}' "$FULL_IMAGE_TAG" | cut -d: -f2)
+    if [[ -n "$IMAGE_ID" ]]; then
+        SHA256_DIGEST="${IMAGE_NAME}@sha256:${IMAGE_ID}"
+        echo "Using local image digest: $SHA256_DIGEST"
+    else
+        echo "Error: Failed to extract image digest" >&2
+        exit 1
+    fi
+else
+    echo "Using repo digest: $SHA256_DIGEST"
+fi
+
+# Create the build JSON output in Skaffold format with digest in the tag field
 echo "Writing build JSON to: $OUTPUT_FILE"
 cat > "$OUTPUT_FILE" << EOF
 {
   "builds": [
     {
       "imageName": "$IMAGE_NAME",
-      "tag": "$FULL_IMAGE_TAG"
+      "tag": "$SHA256_DIGEST"
     }
   ]
 }
 EOF
 
 echo "Build completed successfully!"
-echo "Image: $FULL_IMAGE_TAG"
-echo "Build JSON written to: $OUTPUT_FILE"
+echo "Built and tagged as: $FULL_IMAGE_TAG"
+echo "Image digest: $SHA256_DIGEST"
+echo "Build JSON written to: $OUTPUT_FILE (using digest for Skaffold compatibility)"

@@ -118,13 +118,7 @@ func (h *HTTPHandlers) BatchLaunchHandler(c echo.Context) error {
 	}
 	log.Debug("done parsing request body JSON")
 
-	// Parse disable-resource-tracking query parameter
-	disableTracking := false
-	if c.QueryParam("disable-resource-tracking") == "true" {
-		disableTracking = true
-	}
-
-	if err = h.batchadapter.LaunchWorkflow(ctx, analysis, disableTracking); err != nil {
+	if err = h.batchadapter.LaunchWorkflow(ctx, analysis); err != nil {
 		log.Error(err)
 		return err
 	}

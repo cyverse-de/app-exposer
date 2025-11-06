@@ -50,13 +50,7 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 		return c.NoContent(http.StatusOK)
 	}
 
-	// Parse disable-resource-tracking query parameter
-	disableTracking := false
-	if c.QueryParam("disable-resource-tracking") == "true" {
-		disableTracking = true
-	}
-
-	if status, err := h.incluster.ValidateJob(ctx, job, disableTracking); err != nil {
+	if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
 		if validationErr, ok := err.(common.ErrorResponse); ok {
 			return validationErr
 		}

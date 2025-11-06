@@ -60,6 +60,7 @@ type Init struct {
 	LocalStorageClass             string
 	DisableViceProxyAuth          bool
 	NATSEncodedConn               *nats.EncodedConn
+	BypassUsers                   []string
 }
 
 // Incluster contains information and operations for launching VICE apps inside the
@@ -545,10 +546,22 @@ func (i *Incluster) UpdateTimeLimit(ctx context.Context, user, id string) (*Time
 	return retval, nil
 }
 
-func (i *Incluster) ValidateJob(ctx context.Context, job *model.Job, disableTracking bool) (int, error) {
-	if disableTracking {
-		log.Info("Resource tracking disabled for job, skipping validation")
+// isUserInBypassWhitelist checks if the given username is in the resource tracking bypass whitelist.
+func (i *Incluster) isUserInBypassWhitelist(username string) bool {
+	normalizedUser := common.FixUsername(username, i.UserSuffix)
+	for _, allowedUser := range i.BypassUsers {
+		if normalizedUser == allowedUser {
+			return true
+		}
+	}
+	return false
+}
+
+func (i *Incluster) ValidateJob(ctx context.Context, job *model.Job) (int, error) {
+	if i.isUserInBypassWhitelist(job.Submitter) {
+		log.Infof("Resource tracking disabled for user %s (in bypass whitelist), skipping validation for job %s", job.Submitter, job.InvocationID)
 		return http.StatusOK, nil
 	}
+	log.Infof("Resource tracking enabled for user %s, validating job %s", job.Submitter, job.InvocationID)
 	return i.quotaEnforcer.ValidateJob(ctx, job, i.ViceNamespace)
 }

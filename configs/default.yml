@@ -27,6 +27,9 @@ metadata:
 path_list:
   file_identifier: "# application/vnd.de.multi-input-path-list+csv; version=1"
 
+resource_tracking:
+  bypass_users: []
+
 tickets_path_list:
   file_identifier: "# application/vnd.de.tickets-path-list+csv; version=1"
 
