@@ -12,9 +12,10 @@ import (
 	"github.com/argoproj/argo-workflows/v3/cmd/argo/commands/client"
 	workflowpkg "github.com/argoproj/argo-workflows/v3/pkg/apiclient/workflow"
 	v1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/resourcing"
-	"github.com/cyverse-de/model/v7"
+	"github.com/cyverse-de/model/v9"
 	"github.com/gosimple/slug"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
@@ -837,6 +838,10 @@ func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOp
 		},
 	}
 
+	if err := w.addGPURequirements(&workflow); err != nil {
+		return &workflow, err
+	}
+
 	if err := w.addHostPathVolumes(&workflow); err != nil {
 		return &workflow, err
 	}
@@ -846,6 +851,31 @@ func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOp
 	}
 
 	return &workflow, nil
+}
+
+func (w *WorkflowMaker) addGPURequirements(workflow *v1alpha1.Workflow) error {
+	// If the analysis requires GPUs, add the necessary tolerations and node affinity
+	// to ensure the workflow pods are scheduled on GPU-enabled nodes.
+	if resourcing.GPUEnabled(w.analysis) {
+		// Add GPU toleration
+		workflow.Spec.Tolerations = append(workflow.Spec.Tolerations, apiv1.Toleration{
+			Key:      constants.GPUTolerationKey,
+			Operator: apiv1.TolerationOperator(constants.GPUTolerationOperator),
+			Value:    constants.GPUTolerationValue,
+			Effect:   apiv1.TaintEffect(constants.GPUTolerationEffect),
+		})
+
+		// Add GPU node affinity requirement
+		me := &workflow.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions
+		*me = append(*me, apiv1.NodeSelectorRequirement{
+			Key:      constants.GPUAffinityKey,
+			Operator: apiv1.NodeSelectorOperator(constants.GPUAffinityOperator),
+			Values: []string{
+				constants.GPUAffinityValue,
+			},
+		})
+	}
+	return nil
 }
 
 func (w *WorkflowMaker) addHostPathVolumes(workflow *v1alpha1.Workflow) error {

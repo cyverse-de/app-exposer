@@ -3,7 +3,7 @@ package incluster
 import (
 	"testing"
 
-	"github.com/cyverse-de/model/v7"
+	"github.com/cyverse-de/model/v9"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -132,10 +132,10 @@ github.com/cyverse-de/go-mod/protobufjson v0.0.3 h1:XTIZejY7EUbpF6ZdhRhiFX9PGYDk
 github.com/cyverse-de/go-mod/protobufjson v0.0.3/go.mod h1:p/ASemjpl2GEFYb3Tt7N8RozViwonsK0fOm0LxYeCt8=
 github.com/cyverse-de/messaging/v11 v11.0.1 h1:OPyTprbf5DxRj/A5VW7UM6zv5NxP6yzVBWt6fi3TiOc=
 github.com/cyverse-de/messaging/v11 v11.0.1/go.mod h1:+YRUpv3nqOBgxaBc+G4ypvpUzRCJymdQxWWui3heIsk=
-github.com/cyverse-de/model/v7 v7.0.1 h1:UfBlK1YT63TdFtMxFLg+jxNePC6xnRIt4nJ4+7JY7Ek=
-github.com/cyverse-de/model/v7 v7.0.1/go.mod h1:egZO5+I6BBIt/8pQ9wWcVmTq2Kz9cxDG/UVp58Ac2i8=
 github.com/cyverse-de/model/v8 v8.0.0 h1:Q7JTorsD5aetJCVsdIOPC20hlSIazsW2mr3pV1qJYAg=
 github.com/cyverse-de/model/v8 v8.0.0/go.mod h1:kQBAJ7UNiU0FlApSSD5jzjlIlaCpauxxAcYpXOBEIfU=
+github.com/cyverse-de/model/v9 v9.0.0 h1:1HPc8+WV2nENSI/gyQ5OZThMNlqAthS7hwrN+MKWQ9k=
+github.com/cyverse-de/model/v9 v9.0.0/go.mod h1:NFNliUQJ+fHGL72GcSFSE5k07Sk1WeYl90BgkuMbgwI=
 github.com/cyverse-de/p v0.0.0-20240228001927-426a6bd80191 h1:f0tJEoxQ9t5X9JhH6P160uQt+j1K0LqAwOS7Uy5qzgQ=
 github.com/cyverse-de/p v0.0.0-20240228001927-426a6bd80191/go.mod h1:JM04cBlOajBkOVfQOEbBD6QwmWyupji9J84wfUA+LTc=
 github.com/cyverse-de/p/go/analysis v0.0.16 h1:E+SE/v3RE1znwnIzk4ugXiM0knVsBnTLmuv4fcvietc=

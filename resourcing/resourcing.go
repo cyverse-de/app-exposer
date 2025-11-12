@@ -2,10 +2,11 @@ package resourcing
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/cyverse-de/app-exposer/common"
-	"github.com/cyverse-de/model/v7"
+	"github.com/cyverse-de/model/v9"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 )
@@ -145,14 +146,51 @@ func VICEProxyStorageLimit() resourcev1.Quantity {
 }
 
 func GPUEnabled(analysis *model.Analysis) bool {
-	gpuEnabled := false
-	for _, device := range analysis.Steps[0].Component.Container.Devices {
+	// GPU is considered enabled if the container explicitly requests GPUs
+	// via MinGPUs/MaxGPUs, or if a legacy device entry references an NVIDIA
+	// device path. The device-path check is kept for backward compatibility
+	// with older job payloads.
+	c := analysis.Steps[0].Component.Container
+	if minGPUs(c) > 0 || maxGPUs(c) > 0 {
+		return true
+	}
+	for _, device := range c.Devices {
 		if strings.HasPrefix(strings.ToLower(device.HostPath), "/dev/nvidia") {
-			gpuEnabled = true
+			return true
 		}
 	}
-	return gpuEnabled
+	return false
 }
+
+// getIntField is a small reflection helper to safely read an (exported) integer
+// field by name from a struct value. Returns 0 when the field doesn't exist or
+// can't be converted to an int.
+func getIntField(v interface{}, name string) int {
+	val := reflect.ValueOf(v)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return 0
+	}
+	f := val.FieldByName(name)
+	if !f.IsValid() {
+		return 0
+	}
+	switch f.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return int(f.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return int(f.Uint())
+	case reflect.Float32, reflect.Float64:
+		return int(f.Float())
+	default:
+		return 0
+	}
+}
+
+func minGPUs(c model.Container) int { return getIntField(c, "MinGPUs") }
+func maxGPUs(c model.Container) int { return getIntField(c, "MaxGPUs") }
 
 func cpuResourceRequest(analysis *model.Analysis) resourcev1.Quantity {
 	var (
@@ -262,11 +300,29 @@ func SharedMemoryAmount(analysis *model.Analysis) *resourcev1.Quantity {
 }
 
 func resourceRequests(analysis *model.Analysis) apiv1.ResourceList {
-	return apiv1.ResourceList{
+	reqs := apiv1.ResourceList{
 		apiv1.ResourceCPU:              cpuResourceRequest(analysis), // analysis contains # cores
 		apiv1.ResourceMemory:           memResourceRequest(analysis), // analysis contains # bytes mem
 		apiv1.ResourceEphemeralStorage: storageRequest(analysis),     // analysis contains # bytes storage
 	}
+
+	// Add GPU request if specified. For extended resources like GPUs, requests
+	// should be integers. When only legacy device detection is present, default
+	// the request to 1 to match previous implicit behavior.
+	if GPUEnabled(analysis) {
+		c := analysis.Steps[0].Component.Container
+		requestedGPUs := 1
+		if minGPUs(c) > 0 {
+			requestedGPUs = minGPUs(c)
+		}
+		if q, err := resourcev1.ParseQuantity(fmt.Sprintf("%d", int64(requestedGPUs))); err == nil {
+			reqs[apiv1.ResourceName("nvidia.com/gpu")] = q
+		} else {
+			log.Warn(err)
+		}
+	}
+
+	return reqs
 }
 
 func resourceLimits(analysis *model.Analysis) apiv1.ResourceList {
@@ -280,13 +336,19 @@ func resourceLimits(analysis *model.Analysis) apiv1.ResourceList {
 		limits[apiv1.ResourceMemory] = memResourceLimit(analysis)
 	}
 
-	// If a GPU device is configured, then add it to the resource limits.
+	// If GPUs are requested, set the GPU limits appropriately. Prefer the
+	// explicit MaxGPUs field when provided; otherwise, fall back to legacy
+	// device-path detection and a single GPU.
 	if GPUEnabled(analysis) {
-		gpuLimit, err := resourcev1.ParseQuantity("1")
-		if err != nil {
-			log.Warn(err)
+		c := analysis.Steps[0].Component.Container
+		limitGPUs := 1
+		if maxGPUs(c) > 0 {
+			limitGPUs = maxGPUs(c)
+		}
+		if q, err := resourcev1.ParseQuantity(fmt.Sprintf("%d", int64(limitGPUs))); err == nil {
+			limits[apiv1.ResourceName("nvidia.com/gpu")] = q
 		} else {
-			limits[apiv1.ResourceName("nvidia.com/gpu")] = gpuLimit
+			log.Warn(err)
 		}
 	}
 
