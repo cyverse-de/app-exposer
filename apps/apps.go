@@ -135,6 +135,10 @@ func (a *Apps) GetUserIP(ctx context.Context, userID string) (string, error) {
 	)
 
 	err := a.DB.QueryRowContext(ctx, getUserIPQuery, userID).Scan(&ipAddr)
+	if err == sql.ErrNoRows {
+		log.Errorf("no logins recorded for %s; please check admin Keycloak settings", userID)
+		return "", nil
+	}
 	if err != nil {
 		return "", err
 	}
