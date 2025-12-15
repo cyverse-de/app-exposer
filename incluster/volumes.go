@@ -439,6 +439,22 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 		)
 	}
 
+	// Add DRI device volume if requested for GPU rendering support.
+	if resourcing.DRIDevicesRequested(job) {
+		driHostPathType := apiv1.HostPathDirectory
+		output = append(output,
+			apiv1.Volume{
+				Name: constants.DRIVolumeName,
+				VolumeSource: apiv1.VolumeSource{
+					HostPath: &apiv1.HostPathVolumeSource{
+						Path: constants.DRIDevicePathPrefix,
+						Type: &driHostPathType,
+					},
+				},
+			},
+		)
+	}
+
 	return output
 }
 
@@ -454,6 +470,15 @@ func (i *Incluster) deploymentVolumeMounts(job *model.Job) []apiv1.VolumeMount {
 		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
 			Name:      constants.SharedMemoryVolumeName,
 			MountPath: constants.ShmDevice,
+			ReadOnly:  false,
+		})
+	}
+
+	// Add DRI device volume mount if requested for GPU rendering support.
+	if resourcing.DRIDevicesRequested(job) {
+		volumeMounts = append(volumeMounts, apiv1.VolumeMount{
+			Name:      constants.DRIVolumeName,
+			MountPath: constants.DRIDevicePathPrefix,
 			ReadOnly:  false,
 		})
 	}

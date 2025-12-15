@@ -23,6 +23,10 @@ const (
 	// Constants for shared memory volumes.
 	SharedMemoryVolumeName = "shared-memory"
 
+	// Constants for DRI (Direct Rendering Infrastructure) device support.
+	DRIDevicePathPrefix = "/dev/dri"
+	DRIVolumeName       = "dri-devices"
+
 	// The working directory volume serves as the working directory when IRODS CSI Driver integration is enabled.
 	WorkingDirVolumeName             = "working-dir"
 	WorkingDirInitContainerName      = "working-dir-init"

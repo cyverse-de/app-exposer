@@ -389,6 +389,17 @@ func (i *Incluster) imagePullSecrets(_ *model.Job) []apiv1.LocalObjectReference 
 	return []apiv1.LocalObjectReference{}
 }
 
+// podSecurityContext returns the PodSecurityContext for the VICE analysis.
+func (i *Incluster) podSecurityContext(job *model.Job) *apiv1.PodSecurityContext {
+	uid := int64(job.Steps[0].Component.Container.UID)
+
+	return &apiv1.PodSecurityContext{
+		RunAsUser:  constants.Int64Ptr(uid),
+		RunAsGroup: constants.Int64Ptr(uid),
+		FSGroup:    constants.Int64Ptr(uid),
+	}
+}
+
 // GetDeployment assembles and returns the Deployment for the VICE analysis. It does
 // not call the k8s API.
 func (i *Incluster) GetDeployment(ctx context.Context, job *model.Job) (*appsv1.Deployment, error) {
@@ -472,12 +483,8 @@ func (i *Incluster) GetDeployment(ctx context.Context, job *model.Job) (*appsv1.
 					Containers:                   i.deploymentContainers(job),
 					ImagePullSecrets:             i.imagePullSecrets(job),
 					AutomountServiceAccountToken: &autoMount,
-					SecurityContext: &apiv1.PodSecurityContext{
-						RunAsUser:  constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-						RunAsGroup: constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-						FSGroup:    constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-					},
-					Tolerations: tolerations,
+					SecurityContext:              i.podSecurityContext(job),
+					Tolerations:                  tolerations,
 					Affinity: &apiv1.Affinity{
 						PodAntiAffinity: &apiv1.PodAntiAffinity{
 							PreferredDuringSchedulingIgnoredDuringExecution: []apiv1.WeightedPodAffinityTerm{

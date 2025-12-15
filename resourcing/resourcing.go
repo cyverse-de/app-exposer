@@ -299,6 +299,20 @@ func SharedMemoryAmount(analysis *model.Analysis) *resourcev1.Quantity {
 	return nil
 }
 
+const DRIDevicePathPrefix = "/dev/dri"
+
+// DRIDevicesRequested returns true if any /dev/dri/* devices are requested by the analysis.
+// This is used to determine whether to mount the /dev/dri directory into the container
+// for GPU rendering support (OpenGL, Vulkan, VA-API, etc.).
+func DRIDevicesRequested(analysis *model.Analysis) bool {
+	for _, device := range analysis.Steps[0].Component.Container.Devices {
+		if strings.HasPrefix(strings.ToLower(device.HostPath), DRIDevicePathPrefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func resourceRequests(analysis *model.Analysis) apiv1.ResourceList {
 	reqs := apiv1.ResourceList{
 		apiv1.ResourceCPU:              cpuResourceRequest(analysis), // analysis contains # cores
