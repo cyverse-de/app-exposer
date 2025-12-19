@@ -110,7 +110,7 @@ func (h *HarborInfoGetter) GetInfo(project, image, tag string) (*ImageInfo, erro
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %s", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if err := json.NewDecoder(resp.Body).Decode(&replyData); err != nil {
 		return nil, fmt.Errorf("error decoding response: %s", err)

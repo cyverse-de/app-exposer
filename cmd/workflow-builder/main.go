@@ -97,7 +97,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer infile.Close()
+	defer func() { _ = infile.Close() }()
 
 	if err = json.NewDecoder(infile).Decode(&inputJob); err != nil {
 		log.Fatal(err)
@@ -127,7 +127,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			defer outfile.Close()
+			defer func() { _ = outfile.Close() }()
 		}
 
 		if err = yaml.NewEncoder(outfile).Encode(&workflow); err != nil {

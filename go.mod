@@ -1,6 +1,6 @@
 module github.com/cyverse-de/app-exposer
 
-go 1.24.4
+go 1.25
 
 replace github.com/cyverse-de/millicores => ./millicores
 

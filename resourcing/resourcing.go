@@ -364,7 +364,7 @@ func VICEProxyRequirements(analysis *model.Analysis) *apiv1.ResourceRequirements
 		},
 	}
 
-	if !(doVICEProxyStorageLimit || doVICEProxyCPUResourceLimit || doVICEProxyMemResourceLimit) {
+	if !doVICEProxyStorageLimit && !doVICEProxyCPUResourceLimit && !doVICEProxyMemResourceLimit {
 		return retval
 	}
 
@@ -394,7 +394,7 @@ func Requirements(analysis *model.Analysis) *apiv1.ResourceRequirements {
 		Requests: resourceRequests(analysis),
 	}
 
-	if !(doDefaultCPUResourceLimit || doDefaultMemResourceLimit || GPUEnabled(analysis)) {
+	if !doDefaultCPUResourceLimit && !doDefaultMemResourceLimit && !GPUEnabled(analysis) {
 		return retval
 	}
 
