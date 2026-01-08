@@ -20,7 +20,6 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/kubernetes"
@@ -141,8 +140,8 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 
 		// This is used to mount host paths into the container.
 		for volumeIdx, volume := range step.Component.Container.Volumes {
-			stTmpl.Script.Container.VolumeMounts = append(
-				stTmpl.Script.Container.VolumeMounts,
+			stTmpl.Script.VolumeMounts = append(
+				stTmpl.Script.VolumeMounts,
 				apiv1.VolumeMount{
 					Name:      fmt.Sprintf("step-%d-%d", idx, volumeIdx),
 					MountPath: volume.ContainerPath,
@@ -162,8 +161,8 @@ func (w *WorkflowMaker) stepTemplates() ([]v1alpha1.Template, error) {
 			} else {
 				containerPath = volumeFrom.ContainerPath
 			}
-			stTmpl.Script.Container.VolumeMounts = append(
-				stTmpl.Script.Container.VolumeMounts,
+			stTmpl.Script.VolumeMounts = append(
+				stTmpl.Script.VolumeMounts,
 				apiv1.VolumeMount{
 					Name:      volumeFrom.NamePrefix,
 					MountPath: containerPath,
@@ -746,11 +745,11 @@ func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOp
 	)
 
 	workflow := v1alpha1.Workflow{
-		TypeMeta: v1.TypeMeta{
+		TypeMeta: metav1.TypeMeta{
 			Kind:       "Workflow",
 			APIVersion: "argoproj.io/v1alpha1",
 		},
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "batch-analysis-", // TODO: Make this configurable
 			Namespace:    "argo",
 			Labels: map[string]string{
@@ -819,7 +818,7 @@ func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOp
 			},
 			VolumeClaimTemplates: []apiv1.PersistentVolumeClaim{
 				{
-					ObjectMeta: v1.ObjectMeta{
+					ObjectMeta: metav1.ObjectMeta{
 						Name: defaultVolumeName,
 					},
 					Spec: apiv1.PersistentVolumeClaimSpec{
@@ -940,7 +939,7 @@ func (w *WorkflowMaker) addDataContainers(ctx context.Context, workflow *v1alpha
 			for key := range maps.Keys(secret.Data) {
 				items = append(items, apiv1.KeyToPath{
 					Key:  key,
-					Path: secret.ObjectMeta.Annotations[key],
+					Path: secret.Annotations[key],
 				})
 			}
 
@@ -960,7 +959,7 @@ func (w *WorkflowMaker) addDataContainers(ctx context.Context, workflow *v1alpha
 }
 
 func (w *WorkflowMaker) getSecret(ctx context.Context, name, namespace string) (*apiv1.Secret, error) {
-	return w.clientset.CoreV1().Secrets(namespace).Get(ctx, name, v1.GetOptions{})
+	return w.clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
 func (w *WorkflowMaker) SubmitWorkflow(ctx context.Context, serviceClient workflowpkg.WorkflowServiceClient, workflow *v1alpha1.Workflow) (*v1alpha1.Workflow, error) {
@@ -981,7 +980,7 @@ func ListWorkflows(ctx context.Context, serviceClient workflowpkg.WorkflowServic
 	}
 	return serviceClient.ListWorkflows(ctx, &workflowpkg.WorkflowListRequest{
 		Namespace: namespace,
-		ListOptions: &v1.ListOptions{
+		ListOptions: &metav1.ListOptions{
 			LabelSelector: req.String(),
 		},
 	})

@@ -175,7 +175,7 @@ func (e *Outcluster) UpdateServiceHandler(c echo.Context) error {
 // The namespace of the Service comes from the daemon configuration setting.
 func (e *Outcluster) GetServiceHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	var service string = c.Param("name")
+	var service = c.Param("name")
 	if service == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing service name in the URL")
 	}
@@ -205,7 +205,7 @@ func (e *Outcluster) GetServiceHandler(c echo.Context) error {
 // a 200 status if you try to delete a Service that doesn't exist.
 func (e *Outcluster) DeleteServiceHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	var service string = c.Param("name")
+	var service = c.Param("name")
 	if service == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing service name in the URL")
 	}
@@ -392,7 +392,7 @@ func (e *Outcluster) GetEndpointHandler(c echo.Context) error {
 // Expects no request body and returns no body in the response. Returns a 200
 // if you attempt to delete an Endpoints object that doesn't exist.
 func (e *Outcluster) DeleteEndpointHandler(c echo.Context) error {
-	var endpoint string = c.Param("name")
+	var endpoint = c.Param("name")
 	if endpoint == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing endpoint name in the URL")
 	}
@@ -580,7 +580,7 @@ func (e *Outcluster) GetIngressHandler(c echo.Context) error {
 // if you attempt to delete an Endpoints object that doesn't exist.
 func (e *Outcluster) DeleteIngressHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	var ingress string = c.Param("name")
+	var ingress = c.Param("name")
 	if ingress == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing ingress name in the URL")
 	}

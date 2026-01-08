@@ -270,7 +270,7 @@ func (i *Incluster) UpsertDeployment(ctx context.Context, deployment *appsv1.Dep
 	}
 
 	// Create the ingress for the job
-	ingress, err := i.getIngress(ctx, job, svc, i.Init.IngressClass)
+	ingress, err := i.getIngress(ctx, job, svc, i.IngressClass)
 	if err != nil {
 		return err
 	}

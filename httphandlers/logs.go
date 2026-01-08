@@ -159,7 +159,7 @@ func (h *HTTPHandlers) LogsHandler(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer logReadCloser.Close()
+	defer func() { _ = logReadCloser.Close() }()
 
 	bodyBytes, err := io.ReadAll(logReadCloser)
 	if err != nil {

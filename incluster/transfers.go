@@ -125,7 +125,7 @@ func requestTransfer(ctx context.Context, svc apiv1.Service, reqpath string) (*t
 		return nil, fmt.Errorf("response from %s was nil", svcurl.String())
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 399 {
 		return nil, errors.Wrapf(posterr, "download request to %s returned %d", svcurl.String(), resp.StatusCode)
@@ -171,7 +171,7 @@ func getTransferDetails(ctx context.Context, svc apiv1.Service, reqpath string) 
 		return nil, fmt.Errorf("response from GET %s was nil", svcurl.String())
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 399 {
 		return nil, errors.Wrapf(posterr, "status request to %s returned %d", svcurl.String(), resp.StatusCode)

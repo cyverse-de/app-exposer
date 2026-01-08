@@ -51,6 +51,7 @@ func NewApps(db *sqlx.DB, userSuffix string) *Apps {
 
 // Run runs the goroutine for storing millicores reserved for new jobs.
 func (a *Apps) Run() {
+GoroutineLoop:
 	for {
 		select {
 		case mj := <-a.addJob:
@@ -73,7 +74,7 @@ func (a *Apps) Run() {
 			delete(a.jobs, doneJobID.String())
 
 		case <-a.exit:
-			break
+			break GoroutineLoop
 		}
 	}
 }

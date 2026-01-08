@@ -43,7 +43,7 @@ func TestLatestDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	rows := sqlmock.NewRows([]string{"id", "version", "mapping"}).
 		AddRow("0", "0", "{}")
@@ -65,7 +65,7 @@ func TestGetLatestDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	expected := map[string]*InstantLaunchSelector{
 		"one": {
@@ -120,7 +120,7 @@ func TestUpdateLatestDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	expected := &InstantLaunchMapping{
 		"one": &InstantLaunchSelector{
@@ -159,7 +159,7 @@ func TestUpdateLatestDefaultsHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	expected := map[string]*InstantLaunchSelector{
 		"one": {
@@ -211,7 +211,7 @@ func TestDeleteLatestDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	mock.ExpectExec("DELETE FROM ONLY default_instant_launches AS def").WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -227,7 +227,7 @@ func TestDeleteLatestDefaultsHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	req := httptest.NewRequest("DELETE", "http://localhost/instantlaunches/defaults", nil)
 	rec := httptest.NewRecorder()
@@ -249,7 +249,7 @@ func TestAddLatestDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	expected := &InstantLaunchMapping{
 		"one": &InstantLaunchSelector{
@@ -292,7 +292,7 @@ func TestAddLatestDefaultsHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	expected := &InstantLaunchMapping{
 		"one": &InstantLaunchSelector{
@@ -346,7 +346,7 @@ func TestDefaultsByVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	expected := &DefaultInstantLaunchMapping{
 		ID:      "0",
@@ -389,7 +389,7 @@ func TestDefaultsByVersionHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	expected := &DefaultInstantLaunchMapping{
 		ID:      "0",
@@ -445,7 +445,7 @@ func TestUpdateDefaultsByVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	expected := &InstantLaunchMapping{
 		"one": &InstantLaunchSelector{
@@ -484,7 +484,7 @@ func TestUpdateDefaultsByVersionHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	expected := &InstantLaunchMapping{
 		"one": &InstantLaunchSelector{
@@ -531,7 +531,7 @@ func TestDeleteDefaultsByVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	mock.ExpectExec("DELETE FROM ONLY default_instant_launches as def").
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -548,7 +548,7 @@ func TestDeleteDefaultsByVersionHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	mock.ExpectExec("DELETE FROM ONLY default_instant_launches as def").
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -574,7 +574,7 @@ func TestListAllDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up app: %s", err)
 	}
-	defer app.DB.Close()
+	defer func() { _ = app.DB.Close() }()
 
 	mock.ExpectQuery(listAllDefaultsQuery).
 		WillReturnRows(

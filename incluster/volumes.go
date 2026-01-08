@@ -228,7 +228,7 @@ func (i *Incluster) getPersistentVolumes(ctx context.Context, job *model.Job) ([
 func (i *Incluster) getPersistentVolumeCapacity(job *model.Job) resourcev1.Quantity {
 
 	// Get the maximum requested disk space.
-	var capacityToRequest int64 = defaultStorageCapacity.Value()
+	var capacityToRequest = defaultStorageCapacity.Value()
 	for _, step := range job.Steps {
 		if step.Component.Container.MinDiskSpace > capacityToRequest {
 			capacityToRequest = step.Component.Container.MinDiskSpace
