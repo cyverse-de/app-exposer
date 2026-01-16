@@ -2,10 +2,12 @@ package main
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/cyverse-de/app-exposer/adapter"
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/coordinator"
 	"github.com/cyverse-de/app-exposer/httphandlers"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/instantlaunches"
@@ -28,14 +30,16 @@ import (
 // REST-like API with the underlying Kubernetes API. All of the HTTP handlers
 // are methods for an ExposerApp instance.
 type ExposerApp struct {
-	outcluster      *outcluster.Outcluster
-	incluster       *incluster.Incluster
-	handlers        *httphandlers.HTTPHandlers
-	namespace       string
-	clientset       kubernetes.Interface
-	router          *echo.Echo
-	db              *sqlx.DB
-	instantlaunches *instantlaunches.App
+	outcluster       *outcluster.Outcluster
+	incluster        *incluster.Incluster
+	handlers         *httphandlers.HTTPHandlers
+	namespace        string
+	clientset        kubernetes.Interface
+	router           *echo.Echo
+	db               *sqlx.DB
+	instantlaunches  *instantlaunches.App
+	clusterRegistry  *coordinator.ClusterRegistry
+	clusterHandlers  *coordinator.ClusterHandlers
 }
 
 // ExposerAppInit contains configuration settings for creating a new ExposerApp.
@@ -57,6 +61,7 @@ type ExposerAppInit struct {
 	LocalStorageClass             string
 	DisableViceProxyAuth          bool
 	BypassUsers                   []string
+	EncryptionKey                 []byte // Key for encrypting cluster client keys (32 bytes for AES-256)
 }
 
 //	@title			app-exposer
@@ -124,14 +129,21 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, apps)
 
+	// Create cluster registry for multi-cluster support
+	clusterRegistry := coordinator.NewClusterRegistry(init.db, init.EncryptionKey, 5*time.Minute)
+	deployerClient := coordinator.NewDeployerClient(clusterRegistry)
+	clusterHandlers := coordinator.NewClusterHandlers(clusterRegistry, deployerClient)
+
 	app := &ExposerApp{
-		outcluster: outcluster.New(init.ClientSet, init.Namespace, init.IngressClass),
-		incluster:  incluster,
-		namespace:  init.Namespace,
-		clientset:  init.ClientSet,
-		router:     echo.New(),
-		db:         init.db,
-		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter),
+		outcluster:      outcluster.New(init.ClientSet, init.Namespace, init.IngressClass),
+		incluster:       incluster,
+		namespace:       init.Namespace,
+		clientset:       init.ClientSet,
+		router:          echo.New(),
+		db:              init.db,
+		handlers:        httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter),
+		clusterRegistry: clusterRegistry,
+		clusterHandlers: clusterHandlers,
 	}
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
@@ -244,6 +256,9 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	ilgroup := app.router.Group("/instantlaunches")
 	ilgroup.Use(middleware.Logger())
 	app.instantlaunches = instantlaunches.New(app.db, ilgroup, ilInit)
+
+	// Register cluster management API routes
+	app.clusterHandlers.RegisterRoutes(app.router)
 
 	return app
 }

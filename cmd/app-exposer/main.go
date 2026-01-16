@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"github.com/cyverse-de/app-exposer/adapter"
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/coordinator"
 	"github.com/cyverse-de/app-exposer/db"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
@@ -353,6 +355,20 @@ func main() {
 	enforcer := quota.NewEnforcer(clientset, dbconn, a, nec, *userSuffix)
 	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer, clientset)
 
+	// Load encryption key for cluster client keys (from env or config)
+	var encryptionKey []byte
+	encryptionKeyStr := os.Getenv(coordinator.EncryptionKeyEnvVar)
+	if encryptionKeyStr == "" {
+		encryptionKeyStr = c.String("encryption.key")
+	}
+	if encryptionKeyStr != "" {
+		var err error
+		encryptionKey, err = base64.StdEncoding.DecodeString(encryptionKeyStr)
+		if err != nil {
+			log.Warnf("failed to decode encryption key: %v - encryption disabled", err)
+		}
+	}
+
 	exposerInit := &ExposerAppInit{
 		Namespace:                     *namespace,
 		ViceNamespace:                 *viceNamespace,
@@ -371,6 +387,7 @@ func main() {
 		LocalStorageClass:             *localStorageClass,
 		DisableViceProxyAuth:          *disableViceProxyAuth,
 		BypassUsers:                   bypassUsers,
+		EncryptionKey:                 encryptionKey,
 	}
 
 	// app is the base app-exposer functionality.
