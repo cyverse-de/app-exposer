@@ -17,7 +17,7 @@ replace github.com/cyverse-de/adapter => ./adapter
 require (
 	al.essio.dev/pkg/shellescape v1.6.0
 	github.com/DATA-DOG/go-sqlmock v1.5.0
-	github.com/argoproj/argo-workflows/v3 v3.6.14
+	github.com/argoproj/argo-workflows/v3 v3.6.17
 	github.com/cockroachdb/apd v1.1.0
 	github.com/cyverse-de/go-mod/cfg v0.0.1
 	github.com/cyverse-de/go-mod/gotelnats v0.0.11
