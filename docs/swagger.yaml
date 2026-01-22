@@ -8718,6 +8718,32 @@ definitions:
         description: Replicas is the total number of replicas
         type: integer
     type: object
+  vicetypes.FileTransferRequest:
+    properties:
+      async:
+        description: 'Async indicates whether to wait for the transfer to complete
+          (default: false = wait)'
+        type: boolean
+      type:
+        description: Type is the transfer type ("download" or "upload")
+        type: string
+    type: object
+  vicetypes.FileTransferResponse:
+    properties:
+      error:
+        description: Error contains error details if status is "error"
+        type: string
+      message:
+        description: Message contains additional information about the transfer
+        type: string
+      status:
+        description: Status is the result status ("completed", "failed", "in_progress",
+          "error")
+        type: string
+      transfer_id:
+        description: TransferID is the unique identifier for tracking the transfer
+        type: string
+    type: object
   vicetypes.HealthResponse:
     properties:
       kubernetes:
@@ -9108,6 +9134,45 @@ paths:
           schema:
             $ref: '#/definitions/vicetypes.DeploymentResponse'
       summary: Delete a VICE deployment
+      tags:
+      - deployments
+  /api/v1/deployments/{external_id}/file-transfer:
+    post:
+      consumes:
+      - application/json
+      description: Initiates a file upload or download for a deployment
+      parameters:
+      - description: External ID of the deployment
+        in: path
+        name: external_id
+        required: true
+        type: string
+      - description: Kubernetes namespace (defaults to configured namespace)
+        in: query
+        name: namespace
+        type: string
+      - description: File transfer request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/vicetypes.FileTransferRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vicetypes.FileTransferResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/vicetypes.FileTransferResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/vicetypes.FileTransferResponse'
+      summary: Trigger file transfer
       tags:
       - deployments
   /api/v1/deployments/{external_id}/logs:

@@ -94,8 +94,6 @@ func main() {
 		transferWorkingDir                   = flag.String("transfer-working-dir", "/de-app-work", "The working directory within the file transfer image.")
 		transferLogLevel                     = flag.String("transfer-log-level", "debug", "The log level of the output of the file transfer tool.")
 		statusSenderImage                    = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
-		viceDefaultBackendService            = flag.String("vice-default-backend", "vice-default-backend", "The name of the service to use as the default backend for VICE ingresses")
-		viceDefaultBackendServicePort        = flag.Int("vice-default-backend-port", 80, "The port for the default backend for VICE ingresses")
 		getAnalysisIDService                 = flag.String("get-analysis-id-service", "get-analysis-id", "The service name for the service that provides analysis ID lookups")
 		checkResourceAccessService           = flag.String("check-resource-access-service", "check-resource-access", "The name of the service that validates whether a user can access a resource")
 		userSuffix                           = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
@@ -369,25 +367,38 @@ func main() {
 		}
 	}
 
+	// Coordinator mode configuration
+	coordinatorEnabled := c.Bool("coordinator.enabled")
+	selectionStrategy := c.String("coordinator.selection_strategy")
+	if selectionStrategy == "" {
+		selectionStrategy = "priority"
+	}
+
+	if coordinatorEnabled {
+		log.Infof("Coordinator mode enabled with selection strategy: %s", selectionStrategy)
+	} else {
+		log.Info("Coordinator mode disabled, using direct K8s mode")
+	}
+
 	exposerInit := &ExposerAppInit{
-		Namespace:                     *namespace,
-		ViceNamespace:                 *viceNamespace,
-		ViceProxyImage:                proxyImage,
-		ViceDefaultBackendService:     *viceDefaultBackendService,
-		ViceDefaultBackendServicePort: *viceDefaultBackendServicePort,
-		GetAnalysisIDService:          *getAnalysisIDService,
-		CheckResourceAccessService:    *checkResourceAccessService,
-		db:                            dbconn,
-		UserSuffix:                    *userSuffix,
-		IRODSZone:                     zone,
-		IngressClass:                  *ingressClass,
-		ClientSet:                     clientset,
-		batchadapter:                  jexAdapter,
-		ImagePullSecretName:           imagePullSecretName,
-		LocalStorageClass:             *localStorageClass,
-		DisableViceProxyAuth:          *disableViceProxyAuth,
-		BypassUsers:                   bypassUsers,
-		EncryptionKey:                 encryptionKey,
+		Namespace:                  *namespace,
+		ViceNamespace:              *viceNamespace,
+		ViceProxyImage:             proxyImage,
+		GetAnalysisIDService:       *getAnalysisIDService,
+		CheckResourceAccessService: *checkResourceAccessService,
+		db:                         dbconn,
+		UserSuffix:                 *userSuffix,
+		IRODSZone:                  zone,
+		IngressClass:               *ingressClass,
+		ClientSet:                  clientset,
+		batchadapter:               jexAdapter,
+		ImagePullSecretName:        imagePullSecretName,
+		LocalStorageClass:          *localStorageClass,
+		DisableViceProxyAuth:       *disableViceProxyAuth,
+		BypassUsers:                bypassUsers,
+		EncryptionKey:              encryptionKey,
+		CoordinatorEnabled:         coordinatorEnabled,
+		SelectionStrategy:          selectionStrategy,
 	}
 
 	// app is the base app-exposer functionality.

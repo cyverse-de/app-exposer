@@ -44,8 +44,6 @@ type SpecBuilderConfig struct {
 	ImagePullSecretName           string
 	ViceProxyImage                string
 	FrontendBaseURL               string
-	ViceDefaultBackendService     string
-	ViceDefaultBackendServicePort int
 	GetAnalysisIDService          string
 	CheckResourceAccessService    string
 	VICEBackendNamespace          string
@@ -184,6 +182,7 @@ func (b *SpecBuilder) labelsFromJob(ctx context.Context, job *model.Job) (map[st
 
 	return map[string]string{
 		"external-id":   job.InvocationID,
+		"analysis-id":   job.ID,
 		"app-name":      common.LabelValueString(job.AppName),
 		"app-id":        job.AppID,
 		"username":      common.LabelValueString(job.Submitter),
@@ -1113,15 +1112,6 @@ func (b *SpecBuilder) getIngress(ctx context.Context, job *model.Job, svc *apiv1
 		return nil, fmt.Errorf("port %s was not found in the service", constants.VICEProxyPortName)
 	}
 
-	defaultBackend := &netv1.IngressBackend{
-		Service: &netv1.IngressServiceBackend{
-			Name: b.config.ViceDefaultBackendService,
-			Port: netv1.ServiceBackendPort{
-				Number: int32(b.config.ViceDefaultBackendServicePort),
-			},
-		},
-	}
-
 	backend := &netv1.IngressBackend{
 		Service: &netv1.IngressServiceBackend{
 			Name: svc.Name,
@@ -1172,7 +1162,6 @@ func (b *SpecBuilder) getIngress(ctx context.Context, job *model.Job, svc *apiv1
 			Annotations: annotations,
 		},
 		Spec: netv1.IngressSpec{
-			DefaultBackend:   defaultBackend,
 			IngressClassName: &ingressClass,
 			Rules:            rules,
 		},

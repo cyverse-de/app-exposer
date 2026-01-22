@@ -41,8 +41,6 @@ type Init struct {
 	ImagePullSecretName           string
 	ViceProxyImage                string
 	FrontendBaseURL               string
-	ViceDefaultBackendService     string
-	ViceDefaultBackendServicePort int
 	GetAnalysisIDService          string
 	CheckResourceAccessService    string
 	VICEBackendNamespace          string
@@ -106,6 +104,7 @@ func (i *Incluster) LabelsFromJob(ctx context.Context, job *model.Job) (map[stri
 
 	return map[string]string{
 		"external-id":   job.InvocationID,
+		"analysis-id":   job.ID,
 		"app-name":      common.LabelValueString(job.AppName),
 		"app-id":        job.AppID,
 		"username":      common.LabelValueString(job.Submitter),

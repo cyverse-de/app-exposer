@@ -14,13 +14,24 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
+// VICELaunchRequest wraps model.Job with additional launch options.
+// This allows callers to specify which cluster to deploy to.
+type VICELaunchRequest struct {
+	*model.Job
+
+	// TargetCluster is the name of the cluster to deploy to.
+	// If empty or omitted, the analysis is deployed to the local cluster.
+	// If specified, the analysis is routed through the coordinator to the named cluster.
+	TargetCluster string `json:"target_cluster,omitempty"`
+}
+
 // @ID				launch-app
 // @Summary		Launch a VICE analysis
 // @Description	The HTTP handler that orchestrates the launching of a VICE analysis inside
 // @Description	the k8s cluster. This gets passed to the router to be associated with a route. The Job
 // @Description	is passed in as the body of the request.
 // @Accept			json
-// @Param			request						body	AnalysisLaunch	true	"The request body containing the analysis details"
+// @Param			request						body	VICELaunchRequest	true	"The request body containing the analysis details"
 // @Param			disable-resource-tracking	query	boolean			false	"Bypass resource tracking"	default(false)
 // @Success		200
 // @Failure		400	{object}	common.ErrorResponse
@@ -28,17 +39,60 @@ import (
 // @Router			/vice/launch [post]
 func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	var (
-		job *model.Job
-		err error
+		launch VICELaunchRequest
+		err    error
 	)
 
 	ctx := c.Request().Context()
 
-	job = &model.Job{}
+	launch.Job = &model.Job{}
 
-	if err = c.Bind(job); err != nil {
+	if err = c.Bind(&launch); err != nil {
 		return err
 	}
+
+	job := launch.Job
+	targetCluster := launch.TargetCluster
+
+	// Log whether the analysis ID was provided in the payload
+	if job.ID != "" {
+		log.Infof("received launch with analysis_id: %s, external_id: %s, target_cluster: %q", job.ID, job.InvocationID, targetCluster)
+	} else {
+		log.Warnf("received launch without analysis_id, external_id: %s, target_cluster: %q (will require DB lookup)", job.InvocationID, targetCluster)
+	}
+
+	// Validate the job first
+	if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
+		if validationErr, ok := err.(common.ErrorResponse); ok {
+			return validationErr
+		}
+		return echo.NewHTTPError(status, err.Error())
+	}
+
+	// Route based on target cluster
+	if targetCluster != "" {
+		// Named cluster - route through coordinator to remote deployer
+		log.Infof("using coordinator mode for launch to cluster %s", targetCluster)
+		if err = h.coordinator.LaunchToCluster(ctx, job, targetCluster); err != nil {
+			log.Errorf("coordinator launch to cluster %s failed: %v", targetCluster, err)
+			return err
+		}
+		return c.NoContent(http.StatusOK)
+	}
+
+	// Empty target = local cluster
+	// If coordinator mode is enabled without a target cluster, use auto-selection
+	if h.UseCoordinator() {
+		log.Info("using coordinator mode for launch (auto-select cluster)")
+		if err = h.coordinator.Launch(ctx, job); err != nil {
+			log.Errorf("coordinator launch failed: %v", err)
+			return err
+		}
+		return c.NoContent(http.StatusOK)
+	}
+
+	// Direct-to-K8s path (local cluster, no coordinator)
+	log.Info("using direct K8s mode for launch")
 
 	found, err := h.incluster.IsAnalysisInCluster(ctx, job.InvocationID)
 	if err != nil {
@@ -48,13 +102,6 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	// If the deployment for this invocation ID is already in the cluster, there's nothing to do.
 	if found {
 		return c.NoContent(http.StatusOK)
-	}
-
-	if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
-		if validationErr, ok := err.(common.ErrorResponse); ok {
-			return validationErr
-		}
-		return echo.NewHTTPError(status, err.Error())
 	}
 
 	// Create the excludes file ConfigMap for the job.

@@ -297,6 +297,13 @@ type IngressInfo struct {
 func ingressInfo(ingress *netv1.Ingress) *IngressInfo {
 	labels := ingress.GetObjectMeta().GetLabels()
 
+	defaultBackend := ""
+	if ingress.Spec.DefaultBackend != nil && ingress.Spec.DefaultBackend.Service != nil {
+		defaultBackend = fmt.Sprintf("%s:%d",
+			ingress.Spec.DefaultBackend.Service.Name,
+			ingress.Spec.DefaultBackend.Service.Port.Number)
+	}
+
 	return &IngressInfo{
 		MetaInfo: MetaInfo{
 			Name:              ingress.GetName(),
@@ -309,12 +316,8 @@ func ingressInfo(ingress *netv1.Ingress) *IngressInfo {
 			Username:          labels["username"],
 			CreationTimestamp: ingress.GetCreationTimestamp().String(),
 		},
-		Rules: ingress.Spec.Rules,
-		DefaultBackend: fmt.Sprintf(
-			"%s:%d",
-			ingress.Spec.DefaultBackend.Service.Name,
-			ingress.Spec.DefaultBackend.Service.Port.Number,
-		),
+		Rules:          ingress.Spec.Rules,
+		DefaultBackend: defaultBackend,
 	}
 }
 

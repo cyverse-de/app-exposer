@@ -31,6 +31,7 @@ func (h *Handlers) RegisterRoutes(e *echo.Echo) {
 	api.GET("/deployments/:external_id/status", h.GetStatus)
 	api.GET("/deployments/:external_id/url-ready", h.CheckURLReady)
 	api.GET("/deployments/:external_id/logs", h.GetLogs)
+	api.POST("/deployments/:external_id/file-transfer", h.TriggerFileTransfer)
 
 	// Health check
 	api.GET("/health", h.Health)
@@ -231,4 +232,49 @@ func (h *Handlers) Health(c echo.Context) error {
 	}
 
 	return c.JSON(statusCode, health)
+}
+
+// TriggerFileTransfer handles POST /api/v1/deployments/:external_id/file-transfer
+//
+//	@Summary		Trigger file transfer
+//	@Description	Initiates a file upload or download for a deployment
+//	@Tags			deployments
+//	@Accept			json
+//	@Produce		json
+//	@Param			external_id	path		string							true	"External ID of the deployment"
+//	@Param			namespace	query		string							false	"Kubernetes namespace (defaults to configured namespace)"
+//	@Param			request		body		vicetypes.FileTransferRequest	true	"File transfer request"
+//	@Success		200			{object}	vicetypes.FileTransferResponse
+//	@Failure		400			{object}	vicetypes.FileTransferResponse
+//	@Failure		500			{object}	vicetypes.FileTransferResponse
+//	@Router			/api/v1/deployments/{external_id}/file-transfer [post]
+func (h *Handlers) TriggerFileTransfer(c echo.Context) error {
+	ctx := c.Request().Context()
+	externalID := c.Param("external_id")
+	namespace := c.QueryParam("namespace")
+	if namespace == "" {
+		namespace = h.namespace
+	}
+
+	var req vicetypes.FileTransferRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, vicetypes.FileTransferResponse{
+			Status: "error",
+			Error:  "invalid request body: " + err.Error(),
+		})
+	}
+
+	if req.Type != "upload" && req.Type != "download" {
+		return c.JSON(http.StatusBadRequest, vicetypes.FileTransferResponse{
+			Status: "error",
+			Error:  "type must be 'upload' or 'download'",
+		})
+	}
+
+	resp, err := h.deployer.TriggerFileTransfer(ctx, externalID, namespace, req.Type, req.Async)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, resp)
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }

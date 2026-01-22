@@ -440,6 +440,65 @@
                 }
             }
         },
+        "/api/v1/deployments/{external_id}/file-transfer": {
+            "post": {
+                "description": "Initiates a file upload or download for a deployment",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "deployments"
+                ],
+                "summary": "Trigger file transfer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "External ID of the deployment",
+                        "name": "external_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Kubernetes namespace (defaults to configured namespace)",
+                        "name": "namespace",
+                        "in": "query"
+                    },
+                    {
+                        "description": "File transfer request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/vicetypes.FileTransferRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/vicetypes.FileTransferResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/vicetypes.FileTransferResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/vicetypes.FileTransferResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/deployments/{external_id}/logs": {
             "get": {
                 "description": "Returns logs from the deployment's pods",
@@ -9602,6 +9661,40 @@
                 "replicas": {
                     "description": "Replicas is the total number of replicas",
                     "type": "integer"
+                }
+            }
+        },
+        "vicetypes.FileTransferRequest": {
+            "type": "object",
+            "properties": {
+                "async": {
+                    "description": "Async indicates whether to wait for the transfer to complete (default: false = wait)",
+                    "type": "boolean"
+                },
+                "type": {
+                    "description": "Type is the transfer type (\"download\" or \"upload\")",
+                    "type": "string"
+                }
+            }
+        },
+        "vicetypes.FileTransferResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "description": "Error contains error details if status is \"error\"",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "Message contains additional information about the transfer",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status is the result status (\"completed\", \"failed\", \"in_progress\", \"error\")",
+                    "type": "string"
+                },
+                "transfer_id": {
+                    "description": "TransferID is the unique identifier for tracking the transfer",
+                    "type": "string"
                 }
             }
         },

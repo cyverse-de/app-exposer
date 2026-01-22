@@ -229,16 +229,27 @@ func (a *Apps) tryForAnalysisID(ctx context.Context, job *model.Job, maxAttempts
 }
 
 func (a *Apps) storeMillicoresInternal(ctx context.Context, job *model.Job, millicores *apd.Decimal) error {
-	analysisID, err := a.tryForAnalysisID(ctx, job, 30)
-	if err != nil {
-		return err
+	var analysisID string
+	var err error
+
+	// If the job already has an ID (analysis_id), use it directly
+	if job.ID != "" {
+		log.Debugf("using analysis ID from job payload: %s", job.ID)
+		analysisID = job.ID
+	} else {
+		// Fallback to lookup by external_id for backwards compatibility
+		log.Debugf("job.ID not set, looking up analysis ID by external ID: %s", job.InvocationID)
+		analysisID, err = a.tryForAnalysisID(ctx, job, 30)
+		if err != nil {
+			return err
+		}
 	}
 
 	if err = a.setMillicoresReserved(ctx, analysisID, millicores); err != nil {
 		return err
 	}
 
-	return err
+	return nil
 }
 
 // SetMillicoresReserved updates the number of millicores reserved for a single job.

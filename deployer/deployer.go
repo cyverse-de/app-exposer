@@ -5,9 +5,16 @@ package deployer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"path"
+	"time"
 
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/vicetypes"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -467,6 +474,192 @@ func (d *Deployer) Health(ctx context.Context) *vicetypes.HealthResponse {
 		Version:    Version,
 		Kubernetes: k8sHealthy,
 		Message:    message,
+	}
+}
+
+// TriggerFileTransfer initiates a file transfer (upload or download) on a deployment.
+func (d *Deployer) TriggerFileTransfer(ctx context.Context, externalID, namespace, transferType string, async bool) (*vicetypes.FileTransferResponse, error) {
+	if namespace == "" {
+		namespace = d.namespace
+	}
+
+	log.Infof("triggering %s file transfer for %s", transferType, externalID)
+
+	// Find the service for this deployment
+	labelSelector := labels.Set(map[string]string{
+		"external-id": externalID,
+	}).AsSelector().String()
+
+	listOptions := metav1.ListOptions{
+		LabelSelector: labelSelector,
+	}
+
+	svcClient := d.clientset.CoreV1().Services(namespace)
+	svcList, err := svcClient.List(ctx, listOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list services: %w", err)
+	}
+
+	if len(svcList.Items) == 0 {
+		return &vicetypes.FileTransferResponse{
+			Status: "error",
+			Error:  "no services found for deployment",
+		}, nil
+	}
+
+	svc := svcList.Items[0]
+
+	// Determine the request path based on transfer type
+	var reqPath string
+	switch transferType {
+	case "upload":
+		reqPath = constants.UploadBasePath
+	case "download":
+		reqPath = constants.DownloadBasePath
+	default:
+		return &vicetypes.FileTransferResponse{
+			Status: "error",
+			Error:  fmt.Sprintf("invalid transfer type: %s", transferType),
+		}, nil
+	}
+
+	// Call the file transfer service
+	xferResp, err := d.requestTransfer(ctx, svc, reqPath)
+	if err != nil {
+		return &vicetypes.FileTransferResponse{
+			Status: "error",
+			Error:  fmt.Sprintf("failed to initiate transfer: %v", err),
+		}, nil
+	}
+
+	// If async, return immediately
+	if async {
+		return &vicetypes.FileTransferResponse{
+			Status:     "in_progress",
+			TransferID: xferResp.UUID,
+			Message:    fmt.Sprintf("%s transfer initiated", transferType),
+		}, nil
+	}
+
+	// Wait for transfer to complete
+	return d.waitForTransfer(ctx, svc, reqPath, xferResp.UUID, transferType)
+}
+
+type transferResponse struct {
+	UUID   string `json:"uuid"`
+	Status string `json:"status"`
+	Kind   string `json:"kind"`
+}
+
+func (d *Deployer) requestTransfer(ctx context.Context, svc apiv1.Service, reqPath string) (*transferResponse, error) {
+	svcURL := url.URL{
+		Scheme: "http",
+		Host:   fmt.Sprintf("%s.%s:%d", svc.Name, svc.Namespace, constants.FileTransfersPort),
+		Path:   reqPath,
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, svcURL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 399 {
+		return nil, fmt.Errorf("transfer request returned status %d", resp.StatusCode)
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var xferResp transferResponse
+	if err := json.Unmarshal(bodyBytes, &xferResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &xferResp, nil
+}
+
+func (d *Deployer) getTransferStatus(ctx context.Context, svc apiv1.Service, reqPath, uuid string) (*transferResponse, error) {
+	svcURL := url.URL{
+		Scheme: "http",
+		Host:   fmt.Sprintf("%s.%s:%d", svc.Name, svc.Namespace, constants.FileTransfersPort),
+		Path:   path.Join(reqPath, uuid),
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, svcURL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 399 {
+		return nil, fmt.Errorf("status request returned status %d", resp.StatusCode)
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var xferResp transferResponse
+	if err := json.Unmarshal(bodyBytes, &xferResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &xferResp, nil
+}
+
+func (d *Deployer) waitForTransfer(ctx context.Context, svc apiv1.Service, reqPath, uuid, transferType string) (*vicetypes.FileTransferResponse, error) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return &vicetypes.FileTransferResponse{
+				Status:     "error",
+				TransferID: uuid,
+				Error:      "context cancelled",
+			}, ctx.Err()
+		case <-ticker.C:
+			xferResp, err := d.getTransferStatus(ctx, svc, reqPath, uuid)
+			if err != nil {
+				log.Warnf("error getting transfer status: %v", err)
+				continue
+			}
+
+			switch xferResp.Status {
+			case "completed":
+				return &vicetypes.FileTransferResponse{
+					Status:     "completed",
+					TransferID: uuid,
+					Message:    fmt.Sprintf("%s completed successfully", transferType),
+				}, nil
+			case "failed":
+				return &vicetypes.FileTransferResponse{
+					Status:     "failed",
+					TransferID: uuid,
+					Error:      fmt.Sprintf("%s failed", transferType),
+				}, nil
+			default:
+				// Still in progress
+				log.Debugf("transfer %s status: %s", uuid, xferResp.Status)
+			}
+		}
 	}
 }
 

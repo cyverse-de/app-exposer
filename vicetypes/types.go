@@ -165,15 +165,21 @@ type URLReadyResponse struct {
 type FileTransferRequest struct {
 	// Type is the transfer type ("download" or "upload")
 	Type string `json:"type"`
+
+	// Async indicates whether to wait for the transfer to complete (default: false = wait)
+	Async bool `json:"async"`
 }
 
 // FileTransferResponse is returned after initiating a file transfer.
 type FileTransferResponse struct {
-	// Status is the result status ("initiated", "error")
+	// Status is the result status ("completed", "failed", "in_progress", "error")
 	Status string `json:"status"`
 
 	// TransferID is the unique identifier for tracking the transfer
 	TransferID string `json:"transfer_id,omitempty"`
+
+	// Message contains additional information about the transfer
+	Message string `json:"message,omitempty"`
 
 	// Error contains error details if status is "error"
 	Error string `json:"error,omitempty"`

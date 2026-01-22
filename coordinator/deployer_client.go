@@ -302,3 +302,58 @@ func (c *DeployerClient) IsDeployed(ctx context.Context, externalID string) (str
 
 	return "", false
 }
+
+// TriggerFileTransfer initiates a file transfer (upload or download) on a deployment.
+func (c *DeployerClient) TriggerFileTransfer(ctx context.Context, clusterID, externalID, namespace, transferType string, async bool) (*vicetypes.FileTransferResponse, error) {
+	cluster, ok := c.registry.GetCluster(clusterID)
+	if !ok {
+		return nil, fmt.Errorf("cluster not found: %s", clusterID)
+	}
+
+	client, ok := c.registry.GetHTTPClient(clusterID)
+	if !ok {
+		return nil, fmt.Errorf("HTTP client not found for cluster: %s", clusterID)
+	}
+
+	endpoint := fmt.Sprintf("%s/api/v1/deployments/%s/file-transfer", cluster.DeployerURL, url.PathEscape(externalID))
+
+	params := url.Values{}
+	if namespace != "" {
+		params.Set("namespace", namespace)
+	}
+	if len(params) > 0 {
+		endpoint += "?" + params.Encode()
+	}
+
+	reqBody := vicetypes.FileTransferRequest{
+		Type:  transferType,
+		Async: async,
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal file transfer request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send file transfer request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result vicetypes.FileTransferResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		return &result, fmt.Errorf("deployer returned error: %s", result.Error)
+	}
+
+	return &result, nil
+}

@@ -44,18 +44,7 @@ func (i *Incluster) getIngress(ctx context.Context, job *model.Job, svc *apiv1.S
 		return nil, fmt.Errorf("port %s was not found in the service", constants.VICEProxyPortName)
 	}
 
-	// default backend, should point at the VICE default backend, which redirects
-	// users to the loading page.
-	defaultBackend := &netv1.IngressBackend{
-		Service: &netv1.IngressServiceBackend{
-			Name: i.ViceDefaultBackendService,
-			Port: netv1.ServiceBackendPort{
-				Number: int32(i.ViceDefaultBackendServicePort),
-			},
-		},
-	}
-
-	// Backend for the service, not the default backend
+	// Backend for the service
 	backend := &netv1.IngressBackend{
 		Service: &netv1.IngressServiceBackend{
 			Name: svc.Name,
@@ -74,7 +63,7 @@ func (i *Incluster) getIngress(ctx context.Context, job *model.Job, svc *apiv1.S
 				Paths: []netv1.HTTPIngressPath{
 					{
 						PathType: &pathTytpe,
-						Backend:  *backend, // service backend, not the default backend
+						Backend:  *backend,
 					},
 				},
 			},
@@ -105,7 +94,6 @@ func (i *Incluster) getIngress(ctx context.Context, job *model.Job, svc *apiv1.S
 			Annotations: annotations,
 		},
 		Spec: netv1.IngressSpec{
-			DefaultBackend:   defaultBackend, // default backend, not the service backend
 			IngressClassName: &class,
 			Rules:            rules,
 		},

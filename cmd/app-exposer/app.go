@@ -30,38 +30,38 @@ import (
 // REST-like API with the underlying Kubernetes API. All of the HTTP handlers
 // are methods for an ExposerApp instance.
 type ExposerApp struct {
-	outcluster       *outcluster.Outcluster
-	incluster        *incluster.Incluster
-	handlers         *httphandlers.HTTPHandlers
-	namespace        string
-	clientset        kubernetes.Interface
-	router           *echo.Echo
-	db               *sqlx.DB
-	instantlaunches  *instantlaunches.App
-	clusterRegistry  *coordinator.ClusterRegistry
-	clusterHandlers  *coordinator.ClusterHandlers
+	outcluster      *outcluster.Outcluster
+	incluster       *incluster.Incluster
+	handlers        *httphandlers.HTTPHandlers
+	namespace       string
+	clientset       kubernetes.Interface
+	router          *echo.Echo
+	db              *sqlx.DB
+	instantlaunches *instantlaunches.App
+	clusterRegistry *coordinator.ClusterRegistry
+	clusterHandlers *coordinator.ClusterHandlers
 }
 
 // ExposerAppInit contains configuration settings for creating a new ExposerApp.
 type ExposerAppInit struct {
-	Namespace                     string // The namespace that the Ingress settings are added to.
-	ViceNamespace                 string // The namespace containing the running VICE apps.
-	ViceProxyImage                string
-	ViceDefaultBackendService     string
-	ViceDefaultBackendServicePort int
-	GetAnalysisIDService          string
-	CheckResourceAccessService    string
-	db                            *sqlx.DB
-	UserSuffix                    string
-	IRODSZone                     string
-	IngressClass                  string
-	ClientSet                     kubernetes.Interface
-	batchadapter                  *adapter.JEXAdapter
-	ImagePullSecretName           string
-	LocalStorageClass             string
-	DisableViceProxyAuth          bool
-	BypassUsers                   []string
-	EncryptionKey                 []byte // Key for encrypting cluster client keys (32 bytes for AES-256)
+	Namespace                  string // The namespace that the Ingress settings are added to.
+	ViceNamespace              string // The namespace containing the running VICE apps.
+	ViceProxyImage             string
+	GetAnalysisIDService       string
+	CheckResourceAccessService string
+	db                         *sqlx.DB
+	UserSuffix                 string
+	IRODSZone                  string
+	IngressClass               string
+	ClientSet                  kubernetes.Interface
+	batchadapter               *adapter.JEXAdapter
+	ImagePullSecretName        string
+	LocalStorageClass          string
+	DisableViceProxyAuth       bool
+	BypassUsers                []string
+	EncryptionKey              []byte // Key for encrypting cluster client keys (32 bytes for AES-256)
+	CoordinatorEnabled         bool   // Whether to enable coordinator mode for multi-cluster deployments
+	SelectionStrategy          string // Cluster selection strategy (priority, round-robin)
 }
 
 //	@title			app-exposer
@@ -106,8 +106,6 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		ImagePullSecretName:           init.ImagePullSecretName,
 		ViceProxyImage:                init.ViceProxyImage,
 		FrontendBaseURL:               c.String("k8s.frontend.base"),
-		ViceDefaultBackendService:     init.ViceDefaultBackendService,
-		ViceDefaultBackendServicePort: init.ViceDefaultBackendServicePort,
 		GetAnalysisIDService:          init.GetAnalysisIDService,
 		CheckResourceAccessService:    init.CheckResourceAccessService,
 		VICEBackendNamespace:          c.String("vice.backend-namespace"),
@@ -134,6 +132,49 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	deployerClient := coordinator.NewDeployerClient(clusterRegistry)
 	clusterHandlers := coordinator.NewClusterHandlers(clusterRegistry, deployerClient)
 
+	// Create HTTP handlers
+	handlers := httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter)
+
+	// Create and configure coordinator if enabled
+	if init.CoordinatorEnabled {
+		strategy := coordinator.SelectionStrategy(init.SelectionStrategy)
+		if strategy == "" {
+			strategy = coordinator.StrategyPriority
+		}
+
+		coordinatorConfig := coordinator.CoordinatorConfig{
+			Enabled:           true,
+			SelectionStrategy: strategy,
+			SpecBuilderConfig: coordinator.SpecBuilderConfig{
+				PorklockImage:                 c.String("vice.file-transfers.image"),
+				PorklockTag:                   c.String("vice.file-transfers.tag"),
+				UseCSIDriver:                  c.Bool("vice.use_csi_driver"),
+				InputPathListIdentifier:       c.String("path_list.file_identifier"),
+				TicketInputPathListIdentifier: c.String("tickets_path_list.file_identifier"),
+				ImagePullSecretName:           init.ImagePullSecretName,
+				ViceProxyImage:                init.ViceProxyImage,
+				FrontendBaseURL:               c.String("k8s.frontend.base"),
+				GetAnalysisIDService:          init.GetAnalysisIDService,
+				CheckResourceAccessService:    init.CheckResourceAccessService,
+				VICEBackendNamespace:          c.String("vice.backend-namespace"),
+				AppsServiceBaseURL:            appsServiceBaseURL,
+				ViceNamespace:                 init.ViceNamespace,
+				UserSuffix:                    init.UserSuffix,
+				KeycloakBaseURL:               c.String("keycloak.base"),
+				KeycloakRealm:                 c.String("keycloak.realm"),
+				KeycloakClientID:              c.String("keycloak.client-id"),
+				KeycloakClientSecret:          c.String("keycloak.client-secret"),
+				IRODSZone:                     init.IRODSZone,
+				IngressClass:                  init.IngressClass,
+				LocalStorageClass:             init.LocalStorageClass,
+				DisableViceProxyAuth:          init.DisableViceProxyAuth,
+			},
+		}
+
+		coord := coordinator.NewCoordinator(init.db, clusterRegistry, apps, coordinatorConfig)
+		handlers.SetCoordinator(coord)
+	}
+
 	app := &ExposerApp{
 		outcluster:      outcluster.New(init.ClientSet, init.Namespace, init.IngressClass),
 		incluster:       incluster,
@@ -141,7 +182,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		clientset:       init.ClientSet,
 		router:          echo.New(),
 		db:              init.db,
-		handlers:        httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter),
+		handlers:        handlers,
 		clusterRegistry: clusterRegistry,
 		clusterHandlers: clusterHandlers,
 	}

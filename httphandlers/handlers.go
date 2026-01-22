@@ -8,6 +8,7 @@ import (
 	"github.com/cyverse-de/app-exposer/adapter"
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/coordinator"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/model/v9"
 	"github.com/labstack/echo/v4"
@@ -21,21 +22,31 @@ var otelName = "github.com/cyverse-de/app-exposer/handlers"
 type AnalysisLaunch model.Analysis
 
 type HTTPHandlers struct {
-	incluster *incluster.Incluster
-	apps      *apps.Apps
-	clientset kubernetes.Interface
-	//db           *db.Database
+	incluster    *incluster.Incluster
+	apps         *apps.Apps
+	clientset    kubernetes.Interface
 	batchadapter *adapter.JEXAdapter
+	coordinator  *coordinator.Coordinator
 }
 
 func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface, batchadapter *adapter.JEXAdapter) *HTTPHandlers {
 	return &HTTPHandlers{
-		incluster,
-		apps,
-		clientset,
-		//db,
-		batchadapter,
+		incluster:    incluster,
+		apps:         apps,
+		clientset:    clientset,
+		batchadapter: batchadapter,
 	}
+}
+
+// SetCoordinator sets the coordinator for multi-cluster deployments.
+// If set and enabled, launch/exit operations will route through the coordinator.
+func (h *HTTPHandlers) SetCoordinator(c *coordinator.Coordinator) {
+	h.coordinator = c
+}
+
+// UseCoordinator returns true if coordinator mode is enabled and configured.
+func (h *HTTPHandlers) UseCoordinator() bool {
+	return h.coordinator != nil && h.coordinator.IsEnabled()
 }
 
 type ExternalIDResp struct {

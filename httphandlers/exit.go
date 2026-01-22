@@ -24,7 +24,18 @@ import (
 // @Failure		500	{object}	common.ErrorResponse
 // @Router			/vice/{id}/exit [post]
 func (h *HTTPHandlers) ExitHandler(c echo.Context) error {
-	return h.incluster.DoExit(c.Request().Context(), c.Param("id"))
+	ctx := c.Request().Context()
+	externalID := c.Param("id")
+
+	// If coordinator mode is enabled, route through the coordinator
+	if h.UseCoordinator() {
+		log.Infof("using coordinator mode for exit of %s", externalID)
+		return h.coordinator.Exit(ctx, externalID)
+	}
+
+	// Legacy direct-to-K8s path
+	log.Infof("using direct K8s mode for exit of %s", externalID)
+	return h.incluster.DoExit(ctx, externalID)
 }
 
 // @ID				admin-exit
@@ -48,6 +59,14 @@ func (h *HTTPHandlers) AdminExitHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
+	// If coordinator mode is enabled, route through the coordinator
+	if h.UseCoordinator() {
+		log.Infof("using coordinator mode for admin exit of %s", externalID)
+		return h.coordinator.Exit(ctx, externalID)
+	}
+
+	// Legacy direct-to-K8s path
+	log.Infof("using direct K8s mode for admin exit of %s", externalID)
 	return h.incluster.DoExit(ctx, externalID)
 }
 
@@ -65,6 +84,8 @@ func (h *HTTPHandlers) AdminExitHandler(c echo.Context) error {
 func (h *HTTPHandlers) SaveAndExitHandler(c echo.Context) error {
 	log.Info("save and exit called")
 
+	useCoordinator := h.UseCoordinator()
+
 	// Since file transfers can take a while, we should do this asynchronously by default.
 	go func(ctx context.Context, c echo.Context) {
 		var err error
@@ -78,14 +99,27 @@ func (h *HTTPHandlers) SaveAndExitHandler(c echo.Context) error {
 		log.Infof("calling doFileTransfer for %s", externalID)
 
 		// Trigger a blocking output file transfer request.
-		if err = h.incluster.DoFileTransfer(ctx, externalID, constants.UploadBasePath, constants.UploadKind, false); err != nil {
-			log.Error(errors.Wrap(err, "error doing file transfer")) // Log but don't exit. Possible to cancel a job that hasn't started yet
+		if useCoordinator {
+			log.Info("using coordinator mode for file transfer")
+			if err = h.coordinator.TriggerFileTransfer(ctx, externalID, "upload", false); err != nil {
+				log.Error(errors.Wrap(err, "error doing file transfer"))
+			}
+		} else {
+			if err = h.incluster.DoFileTransfer(ctx, externalID, constants.UploadBasePath, constants.UploadKind, false); err != nil {
+				log.Error(errors.Wrap(err, "error doing file transfer"))
+			}
 		}
 
 		log.Infof("calling VICEExit for %s", externalID)
 
-		if err = h.incluster.DoExit(ctx, externalID); err != nil {
-			log.Error(errors.Wrapf(err, "error triggering analysis exit for %s", externalID))
+		if useCoordinator {
+			if err = h.coordinator.Exit(ctx, externalID); err != nil {
+				log.Error(errors.Wrapf(err, "error triggering analysis exit for %s", externalID))
+			}
+		} else {
+			if err = h.incluster.DoExit(ctx, externalID); err != nil {
+				log.Error(errors.Wrapf(err, "error triggering analysis exit for %s", externalID))
+			}
 		}
 
 		log.Infof("after VICEExit for %s", externalID)
@@ -110,6 +144,8 @@ func (h *HTTPHandlers) SaveAndExitHandler(c echo.Context) error {
 func (h *HTTPHandlers) AdminSaveAndExitHandler(c echo.Context) error {
 	log.Info("admin save and exit called")
 
+	useCoordinator := h.UseCoordinator()
+
 	// Since file transfers can take a while, we should do this asynchronously by default.
 	go func(ctx context.Context, c echo.Context) {
 		var (
@@ -132,14 +168,27 @@ func (h *HTTPHandlers) AdminSaveAndExitHandler(c echo.Context) error {
 		}
 
 		// Trigger a blocking output file transfer request.
-		if err = h.incluster.DoFileTransfer(ctx, externalID, constants.UploadBasePath, constants.UploadKind, false); err != nil {
-			log.Error(errors.Wrap(err, "error doing file transfer")) // Log but don't exit. Possible to cancel a job that hasn't started yet
+		if useCoordinator {
+			log.Info("using coordinator mode for file transfer")
+			if err = h.coordinator.TriggerFileTransfer(ctx, externalID, "upload", false); err != nil {
+				log.Error(errors.Wrap(err, "error doing file transfer"))
+			}
+		} else {
+			if err = h.incluster.DoFileTransfer(ctx, externalID, constants.UploadBasePath, constants.UploadKind, false); err != nil {
+				log.Error(errors.Wrap(err, "error doing file transfer"))
+			}
 		}
 
 		log.Debug("calling VICEExit")
 
-		if err = h.incluster.DoExit(ctx, externalID); err != nil {
-			log.Error(err)
+		if useCoordinator {
+			if err = h.coordinator.Exit(ctx, externalID); err != nil {
+				log.Error(err)
+			}
+		} else {
+			if err = h.incluster.DoExit(ctx, externalID); err != nil {
+				log.Error(err)
+			}
 		}
 
 		log.Debug("after VICEExit")
