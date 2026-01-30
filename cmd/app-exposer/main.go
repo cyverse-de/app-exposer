@@ -94,9 +94,7 @@ func main() {
 		transferWorkingDir                   = flag.String("transfer-working-dir", "/de-app-work", "The working directory within the file transfer image.")
 		transferLogLevel                     = flag.String("transfer-log-level", "debug", "The log level of the output of the file transfer tool.")
 		statusSenderImage                    = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
-		getAnalysisIDService                 = flag.String("get-analysis-id-service", "get-analysis-id", "The service name for the service that provides analysis ID lookups")
-		checkResourceAccessService           = flag.String("check-resource-access-service", "check-resource-access", "The name of the service that validates whether a user can access a resource")
-		userSuffix                           = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
+		userSuffix = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
 		defaultMillicores                    = flag.Float64("default-millicores", 4000.0, "The default number of millicores reserved for an analysis.")
 		argoWorkflowNS                       = flag.String("workflow-namespace", "argo", "The namespace Argo Workflows run in.")
 		defaultCPUResourceRequest            = flag.String("default-cpu-resource-request", "1000m", "The default CPU resource request for an analysis.")
@@ -383,10 +381,8 @@ func main() {
 	exposerInit := &ExposerAppInit{
 		Namespace:                  *namespace,
 		ViceNamespace:              *viceNamespace,
-		ViceProxyImage:             proxyImage,
-		GetAnalysisIDService:       *getAnalysisIDService,
-		CheckResourceAccessService: *checkResourceAccessService,
-		db:                         dbconn,
+		ViceProxyImage: proxyImage,
+		db:             dbconn,
 		UserSuffix:                 *userSuffix,
 		IRODSZone:                  zone,
 		IngressClass:               *ingressClass,

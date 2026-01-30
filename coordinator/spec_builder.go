@@ -42,11 +42,9 @@ type SpecBuilderConfig struct {
 	InputPathListIdentifier       string
 	TicketInputPathListIdentifier string
 	ImagePullSecretName           string
-	ViceProxyImage                string
-	FrontendBaseURL               string
-	GetAnalysisIDService          string
-	CheckResourceAccessService    string
-	VICEBackendNamespace          string
+	ViceProxyImage       string
+	FrontendBaseURL      string
+	VICEBackendNamespace string
 	AppsServiceBaseURL            string
 	ViceNamespace                 string
 	UserSuffix                    string
@@ -412,9 +410,7 @@ func (b *SpecBuilder) viceProxyCommand(job *model.Job) []string {
 		"--backend-url", backendURL,
 		"--ws-backend-url", backendURL,
 		"--frontend-url", frontURL.String(),
-		"--external-id", job.InvocationID,
-		"--get-analysis-id-base", fmt.Sprintf("http://%s.%s", b.config.GetAnalysisIDService, b.config.VICEBackendNamespace),
-		"--check-resource-access-base", fmt.Sprintf("http://%s.%s", b.config.CheckResourceAccessService, b.config.VICEBackendNamespace),
+		"--analysis-id", job.ID,
 		"--keycloak-base-url", b.config.KeycloakBaseURL,
 		"--keycloak-realm", b.config.KeycloakRealm,
 		"--keycloak-client-id", b.config.KeycloakClientID,

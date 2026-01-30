@@ -10,6 +10,7 @@ import (
 // testJob creates a minimal Job for testing purposes.
 func testJob() *model.Job {
 	job := &model.Job{
+		ID:           "test-analysis-id",
 		UserID:       "test-user",
 		InvocationID: "test-invocation-id",
 		Steps: []model.Step{
@@ -30,10 +31,8 @@ func TestViceProxyCommandWithAuthEnabled(t *testing.T) {
 		InputPathListIdentifier:       "imapathlist",
 		TicketInputPathListIdentifier: "imaticketpathlist",
 		ImagePullSecretName:           "imanimagepullsecret",
-		ViceProxyImage:       "harbor.cyverse.org/de/vice-proxy",
-		FrontendBaseURL:      "https://de.example.org",
-		GetAnalysisIDService: "get-analysis-id",
-		CheckResourceAccessService:    "check-resource-access",
+		ViceProxyImage:                "harbor.cyverse.org/de/vice-proxy",
+		FrontendBaseURL:               "https://de.example.org",
 		VICEBackendNamespace:          "prod",
 		AppsServiceBaseURL:            "http://apps.prod",
 		ViceNamespace:                 "vice-apps",
@@ -65,8 +64,13 @@ func TestViceProxyCommandWithAuthEnabled(t *testing.T) {
 	assert.Contains(t, command, "--listen-addr")
 	assert.Contains(t, command, "--backend-url")
 	assert.Contains(t, command, "--frontend-url")
-	assert.Contains(t, command, "--external-id")
+	assert.Contains(t, command, "--analysis-id")
 	assert.Contains(t, command, "--keycloak-base-url")
+
+	// Verify removed flags are absent
+	assert.NotContains(t, command, "--external-id")
+	assert.NotContains(t, command, "--get-analysis-id-base")
+	assert.NotContains(t, command, "--check-resource-access-base")
 }
 
 func TestViceProxyCommandWithAuthDisabled(t *testing.T) {
@@ -77,10 +81,8 @@ func TestViceProxyCommandWithAuthDisabled(t *testing.T) {
 		InputPathListIdentifier:       "imapathlist",
 		TicketInputPathListIdentifier: "imaticketpathlist",
 		ImagePullSecretName:           "imanimagepullsecret",
-		ViceProxyImage:       "harbor.cyverse.org/de/vice-proxy",
-		FrontendBaseURL:      "https://de.example.org",
-		GetAnalysisIDService: "get-analysis-id",
-		CheckResourceAccessService:    "check-resource-access",
+		ViceProxyImage:                "harbor.cyverse.org/de/vice-proxy",
+		FrontendBaseURL:               "https://de.example.org",
 		VICEBackendNamespace:          "prod",
 		AppsServiceBaseURL:            "http://apps.prod",
 		ViceNamespace:                 "vice-apps",
@@ -110,7 +112,7 @@ func TestViceProxyCommandWithAuthDisabled(t *testing.T) {
 	assert.Contains(t, command, "--listen-addr")
 	assert.Contains(t, command, "--backend-url")
 	assert.Contains(t, command, "--frontend-url")
-	assert.Contains(t, command, "--external-id")
+	assert.Contains(t, command, "--analysis-id")
 }
 
 func TestViceProxyCommandFlagOrdering(t *testing.T) {
@@ -121,10 +123,8 @@ func TestViceProxyCommandFlagOrdering(t *testing.T) {
 		InputPathListIdentifier:       "imapathlist",
 		TicketInputPathListIdentifier: "imaticketpathlist",
 		ImagePullSecretName:           "imanimagepullsecret",
-		ViceProxyImage:       "harbor.cyverse.org/de/vice-proxy",
-		FrontendBaseURL:      "https://de.example.org",
-		GetAnalysisIDService: "get-analysis-id",
-		CheckResourceAccessService:    "check-resource-access",
+		ViceProxyImage:                "harbor.cyverse.org/de/vice-proxy",
+		FrontendBaseURL:               "https://de.example.org",
 		VICEBackendNamespace:          "prod",
 		AppsServiceBaseURL:            "http://apps.prod",
 		ViceNamespace:                 "vice-apps",

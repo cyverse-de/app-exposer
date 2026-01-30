@@ -44,12 +44,10 @@ type ExposerApp struct {
 
 // ExposerAppInit contains configuration settings for creating a new ExposerApp.
 type ExposerAppInit struct {
-	Namespace                  string // The namespace that the Ingress settings are added to.
-	ViceNamespace              string // The namespace containing the running VICE apps.
-	ViceProxyImage             string
-	GetAnalysisIDService       string
-	CheckResourceAccessService string
-	db                         *sqlx.DB
+	Namespace      string // The namespace that the Ingress settings are added to.
+	ViceNamespace  string // The namespace containing the running VICE apps.
+	ViceProxyImage string
+	db             *sqlx.DB
 	UserSuffix                 string
 	IRODSZone                  string
 	IngressClass               string
@@ -104,11 +102,9 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		InputPathListIdentifier:       c.String("path_list.file_identifier"),
 		TicketInputPathListIdentifier: c.String("tickets_path_list.file_identifier"),
 		ImagePullSecretName:           init.ImagePullSecretName,
-		ViceProxyImage:                init.ViceProxyImage,
-		FrontendBaseURL:               c.String("k8s.frontend.base"),
-		GetAnalysisIDService:          init.GetAnalysisIDService,
-		CheckResourceAccessService:    init.CheckResourceAccessService,
-		VICEBackendNamespace:          c.String("vice.backend-namespace"),
+		ViceProxyImage:       init.ViceProxyImage,
+		FrontendBaseURL:      c.String("k8s.frontend.base"),
+		VICEBackendNamespace: c.String("vice.backend-namespace"),
 		AppsServiceBaseURL:            appsServiceBaseURL,
 		JobStatusURL:                  jobStatusURL,
 		UserSuffix:                    init.UserSuffix,
@@ -152,11 +148,9 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 				InputPathListIdentifier:       c.String("path_list.file_identifier"),
 				TicketInputPathListIdentifier: c.String("tickets_path_list.file_identifier"),
 				ImagePullSecretName:           init.ImagePullSecretName,
-				ViceProxyImage:                init.ViceProxyImage,
-				FrontendBaseURL:               c.String("k8s.frontend.base"),
-				GetAnalysisIDService:          init.GetAnalysisIDService,
-				CheckResourceAccessService:    init.CheckResourceAccessService,
-				VICEBackendNamespace:          c.String("vice.backend-namespace"),
+				ViceProxyImage:       init.ViceProxyImage,
+				FrontendBaseURL:      c.String("k8s.frontend.base"),
+				VICEBackendNamespace: c.String("vice.backend-namespace"),
 				AppsServiceBaseURL:            appsServiceBaseURL,
 				ViceNamespace:                 init.ViceNamespace,
 				UserSuffix:                    init.UserSuffix,

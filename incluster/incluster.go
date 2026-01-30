@@ -39,11 +39,9 @@ type Init struct {
 	InputPathListIdentifier       string
 	TicketInputPathListIdentifier string
 	ImagePullSecretName           string
-	ViceProxyImage                string
-	FrontendBaseURL               string
-	GetAnalysisIDService          string
-	CheckResourceAccessService    string
-	VICEBackendNamespace          string
+	ViceProxyImage       string
+	FrontendBaseURL      string
+	VICEBackendNamespace string
 	AppsServiceBaseURL            string
 	ViceNamespace                 string
 	JobStatusURL                  string
