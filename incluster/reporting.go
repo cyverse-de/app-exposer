@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 func getListSelector(customLabels map[string]string) labels.Selector {
@@ -98,6 +99,17 @@ func (i *Incluster) serviceList(ctx context.Context, namespace string, customLab
 	}
 
 	return svcList, nil
+}
+
+func (i *Incluster) routeList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*gatewayv1.HTTPRouteList, error) {
+	listOptions := getListOptions(customLabels, missingLabels)
+
+	client := i.gatewayClient.HTTPRoutes(namespace)
+	routeList, err := client.List(ctx, listOptions)
+	if err != nil {
+		return nil, err
+	}
+	return routeList, nil
 }
 
 func (i *Incluster) ingressList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*netv1.IngressList, error) {
@@ -287,6 +299,32 @@ func serviceInfo(svc *corev1.Service) *ServiceInfo {
 	}
 }
 
+// RouteInfo contains information about HTTP routes used for VICE apps.
+type RouteInfo struct {
+	MetaInfo
+	Rules []gatewayv1.HTTPRouteRule `json:"rules"`
+}
+
+// routeInfo returns an RouteInfo struct for an HTTPRoute.
+func routeInfo(route *gatewayv1.HTTPRoute) *RouteInfo {
+	labels := route.GetObjectMeta().GetLabels()
+
+	return &RouteInfo{
+		MetaInfo: MetaInfo{
+			Name:              route.GetName(),
+			Namespace:         route.GetNamespace(),
+			AnalysisName:      labels["analysis-name"],
+			AppName:           labels["app-name"],
+			AppID:             labels["app-id"],
+			ExternalID:        labels["external-id"],
+			UserID:            labels["user-id"],
+			Username:          labels["username"],
+			CreationTimestamp: route.GetCreationTimestamp().String(),
+		},
+		Rules: route.Spec.Rules,
+	}
+}
+
 // IngressInfo contains useful Ingress VICE info.
 type IngressInfo struct {
 	MetaInfo
@@ -382,20 +420,18 @@ func (i *Incluster) GetFilteredServices(ctx context.Context, filter map[string]s
 	return svcs, nil
 }
 
-func (i *Incluster) GetFilteredIngresses(ctx context.Context, filter map[string]string) ([]IngressInfo, error) {
-	ingList, err := i.ingressList(ctx, i.ViceNamespace, filter, []string{})
+func (i *Incluster) GetFilteredRoutes(ctx context.Context, filter map[string]string) ([]RouteInfo, error) {
+	routeList, err := i.routeList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return nil, err
 	}
 
-	ingresses := []IngressInfo{}
-
-	for _, ingress := range ingList.Items {
-		info := ingressInfo(&ingress)
-		ingresses = append(ingresses, *info)
+	routes := make([]RouteInfo, len(routeList.Items))
+	for i, route := range routeList.Items {
+		routes[i] = *routeInfo(&route)
 	}
 
-	return ingresses, nil
+	return routes, nil
 }
 
 // ResourceInfo contains all of the k8s resource information about a running VICE analysis
@@ -405,7 +441,7 @@ type ResourceInfo struct {
 	Pods        []PodInfo        `json:"pods"`
 	ConfigMaps  []ConfigMapInfo  `json:"configMaps"`
 	Services    []ServiceInfo    `json:"services"`
-	Ingresses   []IngressInfo    `json:"ingresses"`
+	Routes      []RouteInfo      `json:"routes"`
 }
 
 func (i *Incluster) FixUsername(username string) string {
@@ -433,7 +469,7 @@ func (i *Incluster) DoResourceListing(ctx context.Context, filter map[string]str
 		return nil, err
 	}
 
-	ingresses, err := i.GetFilteredIngresses(ctx, filter)
+	routes, err := i.GetFilteredRoutes(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -443,7 +479,7 @@ func (i *Incluster) DoResourceListing(ctx context.Context, filter map[string]str
 		Pods:        pods,
 		ConfigMaps:  cms,
 		Services:    svcs,
-		Ingresses:   ingresses,
+		Routes:      routes,
 	}, nil
 }
 

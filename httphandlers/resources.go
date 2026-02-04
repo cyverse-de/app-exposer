@@ -121,30 +121,30 @@ func (h *HTTPHandlers) FilterableServicesHandler(c echo.Context) error {
 	})
 }
 
-type FilteredIngressesResponse struct {
-	Ingresses []incluster.IngressInfo `json:"ingresses"`
+type FilteredRoutesResponse struct {
+	Routes []incluster.RouteInfo `json:"routes"`
 }
 
-// @ID				filterable-ingresses
-// @Summary		Lists ingresses in use by VICE apps.
-// @Description	Lists ingresses in use by VICE apps. The query parameters
+// @ID				filterable-routes
+// @Summary		Lists HTTP routes in use by VICE apps.
+// @Description	Lists HTTP routes in use by VICE apps. The query parameters
 // @Description	are used to filter the results and aren't listed as parameters.
 // @Produce		json
-// @Success		200	{object}	FilteredIngressesResponse
+// @Success		200	{object}	FilteredRoutesResponse
 // @Failure		400	{object}	common.ErrorResponse
 // @Failure		500	{object}	common.ErrorResponse
 // @Router			/vice/listing/ingresses [get]
-func (h *HTTPHandlers) FilterableIngressesHandler(c echo.Context) error {
+func (h *HTTPHandlers) FilterableRoutesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := common.FilterMap(c.Request().URL.Query())
 
-	ingresses, err := h.incluster.GetFilteredIngresses(ctx, filter)
+	routes, err := h.incluster.GetFilteredRoutes(ctx, filter)
 	if err != nil {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, FilteredIngressesResponse{
-		Ingresses: ingresses,
+	return c.JSON(http.StatusOK, FilteredRoutesResponse{
+		Routes: routes,
 	})
 }
 
