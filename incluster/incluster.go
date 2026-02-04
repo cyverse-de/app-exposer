@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
 var log = common.Log
@@ -42,6 +43,7 @@ type Init struct {
 	FrontendBaseURL               string
 	ViceDefaultBackendService     string
 	ViceDefaultBackendServicePort int
+	ViceDomain                    string
 	GetAnalysisIDService          string
 	CheckResourceAccessService    string
 	VICEBackendNamespace          string
@@ -68,6 +70,7 @@ type Init struct {
 type Incluster struct {
 	Init
 	clientset       kubernetes.Interface
+	gatewayClient   *gatewayclient.GatewayV1Client
 	db              *sqlx.DB
 	statusPublisher AnalysisStatusPublisher
 	apps            *apps.Apps
@@ -75,11 +78,12 @@ type Incluster struct {
 }
 
 // New creates a new *Incluster.
-func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, apps *apps.Apps) *Incluster {
+func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, gatewayClient *gatewayclient.GatewayV1Client, apps *apps.Apps) *Incluster {
 	return &Incluster{
-		Init:      *init,
-		db:        db,
-		clientset: clientset,
+		Init:          *init,
+		db:            db,
+		clientset:     clientset,
+		gatewayClient: gatewayClient,
 		statusPublisher: &JSLPublisher{
 			statusURL: init.JobStatusURL,
 		},
