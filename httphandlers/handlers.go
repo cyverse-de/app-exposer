@@ -21,20 +21,20 @@ var otelName = "github.com/cyverse-de/app-exposer/handlers"
 type AnalysisLaunch model.Analysis
 
 type HTTPHandlers struct {
-	incluster *incluster.Incluster
-	apps      *apps.Apps
-	clientset kubernetes.Interface
-	//db           *db.Database
+	incluster    *incluster.Incluster
+	apps         *apps.Apps
+	clientset    kubernetes.Interface
 	batchadapter *adapter.JEXAdapter
+	jwksCache    *JWKSCache
 }
 
-func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface, batchadapter *adapter.JEXAdapter) *HTTPHandlers {
+func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface, batchadapter *adapter.JEXAdapter, jwksCache *JWKSCache) *HTTPHandlers {
 	return &HTTPHandlers{
-		incluster,
-		apps,
-		clientset,
-		//db,
-		batchadapter,
+		incluster:    incluster,
+		apps:         apps,
+		clientset:    clientset,
+		batchadapter: batchadapter,
+		jwksCache:    jwksCache,
 	}
 }
 

@@ -12,7 +12,7 @@ func FixUsername(username, suffix string) string {
 	} else {
 		userSuffix = fmt.Sprintf("@%s", suffix)
 	}
-	if strings.HasSuffix(userSuffix, username) {
+	if strings.HasSuffix(username, userSuffix) {
 		return username
 	}
 	return fmt.Sprintf("%s%s", username, userSuffix)

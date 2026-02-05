@@ -23,8 +23,6 @@ func newIncluster() *Incluster {
 		FrontendBaseURL:               "https://de.example.org",
 		ViceDefaultBackendService:     "vice-default-backend",
 		ViceDefaultBackendServicePort: 80,
-		GetAnalysisIDService:          "get-analysis-id",
-		CheckResourceAccessService:    "check-resource-access",
 		VICEBackendNamespace:          "prod",
 		AppsServiceBaseURL:            "http://apps.prod",
 		ViceNamespace:                 "vice-apps",

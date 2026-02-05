@@ -229,16 +229,25 @@ func (a *Apps) tryForAnalysisID(ctx context.Context, job *model.Job, maxAttempts
 }
 
 func (a *Apps) storeMillicoresInternal(ctx context.Context, job *model.Job, millicores *apd.Decimal) error {
-	analysisID, err := a.tryForAnalysisID(ctx, job, 30)
-	if err != nil {
-		return err
+	var analysisID string
+	var err error
+
+	// Prefer job.ID if available (new vice-proxy provides this directly)
+	if job.ID != "" {
+		analysisID = job.ID
+	} else {
+		// Fallback to lookup for backward compatibility
+		analysisID, err = a.tryForAnalysisID(ctx, job, 30)
+		if err != nil {
+			return err
+		}
 	}
 
 	if err = a.setMillicoresReserved(ctx, analysisID, millicores); err != nil {
 		return err
 	}
 
-	return err
+	return nil
 }
 
 // SetMillicoresReserved updates the number of millicores reserved for a single job.
