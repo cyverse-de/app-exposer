@@ -460,7 +460,7 @@ func (i *Incluster) GetIDFromHost(ctx context.Context, host string) (string, err
 
 const updateTimeLimitSQL = `
 	UPDATE ONLY jobs
-	   SET planned_end_date = old_value.planned_end_date + interval '72 hours'
+	   SET planned_end_date = old_value.planned_end_date + interval '4 hours'
 	  FROM (SELECT planned_end_date FROM jobs WHERE id = $2) AS old_value
 	 WHERE jobs.id = $2
 	   AND jobs.user_id = $1
