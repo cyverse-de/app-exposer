@@ -45,17 +45,13 @@ func (i *Incluster) viceProxyCommand(job *model.Job) []string {
 	frontURL := i.getFrontendURL(job)
 	backendURL := fmt.Sprintf("http://localhost:%s", strconv.Itoa(job.Steps[0].Component.Container.Ports[0].ContainerPort))
 
-	// websocketURL := fmt.Sprintf("ws://localhost:%s", strconv.Itoa(job.Steps[0].Component.Container.Ports[0].ContainerPort))
-
 	output := []string{
 		"vice-proxy",
 		"--listen-addr", fmt.Sprintf("0.0.0.0:%d", constants.VICEProxyPort),
 		"--backend-url", backendURL,
 		"--ws-backend-url", backendURL,
 		"--frontend-url", frontURL.String(),
-		"--external-id", job.InvocationID,
-		"--get-analysis-id-base", fmt.Sprintf("http://%s.%s", i.GetAnalysisIDService, i.VICEBackendNamespace),
-		"--check-resource-access-base", fmt.Sprintf("http://%s.%s", i.CheckResourceAccessService, i.VICEBackendNamespace),
+		"--analysis-id", job.ID,
 		"--keycloak-base-url", i.KeycloakBaseURL,
 		"--keycloak-realm", i.KeycloakRealm,
 		"--keycloak-client-id", i.KeycloakClientID,

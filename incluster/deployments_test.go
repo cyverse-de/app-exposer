@@ -10,6 +10,7 @@ import (
 // testJob creates a minimal Job for testing purposes.
 func testJob() *model.Job {
 	job := &model.Job{
+		ID:           "test-analysis-id",
 		UserID:       "test-user",
 		InvocationID: "test-invocation-id",
 		Steps: []model.Step{
@@ -34,8 +35,6 @@ func TestViceProxyCommandWithAuthEnabled(t *testing.T) {
 		FrontendBaseURL:               "https://de.example.org",
 		ViceDefaultBackendService:     "vice-default-backend",
 		ViceDefaultBackendServicePort: 80,
-		GetAnalysisIDService:          "get-analysis-id",
-		CheckResourceAccessService:    "check-resource-access",
 		VICEBackendNamespace:          "prod",
 		AppsServiceBaseURL:            "http://apps.prod",
 		ViceNamespace:                 "vice-apps",
@@ -67,8 +66,13 @@ func TestViceProxyCommandWithAuthEnabled(t *testing.T) {
 	assert.Contains(t, command, "--listen-addr")
 	assert.Contains(t, command, "--backend-url")
 	assert.Contains(t, command, "--frontend-url")
-	assert.Contains(t, command, "--external-id")
+	assert.Contains(t, command, "--analysis-id")
+	assert.Contains(t, command, "test-analysis-id")
 	assert.Contains(t, command, "--keycloak-base-url")
+	// Verify old flags are NOT present
+	assert.NotContains(t, command, "--external-id")
+	assert.NotContains(t, command, "--get-analysis-id-base")
+	assert.NotContains(t, command, "--check-resource-access-base")
 }
 
 func TestViceProxyCommandWithAuthDisabled(t *testing.T) {
@@ -83,8 +87,6 @@ func TestViceProxyCommandWithAuthDisabled(t *testing.T) {
 		FrontendBaseURL:               "https://de.example.org",
 		ViceDefaultBackendService:     "vice-default-backend",
 		ViceDefaultBackendServicePort: 80,
-		GetAnalysisIDService:          "get-analysis-id",
-		CheckResourceAccessService:    "check-resource-access",
 		VICEBackendNamespace:          "prod",
 		AppsServiceBaseURL:            "http://apps.prod",
 		ViceNamespace:                 "vice-apps",
@@ -114,7 +116,8 @@ func TestViceProxyCommandWithAuthDisabled(t *testing.T) {
 	assert.Contains(t, command, "--listen-addr")
 	assert.Contains(t, command, "--backend-url")
 	assert.Contains(t, command, "--frontend-url")
-	assert.Contains(t, command, "--external-id")
+	assert.Contains(t, command, "--analysis-id")
+	assert.Contains(t, command, "test-analysis-id")
 }
 
 func TestViceProxyCommandFlagOrdering(t *testing.T) {
@@ -129,8 +132,6 @@ func TestViceProxyCommandFlagOrdering(t *testing.T) {
 		FrontendBaseURL:               "https://de.example.org",
 		ViceDefaultBackendService:     "vice-default-backend",
 		ViceDefaultBackendServicePort: 80,
-		GetAnalysisIDService:          "get-analysis-id",
-		CheckResourceAccessService:    "check-resource-access",
 		VICEBackendNamespace:          "prod",
 		AppsServiceBaseURL:            "http://apps.prod",
 		ViceNamespace:                 "vice-apps",

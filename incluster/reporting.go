@@ -67,6 +67,41 @@ func (i *Incluster) DeploymentList(ctx context.Context, namespace string, custom
 	return depList, nil
 }
 
+// UserDeploymentInfo contains basic deployment info for logout forwarding
+type UserDeploymentInfo struct {
+	ExternalID string
+	UserID     string
+}
+
+// GetDeploymentsByUserID returns all VICE deployments for a given user ID
+func (i *Incluster) GetDeploymentsByUserID(ctx context.Context, userID string) ([]UserDeploymentInfo, error) {
+	set := labels.Set(map[string]string{
+		"app-type": "interactive",
+		"user-id":  userID,
+	})
+
+	opts := metav1.ListOptions{
+		LabelSelector: set.AsSelector().String(),
+	}
+
+	depList, err := i.clientset.AppsV1().Deployments(i.ViceNamespace).List(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]UserDeploymentInfo, 0, len(depList.Items))
+	for _, dep := range depList.Items {
+		if extID, ok := dep.Labels["external-id"]; ok {
+			result = append(result, UserDeploymentInfo{
+				ExternalID: extID,
+				UserID:     userID,
+			})
+		}
+	}
+
+	return result, nil
+}
+
 func (i *Incluster) podList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.PodList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 

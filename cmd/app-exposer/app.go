@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -22,7 +23,6 @@ import (
 
 	_ "github.com/cyverse-de/app-exposer/docs"
 	echoSwagger "github.com/swaggo/echo-swagger"
-	//"github.com/labstack/gommon/log"
 )
 
 // ExposerApp encapsulates the overall application-logic, tying together the
@@ -46,8 +46,6 @@ type ExposerAppInit struct {
 	ViceProxyImage                string
 	ViceDefaultBackendService     string
 	ViceDefaultBackendServicePort int
-	GetAnalysisIDService          string
-	CheckResourceAccessService    string
 	db                            *sqlx.DB
 	UserSuffix                    string
 	IRODSZone                     string
@@ -118,8 +116,6 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		FrontendBaseURL:               c.String("k8s.frontend.base"),
 		ViceDefaultBackendService:     init.ViceDefaultBackendService,
 		ViceDefaultBackendServicePort: init.ViceDefaultBackendServicePort,
-		GetAnalysisIDService:          init.GetAnalysisIDService,
-		CheckResourceAccessService:    init.CheckResourceAccessService,
 		VICEBackendNamespace:          c.String("vice.backend-namespace"),
 		AppsServiceBaseURL:            appsServiceBaseURL,
 		JobStatusURL:                  jobStatusURL,
@@ -140,6 +136,12 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, apps)
 
+	// Create JWKS cache for logout token validation
+	jwksURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/certs",
+		c.String("keycloak.base"),
+		c.String("keycloak.realm"))
+	jwksCache := httphandlers.NewJWKSCache(jwksURL)
+
 	app := &ExposerApp{
 		outcluster: outcluster.New(init.ClientSet, init.Namespace, init.IngressClass),
 		incluster:  incluster,
@@ -147,7 +149,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		clientset:  init.ClientSet,
 		router:     echo.New(),
 		db:         init.db,
-		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter),
+		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter, jwksCache),
 	}
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
@@ -192,6 +194,9 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	batchGroup.POST("/", app.handlers.BatchLaunchHandler)
 	batchGroup.POST("/cleanup", app.handlers.BatchStopByUUID)
 	batchGroup.DELETE("/stop/:id", app.handlers.BatchStopHandler)
+
+	// Back-channel logout endpoint (at root level for Keycloak compatibility)
+	app.router.POST("/backchannel-logout", app.handlers.HandleBackChannelLogout)
 
 	vice := app.router.Group("/vice")
 	vice.Use(middleware.Logger())

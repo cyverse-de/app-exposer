@@ -94,8 +94,6 @@ func main() {
 		statusSenderImage                    = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
 		viceDefaultBackendService            = flag.String("vice-default-backend", "vice-default-backend", "The name of the service to use as the default backend for VICE ingresses")
 		viceDefaultBackendServicePort        = flag.Int("vice-default-backend-port", 80, "The port for the default backend for VICE ingresses")
-		getAnalysisIDService                 = flag.String("get-analysis-id-service", "get-analysis-id", "The service name for the service that provides analysis ID lookups")
-		checkResourceAccessService           = flag.String("check-resource-access-service", "check-resource-access", "The name of the service that validates whether a user can access a resource")
 		userSuffix                           = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
 		defaultMillicores                    = flag.Float64("default-millicores", 4000.0, "The default number of millicores reserved for an analysis.")
 		argoWorkflowNS                       = flag.String("workflow-namespace", "argo", "The namespace Argo Workflows run in.")
@@ -359,8 +357,6 @@ func main() {
 		ViceProxyImage:                proxyImage,
 		ViceDefaultBackendService:     *viceDefaultBackendService,
 		ViceDefaultBackendServicePort: *viceDefaultBackendServicePort,
-		GetAnalysisIDService:          *getAnalysisIDService,
-		CheckResourceAccessService:    *checkResourceAccessService,
 		db:                            dbconn,
 		UserSuffix:                    *userSuffix,
 		IRODSZone:                     zone,

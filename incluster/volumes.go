@@ -389,16 +389,17 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 	// 	},
 	// )
 
-	if i.UseCSIDriver {
-		volumeSources, err := i.getPersistentVolumeSources(job)
-		if err != nil {
-			log.Warn(err)
-		} else {
-			for _, volumeSource := range volumeSources {
-				output = append(output, *volumeSource)
-			}
-		}
+	// Always add persistent volume sources (includes working-dir volume, and CSI data volume when enabled)
+	volumeSources, err := i.getPersistentVolumeSources(job)
+	if err != nil {
+		log.Warn(err)
 	} else {
+		for _, volumeSource := range volumeSources {
+			output = append(output, *volumeSource)
+		}
+	}
+
+	if !i.UseCSIDriver {
 		output = append(output,
 			apiv1.Volume{
 				Name: constants.PorklockConfigVolumeName,
