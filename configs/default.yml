@@ -43,3 +43,4 @@ vice:
   backend-namespace: default
   use_csi_driver: false
   image-pull-secret: ""
+  time-limit-extension: "4h"

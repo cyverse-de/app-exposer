@@ -2,10 +2,10 @@ package incluster
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/cockroachdb/apd"
 	"github.com/cyverse-de/app-exposer/apps"
@@ -14,7 +14,6 @@ import (
 	"github.com/cyverse-de/app-exposer/quota"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/lib/pq"
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -61,6 +60,7 @@ type Init struct {
 	DisableViceProxyAuth          bool
 	NATSEncodedConn               *nats.EncodedConn
 	BypassUsers                   []string
+	TimeLimitExtensionSeconds     int64
 }
 
 // Incluster contains information and operations for launching VICE apps inside the
@@ -460,15 +460,19 @@ func (i *Incluster) GetIDFromHost(ctx context.Context, host string) (string, err
 
 const updateTimeLimitSQL = `
 	UPDATE ONLY jobs
-	   SET planned_end_date = old_value.planned_end_date + interval '4 hours'
+	   SET planned_end_date = old_value.planned_end_date + interval '1 second' * $3
 	  FROM (SELECT planned_end_date FROM jobs WHERE id = $2) AS old_value
 	 WHERE jobs.id = $2
 	   AND jobs.user_id = $1
- RETURNING jobs.planned_end_date
+ RETURNING EXTRACT(EPOCH FROM
+    jobs.planned_end_date AT TIME ZONE current_setting('TimeZone')
+ )::bigint
 `
 
 const getTimeLimitSQL = `
-	SELECT planned_end_date
+	SELECT EXTRACT(EPOCH FROM
+	    planned_end_date AT TIME ZONE current_setting('TimeZone')
+	)::bigint
 	  FROM jobs
 	 WHERE jobs.id = $2
 	   AND jobs.user_id = $1
@@ -480,13 +484,6 @@ const getUserIDSQL = `
 	 WHERE username = $1
 `
 
-func dbTimestampToLocal(t time.Time) time.Time {
-	_, offset := time.Now().Zone()
-	t = t.Local()
-	t = t.Add(time.Duration(offset*-1) * time.Second)
-	return t
-}
-
 type TimeLimit struct {
 	TimeLimit string `json:"time_limit"`
 }
@@ -494,18 +491,14 @@ type TimeLimit struct {
 func (i *Incluster) GetTimeLimit(ctx context.Context, userID, id string) (*TimeLimit, error) {
 	var err error
 
-	var timeLimit pq.NullTime
-	if err = i.db.QueryRowContext(ctx, getTimeLimitSQL, userID, id).Scan(&timeLimit); err != nil {
+	var epoch sql.NullInt64
+	if err = i.db.QueryRowContext(ctx, getTimeLimitSQL, userID, id).Scan(&epoch); err != nil {
 		return nil, errors.Wrapf(err, "error retrieving time limit for user %s on analysis %s", userID, id)
 	}
 
 	retval := &TimeLimit{}
-	if timeLimit.Valid {
-		v, err := timeLimit.Value()
-		if err != nil {
-			return nil, errors.Wrapf(err, "error getting time limit for user %s on analysis %s", userID, id)
-		}
-		retval.TimeLimit = fmt.Sprintf("%d", dbTimestampToLocal(v.(time.Time)).Unix())
+	if epoch.Valid {
+		retval.TimeLimit = fmt.Sprintf("%d", epoch.Int64)
 	} else {
 		retval.TimeLimit = "null"
 	}
@@ -527,20 +520,16 @@ func (i *Incluster) UpdateTimeLimit(ctx context.Context, user, id string) (*Time
 		return nil, errors.Wrapf(err, "error looking user ID for %s", user)
 	}
 
-	var newTimeLimit pq.NullTime
-	if err = i.db.QueryRowContext(ctx, updateTimeLimitSQL, userID, id).Scan(&newTimeLimit); err != nil {
+	var epoch sql.NullInt64
+	if err = i.db.QueryRowContext(ctx, updateTimeLimitSQL, userID, id, i.TimeLimitExtensionSeconds).Scan(&epoch); err != nil {
 		return nil, errors.Wrapf(err, "error extending time limit for user %s on analysis %s", userID, id)
 	}
 
 	retval := &TimeLimit{}
-	if newTimeLimit.Valid {
-		v, err := newTimeLimit.Value()
-		if err != nil {
-			return nil, errors.Wrapf(err, "error getting new time limit for user %s on analysis %s", userID, id)
-		}
-		retval.TimeLimit = fmt.Sprintf("%d", dbTimestampToLocal(v.(time.Time)).Unix())
+	if epoch.Valid {
+		retval.TimeLimit = fmt.Sprintf("%d", epoch.Int64)
 	} else {
-		return nil, errors.Wrapf(err, "the time limit for analysis %s was null after extension", id)
+		return nil, fmt.Errorf("the time limit for analysis %s was null after extension", id)
 	}
 
 	return retval, nil

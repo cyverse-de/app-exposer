@@ -308,7 +308,7 @@
                 }
             },
             "post": {
-                "description": "Updates the time limit on an analysis without requiring user information.",
+                "description": "Updates the time limit on an analysis without requiring user information.\nThe time limit is increased by a configurable amount (default 4 hours, set via vice.time-limit-extension).",
                 "produces": [
                     "application/json"
                 ],
@@ -1081,7 +1081,7 @@
                 }
             },
             "post": {
-                "description": "Updates the time limit on a running VICE app for a user. The user\nmust have access to the analysis. The time limit is increased by a\npre-configured amount.",
+                "description": "Updates the time limit on a running VICE app for a user. The user\nmust have access to the analysis. The time limit is increased by a\nconfigurable amount (default 4 hours, set via vice.time-limit-extension).",
                 "produces": [
                     "application/json"
                 ],

@@ -1521,7 +1521,7 @@ paths:
       description: |-
         Updates the time limit on a running VICE app for a user. The user
         must have access to the analysis. The time limit is increased by a
-        pre-configured amount.
+        configurable amount (default 4 hours, set via vice.time-limit-extension).
       operationId: time-limit-update
       parameters:
       - description: Analysis ID
@@ -1956,7 +1956,9 @@ paths:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Gets an analysis's time limit without requiring user info.
     post:
-      description: Updates the time limit on an analysis without requiring user information.
+      description: |-
+        Updates the time limit on an analysis without requiring user information.
+        The time limit is increased by a configurable amount (default 4 hours, set via vice.time-limit-extension).
       operationId: admin-time-limit-update
       parameters:
       - description: Analysis ID

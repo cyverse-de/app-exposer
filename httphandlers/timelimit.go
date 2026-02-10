@@ -10,7 +10,7 @@ import (
 // @Summary		Handles requests to update the time limit on an already running VICE app.
 // @Description	Updates the time limit on a running VICE app for a user. The user
 // @Description	must have access to the analysis. The time limit is increased by a
-// @Description	pre-configured amount.
+// @Description	configurable amount (default 4 hours, set via vice.time-limit-extension).
 // @Produce		json
 // @Param			analysis-id	path		string	true	"Analysis ID"
 // @Success		200			{object}	incluster.TimeLimit
@@ -55,6 +55,7 @@ func (h *HTTPHandlers) TimeLimitUpdateHandler(c echo.Context) error {
 // @ID				admin-time-limit-update
 // @Summary		Updates the time limit on an analysis without requiring user information
 // @Description	Updates the time limit on an analysis without requiring user information.
+// @Description	The time limit is increased by a configurable amount (default 4 hours, set via vice.time-limit-extension).
 // @Produce		json
 // @Param			analysis-id	path		string	true	"Analysis ID"
 // @Success		200			{object}	incluster.TimeLimit
