@@ -314,7 +314,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Updates the time limit on an analysis without requiring user information.",
+                "description": "Updates the time limit on an analysis without requiring user information.\nThe time limit is increased by a configurable amount (default 4 hours, set via vice.time-limit-extension).",
                 "produces": [
                     "application/json"
                 ],
@@ -1087,7 +1087,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Updates the time limit on a running VICE app for a user. The user\nmust have access to the analysis. The time limit is increased by a\npre-configured amount.",
+                "description": "Updates the time limit on a running VICE app for a user. The user\nmust have access to the analysis. The time limit is increased by a\nconfigurable amount (default 4 hours, set via vice.time-limit-extension).",
                 "produces": [
                     "application/json"
                 ],
@@ -1400,25 +1400,25 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.Container": {
+        "github_com_cyverse-de_model_v9.Container": {
             "type": "object",
             "properties": {
                 "container_devices": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.Device"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.Device"
                     }
                 },
                 "container_volumes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.Volume"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.Volume"
                     }
                 },
                 "container_volumes_from": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.VolumesFrom"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.VolumesFrom"
                     }
                 },
                 "cpu_shares": {
@@ -1431,14 +1431,18 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "image": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.ContainerImage"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.ContainerImage"
                 },
                 "interactive_apps": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.InteractiveApps"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.InteractiveApps"
                 },
                 "max_cpu_cores": {
                     "description": "The maximum number of cores the container needs.",
                     "type": "number"
+                },
+                "max_gpus": {
+                    "description": "The maximum number of GPUs the container needs.",
+                    "type": "integer"
                 },
                 "memory_limit": {
                     "description": "The maximum the container is allowed to have.",
@@ -1450,6 +1454,10 @@ const docTemplate = `{
                 },
                 "min_disk_space": {
                     "description": "The minimum amount of disk space that the container needs.",
+                    "type": "integer"
+                },
+                "min_gpus": {
+                    "description": "The minimum number of GPUs the container needs.",
                     "type": "integer"
                 },
                 "min_memory_limit": {
@@ -1468,7 +1476,7 @@ const docTemplate = `{
                 "ports": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.Ports"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.Ports"
                     }
                 },
                 "skip_tmp_mount": {
@@ -1482,7 +1490,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.ContainerImage": {
+        "github_com_cyverse-de_model_v9.ContainerImage": {
             "type": "object",
             "properties": {
                 "auth": {
@@ -1505,7 +1513,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.Device": {
+        "github_com_cyverse-de_model_v9.Device": {
             "type": "object",
             "properties": {
                 "cgroup_permissions": {
@@ -1519,15 +1527,15 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.ExtraInfo": {
+        "github_com_cyverse-de_model_v9.ExtraInfo": {
             "type": "object",
             "properties": {
                 "htcondor": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.HTCondorExtraInfo"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.HTCondorExtraInfo"
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.FileMetadata": {
+        "github_com_cyverse-de_model_v9.FileMetadata": {
             "type": "object",
             "properties": {
                 "attr": {
@@ -1541,7 +1549,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.HTCondorExtraInfo": {
+        "github_com_cyverse-de_model_v9.HTCondorExtraInfo": {
             "type": "object",
             "properties": {
                 "extra_requirements": {
@@ -1549,7 +1557,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.InteractiveApps": {
+        "github_com_cyverse-de_model_v9.InteractiveApps": {
             "type": "object",
             "properties": {
                 "backend_url": {
@@ -1598,7 +1606,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.Ports": {
+        "github_com_cyverse-de_model_v9.Ports": {
             "type": "object",
             "properties": {
                 "bind_to_host": {
@@ -1612,22 +1620,22 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.Step": {
+        "github_com_cyverse-de_model_v9.Step": {
             "type": "object",
             "properties": {
                 "component": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepComponent"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepComponent"
                 },
                 "config": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepConfig"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepConfig"
                 },
                 "environment": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepEnvironment"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepEnvironment"
                 },
                 "input": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepInput"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepInput"
                     }
                 },
                 "log-file": {
@@ -1636,7 +1644,7 @@ const docTemplate = `{
                 "output": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepOutput"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepOutput"
                     }
                 },
                 "stderr": {
@@ -1653,11 +1661,11 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.StepComponent": {
+        "github_com_cyverse-de_model_v9.StepComponent": {
             "type": "object",
             "properties": {
                 "container": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.Container"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.Container"
                 },
                 "description": {
                     "type": "string"
@@ -1682,36 +1690,36 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.StepConfig": {
+        "github_com_cyverse-de_model_v9.StepConfig": {
             "type": "object",
             "properties": {
                 "input": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepInput"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepInput"
                     }
                 },
                 "output": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepOutput"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepOutput"
                     }
                 },
                 "params": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.StepParam"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepParam"
                     }
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.StepEnvironment": {
+        "github_com_cyverse-de_model_v9.StepEnvironment": {
             "type": "object",
             "additionalProperties": {
                 "type": "string"
             }
         },
-        "github_com_cyverse-de_model_v7.StepInput": {
+        "github_com_cyverse-de_model_v9.StepInput": {
             "type": "object",
             "properties": {
                 "id": {
@@ -1740,7 +1748,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.StepOutput": {
+        "github_com_cyverse-de_model_v9.StepOutput": {
             "type": "object",
             "properties": {
                 "multiplicity": {
@@ -1763,7 +1771,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.StepParam": {
+        "github_com_cyverse-de_model_v9.StepParam": {
             "type": "object",
             "properties": {
                 "id": {
@@ -1786,7 +1794,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.Volume": {
+        "github_com_cyverse-de_model_v9.Volume": {
             "type": "object",
             "properties": {
                 "container_path": {
@@ -1803,7 +1811,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v7.VolumesFrom": {
+        "github_com_cyverse-de_model_v9.VolumesFrom": {
             "type": "object",
             "properties": {
                 "auth": {
@@ -1894,7 +1902,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "extra": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v7.ExtraInfo"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.ExtraInfo"
                 },
                 "failure_count": {
                     "type": "integer"
@@ -1905,7 +1913,7 @@ const docTemplate = `{
                 "file-metadata": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.FileMetadata"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.FileMetadata"
                     }
                 },
                 "filter_files": {
@@ -1932,6 +1940,9 @@ const docTemplate = `{
                 },
                 "irods_base": {
                     "type": "string"
+                },
+                "mount_data_store": {
+                    "type": "boolean"
                 },
                 "name": {
                     "type": "string"
@@ -1969,7 +1980,7 @@ const docTemplate = `{
                 "steps": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v7.Step"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.Step"
                     }
                 },
                 "submission_date": {
@@ -2559,12 +2570,19 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "allocatedResources": {
-                    "description": "AllocatedResources represents the compute resources allocated for this container by the\nnode. Kubelet sets this value to Container.Resources.Requests upon successful pod admission\nand after successfully admitting desired pod resize.\n+featureGate=InPlacePodVerticalScaling\n+optional",
+                    "description": "AllocatedResources represents the compute resources allocated for this container by the\nnode. Kubelet sets this value to Container.Resources.Requests upon successful pod admission\nand after successfully admitting desired pod resize.\n+featureGate=InPlacePodVerticalScalingAllocatedStatus\n+optional",
                     "allOf": [
                         {
                             "$ref": "#/definitions/v1.ResourceList"
                         }
                     ]
+                },
+                "allocatedResourcesStatus": {
+                    "description": "AllocatedResourcesStatus represents the status of various resources\nallocated for this Pod.\n+featureGate=ResourceHealthStatus\n+optional\n+patchMergeKey=name\n+patchStrategy=merge\n+listType=map\n+listMapKey=name",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ResourceStatus"
+                    }
                 },
                 "containerID": {
                     "description": "ContainerID is the ID of the container in the format '\u003ctype\u003e://\u003ccontainer_id\u003e'.\nWhere type is a container runtime identifier, returned from Version call of CRI API\n(for example \"containerd\").\n+optional",
@@ -2618,12 +2636,33 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "user": {
+                    "description": "User represents user identity information initially attached to the first process of the container\n+featureGate=SupplementalGroupsPolicy\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ContainerUser"
+                        }
+                    ]
+                },
                 "volumeMounts": {
                     "description": "Status of volume mounts.\n+optional\n+patchMergeKey=mountPath\n+patchStrategy=merge\n+listType=map\n+listMapKey=mountPath\n+featureGate=RecursiveReadOnlyMounts",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/v1.VolumeMountStatus"
                     }
+                }
+            }
+        },
+        "v1.ContainerUser": {
+            "type": "object",
+            "properties": {
+                "linux": {
+                    "description": "Linux holds user identity information initially attached to the first process of the containers in Linux.\nNote that the actual running identity can be changed if the process has enough privilege to do so.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LinuxContainerUser"
+                        }
+                    ]
                 }
             }
         },
@@ -2719,6 +2758,26 @@ const docTemplate = `{
                 }
             }
         },
+        "v1.LinuxContainerUser": {
+            "type": "object",
+            "properties": {
+                "gid": {
+                    "description": "GID is the primary gid initially attached to the first process in the container",
+                    "type": "integer"
+                },
+                "supplementalGroups": {
+                    "description": "SupplementalGroups are the supplemental groups initially attached to the first process in the container\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "uid": {
+                    "description": "UID is the primary uid initially attached to the first process in the container",
+                    "type": "integer"
+                }
+            }
+        },
         "v1.PathType": {
             "type": "string",
             "enum": [
@@ -2751,14 +2810,95 @@ const docTemplate = `{
                 "name": {
                     "description": "Name must match the name of one entry in pod.spec.resourceClaims of\nthe Pod where this field is used. It makes that resource available\ninside a container.",
                     "type": "string"
+                },
+                "request": {
+                    "description": "Request is the name chosen for a request in the referenced claim.\nIf empty, everything from the claim is made available, otherwise\nonly the result of this request.\n\n+optional",
+                    "type": "string"
                 }
             }
+        },
+        "v1.ResourceHealth": {
+            "type": "object",
+            "properties": {
+                "health": {
+                    "description": "Health of the resource.\ncan be one of:\n - Healthy: operates as normal\n - Unhealthy: reported unhealthy. We consider this a temporary health issue\n              since we do not have a mechanism today to distinguish\n              temporary and permanent issues.\n - Unknown: The status cannot be determined.\n            For example, Device Plugin got unregistered and hasn't been re-registered since.\n\nIn future we may want to introduce the PermanentlyUnhealthy Status.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceHealthStatus"
+                        }
+                    ]
+                },
+                "resourceID": {
+                    "description": "ResourceID is the unique identifier of the resource. See the ResourceID type for more information.",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ResourceHealthStatus": {
+            "type": "string",
+            "enum": [
+                "Healthy",
+                "Unhealthy",
+                "Unknown"
+            ],
+            "x-enum-varnames": [
+                "ResourceHealthStatusHealthy",
+                "ResourceHealthStatusUnhealthy",
+                "ResourceHealthStatusUnknown"
+            ]
         },
         "v1.ResourceList": {
             "type": "object",
             "additionalProperties": {
                 "$ref": "#/definitions/resource.Quantity"
             }
+        },
+        "v1.ResourceName": {
+            "type": "string",
+            "enum": [
+                "cpu",
+                "memory",
+                "storage",
+                "ephemeral-storage",
+                "pods",
+                "services",
+                "replicationcontrollers",
+                "resourcequotas",
+                "secrets",
+                "configmaps",
+                "persistentvolumeclaims",
+                "services.nodeports",
+                "services.loadbalancers",
+                "requests.cpu",
+                "requests.memory",
+                "requests.storage",
+                "requests.ephemeral-storage",
+                "limits.cpu",
+                "limits.memory",
+                "limits.ephemeral-storage"
+            ],
+            "x-enum-varnames": [
+                "ResourceCPU",
+                "ResourceMemory",
+                "ResourceStorage",
+                "ResourceEphemeralStorage",
+                "ResourcePods",
+                "ResourceServices",
+                "ResourceReplicationControllers",
+                "ResourceQuotas",
+                "ResourceSecrets",
+                "ResourceConfigMaps",
+                "ResourcePersistentVolumeClaims",
+                "ResourceServicesNodePorts",
+                "ResourceServicesLoadBalancers",
+                "ResourceRequestsCPU",
+                "ResourceRequestsMemory",
+                "ResourceRequestsStorage",
+                "ResourceRequestsEphemeralStorage",
+                "ResourceLimitsCPU",
+                "ResourceLimitsMemory",
+                "ResourceLimitsEphemeralStorage"
+            ]
         },
         "v1.ResourceRequirements": {
             "type": "object",
@@ -2785,6 +2925,26 @@ const docTemplate = `{
                             "$ref": "#/definitions/v1.ResourceList"
                         }
                     ]
+                }
+            }
+        },
+        "v1.ResourceStatus": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name of the resource. Must be unique within the pod and in case of non-DRA resource, match one of the resources from the pod spec.\nFor DRA resources, the value must be \"claim:\u003cclaim_name\u003e/\u003crequest\u003e\".\nWhen this status is reported about a container, the \"claim_name\" and \"request\" must match one of the claims of this container.\n+required",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceName"
+                        }
+                    ]
+                },
+                "resources": {
+                    "description": "List of unique resources health. Each element in the list contains an unique resource ID and its health.\nAt a minimum, for the lifetime of a Pod, resource ID must uniquely identify the resource allocated to the Pod on the Node.\nIf other Pod on the same Node reports the status with the same resource ID, it must be the same resource they share.\nSee ResourceID type definition for a specific format it has in various use cases.\n+listType=map\n+listMapKey=resourceID",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ResourceHealth"
+                    }
                 }
             }
         },

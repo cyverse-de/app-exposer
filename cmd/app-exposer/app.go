@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/cyverse-de/app-exposer/adapter"
 	"github.com/cyverse-de/app-exposer/apps"
@@ -91,6 +92,20 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		permissionsURL = "http://permissions"
 	}
 
+	timeLimitExtensionStr := c.String("vice.time-limit-extension")
+	if timeLimitExtensionStr == "" {
+		timeLimitExtensionStr = "4h"
+	}
+	timeLimitExtensionDuration, err := time.ParseDuration(timeLimitExtensionStr)
+	if err != nil {
+		log.Fatalf("invalid vice.time-limit-extension value %q: %s", timeLimitExtensionStr, err)
+	}
+	if timeLimitExtensionDuration <= 0 {
+		log.Fatalf("vice.time-limit-extension must be positive, got %q", timeLimitExtensionStr)
+	}
+	timeLimitExtensionSeconds := int64(timeLimitExtensionDuration.Seconds())
+	log.Infof("VICE time limit extension set to %s (%d seconds)", timeLimitExtensionStr, timeLimitExtensionSeconds)
+
 	inclusterInit := &incluster.Init{
 		ViceNamespace:                 init.ViceNamespace,
 		PorklockImage:                 c.String("vice.file-transfers.image"),
@@ -120,6 +135,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		NATSEncodedConn:               conn,
 		LocalStorageClass:             init.LocalStorageClass,
 		BypassUsers:                   init.BypassUsers,
+		TimeLimitExtensionSeconds:     timeLimitExtensionSeconds,
 	}
 
 	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, apps)

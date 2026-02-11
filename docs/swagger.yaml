@@ -10,19 +10,19 @@ definitions:
       message:
         type: string
     type: object
-  github_com_cyverse-de_model_v7.Container:
+  github_com_cyverse-de_model_v9.Container:
     properties:
       container_devices:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v7.Device'
+          $ref: '#/definitions/github_com_cyverse-de_model_v9.Device'
         type: array
       container_volumes:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v7.Volume'
+          $ref: '#/definitions/github_com_cyverse-de_model_v9.Volume'
         type: array
       container_volumes_from:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v7.VolumesFrom'
+          $ref: '#/definitions/github_com_cyverse-de_model_v9.VolumesFrom'
         type: array
       cpu_shares:
         type: integer
@@ -31,12 +31,15 @@ definitions:
       id:
         type: string
       image:
-        $ref: '#/definitions/github_com_cyverse-de_model_v7.ContainerImage'
+        $ref: '#/definitions/github_com_cyverse-de_model_v9.ContainerImage'
       interactive_apps:
-        $ref: '#/definitions/github_com_cyverse-de_model_v7.InteractiveApps'
+        $ref: '#/definitions/github_com_cyverse-de_model_v9.InteractiveApps'
       max_cpu_cores:
         description: The maximum number of cores the container needs.
         type: number
+      max_gpus:
+        description: The maximum number of GPUs the container needs.
+        type: integer
       memory_limit:
         description: The maximum the container is allowed to have.
         type: integer
@@ -45,6 +48,9 @@ definitions:
         type: number
       min_disk_space:
         description: The minimum amount of disk space that the container needs.
+        type: integer
+      min_gpus:
+        description: The minimum number of GPUs the container needs.
         type: integer
       min_memory_limit:
         description: The minimum the container needs.
@@ -57,7 +63,7 @@ definitions:
         type: integer
       ports:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v7.Ports'
+          $ref: '#/definitions/github_com_cyverse-de_model_v9.Ports'
         type: array
       skip_tmp_mount:
         type: boolean
@@ -66,7 +72,7 @@ definitions:
       working_directory:
         type: string
     type: object
-  github_com_cyverse-de_model_v7.ContainerImage:
+  github_com_cyverse-de_model_v9.ContainerImage:
     properties:
       auth:
         type: string
@@ -81,7 +87,7 @@ definitions:
       url:
         type: string
     type: object
-  github_com_cyverse-de_model_v7.Device:
+  github_com_cyverse-de_model_v9.Device:
     properties:
       cgroup_permissions:
         type: string
@@ -90,12 +96,12 @@ definitions:
       host_path:
         type: string
     type: object
-  github_com_cyverse-de_model_v7.ExtraInfo:
+  github_com_cyverse-de_model_v9.ExtraInfo:
     properties:
       htcondor:
-        $ref: '#/definitions/github_com_cyverse-de_model_v7.HTCondorExtraInfo'
+        $ref: '#/definitions/github_com_cyverse-de_model_v9.HTCondorExtraInfo'
     type: object
-  github_com_cyverse-de_model_v7.FileMetadata:
+  github_com_cyverse-de_model_v9.FileMetadata:
     properties:
       attr:
         type: string
@@ -104,12 +110,12 @@ definitions:
       value:
         type: string
     type: object
-  github_com_cyverse-de_model_v7.HTCondorExtraInfo:
+  github_com_cyverse-de_model_v9.HTCondorExtraInfo:
     properties:
       extra_requirements:
         type: string
     type: object
-  github_com_cyverse-de_model_v7.InteractiveApps:
+  github_com_cyverse-de_model_v9.InteractiveApps:
     properties:
       backend_url:
         description: |-
@@ -155,7 +161,7 @@ definitions:
         description: If websocket handling requires a protocol other than ws://.
         type: string
     type: object
-  github_com_cyverse-de_model_v7.Ports:
+  github_com_cyverse-de_model_v9.Ports:
     properties:
       bind_to_host:
         type: boolean
@@ -164,23 +170,23 @@ definitions:
       host_port:
         type: integer
     type: object
-  github_com_cyverse-de_model_v7.Step:
+  github_com_cyverse-de_model_v9.Step:
     properties:
       component:
-        $ref: '#/definitions/github_com_cyverse-de_model_v7.StepComponent'
+        $ref: '#/definitions/github_com_cyverse-de_model_v9.StepComponent'
       config:
-        $ref: '#/definitions/github_com_cyverse-de_model_v7.StepConfig'
+        $ref: '#/definitions/github_com_cyverse-de_model_v9.StepConfig'
       environment:
-        $ref: '#/definitions/github_com_cyverse-de_model_v7.StepEnvironment'
+        $ref: '#/definitions/github_com_cyverse-de_model_v9.StepEnvironment'
       input:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v7.StepInput'
+          $ref: '#/definitions/github_com_cyverse-de_model_v9.StepInput'
         type: array
       log-file:
         type: string
       output:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v7.StepOutput'
+          $ref: '#/definitions/github_com_cyverse-de_model_v9.StepOutput'
         type: array
       stderr:
         type: string
@@ -191,10 +197,10 @@ definitions:
       type:
         type: string
     type: object
-  github_com_cyverse-de_model_v7.StepComponent:
+  github_com_cyverse-de_model_v9.StepComponent:
     properties:
       container:
-        $ref: '#/definitions/github_com_cyverse-de_model_v7.Container'
+        $ref: '#/definitions/github_com_cyverse-de_model_v9.Container'
       description:
         type: string
       interactive:
@@ -210,26 +216,26 @@ definitions:
       type:
         type: string
     type: object
-  github_com_cyverse-de_model_v7.StepConfig:
+  github_com_cyverse-de_model_v9.StepConfig:
     properties:
       input:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v7.StepInput'
+          $ref: '#/definitions/github_com_cyverse-de_model_v9.StepInput'
         type: array
       output:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v7.StepOutput'
+          $ref: '#/definitions/github_com_cyverse-de_model_v9.StepOutput'
         type: array
       params:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v7.StepParam'
+          $ref: '#/definitions/github_com_cyverse-de_model_v9.StepParam'
         type: array
     type: object
-  github_com_cyverse-de_model_v7.StepEnvironment:
+  github_com_cyverse-de_model_v9.StepEnvironment:
     additionalProperties:
       type: string
     type: object
-  github_com_cyverse-de_model_v7.StepInput:
+  github_com_cyverse-de_model_v9.StepInput:
     properties:
       id:
         type: string
@@ -248,7 +254,7 @@ definitions:
       value:
         type: string
     type: object
-  github_com_cyverse-de_model_v7.StepOutput:
+  github_com_cyverse-de_model_v9.StepOutput:
     properties:
       multiplicity:
         type: string
@@ -263,7 +269,7 @@ definitions:
       type:
         type: string
     type: object
-  github_com_cyverse-de_model_v7.StepParam:
+  github_com_cyverse-de_model_v9.StepParam:
     properties:
       id:
         type: string
@@ -278,7 +284,7 @@ definitions:
       value:
         type: string
     type: object
-  github_com_cyverse-de_model_v7.Volume:
+  github_com_cyverse-de_model_v9.Volume:
     properties:
       container_path:
         type: string
@@ -289,7 +295,7 @@ definitions:
       read_only:
         type: boolean
     type: object
-  github_com_cyverse-de_model_v7.VolumesFrom:
+  github_com_cyverse-de_model_v9.VolumesFrom:
     properties:
       auth:
         type: string
@@ -350,14 +356,14 @@ definitions:
       exit_code:
         type: integer
       extra:
-        $ref: '#/definitions/github_com_cyverse-de_model_v7.ExtraInfo'
+        $ref: '#/definitions/github_com_cyverse-de_model_v9.ExtraInfo'
       failure_count:
         type: integer
       failure_threshold:
         type: integer
       file-metadata:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v7.FileMetadata'
+          $ref: '#/definitions/github_com_cyverse-de_model_v9.FileMetadata'
         type: array
       filter_files:
         description: comes from config, not upstream service
@@ -377,6 +383,8 @@ definitions:
         type: string
       irods_base:
         type: string
+      mount_data_store:
+        type: boolean
       name:
         type: string
       nfs_base:
@@ -402,7 +410,7 @@ definitions:
         type: boolean
       steps:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v7.Step'
+          $ref: '#/definitions/github_com_cyverse-de_model_v9.Step'
         type: array
       submission_date:
         type: string
@@ -819,8 +827,21 @@ definitions:
           AllocatedResources represents the compute resources allocated for this container by the
           node. Kubelet sets this value to Container.Resources.Requests upon successful pod admission
           and after successfully admitting desired pod resize.
-          +featureGate=InPlacePodVerticalScaling
+          +featureGate=InPlacePodVerticalScalingAllocatedStatus
           +optional
+      allocatedResourcesStatus:
+        description: |-
+          AllocatedResourcesStatus represents the status of various resources
+          allocated for this Pod.
+          +featureGate=ResourceHealthStatus
+          +optional
+          +patchMergeKey=name
+          +patchStrategy=merge
+          +listType=map
+          +listMapKey=name
+        items:
+          $ref: '#/definitions/v1.ResourceStatus'
+        type: array
       containerID:
         description: |-
           ContainerID is the ID of the container in the format '<type>://<container_id>'.
@@ -898,6 +919,13 @@ definitions:
         description: |-
           State holds details about the container's current condition.
           +optional
+      user:
+        allOf:
+        - $ref: '#/definitions/v1.ContainerUser'
+        description: |-
+          User represents user identity information initially attached to the first process of the container
+          +featureGate=SupplementalGroupsPolicy
+          +optional
       volumeMounts:
         description: |-
           Status of volume mounts.
@@ -910,6 +938,16 @@ definitions:
         items:
           $ref: '#/definitions/v1.VolumeMountStatus'
         type: array
+    type: object
+  v1.ContainerUser:
+    properties:
+      linux:
+        allOf:
+        - $ref: '#/definitions/v1.LinuxContainerUser'
+        description: |-
+          Linux holds user identity information initially attached to the first process of the containers in Linux.
+          Note that the actual running identity can be changed if the process has enough privilege to do so.
+          +optional
     type: object
   v1.HTTPIngressPath:
     properties:
@@ -1017,6 +1055,25 @@ definitions:
           port of the referenced service. A port name or port number
           is required for a IngressServiceBackend.
     type: object
+  v1.LinuxContainerUser:
+    properties:
+      gid:
+        description: GID is the primary gid initially attached to the first process
+          in the container
+        type: integer
+      supplementalGroups:
+        description: |-
+          SupplementalGroups are the supplemental groups initially attached to the first process in the container
+          +optional
+          +listType=atomic
+        items:
+          type: integer
+        type: array
+      uid:
+        description: UID is the primary uid initially attached to the first process
+          in the container
+        type: integer
+    type: object
   v1.PathType:
     enum:
     - Exact
@@ -1045,11 +1102,94 @@ definitions:
           the Pod where this field is used. It makes that resource available
           inside a container.
         type: string
+      request:
+        description: |-
+          Request is the name chosen for a request in the referenced claim.
+          If empty, everything from the claim is made available, otherwise
+          only the result of this request.
+
+          +optional
+        type: string
     type: object
+  v1.ResourceHealth:
+    properties:
+      health:
+        allOf:
+        - $ref: '#/definitions/v1.ResourceHealthStatus'
+        description: |-
+          Health of the resource.
+          can be one of:
+           - Healthy: operates as normal
+           - Unhealthy: reported unhealthy. We consider this a temporary health issue
+                        since we do not have a mechanism today to distinguish
+                        temporary and permanent issues.
+           - Unknown: The status cannot be determined.
+                      For example, Device Plugin got unregistered and hasn't been re-registered since.
+
+          In future we may want to introduce the PermanentlyUnhealthy Status.
+      resourceID:
+        description: ResourceID is the unique identifier of the resource. See the
+          ResourceID type for more information.
+        type: string
+    type: object
+  v1.ResourceHealthStatus:
+    enum:
+    - Healthy
+    - Unhealthy
+    - Unknown
+    type: string
+    x-enum-varnames:
+    - ResourceHealthStatusHealthy
+    - ResourceHealthStatusUnhealthy
+    - ResourceHealthStatusUnknown
   v1.ResourceList:
     additionalProperties:
       $ref: '#/definitions/resource.Quantity'
     type: object
+  v1.ResourceName:
+    enum:
+    - cpu
+    - memory
+    - storage
+    - ephemeral-storage
+    - pods
+    - services
+    - replicationcontrollers
+    - resourcequotas
+    - secrets
+    - configmaps
+    - persistentvolumeclaims
+    - services.nodeports
+    - services.loadbalancers
+    - requests.cpu
+    - requests.memory
+    - requests.storage
+    - requests.ephemeral-storage
+    - limits.cpu
+    - limits.memory
+    - limits.ephemeral-storage
+    type: string
+    x-enum-varnames:
+    - ResourceCPU
+    - ResourceMemory
+    - ResourceStorage
+    - ResourceEphemeralStorage
+    - ResourcePods
+    - ResourceServices
+    - ResourceReplicationControllers
+    - ResourceQuotas
+    - ResourceSecrets
+    - ResourceConfigMaps
+    - ResourcePersistentVolumeClaims
+    - ResourceServicesNodePorts
+    - ResourceServicesLoadBalancers
+    - ResourceRequestsCPU
+    - ResourceRequestsMemory
+    - ResourceRequestsStorage
+    - ResourceRequestsEphemeralStorage
+    - ResourceLimitsCPU
+    - ResourceLimitsMemory
+    - ResourceLimitsEphemeralStorage
   v1.ResourceRequirements:
     properties:
       claims:
@@ -1085,6 +1225,28 @@ definitions:
           otherwise to an implementation-defined value. Requests cannot exceed Limits.
           More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
           +optional
+    type: object
+  v1.ResourceStatus:
+    properties:
+      name:
+        allOf:
+        - $ref: '#/definitions/v1.ResourceName'
+        description: |-
+          Name of the resource. Must be unique within the pod and in case of non-DRA resource, match one of the resources from the pod spec.
+          For DRA resources, the value must be "claim:<claim_name>/<request>".
+          When this status is reported about a container, the "claim_name" and "request" must match one of the claims of this container.
+          +required
+      resources:
+        description: |-
+          List of unique resources health. Each element in the list contains an unique resource ID and its health.
+          At a minimum, for the lifetime of a Pod, resource ID must uniquely identify the resource allocated to the Pod on the Node.
+          If other Pod on the same Node reports the status with the same resource ID, it must be the same resource they share.
+          See ResourceID type definition for a specific format it has in various use cases.
+          +listType=map
+          +listMapKey=resourceID
+        items:
+          $ref: '#/definitions/v1.ResourceHealth'
+        type: array
     type: object
   v1.ServiceBackendPort:
     properties:
@@ -1359,7 +1521,7 @@ paths:
       description: |-
         Updates the time limit on a running VICE app for a user. The user
         must have access to the analysis. The time limit is increased by a
-        pre-configured amount.
+        configurable amount (default 4 hours, set via vice.time-limit-extension).
       operationId: time-limit-update
       parameters:
       - description: Analysis ID
@@ -1794,7 +1956,9 @@ paths:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Gets an analysis's time limit without requiring user info.
     post:
-      description: Updates the time limit on an analysis without requiring user information.
+      description: |-
+        Updates the time limit on an analysis without requiring user information.
+        The time limit is increased by a configurable amount (default 4 hours, set via vice.time-limit-extension).
       operationId: admin-time-limit-update
       parameters:
       - description: Analysis ID
