@@ -40,7 +40,7 @@ func newIncluster() *Incluster {
 		LocalStorageClass:             "example",
 		NATSEncodedConn:               nil,
 	}
-	return New(init, nil, nil, nil)
+	return New(init, nil, nil, nil, nil)
 }
 
 func jobWithDiskRequirements(capacities ...int64) *model.Job {

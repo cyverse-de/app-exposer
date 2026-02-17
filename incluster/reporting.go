@@ -525,6 +525,23 @@ func populateLoginIP(ctx context.Context, a *apps.Apps, existingLabels map[strin
 	return existingLabels, nil
 }
 
+func (i *Incluster) populateAdditionalLabels(ctx context.Context, existingLabels map[string]string) (map[string]string, []error) {
+	var err error
+	errors := []error{}
+
+	existingLabels = populateSubdomain(existingLabels)
+	existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
+	if err != nil {
+		errors = append(errors, err)
+	}
+	existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
+	if err != nil {
+		errors = append(errors, err)
+	}
+
+	return existingLabels, errors
+}
+
 func (i *Incluster) relabelDeployments(ctx context.Context) []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
@@ -536,21 +553,11 @@ func (i *Incluster) relabelDeployments(ctx context.Context) []error {
 	}
 
 	for _, deployment := range deployments.Items {
-		existingLabels := deployment.GetLabels()
-
-		existingLabels = populateSubdomain(existingLabels)
-
-		existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
+		labels, deploymentErrors := i.populateAdditionalLabels(ctx, deployment.GetLabels())
+		if len(deploymentErrors) > 0 {
+			errors = append(errors, deploymentErrors...)
 		}
-
-		existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
-		}
-
-		deployment.SetLabels(existingLabels)
+		deployment.SetLabels(labels)
 		_, err = i.clientset.AppsV1().Deployments(i.ViceNamespace).Update(ctx, &deployment, metav1.UpdateOptions{})
 		if err != nil {
 			errors = append(errors, err)
@@ -571,21 +578,11 @@ func (i *Incluster) relabelConfigMaps(ctx context.Context) []error {
 	}
 
 	for _, configmap := range cms.Items {
-		existingLabels := configmap.GetLabels()
-
-		existingLabels = populateSubdomain(existingLabels)
-
-		existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
+		labels, configmapErrors := i.populateAdditionalLabels(ctx, configmap.GetLabels())
+		if len(configmapErrors) > 0 {
+			errors = append(errors, configmapErrors...)
 		}
-
-		existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
-		}
-
-		configmap.SetLabels(existingLabels)
+		configmap.SetLabels(labels)
 		_, err = i.clientset.CoreV1().ConfigMaps(i.ViceNamespace).Update(ctx, &configmap, metav1.UpdateOptions{})
 		if err != nil {
 			errors = append(errors, err)
@@ -606,21 +603,11 @@ func (i *Incluster) relabelServices(ctx context.Context) []error {
 	}
 
 	for _, service := range svcs.Items {
-		existingLabels := service.GetLabels()
-
-		existingLabels = populateSubdomain(existingLabels)
-
-		existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
+		labels, serviceErrors := i.populateAdditionalLabels(ctx, service.GetLabels())
+		if len(serviceErrors) > 0 {
+			errors = append(errors, serviceErrors...)
 		}
-
-		existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
-		}
-
-		service.SetLabels(existingLabels)
+		service.SetLabels(labels)
 		_, err = i.clientset.CoreV1().Services(i.ViceNamespace).Update(ctx, &service, metav1.UpdateOptions{})
 		if err != nil {
 			errors = append(errors, err)
@@ -630,34 +617,23 @@ func (i *Incluster) relabelServices(ctx context.Context) []error {
 	return errors
 }
 
-func (i *Incluster) relabelIngresses(ctx context.Context) []error {
+func (i *Incluster) relabelRoutes(ctx context.Context) []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
 
-	ingresses, err := i.ingressList(ctx, i.ViceNamespace, filter, []string{"subdomain"})
+	routes, err := i.routeList(ctx, i.ViceNamespace, filter, []string{"subdomain"})
 	if err != nil {
 		errors = append(errors, err)
 		return errors
 	}
 
-	for _, ingress := range ingresses.Items {
-		existingLabels := ingress.GetLabels()
-
-		existingLabels = populateSubdomain(existingLabels)
-
-		existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
+	for _, route := range routes.Items {
+		labels, routeErrors := i.populateAdditionalLabels(ctx, route.GetLabels())
+		if len(routeErrors) > 0 {
+			errors = append(errors, routeErrors...)
 		}
-
-		existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
-		}
-
-		ingress.SetLabels(existingLabels)
-		client := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
-		_, err = client.Update(ctx, &ingress, metav1.UpdateOptions{})
+		route.SetLabels(labels)
+		_, err = i.gatewayClient.HTTPRoutes(i.ViceNamespace).Update(ctx, &route, metav1.UpdateOptions{})
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -687,9 +663,9 @@ func (i *Incluster) ApplyAsyncLabels(ctx context.Context) []error {
 		errors = append(errors, labelSVCErrors...)
 	}
 
-	labelIngressesErrors := i.relabelIngresses(ctx)
-	if len(labelIngressesErrors) > 0 {
-		errors = append(errors, labelIngressesErrors...)
+	labelRoutesErrors := i.relabelRoutes(ctx)
+	if len(labelRoutesErrors) > 0 {
+		errors = append(errors, labelRoutesErrors...)
 	}
 
 	return errors
