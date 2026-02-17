@@ -52,7 +52,7 @@ func TestViceProxyCommandWithAuthEnabled(t *testing.T) {
 		DisableViceProxyAuth:          false, // Authentication enabled
 		NATSEncodedConn:               nil,
 	}
-	i := New(init, nil, nil, nil)
+	i := New(init, nil, nil, nil, nil)
 	job := testJob()
 
 	command := i.viceProxyCommand(job)
@@ -101,7 +101,7 @@ func TestViceProxyCommandWithAuthDisabled(t *testing.T) {
 		DisableViceProxyAuth:          true, // Authentication disabled
 		NATSEncodedConn:               nil,
 	}
-	i := New(init, nil, nil, nil)
+	i := New(init, nil, nil, nil, nil)
 	job := testJob()
 
 	command := i.viceProxyCommand(job)
@@ -147,7 +147,7 @@ func TestViceProxyCommandFlagOrdering(t *testing.T) {
 		DisableViceProxyAuth:          true,
 		NATSEncodedConn:               nil,
 	}
-	i := New(init, nil, nil, nil)
+	i := New(init, nil, nil, nil, nil)
 	job := testJob()
 
 	command := i.viceProxyCommand(job)
