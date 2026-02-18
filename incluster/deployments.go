@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/resourcing"
 	"github.com/cyverse-de/model/v9"
@@ -37,7 +38,7 @@ func analysisPorts(step *model.Step) []apiv1.ContainerPort {
 func (i *Incluster) getFrontendURL(job *model.Job) *url.URL {
 	// This should be parsed in main(), so we shouldn't worry about it here.
 	frontURL, _ := url.Parse(i.FrontendBaseURL)
-	frontURL.Host = fmt.Sprintf("%s.%s", IngressName(job.UserID, job.InvocationID), frontURL.Host)
+	frontURL.Host = fmt.Sprintf("%s.%s", common.Subdomain(job.UserID, job.InvocationID), frontURL.Host)
 	return frontURL
 }
 
@@ -392,7 +393,7 @@ func (i *Incluster) imagePullSecrets(_ *model.Job) []apiv1.LocalObjectReference 
 // GetDeployment assembles and returns the Deployment for the VICE analysis. It does
 // not call the k8s API.
 func (i *Incluster) GetDeployment(ctx context.Context, job *model.Job) (*appsv1.Deployment, error) {
-	labels, err := i.LabelsFromJob(ctx, job)
+	labels, err := i.jobInfo.JobLabels(ctx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +466,7 @@ func (i *Incluster) GetDeployment(ctx context.Context, job *model.Job) (*appsv1.
 					Labels: labels,
 				},
 				Spec: apiv1.PodSpec{
-					Hostname:                     IngressName(job.UserID, job.InvocationID),
+					Hostname:                     common.Subdomain(job.UserID, job.InvocationID),
 					RestartPolicy:                apiv1.RestartPolicy("Always"),
 					Volumes:                      i.deploymentVolumes(job),
 					InitContainers:               i.initContainers(job),

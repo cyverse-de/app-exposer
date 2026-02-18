@@ -2,21 +2,15 @@ package incluster
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v9"
 	apiv1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// IngressName returns the name of the ingress created for the running VICE
-// analysis. This should match the name created in the apps service.
-func IngressName(userID, invocationID string) string {
-	return fmt.Sprintf("a%x", sha256.Sum256([]byte(fmt.Sprintf("%s%s", userID, invocationID))))[0:9]
-}
 
 // getIngress assembles and returns the Ingress needed for the VICE analysis.
 // It does not call the k8s API.
@@ -26,11 +20,11 @@ func (i *Incluster) getIngress(ctx context.Context, job *model.Job, svc *apiv1.S
 		defaultPort int32
 	)
 
-	labels, err := i.LabelsFromJob(ctx, job)
+	labels, err := i.jobInfo.JobLabels(ctx, job)
 	if err != nil {
 		return nil, err
 	}
-	ingressName := IngressName(job.UserID, job.InvocationID)
+	ingressName := common.Subdomain(job.UserID, job.InvocationID)
 
 	// Find the proxy port, use it as the default
 	for _, port := range svc.Spec.Ports {

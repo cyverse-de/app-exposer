@@ -621,7 +621,7 @@ const docTemplate = `{
         "/vice/async-data": {
             "get": {
                 "description": "Returns data that is applied to analyses outside of an API call.\nThe returned data is not returned asynchronously, despite the name of the call.",
-                "summary": "Returns data that is generately asynchronously from the job launch.",
+                "summary": "Returns data that is generated asynchronously from the job launch.",
                 "operationId": "async-data",
                 "parameters": [
                     {
