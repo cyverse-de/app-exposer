@@ -400,7 +400,7 @@ func (e *Outcluster) bindRouteOptions(c echo.Context, routeName string) (*RouteO
 	}
 
 	if opts.Service == "" {
-		return nil, echo.NewHTTPError(http.StatusBadRequest, "missing service from the ingress JSON")
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "missing service from the route JSON")
 	}
 
 	if opts.Port == 0 {

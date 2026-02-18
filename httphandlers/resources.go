@@ -133,7 +133,7 @@ type FilteredRoutesResponse struct {
 // @Success		200	{object}	FilteredRoutesResponse
 // @Failure		400	{object}	common.ErrorResponse
 // @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/listing/ingresses [get]
+// @Router			/vice/listing/routes [get]
 func (h *HTTPHandlers) FilterableRoutesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := common.FilterMap(c.Request().URL.Query())
