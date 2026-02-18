@@ -62,9 +62,11 @@ const (
 	AnalysisAffinityKey      = "analysis"
 	AnalysisAffinityOperator = "Exists"
 
-	GPUAffinityKey      = "gpu"
-	GPUAffinityOperator = "In"
-	GPUAffinityValue    = "true"
+	GPUAffinityKey           = "gpu"
+	GPUAffinityOperator      = "In"
+	GPUAffinityValue         = "true"
+	GPUModelAffinityKey      = "nvidia.com/gpu.product"
+	GPUModelAffinityOperator = "In"
 
 	UserSuffix = "@iplantcollaborative.org"
 
