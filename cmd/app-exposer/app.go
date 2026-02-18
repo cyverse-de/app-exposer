@@ -133,6 +133,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		KeycloakClientID:              c.String("keycloak.client-id"),
 		KeycloakClientSecret:          c.String("keycloak.client-secret"),
 		IRODSZone:                     init.IRODSZone,
+		GatewayProvider:               c.String("vice.gateway_provider"),
 		DisableViceProxyAuth:          init.DisableViceProxyAuth,
 		NATSEncodedConn:               conn,
 		LocalStorageClass:             init.LocalStorageClass,

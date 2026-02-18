@@ -23,6 +23,7 @@ func newIncluster() *Incluster {
 		FrontendBaseURL:               "https://de.example.org",
 		ViceDefaultBackendService:     "vice-default-backend",
 		ViceDefaultBackendServicePort: 80,
+		ViceDomain:                    "cyverse.run",
 		GetAnalysisIDService:          "get-analysis-id",
 		CheckResourceAccessService:    "check-resource-access",
 		VICEBackendNamespace:          "prod",
@@ -36,7 +37,7 @@ func newIncluster() *Incluster {
 		KeycloakClientID:              "theclient",
 		KeycloakClientSecret:          "thesecret",
 		IRODSZone:                     "example",
-		IngressClass:                  "nginx",
+		GatewayProvider:               "traefik",
 		LocalStorageClass:             "example",
 		NATSEncodedConn:               nil,
 	}
