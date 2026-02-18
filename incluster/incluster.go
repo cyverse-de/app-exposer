@@ -11,6 +11,7 @@ import (
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/app-exposer/incluster/jobinfo"
 	"github.com/cyverse-de/app-exposer/quota"
 
 	"github.com/jmoiron/sqlx"
@@ -75,6 +76,7 @@ type Incluster struct {
 	statusPublisher AnalysisStatusPublisher
 	apps            *apps.Apps
 	quotaEnforcer   *quota.Enforcer
+	jobInfo         jobinfo.JobInfo
 }
 
 // New creates a new *Incluster.
@@ -89,36 +91,8 @@ func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, gatewayClient 
 		},
 		apps:          apps,
 		quotaEnforcer: quota.NewEnforcer(clientset, db, apps, init.NATSEncodedConn, init.UserSuffix),
+		jobInfo:       jobinfo.NewJobInfo(apps),
 	}
-}
-
-// LabelsFromJob returns a map[string]string that can be used as labels for K8s resources.
-func (i *Incluster) LabelsFromJob(ctx context.Context, job *model.Job) (map[string]string, error) {
-	name := []rune(job.Name)
-
-	var stringmax int
-	if len(name) >= 63 {
-		stringmax = 62
-	} else {
-		stringmax = len(name) - 1
-	}
-
-	ipAddr, err := i.apps.GetUserIP(ctx, job.UserID)
-	if err != nil {
-		return nil, err
-	}
-
-	return map[string]string{
-		"external-id":   job.InvocationID,
-		"app-name":      common.LabelValueString(job.AppName),
-		"app-id":        job.AppID,
-		"username":      common.LabelValueString(job.Submitter),
-		"user-id":       job.UserID,
-		"analysis-name": common.LabelValueString(string(name[:stringmax])),
-		"app-type":      "interactive",
-		"subdomain":     IngressName(job.UserID, job.InvocationID),
-		"login-ip":      ipAddr,
-	}, nil
 }
 
 // UpsertExcludesConfigMap uses the Job passed in to assemble the ConfigMap

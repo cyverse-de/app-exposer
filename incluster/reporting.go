@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -110,18 +109,6 @@ func (i *Incluster) routeList(ctx context.Context, namespace string, customLabel
 		return nil, err
 	}
 	return routeList, nil
-}
-
-func (i *Incluster) ingressList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*netv1.IngressList, error) {
-	listOptions := getListOptions(customLabels, missingLabels)
-
-	client := i.clientset.NetworkingV1().Ingresses(namespace)
-	ingList, err := client.List(ctx, listOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	return ingList, nil
 }
 
 // MetaInfo contains useful information provided by multiple resource types.
@@ -325,37 +312,6 @@ func routeInfo(route *gatewayv1.HTTPRoute) *RouteInfo {
 	}
 }
 
-// IngressInfo contains useful Ingress VICE info.
-type IngressInfo struct {
-	MetaInfo
-	DefaultBackend string              `json:"defaultBackend"`
-	Rules          []netv1.IngressRule `json:"rules"`
-}
-
-func ingressInfo(ingress *netv1.Ingress) *IngressInfo {
-	labels := ingress.GetObjectMeta().GetLabels()
-
-	return &IngressInfo{
-		MetaInfo: MetaInfo{
-			Name:              ingress.GetName(),
-			Namespace:         ingress.GetNamespace(),
-			AnalysisName:      labels["analysis-name"],
-			AppName:           labels["app-name"],
-			AppID:             labels["app-id"],
-			ExternalID:        labels["external-id"],
-			UserID:            labels["user-id"],
-			Username:          labels["username"],
-			CreationTimestamp: ingress.GetCreationTimestamp().String(),
-		},
-		Rules: ingress.Spec.Rules,
-		DefaultBackend: fmt.Sprintf(
-			"%s:%d",
-			ingress.Spec.DefaultBackend.Service.Name,
-			ingress.Spec.DefaultBackend.Service.Port.Number,
-		),
-	}
-}
-
 func (i *Incluster) GetFilteredDeployments(ctx context.Context, filter map[string]string) ([]DeploymentInfo, error) {
 	depList, err := i.DeploymentList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
@@ -503,7 +459,7 @@ func populateSubdomain(existingLabels map[string]string) map[string]string {
 	if _, ok := existingLabels["subdomain"]; !ok {
 		if externalID, ok := existingLabels["external-id"]; ok {
 			if userID, ok := existingLabels["user-id"]; ok {
-				existingLabels["subdomain"] = IngressName(userID, externalID)
+				existingLabels["subdomain"] = common.Subdomain(userID, externalID)
 			}
 		}
 	}
