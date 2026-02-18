@@ -11,8 +11,7 @@ import (
 
 const ViceGatewayName = "vice"
 
-// RouteOptions contains the settings needed to create or update an Ingress
-// for an interactive app.
+// RouteOptions contains the settings needed to create or update an HTTP route for an interactive app.
 type RouteOptions struct {
 	Name      string
 	Namespace string
