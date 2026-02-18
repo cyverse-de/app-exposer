@@ -42,24 +42,22 @@ type ExposerApp struct {
 
 // ExposerAppInit contains configuration settings for creating a new ExposerApp.
 type ExposerAppInit struct {
-	Namespace                     string // The namespace that the routes settings are added to.
-	ViceNamespace                 string // The namespace containing the running VICE apps.
-	ViceProxyImage                string
-	ViceDefaultBackendService     string
-	ViceDefaultBackendServicePort int
-	ViceDomain                    string
-	GetAnalysisIDService          string
-	CheckResourceAccessService    string
-	db                            *sqlx.DB
-	UserSuffix                    string
-	IRODSZone                     string
-	ClientSet                     kubernetes.Interface
-	GatewayClient                 *gatewayclient.GatewayV1Client
-	batchadapter                  *adapter.JEXAdapter
-	ImagePullSecretName           string
-	LocalStorageClass             string
-	DisableViceProxyAuth          bool
-	BypassUsers                   []string
+	Namespace                  string // The namespace that the routes settings are added to.
+	ViceNamespace              string // The namespace containing the running VICE apps.
+	ViceProxyImage             string
+	ViceDomain                 string
+	GetAnalysisIDService       string
+	CheckResourceAccessService string
+	db                         *sqlx.DB
+	UserSuffix                 string
+	IRODSZone                  string
+	ClientSet                  kubernetes.Interface
+	GatewayClient              *gatewayclient.GatewayV1Client
+	batchadapter               *adapter.JEXAdapter
+	ImagePullSecretName        string
+	LocalStorageClass          string
+	DisableViceProxyAuth       bool
+	BypassUsers                []string
 }
 
 //	@title			app-exposer
@@ -119,8 +117,6 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		ImagePullSecretName:           init.ImagePullSecretName,
 		ViceProxyImage:                init.ViceProxyImage,
 		FrontendBaseURL:               c.String("k8s.frontend.base"),
-		ViceDefaultBackendService:     init.ViceDefaultBackendService,
-		ViceDefaultBackendServicePort: init.ViceDefaultBackendServicePort,
 		GetAnalysisIDService:          init.GetAnalysisIDService,
 		CheckResourceAccessService:    init.CheckResourceAccessService,
 		VICEBackendNamespace:          c.String("vice.backend-namespace"),

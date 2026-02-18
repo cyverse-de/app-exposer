@@ -44,8 +44,6 @@ type Init struct {
 	ImagePullSecretName           string
 	ViceProxyImage                string
 	FrontendBaseURL               string
-	ViceDefaultBackendService     string
-	ViceDefaultBackendServicePort int
 	ViceDomain                    string
 	GetAnalysisIDService          string
 	CheckResourceAccessService    string
