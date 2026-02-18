@@ -26,7 +26,7 @@ require (
 	github.com/cyverse-de/go-mod/pbinit v0.1.11
 	github.com/cyverse-de/go-mod/protobufjson v0.0.3
 	github.com/cyverse-de/messaging/v11 v11.0.1
-	github.com/cyverse-de/model/v9 v9.0.0
+	github.com/cyverse-de/model/v10 v10.0.0
 	github.com/cyverse-de/p/go/qms v0.1.13
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0

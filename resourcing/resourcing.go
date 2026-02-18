@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/cyverse-de/app-exposer/common"
-	"github.com/cyverse-de/model/v9"
+	"github.com/cyverse-de/model/v10"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 )
@@ -192,6 +192,33 @@ func getIntField(v interface{}, name string) int {
 func minGPUs(c model.Container) int { return getIntField(c, "MinGPUs") }
 func maxGPUs(c model.Container) int { return getIntField(c, "MaxGPUs") }
 
+// getStringSliceField is a reflection helper to safely read a string slice field
+// from a struct value. Returns empty slice when the field doesn't exist or
+// can't be converted to a []string.
+func getStringSliceField(v interface{}, name string) []string {
+	val := reflect.ValueOf(v)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return []string{}
+	}
+	f := val.FieldByName(name)
+	if !f.IsValid() {
+		return []string{}
+	}
+	if f.Kind() == reflect.Slice && f.Type().Elem().Kind() == reflect.String {
+		result := make([]string, f.Len())
+		for i := 0; i < f.Len(); i++ {
+			result[i] = f.Index(i).String()
+		}
+		return result
+	}
+	return []string{}
+}
+
+func gpuModels(c model.Container) []string { return getStringSliceField(c, "GPUModels") }
+
 func cpuResourceRequest(analysis *model.Analysis) resourcev1.Quantity {
 	var (
 		value resourcev1.Quantity
@@ -297,6 +324,13 @@ func SharedMemoryAmount(analysis *model.Analysis) *resourcev1.Quantity {
 		}
 	}
 	return nil
+}
+
+// GPUModelsRequested returns the list of acceptable GPU models for the analysis,
+// or an empty slice if none are specified. This is used to create node affinity
+// requirements to schedule the pod on nodes with compatible GPU models.
+func GPUModelsRequested(analysis *model.Analysis) []string {
+	return gpuModels(analysis.Steps[0].Component.Container)
 }
 
 func resourceRequests(analysis *model.Analysis) apiv1.ResourceList {
