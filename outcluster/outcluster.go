@@ -454,7 +454,12 @@ func (e *Outcluster) CreateRouteHandler(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, e.RouteController.OptsFromHTTPRoute(route))
+	routeOptions, err := e.RouteController.OptsFromHTTPRoute(route)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, routeOptions)
 }
 
 // GetRouteHandler is an http handler for getting an HTTPRoute object from a k8s cluster.
@@ -472,7 +477,12 @@ func (e *Outcluster) GetRouteHandler(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, e.RouteController.OptsFromHTTPRoute(route))
+	routeOptions, err := e.RouteController.OptsFromHTTPRoute(route)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, routeOptions)
 }
 
 // UpdateRouteHandler is an HTTP handler for updating an HTTPRoute object in a k8s cluster.
@@ -495,7 +505,12 @@ func (e *Outcluster) UpdateRouteHandler(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, e.RouteController.OptsFromHTTPRoute(route))
+	routeOptions, err := e.RouteController.OptsFromHTTPRoute(route)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, routeOptions)
 }
 
 // DeleteRouteHandler is an HTTP handler for deleting an HTTPRotue object in a Kubernetes cluster.
