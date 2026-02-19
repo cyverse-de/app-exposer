@@ -22,7 +22,7 @@ type RouteOptions struct {
 // RouteCrudder defines the interface for objects that allow CRUD operations on Kubernetes HTTPRoutes. Mostly needed to
 // facilitate testing.
 type RouteCrudder interface {
-	OptsFromHTTPRoute(route *gatewayv1.HTTPRoute) *RouteOptions
+	OptsFromHTTPRoute(route *gatewayv1.HTTPRoute) (*RouteOptions, error)
 	HTTPRouteFromOpts(opts *RouteOptions) *gatewayv1.HTTPRoute
 	Create(ctx context.Context, opts *RouteOptions) (*gatewayv1.HTTPRoute, error)
 	Get(ctx context.Context, namespace, name string) (*gatewayv1.HTTPRoute, error)
@@ -45,14 +45,25 @@ func NewRouter(viceDomain string, gatewayClient *gatewayclient.GatewayV1Client) 
 }
 
 // Returns the route options corresponding to the given HTTPRoute.
-func (r *Router) OptsFromHTTPRoute(route *gatewayv1.HTTPRoute) *RouteOptions {
+func (r *Router) OptsFromHTTPRoute(route *gatewayv1.HTTPRoute) (*RouteOptions, error) {
+
+	// Check for a malformed route. This shouldn't happen but a panic would be confusing if it ever did.
+	if len(route.Spec.Rules) == 0 {
+		return nil, fmt.Errorf("no rules defined for HTTPRoute: %s", route.Name)
+	}
+	if len(route.Spec.Rules) == 0 || len(route.Spec.Rules[0].BackendRefs) == 0 {
+		return nil, fmt.Errorf("no backend refs defined for the first rule of HTTPRoute: %s", route.Name)
+	}
+
+	// Return the route options.
 	backend := route.Spec.Rules[0].BackendRefs[0].BackendRef
-	return &RouteOptions{
+	routeOptions := &RouteOptions{
 		Name:      route.Name,
 		Namespace: route.Namespace,
 		Service:   string(backend.Name),
 		Port:      int(*backend.Port),
 	}
+	return routeOptions, nil
 }
 
 // Returns the HTTPRoute corresponding to the given route options.
