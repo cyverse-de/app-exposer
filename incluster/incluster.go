@@ -252,7 +252,7 @@ func (i *Incluster) UpsertDeployment(ctx context.Context, deployment *appsv1.Dep
 		}
 	}
 
-	// Create the HTTP routes for the job.
+	// Create the HTTPRoute complete with provider-specific customizations if applicable.
 	routeBuilder := httproutes.NewHTTPRouteBuilder(i.GatewayProvider, i.ViceNamespace, i.ViceDomain, i.jobInfo)
 	route, err := routeBuilder.BuildRoute(ctx, job, svc)
 	if err != nil {

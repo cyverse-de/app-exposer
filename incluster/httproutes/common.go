@@ -97,13 +97,24 @@ func (c *CommonHTTPRouteBuilder) BuildRoute(
 	return &route, nil
 }
 
+// customRouteBuilders contains functions used to create routes for specific providers.
+var customRouteBuilders = map[string]func(*CommonHTTPRouteBuilder) HTTPRouteBuilder{
+	"traefik": NewTraefikHTTPRouteBuilder,
+}
+
 // NewHTTPRouteBuilder creates a new HTTPRouteBuilder for the given provider.
 func NewHTTPRouteBuilder(provider, viceNamespace, viceDomain string, jobInfo jobinfo.JobInfo) HTTPRouteBuilder {
-	// Fall back to CommonHTTPRouteBuilder if there's no custom HTTPRouteBuilder for the provider.
-	return &CommonHTTPRouteBuilder{
+	commonBuilder := &CommonHTTPRouteBuilder{
 		Provider:      provider,
 		VICENamespace: gatewayv1.Namespace(viceNamespace),
 		VICEDomain:    viceDomain,
 		JobInfo:       jobInfo,
 	}
+
+	// If there's a custom route builder for the current provider, use it.
+	builderConstructor := customRouteBuilders[provider]
+	if builderConstructor != nil {
+		return builderConstructor(commonBuilder)
+	}
+	return commonBuilder
 }
