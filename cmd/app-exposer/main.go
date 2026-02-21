@@ -276,7 +276,7 @@ func main() {
 
 	gatewayClient, err := gatewayclient.NewForConfig(config)
 	if err != nil {
-		log.Fatal(errors.Wrap(err, "error creating gateway API clientset from comfig"))
+		log.Fatal(errors.Wrap(err, "error creating gateway API clientset from config"))
 	}
 
 	var proxyImage string

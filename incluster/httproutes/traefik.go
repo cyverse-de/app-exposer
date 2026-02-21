@@ -27,7 +27,7 @@ func (t TraefikHTTPRouteBuilder) BuildRoute(
 	}
 
 	// Add the extension reference filters for CORS headers to all of the route rules.
-	for _, rule := range route.Spec.Rules {
+	for i, rule := range route.Spec.Rules {
 		filter := gatewayv1.HTTPRouteFilter{
 			Type: gatewayv1.HTTPRouteFilterExtensionRef,
 			ExtensionRef: &gatewayv1.LocalObjectReference{
@@ -36,7 +36,7 @@ func (t TraefikHTTPRouteBuilder) BuildRoute(
 				Name:  CORSMiddlewareName,
 			},
 		}
-		rule.Filters = append(rule.Filters, filter)
+		route.Spec.Rules[i].Filters = append(rule.Filters, filter)
 	}
 
 	return route, err

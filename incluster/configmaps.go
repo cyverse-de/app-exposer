@@ -24,7 +24,8 @@ func excludesFileContents(job *model.Job) *bytes.Buffer {
 	var output bytes.Buffer
 
 	for _, p := range job.ExcludeArguments() {
-		output.WriteString(fmt.Sprintf("%s\n", p))
+		output.WriteString(p)
+		output.WriteString("\n")
 	}
 	return &output
 }
