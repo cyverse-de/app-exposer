@@ -4,7 +4,10 @@
 package outcluster
 
 import (
+	"fmt"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/labstack/echo/v4"
@@ -13,9 +16,11 @@ import (
 )
 
 var log = common.Log
+var rfc1123Pattern = regexp.MustCompile("[[:alnum:]][-.[:alnum:]]{0,251}[[:alnum:]]")
 
 // Outcluster contains the support for running VICE apps outside of k8s.
 type Outcluster struct {
+	deNamespace        string
 	namespace          string
 	domain             string
 	clientset          kubernetes.Interface
@@ -25,14 +30,21 @@ type Outcluster struct {
 }
 
 // New returns a new *Outcluster.
-func New(cs kubernetes.Interface, gc *gatewayclient.GatewayV1Client, namespace, viceDomain string) *Outcluster {
+func New(
+	cs kubernetes.Interface,
+	gc *gatewayclient.GatewayV1Client,
+	deNamespace string,
+	namespace string,
+	viceDomain string,
+) *Outcluster {
 	return &Outcluster{
 		clientset:          cs,
+		deNamespace:        deNamespace,
 		namespace:          namespace,
 		domain:             viceDomain,
 		ServiceController:  NewServicer(cs.CoreV1().Services(namespace)),
 		EndpointController: NewEndpointer(cs.CoreV1().Endpoints(namespace)),
-		RouteController:    NewRouter(viceDomain, gc),
+		RouteController:    NewRouter(deNamespace, viceDomain, gc),
 	}
 }
 
@@ -406,8 +418,22 @@ func (e *Outcluster) bindRouteOptions(c echo.Context, routeName string) (*RouteO
 	if opts.Port == 0 {
 		return nil, echo.NewHTTPError(http.StatusBadRequest, "Port was either not set or set to 0")
 	}
+	if opts.Port < 1 || opts.Port > 65535 {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "port number %d is out of range (1-65535)", opts.Port)
+	}
 
 	opts.Name = routeName
+	if routeName == "" {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "no route name provided")
+	}
+	routeFQDN := routeName
+	if !strings.Contains(routeName, ".") {
+		routeFQDN = fmt.Sprintf("%s.%s", routeName, e.domain)
+	}
+	if !rfc1123Pattern.MatchString(routeFQDN) {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "invalid route name provided: %s", routeFQDN)
+	}
+
 	opts.Namespace = e.namespace
 
 	return &opts, nil
@@ -513,7 +539,7 @@ func (e *Outcluster) UpdateRouteHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, routeOptions)
 }
 
-// DeleteRouteHandler is an HTTP handler for deleting an HTTPRotue object in a Kubernetes cluster.
+// DeleteRouteHandler is an HTTP handler for deleting an HTTPRoute object in a Kubernetes cluster.
 func (e *Outcluster) DeleteRouteHandler(c echo.Context) error {
 	var err error
 

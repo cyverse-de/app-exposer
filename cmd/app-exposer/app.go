@@ -106,6 +106,8 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	timeLimitExtensionSeconds := int64(timeLimitExtensionDuration.Seconds())
 	log.Infof("VICE time limit extension set to %s (%d seconds)", timeLimitExtensionStr, timeLimitExtensionSeconds)
 
+	deNamespace := c.String("vice.backend-namespace")
+
 	inclusterInit := &incluster.Init{
 		ViceNamespace:                 init.ViceNamespace,
 		ViceDomain:                    init.ViceDomain,
@@ -119,7 +121,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		FrontendBaseURL:               c.String("k8s.frontend.base"),
 		GetAnalysisIDService:          init.GetAnalysisIDService,
 		CheckResourceAccessService:    init.CheckResourceAccessService,
-		VICEBackendNamespace:          c.String("vice.backend-namespace"),
+		VICEBackendNamespace:          deNamespace,
 		AppsServiceBaseURL:            appsServiceBaseURL,
 		JobStatusURL:                  jobStatusURL,
 		UserSuffix:                    init.UserSuffix,
@@ -140,7 +142,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, init.GatewayClient, apps)
 
 	app := &ExposerApp{
-		outcluster: outcluster.New(init.ClientSet, init.GatewayClient, init.Namespace, init.ViceDomain),
+		outcluster: outcluster.New(init.ClientSet, init.GatewayClient, deNamespace, init.Namespace, init.ViceDomain),
 		incluster:  incluster,
 		namespace:  init.Namespace,
 		clientset:  init.ClientSet,

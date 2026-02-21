@@ -32,13 +32,15 @@ type RouteCrudder interface {
 
 // Router is a concrete implementation of the RouteCrudder interface.
 type Router struct {
+	deNamespace   string
 	viceDomain    string
 	gatewayClient *gatewayclient.GatewayV1Client
 }
 
 // NewRouter creates a new Router instance.
-func NewRouter(viceDomain string, gatewayClient *gatewayclient.GatewayV1Client) *Router {
+func NewRouter(deNamespace, viceDomain string, gatewayClient *gatewayclient.GatewayV1Client) *Router {
 	return &Router{
+		deNamespace:   deNamespace,
 		viceDomain:    viceDomain,
 		gatewayClient: gatewayClient,
 	}
@@ -69,6 +71,7 @@ func (r *Router) OptsFromHTTPRoute(route *gatewayv1.HTTPRoute) (*RouteOptions, e
 // Returns the HTTPRoute corresponding to the given route options.
 func (r *Router) HTTPRouteFromOpts(opts *RouteOptions) *gatewayv1.HTTPRoute {
 	portNumber := gatewayv1.PortNumber(opts.Port)
+	gatewayNamespace := gatewayv1.Namespace(r.deNamespace)
 	return &gatewayv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      opts.Name,
@@ -78,12 +81,13 @@ func (r *Router) HTTPRouteFromOpts(opts *RouteOptions) *gatewayv1.HTTPRoute {
 			CommonRouteSpec: gatewayv1.CommonRouteSpec{
 				ParentRefs: []gatewayv1.ParentReference{
 					{
-						Name: ViceGatewayName,
+						Namespace: &gatewayNamespace,
+						Name:      ViceGatewayName,
 					},
 				},
 			},
 			Hostnames: []gatewayv1.Hostname{
-				gatewayv1.Hostname(fmt.Sprintf("%s.%s", opts.Name, r.viceDomain)),
+				gatewayv1.Hostname(opts.Name),
 			},
 			Rules: []gatewayv1.HTTPRouteRule{
 				gatewayv1.HTTPRouteRule{

@@ -25,6 +25,7 @@ type HTTPRouteBuilder interface {
 // CommonHTTPRouteBuilder is an HTTPRouteBuilder that adds no provider-specific settings.
 type CommonHTTPRouteBuilder struct {
 	Provider      string
+	DENamespace   gatewayv1.Namespace
 	VICENamespace gatewayv1.Namespace
 	VICEDomain    string
 	JobInfo       jobinfo.JobInfo
@@ -77,14 +78,15 @@ func (c *CommonHTTPRouteBuilder) BuildRoute(
 	// Define and return the route.
 	route := gatewayv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   job.InvocationID,
-			Labels: labels,
+			Name:      job.InvocationID,
+			Namespace: string(c.VICENamespace),
+			Labels:    labels,
 		},
 		Spec: gatewayv1.HTTPRouteSpec{
 			CommonRouteSpec: gatewayv1.CommonRouteSpec{
 				ParentRefs: []gatewayv1.ParentReference{
 					gatewayv1.ParentReference{
-						Namespace: &c.VICENamespace,
+						Namespace: &c.DENamespace,
 						Name:      VICEGatewayName,
 					},
 				},
@@ -103,9 +105,16 @@ var customRouteBuilders = map[string]func(*CommonHTTPRouteBuilder) HTTPRouteBuil
 }
 
 // NewHTTPRouteBuilder creates a new HTTPRouteBuilder for the given provider.
-func NewHTTPRouteBuilder(provider, viceNamespace, viceDomain string, jobInfo jobinfo.JobInfo) HTTPRouteBuilder {
+func NewHTTPRouteBuilder(
+	provider string,
+	deNamespace string,
+	viceNamespace string,
+	viceDomain string,
+	jobInfo jobinfo.JobInfo,
+) HTTPRouteBuilder {
 	commonBuilder := &CommonHTTPRouteBuilder{
 		Provider:      provider,
+		DENamespace:   gatewayv1.Namespace(deNamespace),
 		VICENamespace: gatewayv1.Namespace(viceNamespace),
 		VICEDomain:    viceDomain,
 		JobInfo:       jobInfo,
