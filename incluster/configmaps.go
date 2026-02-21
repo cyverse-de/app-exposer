@@ -24,7 +24,8 @@ func excludesFileContents(job *model.Job) *bytes.Buffer {
 	var output bytes.Buffer
 
 	for _, p := range job.ExcludeArguments() {
-		output.WriteString(fmt.Sprintf("%s\n", p))
+		output.WriteString(p)
+		output.WriteString("\n")
 	}
 	return &output
 }
@@ -34,7 +35,7 @@ func excludesFileContents(job *model.Job) *bytes.Buffer {
 // call the k8s API to actually create the ConfigMap, just returns the object
 // that can be passed to the API.
 func (i *Incluster) excludesConfigMap(ctx context.Context, job *model.Job) (*apiv1.ConfigMap, error) {
-	labels, err := i.LabelsFromJob(ctx, job)
+	labels, err := i.jobInfo.JobLabels(ctx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +87,7 @@ func inputPathListContents(job *model.Job, pathListIdentifier string) (*bytes.Bu
 // files for the VICE analysis. This does NOT call the k8s API to actually
 // create the ConfigMap, just returns the object that can be passed to the API.
 func (i *Incluster) inputPathListConfigMap(ctx context.Context, job *model.Job) (*apiv1.ConfigMap, error) {
-	labels, err := i.LabelsFromJob(ctx, job)
+	labels, err := i.jobInfo.JobLabels(ctx, job)
 	if err != nil {
 		return nil, err
 	}

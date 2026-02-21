@@ -45,7 +45,7 @@ components:
       description: The name of the app used to launch the analysis. Provided by the app integrator.
       schema:
         type: string
-    
+
     externalID:
       name: external-id
       in: query
@@ -63,7 +63,7 @@ components:
       required: true
       schema:
         type: string
-    
+
     userID:
       name: user-id
       in: query
@@ -71,7 +71,7 @@ components:
       description: The UUID assigned to the user that launched the analysis.
       schema:
         type: string
-    
+
     username:
       name: username
       in: query
@@ -105,7 +105,7 @@ components:
         text/plain:
           schema:
             type: string
-  
+
     ForbiddenError:
       description: Forbidden
       content:
@@ -122,7 +122,7 @@ components:
           $ref: '#/components/schemas/ContainerStateRunning'
         terminated:
           $ref: '#/components/schemas/ContainerStateTerminated'
-    
+
     ContainerStateWaiting:
       properties:
         reason:
@@ -178,7 +178,7 @@ components:
 
     Deployment:
       properties:
-        name: 
+        name:
           type: string
         namespace:
           type: string
@@ -214,7 +214,7 @@ components:
 
     Pod:
       properties:
-        name: 
+        name:
           type: string
         namespace:
           type: string
@@ -249,7 +249,7 @@ components:
 
     ConfigMap:
       properties:
-        name: 
+        name:
           type: string
         namespace:
           type: string
@@ -269,10 +269,10 @@ components:
           type: string
         data:
           type: object
-    
-    Ingress:
+
+    HTTPRoute:
       properties:
-        name: 
+        name:
           type: string
         namespace:
           type: string
@@ -293,9 +293,9 @@ components:
         rules:
           type: array
           items:
-            $ref: '#/components/schemas/IngressRule'
+            $ref: '#/components/schemas/HTTPRouteRule'
 
-    IngressRule:
+    HTTPRouteRule:
       properties:
         host:
           type: string
@@ -306,7 +306,7 @@ components:
 
     Service:
       properties:
-        name: 
+        name:
           type: string
         namespace:
           type: string
@@ -328,7 +328,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ServicePort'
-    
+
     ServicePort:
       properties:
         name:
@@ -346,7 +346,7 @@ components:
           format: int32
         protocol:
           type: string
-  
+
     Resources:
       properties:
         deployments:
@@ -365,10 +365,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Service'
-        ingresses:
+        routes:
           type: array
           items:
-            $ref: '#/components/schemas/Ingress'
+            $ref: '#/components/schemas/HTTPRoutes'
 
 paths:
   /vice/listing:
@@ -486,10 +486,10 @@ paths:
                     items:
                       $ref: '#/components/schemas/Service'
 
-  /vice/listing/ingresses:
+  /vice/listing/routes:
     get:
-      summary: List Ingresses
-      description: Lists Ingress resources for in-cluster VICE analyses, optionally filtering them by the labels provided in the query.
+      summary: List HTTPRoutes
+      description: Lists HTTP route resources for in-cluster VICE analyses, optionally filtering them by the labels provided in the query.
       parameters:
         - $ref: '#/components/parameters/analysisName'
         - $ref: '#/components/parameters/appID'
@@ -505,10 +505,10 @@ paths:
               schema:
                 type: object
                 properties:
-                  ingresses:
+                  routes:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Ingress'
+                      $ref: '#/components/schemas/HTTPRoute'
 
   /vice/apply-labels:
     post:
@@ -522,7 +522,7 @@ paths:
     get:
       summary: Get asynchronously applied data about an analysis.
       description: >
-        Retrieves data about an analysis that is developed asynchronously. 
+        Retrieves data about an analysis that is developed asynchronously.
         The call is not asynchronous.
       parameters:
         - $ref: '#/components/parameters/externalID'
@@ -547,7 +547,7 @@ paths:
     post:
       summary: Activate input file downloads
       description: >
-        Tell the analysis to download input files with vice-file-transfers. 
+        Tell the analysis to download input files with vice-file-transfers.
         Blocks until all of the downloads are complete. Called automatically,
         should need to be manually called.
       parameters:
@@ -623,7 +623,7 @@ paths:
         Returns the logs for a container in the VICE analysis pod. Does
         not tail the logs.
       parameters:
-        - $ref: '#/components/parameters/analysisIDInPath' 
+        - $ref: '#/components/parameters/analysisIDInPath'
         - name: previous
           in: query
           required: false
@@ -644,7 +644,7 @@ paths:
           required: false
           description: >
             Basically the same thing as "since", except it gets converted into
-            a Unix time type provided by k8s. Not sure why I bothered to 
+            a Unix time type provided by k8s. Not sure why I bothered to
             include this. Use the other one.
           schema:
             type: integer
@@ -725,7 +725,7 @@ paths:
     get:
       summary: Get time limit
       description: >
-        Returns the current time limit for the analysis with the UUID 
+        Returns the current time limit for the analysis with the UUID
         provided in the path.
       parameters:
         - $ref: '#/components/parameters/analysisIDInPath'
@@ -788,10 +788,10 @@ paths:
         Accepts a DE analysis description in JSON form and turns it into a set
         of K8s resources that run a web application and enforce access
         restrictions. We're not going to document the JSON body here because
-        madness would be the result, both for me and for the reader. If you 
+        madness would be the result, both for me and for the reader. If you
         need to call this endpoint outside of the 'apps' service in the DE,
-        I highly recommend just writing a new version of the endpoint with a 
-        simplified JSON payload and filing a merge/pull request. Believe it 
+        I highly recommend just writing a new version of the endpoint with a
+        simplified JSON payload and filing a merge/pull request. Believe it
         not, your life will be easier.
       requestBody:
         description: >
@@ -808,4 +808,3 @@ paths:
           $ref: '#/components/responses/BadRequestError'
         '500':
           $ref: '#/components/responses/InternalError'
-        

@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog" // pull in to set klog output to stderr
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 
 	"github.com/uptrace/opentelemetry-go-extra/otelsql"
 	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
@@ -85,15 +86,12 @@ func main() {
 		namespace                            = flag.String("namespace", "default", "The namespace scope this process operates on for non-VICE calls")
 		viceNamespace                        = flag.String("vice-namespace", "vice-apps", "The namepsace that VICE apps are launched within")
 		listenPort                           = flag.Int("port", 60000, "(optional) The port to listen on")
-		ingressClass                         = flag.String("ingress-class", "nginx", "(optional) the ingress class to use")
 		localStorageClass                    = flag.String("local-storage-class", "openebs-hostpath", "The storage class to use for the persistent host path volume")
 		viceProxy                            = flag.String("vice-proxy", "harbor.cyverse.org/de/vice-proxy", "The image name of the proxy to use for VICE apps. The image tag is set in the config.")
 		transferImage                        = flag.String("transfer-image", "harbor.cyverse.org/de/gocmd:latest", "(optional) Image used to transfer files to/from the data store")
 		transferWorkingDir                   = flag.String("transfer-working-dir", "/de-app-work", "The working directory within the file transfer image.")
 		transferLogLevel                     = flag.String("transfer-log-level", "debug", "The log level of the output of the file transfer tool.")
 		statusSenderImage                    = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
-		viceDefaultBackendService            = flag.String("vice-default-backend", "vice-default-backend", "The name of the service to use as the default backend for VICE ingresses")
-		viceDefaultBackendServicePort        = flag.Int("vice-default-backend-port", 80, "The port for the default backend for VICE ingresses")
 		getAnalysisIDService                 = flag.String("get-analysis-id-service", "get-analysis-id", "The service name for the service that provides analysis ID lookups")
 		checkResourceAccessService           = flag.String("check-resource-access-service", "check-resource-access", "The name of the service that validates whether a user can access a resource")
 		userSuffix                           = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
@@ -276,6 +274,11 @@ func main() {
 		log.Fatal(errors.Wrap(err, "error creating clientset from config"))
 	}
 
+	gatewayClient, err := gatewayclient.NewForConfig(config)
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "error creating gateway API clientset from config"))
+	}
+
 	var proxyImage string
 	proxyTag := c.String("interapps.proxy.tag")
 	if proxyTag == "" {
@@ -354,23 +357,22 @@ func main() {
 	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer, clientset)
 
 	exposerInit := &ExposerAppInit{
-		Namespace:                     *namespace,
-		ViceNamespace:                 *viceNamespace,
-		ViceProxyImage:                proxyImage,
-		ViceDefaultBackendService:     *viceDefaultBackendService,
-		ViceDefaultBackendServicePort: *viceDefaultBackendServicePort,
-		GetAnalysisIDService:          *getAnalysisIDService,
-		CheckResourceAccessService:    *checkResourceAccessService,
-		db:                            dbconn,
-		UserSuffix:                    *userSuffix,
-		IRODSZone:                     zone,
-		IngressClass:                  *ingressClass,
-		ClientSet:                     clientset,
-		batchadapter:                  jexAdapter,
-		ImagePullSecretName:           imagePullSecretName,
-		LocalStorageClass:             *localStorageClass,
-		DisableViceProxyAuth:          *disableViceProxyAuth,
-		BypassUsers:                   bypassUsers,
+		Namespace:                  *namespace,
+		ViceNamespace:              *viceNamespace,
+		ViceProxyImage:             proxyImage,
+		ViceDomain:                 c.String("vice.domain"),
+		GetAnalysisIDService:       *getAnalysisIDService,
+		CheckResourceAccessService: *checkResourceAccessService,
+		db:                         dbconn,
+		UserSuffix:                 *userSuffix,
+		IRODSZone:                  zone,
+		ClientSet:                  clientset,
+		GatewayClient:              gatewayClient,
+		batchadapter:               jexAdapter,
+		ImagePullSecretName:        imagePullSecretName,
+		LocalStorageClass:          *localStorageClass,
+		DisableViceProxyAuth:       *disableViceProxyAuth,
+		BypassUsers:                bypassUsers,
 	}
 
 	// app is the base app-exposer functionality.

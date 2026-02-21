@@ -135,7 +135,7 @@ func (i *Incluster) getSharedPathMapping() IRODSFSPathMapping {
 }
 
 func (i *Incluster) getCSIDataVolumeLabels(ctx context.Context, job *model.Job) (map[string]string, error) {
-	labels, err := i.LabelsFromJob(ctx, job)
+	labels, err := i.jobInfo.JobLabels(ctx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func (i *Incluster) getPersistentVolumeCapacity(job *model.Job) resourcev1.Quant
 func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolumeClaim, error) {
 	volumeClaims := []*apiv1.PersistentVolumeClaim{}
 
-	labels, err := i.LabelsFromJob(ctx, job)
+	labels, err := i.jobInfo.JobLabels(ctx, job)
 	if err != nil {
 		return nil, err
 	}

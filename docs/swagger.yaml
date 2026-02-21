@@ -460,18 +460,18 @@ definitions:
           $ref: '#/definitions/incluster.DeploymentInfo'
         type: array
     type: object
-  httphandlers.FilteredIngressesResponse:
-    properties:
-      ingresses:
-        items:
-          $ref: '#/definitions/incluster.IngressInfo'
-        type: array
-    type: object
   httphandlers.FilteredPodsResponse:
     properties:
       pods:
         items:
           $ref: '#/definitions/incluster.PodInfo'
+        type: array
+    type: object
+  httphandlers.FilteredRoutesResponse:
+    properties:
+      routes:
+        items:
+          $ref: '#/definitions/incluster.RouteInfo'
         type: array
     type: object
   httphandlers.FilteredServicesResponse:
@@ -584,33 +584,6 @@ definitions:
       username:
         type: string
     type: object
-  incluster.IngressInfo:
-    properties:
-      analysisName:
-        type: string
-      appID:
-        type: string
-      appName:
-        type: string
-      creationTimestamp:
-        type: string
-      defaultBackend:
-        type: string
-      externalID:
-        type: string
-      name:
-        type: string
-      namespace:
-        type: string
-      rules:
-        items:
-          $ref: '#/definitions/v1.IngressRule'
-        type: array
-      userID:
-        type: string
-      username:
-        type: string
-    type: object
   incluster.PodInfo:
     properties:
       analysisName:
@@ -656,13 +629,13 @@ definitions:
         items:
           $ref: '#/definitions/incluster.DeploymentInfo'
         type: array
-      ingresses:
-        items:
-          $ref: '#/definitions/incluster.IngressInfo'
-        type: array
       pods:
         items:
           $ref: '#/definitions/incluster.PodInfo'
+        type: array
+      routes:
+        items:
+          $ref: '#/definitions/incluster.RouteInfo'
         type: array
       services:
         items:
@@ -672,6 +645,31 @@ definitions:
   incluster.RetPod:
     properties:
       name:
+        type: string
+    type: object
+  incluster.RouteInfo:
+    properties:
+      analysisName:
+        type: string
+      appID:
+        type: string
+      appName:
+        type: string
+      creationTimestamp:
+        type: string
+      externalID:
+        type: string
+      name:
+        type: string
+      namespace:
+        type: string
+      rules:
+        items:
+          $ref: '#/definitions/v1.HTTPRouteRule'
+        type: array
+      userID:
+        type: string
+      username:
         type: string
     type: object
   incluster.ServiceInfo:
@@ -719,6 +717,23 @@ definitions:
       time_limit:
         type: string
     type: object
+  k8s_io_api_core_v1.ResourceClaim:
+    properties:
+      name:
+        description: |-
+          Name must match the name of one entry in pod.spec.resourceClaims of
+          the Pod where this field is used. It makes that resource available
+          inside a container.
+        type: string
+      request:
+        description: |-
+          Request is the name chosen for a request in the referenced claim.
+          If empty, everything from the claim is made available, otherwise
+          only the result of this request.
+
+          +optional
+        type: string
+    type: object
   resource.Quantity:
     properties:
       Format:
@@ -739,6 +754,110 @@ definitions:
         - DecimalExponent
         - BinarySI
         - DecimalSI
+    type: object
+  sigs_k8s_io_gateway-api_apis_v1.HTTPHeader:
+    properties:
+      name:
+        description: |-
+          Name is the name of the HTTP Header to be matched. Name matching MUST be
+          case-insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2).
+
+          If multiple entries specify equivalent header names, the first entry with
+          an equivalent name MUST be considered for a match. Subsequent entries
+          with an equivalent header name MUST be ignored. Due to the
+          case-insensitivity of header names, "foo" and "Foo" are considered
+          equivalent.
+          +required
+        type: string
+      value:
+        description: |-
+          Value is the value of HTTP Header to be matched.
+
+          +kubebuilder:validation:MinLength=1
+          +kubebuilder:validation:MaxLength=4096
+          +required
+        type: string
+    type: object
+  sigs_k8s_io_gateway-api_apis_v1.LocalObjectReference:
+    properties:
+      group:
+        description: |-
+          Group is the group of the referent. For example, "gateway.networking.k8s.io".
+          When unspecified or empty string, core API group is inferred.
+          +required
+        type: string
+      kind:
+        description: |-
+          Kind is kind of the referent. For example "HTTPRoute" or "Service".
+          +required
+        type: string
+      name:
+        description: |-
+          Name is the name of the referent.
+          +required
+        type: string
+    type: object
+  v1.BackendObjectReference:
+    properties:
+      group:
+        description: |-
+          Group is the group of the referent. For example, "gateway.networking.k8s.io".
+          When unspecified or empty string, core API group is inferred.
+
+          +optional
+          +kubebuilder:default=""
+        type: string
+      kind:
+        description: |-
+          Kind is the Kubernetes resource kind of the referent. For example
+          "Service".
+
+          Defaults to "Service" when not specified.
+
+          ExternalName services can refer to CNAME DNS records that may live
+          outside of the cluster and as such are difficult to reason about in
+          terms of conformance. They also may not be safe to forward to (see
+          CVE-2021-25740 for more information). Implementations SHOULD NOT
+          support ExternalName Services.
+
+          Support: Core (Services with a type other than ExternalName)
+
+          Support: Implementation-specific (Services with type ExternalName)
+
+          +optional
+          +kubebuilder:default=Service
+        type: string
+      name:
+        description: |-
+          Name is the name of the referent.
+          +required
+        type: string
+      namespace:
+        description: |-
+          Namespace is the namespace of the backend. When unspecified, the local
+          namespace is inferred.
+
+          Note that when a namespace different than the local namespace is specified,
+          a ReferenceGrant object is required in the referent namespace to allow that
+          namespace's owner to accept the reference. See the ReferenceGrant
+          documentation for details.
+
+          Support: Core
+
+          +optional
+        type: string
+      port:
+        description: |-
+          Port specifies the destination port number to use for this resource.
+          Port is required when the referent is a Kubernetes Service. In this
+          case, the port number is the service port number, not the target port.
+          For other resources, destination port might be derived from the referent
+          resource or this field.
+
+          +optional
+          +kubebuilder:validation:Minimum=1
+          +kubebuilder:validation:Maximum=65535
+        type: integer
     type: object
   v1.ContainerState:
     properties:
@@ -919,6 +1038,13 @@ definitions:
         description: |-
           State holds details about the container's current condition.
           +optional
+      stopSignal:
+        allOf:
+        - $ref: '#/definitions/v1.Signal'
+        description: |-
+          StopSignal reports the effective stop signal for this container
+          +featureGate=ContainerStopSignals
+          +optional
       user:
         allOf:
         - $ref: '#/definitions/v1.ContainerUser'
@@ -949,112 +1075,1581 @@ definitions:
           Note that the actual running identity can be changed if the process has enough privilege to do so.
           +optional
     type: object
-  v1.HTTPIngressPath:
+  v1.CookieConfig:
     properties:
-      backend:
+      lifetimeType:
         allOf:
-        - $ref: '#/definitions/v1.IngressBackend'
+        - $ref: '#/definitions/v1.CookieLifetimeType'
         description: |-
-          backend defines the referenced service endpoint to which the traffic
-          will be forwarded to.
-      path:
-        description: |-
-          path is matched against the path of an incoming request. Currently it can
-          contain characters disallowed from the conventional "path" part of a URL
-          as defined by RFC 3986. Paths must begin with a '/' and must be present
-          when using PathType with value "Exact" or "Prefix".
+          LifetimeType specifies whether the cookie has a permanent or
+          session-based lifetime. A permanent cookie persists until its
+          specified expiry time, defined by the Expires or Max-Age cookie
+          attributes, while a session cookie is deleted when the current
+          session ends.
+
+          When set to "Permanent", AbsoluteTimeout indicates the
+          cookie's lifetime via the Expires or Max-Age cookie attributes
+          and is required.
+
+          When set to "Session", AbsoluteTimeout indicates the
+          absolute lifetime of the cookie tracked by the gateway and
+          is optional.
+
+          Defaults to "Session".
+
+          Support: Core for "Session" type
+
+          Support: Extended for "Permanent" type
+
           +optional
-        type: string
-      pathType:
-        allOf:
-        - $ref: '#/definitions/v1.PathType'
-        description: |-
-          pathType determines the interpretation of the path matching. PathType can
-          be one of the following values:
-          * Exact: Matches the URL path exactly.
-          * Prefix: Matches based on a URL path prefix split by '/'. Matching is
-            done on a path element by element basis. A path element refers is the
-            list of labels in the path split by the '/' separator. A request is a
-            match for path p if every p is an element-wise prefix of p of the
-            request path. Note that if the last element of the path is a substring
-            of the last element in request path, it is not a match (e.g. /foo/bar
-            matches /foo/bar/baz, but does not match /foo/barbaz).
-          * ImplementationSpecific: Interpretation of the Path matching is up to
-            the IngressClass. Implementations can treat this as a separate PathType
-            or treat it identically to Prefix or Exact path types.
-          Implementations are required to support all path types.
+          +kubebuilder:default=Session
     type: object
-  v1.HTTPIngressRuleValue:
+  v1.CookieLifetimeType:
+    enum:
+    - Session
+    - Permanent
+    type: string
+    x-enum-varnames:
+    - SessionCookieLifetimeType
+    - PermanentCookieLifetimeType
+  v1.ForwardBodyConfig:
     properties:
-      paths:
+      maxSize:
         description: |-
-          paths is a collection of paths that map requests to backends.
-          +listType=atomic
+          MaxSize specifies how large in bytes the largest body that will be buffered
+          and sent to the authorization server. If the body size is larger than
+          `maxSize`, then the body sent to the authorization server must be
+          truncated to `maxSize` bytes.
+
+          Experimental note: This behavior needs to be checked against
+          various dataplanes; it may need to be changed.
+          See https://github.com/kubernetes-sigs/gateway-api/pull/4001#discussion_r2291405746
+          for more.
+
+          If 0, the body will not be sent to the authorization server.
+          +optional
+        type: integer
+    type: object
+  v1.Fraction:
+    properties:
+      denominator:
+        description: |-
+          +optional
+          +kubebuilder:default=100
+          +kubebuilder:validation:Minimum=1
+        type: integer
+      numerator:
+        description: |-
+          +kubebuilder:validation:Minimum=0
+          +required
+        type: integer
+    type: object
+  v1.GRPCAuthConfig:
+    properties:
+      allowedHeaders:
+        description: |-
+          AllowedRequestHeaders specifies what headers from the client request
+          will be sent to the authorization server.
+
+          If this list is empty, then all headers must be sent.
+
+          If the list has entries, only those entries must be sent.
+
+          +optional
+          +listType=set
+          +kubebuilder:validation:MaxLength=64
         items:
-          $ref: '#/definitions/v1.HTTPIngressPath'
+          type: string
         type: array
     type: object
-  v1.IngressBackend:
+  v1.HTTPAuthConfig:
     properties:
-      resource:
-        allOf:
-        - $ref: '#/definitions/v1.TypedLocalObjectReference'
+      allowedHeaders:
         description: |-
-          resource is an ObjectRef to another Kubernetes resource in the namespace
-          of the Ingress object. If resource is specified, a service.Name and
-          service.Port must not be specified.
-          This is a mutually exclusive setting with "Service".
+          AllowedRequestHeaders specifies what additional headers from the client request
+          will be sent to the authorization server.
+
+          The following headers must always be sent to the authorization server,
+          regardless of this setting:
+
+          * `Host`
+          * `Method`
+          * `Path`
+          * `Content-Length`
+          * `Authorization`
+
+          If this list is empty, then only those headers must be sent.
+
+          Note that `Content-Length` has a special behavior, in that the length
+          sent must be correct for the actual request to the external authorization
+          server - that is, it must reflect the actual number of bytes sent in the
+          body of the request to the authorization server.
+
+          So if the `forwardBody` stanza is unset, or `forwardBody.maxSize` is set
+          to `0`, then `Content-Length` must be `0`. If `forwardBody.maxSize` is set
+          to anything other than `0`, then the `Content-Length` of the authorization
+          request must be set to the actual number of bytes forwarded.
+
           +optional
-      service:
-        allOf:
-        - $ref: '#/definitions/v1.IngressServiceBackend'
+          +listType=set
+          +kubebuilder:validation:MaxLength=64
+        items:
+          type: string
+        type: array
+      allowedResponseHeaders:
         description: |-
-          service references a service as a backend.
-          This is a mutually exclusive setting with "Resource".
+          AllowedResponseHeaders specifies what headers from the authorization response
+          will be copied into the request to the backend.
+
+          If this list is empty, then all headers from the authorization server
+          except Authority or Host must be copied.
+
           +optional
-    type: object
-  v1.IngressRule:
-    properties:
-      host:
-        description: "host is the fully qualified domain name of a network host, as
-          defined by RFC 3986.\nNote the following deviations from the \"host\" part
-          of the\nURI as defined in RFC 3986:\n1. IPs are not allowed. Currently an
-          IngressRuleValue can only apply to\n   the IP in the Spec of the parent
-          Ingress.\n2. The `:` delimiter is not respected because ports are not allowed.\n\t
-          \ Currently the port of an Ingress is implicitly :80 for http and\n\t  :443
-          for https.\nBoth these may change in the future.\nIncoming requests are
-          matched against the host before the\nIngressRuleValue. If the host is unspecified,
-          the Ingress routes all\ntraffic based on the specified IngressRuleValue.\n\nhost
-          can be \"precise\" which is a domain name without the terminating dot of\na
-          network host (e.g. \"foo.bar.com\") or \"wildcard\", which is a domain name\nprefixed
-          with a single wildcard label (e.g. \"*.foo.com\").\nThe wildcard character
-          '*' must appear by itself as the first DNS label and\nmatches only a single
-          label. You cannot have a wildcard label by itself (e.g. Host == \"*\").\nRequests
-          will be matched against the Host field in the following way:\n1. If host
-          is precise, the request matches this rule if the http host header is equal
-          to Host.\n2. If host is a wildcard, then the request matches this rule if
-          the http host header\nis to equal to the suffix (removing the first label)
-          of the wildcard rule.\n+optional"
+          +listType=set
+          +kubebuilder:validation:MaxLength=64
+        items:
+          type: string
+        type: array
+      path:
+        description: |-
+          Path sets the prefix that paths from the client request will have added
+          when forwarded to the authorization server.
+
+          When empty or unspecified, no prefix is added.
+
+          Valid values are the same as the "value" regex for path values in the `match`
+          stanza, and the validation regex will screen out invalid paths in the same way.
+          Even with the validation, implementations MUST sanitize this input before using it
+          directly.
+
+          +optional
+          +kubebuilder:validation:MaxLength=1024
+          +kubebuilder:validation:Pattern="^(?:[-A-Za-z0-9/._~!$&'()*+,;=:@]|[%][0-9a-fA-F]{2})+$"
         type: string
+    type: object
+  v1.HTTPBackendRef:
+    properties:
+      filters:
+        description: |-
+          Filters defined at this level should be executed if and only if the
+          request is being forwarded to the backend defined here.
+
+          Support: Implementation-specific (For broader support of filters, use the
+          Filters field in HTTPRouteRule.)
+
+          +optional
+          +listType=atomic
+          +kubebuilder:validation:MaxItems=16
+          +kubebuilder:validation:XValidation:message="May specify either httpRouteFilterRequestRedirect or httpRouteFilterRequestRewrite, but not both",rule="!(self.exists(f, f.type == 'RequestRedirect') && self.exists(f, f.type == 'URLRewrite'))"
+          +kubebuilder:validation:XValidation:message="RequestHeaderModifier filter cannot be repeated",rule="self.filter(f, f.type == 'RequestHeaderModifier').size() <= 1"
+          +kubebuilder:validation:XValidation:message="ResponseHeaderModifier filter cannot be repeated",rule="self.filter(f, f.type == 'ResponseHeaderModifier').size() <= 1"
+          +kubebuilder:validation:XValidation:message="RequestRedirect filter cannot be repeated",rule="self.filter(f, f.type == 'RequestRedirect').size() <= 1"
+          +kubebuilder:validation:XValidation:message="URLRewrite filter cannot be repeated",rule="self.filter(f, f.type == 'URLRewrite').size() <= 1"
+        items:
+          $ref: '#/definitions/v1.HTTPRouteFilter'
+        type: array
+      group:
+        description: |-
+          Group is the group of the referent. For example, "gateway.networking.k8s.io".
+          When unspecified or empty string, core API group is inferred.
+
+          +optional
+          +kubebuilder:default=""
+        type: string
+      kind:
+        description: |-
+          Kind is the Kubernetes resource kind of the referent. For example
+          "Service".
+
+          Defaults to "Service" when not specified.
+
+          ExternalName services can refer to CNAME DNS records that may live
+          outside of the cluster and as such are difficult to reason about in
+          terms of conformance. They also may not be safe to forward to (see
+          CVE-2021-25740 for more information). Implementations SHOULD NOT
+          support ExternalName Services.
+
+          Support: Core (Services with a type other than ExternalName)
+
+          Support: Implementation-specific (Services with type ExternalName)
+
+          +optional
+          +kubebuilder:default=Service
+        type: string
+      name:
+        description: |-
+          Name is the name of the referent.
+          +required
+        type: string
+      namespace:
+        description: |-
+          Namespace is the namespace of the backend. When unspecified, the local
+          namespace is inferred.
+
+          Note that when a namespace different than the local namespace is specified,
+          a ReferenceGrant object is required in the referent namespace to allow that
+          namespace's owner to accept the reference. See the ReferenceGrant
+          documentation for details.
+
+          Support: Core
+
+          +optional
+        type: string
+      port:
+        description: |-
+          Port specifies the destination port number to use for this resource.
+          Port is required when the referent is a Kubernetes Service. In this
+          case, the port number is the service port number, not the target port.
+          For other resources, destination port might be derived from the referent
+          resource or this field.
+
+          +optional
+          +kubebuilder:validation:Minimum=1
+          +kubebuilder:validation:Maximum=65535
+        type: integer
+      weight:
+        description: |-
+          Weight specifies the proportion of requests forwarded to the referenced
+          backend. This is computed as weight/(sum of all weights in this
+          BackendRefs list). For non-zero values, there may be some epsilon from
+          the exact proportion defined here depending on the precision an
+          implementation supports. Weight is not a percentage and the sum of
+          weights does not need to equal 100.
+
+          If only one backend is specified and it has a weight greater than 0, 100%
+          of the traffic is forwarded to that backend. If weight is set to 0, no
+          traffic should be forwarded for this entry. If unspecified, weight
+          defaults to 1.
+
+          Support for this field varies based on the context where used.
+
+          +optional
+          +kubebuilder:default=1
+          +kubebuilder:validation:Minimum=0
+          +kubebuilder:validation:Maximum=1000000
+        type: integer
+    type: object
+  v1.HTTPCORSFilter:
+    properties:
+      allowCredentials:
+        description: |-
+          AllowCredentials indicates whether the actual cross-origin request allows
+          to include credentials.
+
+          When set to true, the gateway will include the `Access-Control-Allow-Credentials`
+          response header with value true (case-sensitive).
+
+          When set to false or omitted the gateway will omit the header
+          `Access-Control-Allow-Credentials` entirely (this is the standard CORS
+          behavior).
+
+          Support: Extended
+
+          +optional
+        type: boolean
+      allowHeaders:
+        description: |-
+          AllowHeaders indicates which HTTP request headers are supported for
+          accessing the requested resource.
+
+          Header names are not case sensitive.
+
+          Multiple header names in the value of the `Access-Control-Allow-Headers`
+          response header are separated by a comma (",").
+
+          When the `AllowHeaders` field is configured with one or more headers, the
+          gateway must return the `Access-Control-Allow-Headers` response header
+          which value is present in the `AllowHeaders` field.
+
+          If any header name in the `Access-Control-Request-Headers` request header
+          is not included in the list of header names specified by the response
+          header `Access-Control-Allow-Headers`, it will present an error on the
+          client side.
+
+          If any header name in the `Access-Control-Allow-Headers` response header
+          does not recognize by the client, it will also occur an error on the
+          client side.
+
+          A wildcard indicates that the requests with all HTTP headers are allowed.
+          The `Access-Control-Allow-Headers` response header can only use `*`
+          wildcard as value when the `AllowCredentials` field is false or omitted.
+
+          When the `AllowCredentials` field is true and `AllowHeaders` field
+          specified with the `*` wildcard, the gateway must specify one or more
+          HTTP headers in the value of the `Access-Control-Allow-Headers` response
+          header. The value of the header `Access-Control-Allow-Headers` is same as
+          the `Access-Control-Request-Headers` header provided by the client. If
+          the header `Access-Control-Request-Headers` is not included in the
+          request, the gateway will omit the `Access-Control-Allow-Headers`
+          response header, instead of specifying the `*` wildcard. A Gateway
+          implementation may choose to add implementation-specific default headers.
+
+          Support: Extended
+
+          +listType=set
+          +kubebuilder:validation:MaxItems=64
+          +optional
+        items:
+          type: string
+        type: array
+      allowMethods:
+        description: |-
+          AllowMethods indicates which HTTP methods are supported for accessing the
+          requested resource.
+
+          Valid values are any method defined by RFC9110, along with the special
+          value `*`, which represents all HTTP methods are allowed.
+
+          Method names are case sensitive, so these values are also case-sensitive.
+          (See https://www.rfc-editor.org/rfc/rfc2616#section-5.1.1)
+
+          Multiple method names in the value of the `Access-Control-Allow-Methods`
+          response header are separated by a comma (",").
+
+          A CORS-safelisted method is a method that is `GET`, `HEAD`, or `POST`.
+          (See https://fetch.spec.whatwg.org/#cors-safelisted-method) The
+          CORS-safelisted methods are always allowed, regardless of whether they
+          are specified in the `AllowMethods` field.
+
+          When the `AllowMethods` field is configured with one or more methods, the
+          gateway must return the `Access-Control-Allow-Methods` response header
+          which value is present in the `AllowMethods` field.
+
+          If the HTTP method of the `Access-Control-Request-Method` request header
+          is not included in the list of methods specified by the response header
+          `Access-Control-Allow-Methods`, it will present an error on the client
+          side.
+
+          The `Access-Control-Allow-Methods` response header can only use `*`
+          wildcard as value when the `AllowCredentials` field is false or omitted.
+
+          When the `AllowCredentials` field is true and `AllowMethods` field
+          specified with the `*` wildcard, the gateway must specify one HTTP method
+          in the value of the Access-Control-Allow-Methods response header. The
+          value of the header `Access-Control-Allow-Methods` is same as the
+          `Access-Control-Request-Method` header provided by the client. If the
+          header `Access-Control-Request-Method` is not included in the request,
+          the gateway will omit the `Access-Control-Allow-Methods` response header,
+          instead of specifying the `*` wildcard. A Gateway implementation may
+          choose to add implementation-specific default methods.
+
+          Support: Extended
+
+          +listType=set
+          +kubebuilder:validation:MaxItems=9
+          +kubebuilder:validation:XValidation:message="AllowMethods cannot contain '*' alongside other methods",rule="!('*' in self && self.size() > 1)"
+          +optional
+        items:
+          type: string
+        type: array
+      allowOrigins:
+        description: |-
+          AllowOrigins indicates whether the response can be shared with requested
+          resource from the given `Origin`.
+
+          The `Origin` consists of a scheme and a host, with an optional port, and
+          takes the form `<scheme>://<host>(:<port>)`.
+
+          Valid values for scheme are: `http` and `https`.
+
+          Valid values for port are any integer between 1 and 65535 (the list of
+          available TCP/UDP ports). Note that, if not included, port `80` is
+          assumed for `http` scheme origins, and port `443` is assumed for `https`
+          origins. This may affect origin matching.
+
+          The host part of the origin may contain the wildcard character `*`. These
+          wildcard characters behave as follows:
+
+          * `*` is a greedy match to the _left_, including any number of
+            DNS labels to the left of its position. This also means that
+            `*` will include any number of period `.` characters to the
+            left of its position.
+          * A wildcard by itself matches all hosts.
+
+          An origin value that includes _only_ the `*` character indicates requests
+          from all `Origin`s are allowed.
+
+          When the `AllowOrigins` field is configured with multiple origins, it
+          means the server supports clients from multiple origins. If the request
+          `Origin` matches the configured allowed origins, the gateway must return
+          the given `Origin` and sets value of the header
+          `Access-Control-Allow-Origin` same as the `Origin` header provided by the
+          client.
+
+          The status code of a successful response to a "preflight" request is
+          always an OK status (i.e., 204 or 200).
+
+          If the request `Origin` does not match the configured allowed origins,
+          the gateway returns 204/200 response but doesn't set the relevant
+          cross-origin response headers. Alternatively, the gateway responds with
+          403 status to the "preflight" request is denied, coupled with omitting
+          the CORS headers. The cross-origin request fails on the client side.
+          Therefore, the client doesn't attempt the actual cross-origin request.
+
+          The `Access-Control-Allow-Origin` response header can only use `*`
+          wildcard as value when the `AllowCredentials` field is false or omitted.
+
+          When the `AllowCredentials` field is true and `AllowOrigins` field
+          specified with the `*` wildcard, the gateway must return a single origin
+          in the value of the `Access-Control-Allow-Origin` response header,
+          instead of specifying the `*` wildcard. The value of the header
+          `Access-Control-Allow-Origin` is same as the `Origin` header provided by
+          the client.
+
+          Support: Extended
+          +listType=set
+          +kubebuilder:validation:MaxItems=64
+          +kubebuilder:validation:XValidation:message="AllowOrigins cannot contain '*' alongside other origins",rule="!('*' in self && self.size() > 1)"
+          +optional
+        items:
+          type: string
+        type: array
+      exposeHeaders:
+        description: |-
+          ExposeHeaders indicates which HTTP response headers can be exposed
+          to client-side scripts in response to a cross-origin request.
+
+          A CORS-safelisted response header is an HTTP header in a CORS response
+          that it is considered safe to expose to the client scripts.
+          The CORS-safelisted response headers include the following headers:
+          `Cache-Control`
+          `Content-Language`
+          `Content-Length`
+          `Content-Type`
+          `Expires`
+          `Last-Modified`
+          `Pragma`
+          (See https://fetch.spec.whatwg.org/#cors-safelisted-response-header-name)
+          The CORS-safelisted response headers are exposed to client by default.
+
+          When an HTTP header name is specified using the `ExposeHeaders` field,
+          this additional header will be exposed as part of the response to the
+          client.
+
+          Header names are not case sensitive.
+
+          Multiple header names in the value of the `Access-Control-Expose-Headers`
+          response header are separated by a comma (",").
+
+          A wildcard indicates that the responses with all HTTP headers are exposed
+          to clients. The `Access-Control-Expose-Headers` response header can only
+          use `*` wildcard as value when the `AllowCredentials` field is false or omitted.
+
+          Support: Extended
+
+          +optional
+          +listType=set
+          +kubebuilder:validation:MaxItems=64
+        items:
+          type: string
+        type: array
+      maxAge:
+        description: |-
+          MaxAge indicates the duration (in seconds) for the client to cache the
+          results of a "preflight" request.
+
+          The information provided by the `Access-Control-Allow-Methods` and
+          `Access-Control-Allow-Headers` response headers can be cached by the
+          client until the time specified by `Access-Control-Max-Age` elapses.
+
+          The default value of `Access-Control-Max-Age` response header is 5
+          (seconds).
+
+          +optional
+          +kubebuilder:default=5
+          +kubebuilder:validation:Minimum=1
+        type: integer
+    type: object
+  v1.HTTPExternalAuthFilter:
+    properties:
+      backendRef:
+        allOf:
+        - $ref: '#/definitions/v1.BackendObjectReference'
+        description: |-
+          BackendRef is a reference to a backend to send authorization
+          requests to.
+
+          The backend must speak the selected protocol (GRPC or HTTP) on the
+          referenced port.
+
+          If the backend service requires TLS, use BackendTLSPolicy to tell the
+          implementation to supply the TLS details to be used to connect to that
+          backend.
+
+          +required
+      forwardBody:
+        allOf:
+        - $ref: '#/definitions/v1.ForwardBodyConfig'
+        description: |-
+          ForwardBody controls if requests to the authorization server should include
+          the body of the client request; and if so, how big that body is allowed
+          to be.
+
+          It is expected that implementations will buffer the request body up to
+          `forwardBody.maxSize` bytes. Bodies over that size must be rejected with a
+          4xx series error (413 or 403 are common examples), and fail processing
+          of the filter.
+
+          If unset, or `forwardBody.maxSize` is set to `0`, then the body will not
+          be forwarded.
+
+          Feature Name: HTTPRouteExternalAuthForwardBody
+
+          +optional
+      grpc:
+        allOf:
+        - $ref: '#/definitions/v1.GRPCAuthConfig'
+        description: |-
+          GRPCAuthConfig contains configuration for communication with ext_authz
+          protocol-speaking backends.
+
+          If unset, implementations must assume the default behavior for each
+          included field is intended.
+
+          +optional
       http:
         allOf:
-        - $ref: '#/definitions/v1.HTTPIngressRuleValue'
-        description: +optional
+        - $ref: '#/definitions/v1.HTTPAuthConfig'
+        description: |-
+          HTTPAuthConfig contains configuration for communication with HTTP-speaking
+          backends.
+
+          If unset, implementations must assume the default behavior for each
+          included field is intended.
+
+          +optional
+      protocol:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPRouteExternalAuthProtocol'
+        description: |-
+          ExternalAuthProtocol describes which protocol to use when communicating with an
+          ext_authz authorization server.
+
+          When this is set to GRPC, each backend must use the Envoy ext_authz protocol
+          on the port specified in `backendRefs`. Requests and responses are defined
+          in the protobufs explained at:
+          https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/auth/v3/external_auth.proto
+
+          When this is set to HTTP, each backend must respond with a `200` status
+          code in on a successful authorization. Any other code is considered
+          an authorization failure.
+
+          Feature Names:
+          GRPC Support - HTTPRouteExternalAuthGRPC
+          HTTP Support - HTTPRouteExternalAuthHTTP
+
+          +unionDiscriminator
+          +required
+          +kubebuilder:validation:Enum=HTTP;GRPC
     type: object
-  v1.IngressServiceBackend:
+  v1.HTTPHeaderFilter:
+    properties:
+      add:
+        description: |-
+          Add adds the given header(s) (name, value) to the request
+          before the action. It appends to any existing values associated
+          with the header name.
+
+          Input:
+            GET /foo HTTP/1.1
+            my-header: foo
+
+          Config:
+            add:
+            - name: "my-header"
+              value: "bar,baz"
+
+          Output:
+            GET /foo HTTP/1.1
+            my-header: foo,bar,baz
+
+          +optional
+          +listType=map
+          +listMapKey=name
+          +kubebuilder:validation:MaxItems=16
+        items:
+          $ref: '#/definitions/sigs_k8s_io_gateway-api_apis_v1.HTTPHeader'
+        type: array
+      remove:
+        description: |-
+          Remove the given header(s) from the HTTP request before the action. The
+          value of Remove is a list of HTTP header names. Note that the header
+          names are case-insensitive (see
+          https://datatracker.ietf.org/doc/html/rfc2616#section-4.2).
+
+          Input:
+            GET /foo HTTP/1.1
+            my-header1: foo
+            my-header2: bar
+            my-header3: baz
+
+          Config:
+            remove: ["my-header1", "my-header3"]
+
+          Output:
+            GET /foo HTTP/1.1
+            my-header2: bar
+
+          +optional
+          +listType=set
+          +kubebuilder:validation:MaxItems=16
+        items:
+          type: string
+        type: array
+      set:
+        description: |-
+          Set overwrites the request with the given header (name, value)
+          before the action.
+
+          Input:
+            GET /foo HTTP/1.1
+            my-header: foo
+
+          Config:
+            set:
+            - name: "my-header"
+              value: "bar"
+
+          Output:
+            GET /foo HTTP/1.1
+            my-header: bar
+
+          +optional
+          +listType=map
+          +listMapKey=name
+          +kubebuilder:validation:MaxItems=16
+        items:
+          $ref: '#/definitions/sigs_k8s_io_gateway-api_apis_v1.HTTPHeader'
+        type: array
+    type: object
+  v1.HTTPHeaderMatch:
     properties:
       name:
         description: |-
-          name is the referenced service. The service must exist in
-          the same namespace as the Ingress object.
+          Name is the name of the HTTP Header to be matched. Name matching MUST be
+          case-insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2).
+
+          If multiple entries specify equivalent header names, only the first
+          entry with an equivalent name MUST be considered for a match. Subsequent
+          entries with an equivalent header name MUST be ignored. Due to the
+          case-insensitivity of header names, "foo" and "Foo" are considered
+          equivalent.
+
+          When a header is repeated in an HTTP request, it is
+          implementation-specific behavior as to how this is represented.
+          Generally, proxies should follow the guidance from the RFC:
+          https://www.rfc-editor.org/rfc/rfc7230.html#section-3.2.2 regarding
+          processing a repeated header, with special handling for "Set-Cookie".
+          +required
         type: string
-      port:
+      type:
         allOf:
-        - $ref: '#/definitions/v1.ServiceBackendPort'
+        - $ref: '#/definitions/v1.HeaderMatchType'
         description: |-
-          port of the referenced service. A port name or port number
-          is required for a IngressServiceBackend.
+          Type specifies how to match against the value of the header.
+
+          Support: Core (Exact)
+
+          Support: Implementation-specific (RegularExpression)
+
+          Since RegularExpression HeaderMatchType has implementation-specific
+          conformance, implementations can support POSIX, PCRE or any other dialects
+          of regular expressions. Please read the implementation's documentation to
+          determine the supported dialect.
+
+          +optional
+          +kubebuilder:default=Exact
+      value:
+        description: |-
+          Value is the value of HTTP Header to be matched.
+
+          +kubebuilder:validation:MinLength=1
+          +kubebuilder:validation:MaxLength=4096
+          +required
+        type: string
     type: object
+  v1.HTTPMethod:
+    enum:
+    - GET
+    - HEAD
+    - POST
+    - PUT
+    - DELETE
+    - CONNECT
+    - OPTIONS
+    - TRACE
+    - PATCH
+    type: string
+    x-enum-varnames:
+    - HTTPMethodGet
+    - HTTPMethodHead
+    - HTTPMethodPost
+    - HTTPMethodPut
+    - HTTPMethodDelete
+    - HTTPMethodConnect
+    - HTTPMethodOptions
+    - HTTPMethodTrace
+    - HTTPMethodPatch
+  v1.HTTPPathMatch:
+    properties:
+      type:
+        allOf:
+        - $ref: '#/definitions/v1.PathMatchType'
+        description: |-
+          Type specifies how to match against the path Value.
+
+          Support: Core (Exact, PathPrefix)
+
+          Support: Implementation-specific (RegularExpression)
+
+          +optional
+          +kubebuilder:default=PathPrefix
+      value:
+        description: |-
+          Value of the HTTP path to match against.
+
+          +optional
+          +kubebuilder:default="/"
+          +kubebuilder:validation:MaxLength=1024
+        type: string
+    type: object
+  v1.HTTPPathModifier:
+    properties:
+      replaceFullPath:
+        description: |-
+          ReplaceFullPath specifies the value with which to replace the full path
+          of a request during a rewrite or redirect.
+
+          +kubebuilder:validation:MaxLength=1024
+          +optional
+        type: string
+      replacePrefixMatch:
+        description: |-
+          ReplacePrefixMatch specifies the value with which to replace the prefix
+          match of a request during a rewrite or redirect. For example, a request
+          to "/foo/bar" with a prefix match of "/foo" and a ReplacePrefixMatch
+          of "/xyz" would be modified to "/xyz/bar".
+
+          Note that this matches the behavior of the PathPrefix match type. This
+          matches full path elements. A path element refers to the list of labels
+          in the path split by the `/` separator. When specified, a trailing `/` is
+          ignored. For example, the paths `/abc`, `/abc/`, and `/abc/def` would all
+          match the prefix `/abc`, but the path `/abcd` would not.
+
+          ReplacePrefixMatch is only compatible with a `PathPrefix` HTTPRouteMatch.
+          Using any other HTTPRouteMatch type on the same HTTPRouteRule will result in
+          the implementation setting the Accepted Condition for the Route to `status: False`.
+
+          Request Path | Prefix Match | Replace Prefix | Modified Path
+          -------------|--------------|----------------|----------
+          /foo/bar     | /foo         | /xyz           | /xyz/bar
+          /foo/bar     | /foo         | /xyz/          | /xyz/bar
+          /foo/bar     | /foo/        | /xyz           | /xyz/bar
+          /foo/bar     | /foo/        | /xyz/          | /xyz/bar
+          /foo         | /foo         | /xyz           | /xyz
+          /foo/        | /foo         | /xyz           | /xyz/
+          /foo/bar     | /foo         | <empty string> | /bar
+          /foo/        | /foo         | <empty string> | /
+          /foo         | /foo         | <empty string> | /
+          /foo/        | /foo         | /              | /
+          /foo         | /foo         | /              | /
+
+          +kubebuilder:validation:MaxLength=1024
+          +optional
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPPathModifierType'
+        description: |-
+          Type defines the type of path modifier. Additional types may be
+          added in a future release of the API.
+
+          Note that values may be added to this enum, implementations
+          must ensure that unknown values will not cause a crash.
+
+          Unknown values here must result in the implementation setting the
+          Accepted Condition for the Route to `status: False`, with a
+          Reason of `UnsupportedValue`.
+
+          +kubebuilder:validation:Enum=ReplaceFullPath;ReplacePrefixMatch
+          +required
+    type: object
+  v1.HTTPPathModifierType:
+    enum:
+    - ReplaceFullPath
+    - ReplacePrefixMatch
+    type: string
+    x-enum-varnames:
+    - FullPathHTTPPathModifier
+    - PrefixMatchHTTPPathModifier
+  v1.HTTPQueryParamMatch:
+    properties:
+      name:
+        description: |-
+          Name is the name of the HTTP query param to be matched. This must be an
+          exact string match. (See
+          https://tools.ietf.org/html/rfc7230#section-2.7.3).
+
+          If multiple entries specify equivalent query param names, only the first
+          entry with an equivalent name MUST be considered for a match. Subsequent
+          entries with an equivalent query param name MUST be ignored.
+
+          If a query param is repeated in an HTTP request, the behavior is
+          purposely left undefined, since different data planes have different
+          capabilities. However, it is *recommended* that implementations should
+          match against the first value of the param if the data plane supports it,
+          as this behavior is expected in other load balancing contexts outside of
+          the Gateway API.
+
+          Users SHOULD NOT route traffic based on repeated query params to guard
+          themselves against potential differences in the implementations.
+          +required
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/v1.QueryParamMatchType'
+        description: |-
+          Type specifies how to match against the value of the query parameter.
+
+          Support: Extended (Exact)
+
+          Support: Implementation-specific (RegularExpression)
+
+          Since RegularExpression QueryParamMatchType has Implementation-specific
+          conformance, implementations can support POSIX, PCRE or any other
+          dialects of regular expressions. Please read the implementation's
+          documentation to determine the supported dialect.
+
+          +optional
+          +kubebuilder:default=Exact
+      value:
+        description: |-
+          Value is the value of HTTP query param to be matched.
+
+          +kubebuilder:validation:MinLength=1
+          +kubebuilder:validation:MaxLength=1024
+          +required
+        type: string
+    type: object
+  v1.HTTPRequestMirrorFilter:
+    properties:
+      backendRef:
+        allOf:
+        - $ref: '#/definitions/v1.BackendObjectReference'
+        description: |-
+          BackendRef references a resource where mirrored requests are sent.
+
+          Mirrored requests must be sent only to a single destination endpoint
+          within this BackendRef, irrespective of how many endpoints are present
+          within this BackendRef.
+
+          If the referent cannot be found, this BackendRef is invalid and must be
+          dropped from the Gateway. The controller must ensure the "ResolvedRefs"
+          condition on the Route status is set to `status: False` and not configure
+          this backend in the underlying implementation.
+
+          If there is a cross-namespace reference to an *existing* object
+          that is not allowed by a ReferenceGrant, the controller must ensure the
+          "ResolvedRefs"  condition on the Route is set to `status: False`,
+          with the "RefNotPermitted" reason and not configure this backend in the
+          underlying implementation.
+
+          In either error case, the Message of the `ResolvedRefs` Condition
+          should be used to provide more detail about the problem.
+
+          Support: Extended for Kubernetes Service
+
+          Support: Implementation-specific for any other resource
+          +required
+      fraction:
+        allOf:
+        - $ref: '#/definitions/v1.Fraction'
+        description: |-
+          Fraction represents the fraction of requests that should be
+          mirrored to BackendRef.
+
+          Only one of Fraction or Percent may be specified. If neither field
+          is specified, 100% of requests will be mirrored.
+
+          +optional
+      percent:
+        description: |-
+          Percent represents the percentage of requests that should be
+          mirrored to BackendRef. Its minimum value is 0 (indicating 0% of
+          requests) and its maximum value is 100 (indicating 100% of requests).
+
+          Only one of Fraction or Percent may be specified. If neither field
+          is specified, 100% of requests will be mirrored.
+
+          +optional
+          +kubebuilder:validation:Minimum=0
+          +kubebuilder:validation:Maximum=100
+        type: integer
+    type: object
+  v1.HTTPRequestRedirectFilter:
+    properties:
+      hostname:
+        description: |-
+          Hostname is the hostname to be used in the value of the `Location`
+          header in the response.
+          When empty, the hostname in the `Host` header of the request is used.
+
+          Support: Core
+
+          +optional
+        type: string
+      path:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPPathModifier'
+        description: |-
+          Path defines parameters used to modify the path of the incoming request.
+          The modified path is then used to construct the `Location` header. When
+          empty, the request path is used as-is.
+
+          Support: Extended
+
+          +optional
+      port:
+        description: |-
+          Port is the port to be used in the value of the `Location`
+          header in the response.
+
+          If no port is specified, the redirect port MUST be derived using the
+          following rules:
+
+          * If redirect scheme is not-empty, the redirect port MUST be the well-known
+            port associated with the redirect scheme. Specifically "http" to port 80
+            and "https" to port 443. If the redirect scheme does not have a
+            well-known port, the listener port of the Gateway SHOULD be used.
+          * If redirect scheme is empty, the redirect port MUST be the Gateway
+            Listener port.
+
+          Implementations SHOULD NOT add the port number in the 'Location'
+          header in the following cases:
+
+          * A Location header that will use HTTP (whether that is determined via
+            the Listener protocol or the Scheme field) _and_ use port 80.
+          * A Location header that will use HTTPS (whether that is determined via
+            the Listener protocol or the Scheme field) _and_ use port 443.
+
+          Support: Extended
+
+          +optional
+
+          +kubebuilder:validation:Minimum=1
+          +kubebuilder:validation:Maximum=65535
+        type: integer
+      scheme:
+        description: |-
+          Scheme is the scheme to be used in the value of the `Location` header in
+          the response. When empty, the scheme of the request is used.
+
+          Scheme redirects can affect the port of the redirect, for more information,
+          refer to the documentation for the port field of this filter.
+
+          Note that values may be added to this enum, implementations
+          must ensure that unknown values will not cause a crash.
+
+          Unknown values here must result in the implementation setting the
+          Accepted Condition for the Route to `status: False`, with a
+          Reason of `UnsupportedValue`.
+
+          Support: Extended
+
+          +optional
+          +kubebuilder:validation:Enum=http;https
+        type: string
+      statusCode:
+        description: |-
+          StatusCode is the HTTP status code to be used in response.
+
+          Note that values may be added to this enum, implementations
+          must ensure that unknown values will not cause a crash.
+
+          Unknown values here must result in the implementation setting the
+          Accepted Condition for the Route to `status: False`, with a
+          Reason of `UnsupportedValue`.
+
+          Support: Core
+
+          +optional
+          +kubebuilder:default=302
+          +kubebuilder:validation:Enum=301;302
+        type: integer
+    type: object
+  v1.HTTPRouteExternalAuthProtocol:
+    enum:
+    - GRPC
+    - HTTP
+    type: string
+    x-enum-varnames:
+    - HTTPRouteExternalAuthGRPCProtocol
+    - HTTPRouteExternalAuthHTTPProtocol
+  v1.HTTPRouteFilter:
+    properties:
+      cors:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPCORSFilter'
+        description: |-
+          CORS defines a schema for a filter that responds to the
+          cross-origin request based on HTTP response header.
+
+          Support: Extended
+
+          +optional
+          <gateway:experimental>
+      extensionRef:
+        allOf:
+        - $ref: '#/definitions/sigs_k8s_io_gateway-api_apis_v1.LocalObjectReference'
+        description: |-
+          ExtensionRef is an optional, implementation-specific extension to the
+          "filter" behavior.  For example, resource "myroutefilter" in group
+          "networking.example.net"). ExtensionRef MUST NOT be used for core and
+          extended filters.
+
+          This filter can be used multiple times within the same rule.
+
+          Support: Implementation-specific
+
+          +optional
+      externalAuth:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPExternalAuthFilter'
+        description: |-
+          ExternalAuth configures settings related to sending request details
+          to an external auth service. The external service MUST authenticate
+          the request, and MAY authorize the request as well.
+
+          If there is any problem communicating with the external service,
+          this filter MUST fail closed.
+
+          Support: Extended
+
+          +optional
+          <gateway:experimental>
+      requestHeaderModifier:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPHeaderFilter'
+        description: |-
+          RequestHeaderModifier defines a schema for a filter that modifies request
+          headers.
+
+          Support: Core
+
+          +optional
+      requestMirror:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPRequestMirrorFilter'
+        description: |-
+          RequestMirror defines a schema for a filter that mirrors requests.
+          Requests are sent to the specified destination, but responses from
+          that destination are ignored.
+
+          This filter can be used multiple times within the same rule. Note that
+          not all implementations will be able to support mirroring to multiple
+          backends.
+
+          Support: Extended
+
+          +optional
+
+          +kubebuilder:validation:XValidation:message="Only one of percent or fraction may be specified in HTTPRequestMirrorFilter",rule="!(has(self.percent) && has(self.fraction))"
+      requestRedirect:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPRequestRedirectFilter'
+        description: |-
+          RequestRedirect defines a schema for a filter that responds to the
+          request with an HTTP redirection.
+
+          Support: Core
+
+          +optional
+      responseHeaderModifier:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPHeaderFilter'
+        description: |-
+          ResponseHeaderModifier defines a schema for a filter that modifies response
+          headers.
+
+          Support: Extended
+
+          +optional
+      type:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPRouteFilterType'
+        description: |-
+          Type identifies the type of filter to apply. As with other API fields,
+          types are classified into three conformance levels:
+
+          - Core: Filter types and their corresponding configuration defined by
+            "Support: Core" in this package, e.g. "RequestHeaderModifier". All
+            implementations must support core filters.
+
+          - Extended: Filter types and their corresponding configuration defined by
+            "Support: Extended" in this package, e.g. "RequestMirror". Implementers
+            are encouraged to support extended filters.
+
+          - Implementation-specific: Filters that are defined and supported by
+            specific vendors.
+            In the future, filters showing convergence in behavior across multiple
+            implementations will be considered for inclusion in extended or core
+            conformance levels. Filter-specific configuration for such filters
+            is specified using the ExtensionRef field. `Type` should be set to
+            "ExtensionRef" for custom filters.
+
+          Implementers are encouraged to define custom implementation types to
+          extend the core API with implementation-specific behavior.
+
+          If a reference to a custom filter type cannot be resolved, the filter
+          MUST NOT be skipped. Instead, requests that would have been processed by
+          that filter MUST receive a HTTP error response.
+
+          Note that values may be added to this enum, implementations
+          must ensure that unknown values will not cause a crash.
+
+          Unknown values here must result in the implementation setting the
+          Accepted Condition for the Route to `status: False`, with a
+          Reason of `UnsupportedValue`.
+
+          +unionDiscriminator
+          +kubebuilder:validation:Enum=RequestHeaderModifier;ResponseHeaderModifier;RequestMirror;RequestRedirect;URLRewrite;ExtensionRef
+          <gateway:experimental:validation:Enum=RequestHeaderModifier;ResponseHeaderModifier;RequestMirror;RequestRedirect;URLRewrite;ExtensionRef;CORS;ExternalAuth>
+          +required
+      urlRewrite:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPURLRewriteFilter'
+        description: |-
+          URLRewrite defines a schema for a filter that modifies a request during forwarding.
+
+          Support: Extended
+
+          +optional
+    type: object
+  v1.HTTPRouteFilterType:
+    enum:
+    - RequestHeaderModifier
+    - ResponseHeaderModifier
+    - RequestRedirect
+    - URLRewrite
+    - RequestMirror
+    - CORS
+    - ExternalAuth
+    - ExtensionRef
+    type: string
+    x-enum-varnames:
+    - HTTPRouteFilterRequestHeaderModifier
+    - HTTPRouteFilterResponseHeaderModifier
+    - HTTPRouteFilterRequestRedirect
+    - HTTPRouteFilterURLRewrite
+    - HTTPRouteFilterRequestMirror
+    - HTTPRouteFilterCORS
+    - HTTPRouteFilterExternalAuth
+    - HTTPRouteFilterExtensionRef
+  v1.HTTPRouteMatch:
+    properties:
+      headers:
+        description: |-
+          Headers specifies HTTP request header matchers. Multiple match values are
+          ANDed together, meaning, a request must match all the specified headers
+          to select the route.
+
+          +listType=map
+          +listMapKey=name
+          +optional
+          +kubebuilder:validation:MaxItems=16
+        items:
+          $ref: '#/definitions/v1.HTTPHeaderMatch'
+        type: array
+      method:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPMethod'
+        description: |-
+          Method specifies HTTP method matcher.
+          When specified, this route will be matched only if the request has the
+          specified method.
+
+          Support: Extended
+
+          +optional
+      path:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPPathMatch'
+        description: |-
+          Path specifies a HTTP request path matcher. If this field is not
+          specified, a default prefix match on the "/" path is provided.
+
+          +optional
+          +kubebuilder:default={type: "PathPrefix", value: "/"}
+      queryParams:
+        description: |-
+          QueryParams specifies HTTP query parameter matchers. Multiple match
+          values are ANDed together, meaning, a request must match all the
+          specified query parameters to select the route.
+
+          Support: Extended
+
+          +listType=map
+          +listMapKey=name
+          +optional
+          +kubebuilder:validation:MaxItems=16
+        items:
+          $ref: '#/definitions/v1.HTTPQueryParamMatch'
+        type: array
+    type: object
+  v1.HTTPRouteRetry:
+    properties:
+      attempts:
+        description: |-
+          Attempts specifies the maximum number of times an individual request
+          from the gateway to a backend should be retried.
+
+          If the maximum number of retries has been attempted without a successful
+          response from the backend, the Gateway MUST return an error.
+
+          When this field is unspecified, the number of times to attempt to retry
+          a backend request is implementation-specific.
+
+          Support: Extended
+
+          +optional
+        type: integer
+      backoff:
+        description: |-
+          Backoff specifies the minimum duration a Gateway should wait between
+          retry attempts and is represented in Gateway API Duration formatting.
+
+          For example, setting the `rules[].retry.backoff` field to the value
+          `100ms` will cause a backend request to first be retried approximately
+          100 milliseconds after timing out or receiving a response code configured
+          to be retryable.
+
+          An implementation MAY use an exponential or alternative backoff strategy
+          for subsequent retry attempts, MAY cap the maximum backoff duration to
+          some amount greater than the specified minimum, and MAY add arbitrary
+          jitter to stagger requests, as long as unsuccessful backend requests are
+          not retried before the configured minimum duration.
+
+          If a Request timeout (`rules[].timeouts.request`) is configured on the
+          route, the entire duration of the initial request and any retry attempts
+          MUST not exceed the Request timeout duration. If any retry attempts are
+          still in progress when the Request timeout duration has been reached,
+          these SHOULD be canceled if possible and the Gateway MUST immediately
+          return a timeout error.
+
+          If a BackendRequest timeout (`rules[].timeouts.backendRequest`) is
+          configured on the route, any retry attempts which reach the configured
+          BackendRequest timeout duration without a response SHOULD be canceled if
+          possible and the Gateway should wait for at least the specified backoff
+          duration before attempting to retry the backend request again.
+
+          If a BackendRequest timeout is _not_ configured on the route, retry
+          attempts MAY time out after an implementation default duration, or MAY
+          remain pending until a configured Request timeout or implementation
+          default duration for total request time is reached.
+
+          When this field is unspecified, the time to wait between retry attempts
+          is implementation-specific.
+
+          Support: Extended
+
+          +optional
+        type: string
+      codes:
+        description: |-
+          Codes defines the HTTP response status codes for which a backend request
+          should be retried.
+
+          Support: Extended
+
+          +optional
+          +listType=atomic
+        items:
+          type: integer
+        type: array
+    type: object
+  v1.HTTPRouteRule:
+    properties:
+      backendRefs:
+        description: |-
+          BackendRefs defines the backend(s) where matching requests should be
+          sent.
+
+          Failure behavior here depends on how many BackendRefs are specified and
+          how many are invalid.
+
+          If *all* entries in BackendRefs are invalid, and there are also no filters
+          specified in this route rule, *all* traffic which matches this rule MUST
+          receive a 500 status code.
+
+          See the HTTPBackendRef definition for the rules about what makes a single
+          HTTPBackendRef invalid.
+
+          When a HTTPBackendRef is invalid, 500 status codes MUST be returned for
+          requests that would have otherwise been routed to an invalid backend. If
+          multiple backends are specified, and some are invalid, the proportion of
+          requests that would otherwise have been routed to an invalid backend
+          MUST receive a 500 status code.
+
+          For example, if two backends are specified with equal weights, and one is
+          invalid, 50 percent of traffic must receive a 500. Implementations may
+          choose how that 50 percent is determined.
+
+          When a HTTPBackendRef refers to a Service that has no ready endpoints,
+          implementations SHOULD return a 503 for requests to that backend instead.
+          If an implementation chooses to do this, all of the above rules for 500 responses
+          MUST also apply for responses that return a 503.
+
+          Support: Core for Kubernetes Service
+
+          Support: Extended for Kubernetes ServiceImport
+
+          Support: Implementation-specific for any other resource
+
+          Support for weight: Core
+
+          +optional
+          +listType=atomic
+          +kubebuilder:validation:MaxItems=16
+        items:
+          $ref: '#/definitions/v1.HTTPBackendRef'
+        type: array
+      filters:
+        description: |-
+          Filters define the filters that are applied to requests that match
+          this rule.
+
+          Wherever possible, implementations SHOULD implement filters in the order
+          they are specified.
+
+          Implementations MAY choose to implement this ordering strictly, rejecting
+          any combination or order of filters that cannot be supported. If implementations
+          choose a strict interpretation of filter ordering, they MUST clearly document
+          that behavior.
+
+          To reject an invalid combination or order of filters, implementations SHOULD
+          consider the Route Rules with this configuration invalid. If all Route Rules
+          in a Route are invalid, the entire Route would be considered invalid. If only
+          a portion of Route Rules are invalid, implementations MUST set the
+          "PartiallyInvalid" condition for the Route.
+
+          Conformance-levels at this level are defined based on the type of filter:
+
+          - ALL core filters MUST be supported by all implementations.
+          - Implementers are encouraged to support extended filters.
+          - Implementation-specific custom filters have no API guarantees across
+            implementations.
+
+          Specifying the same filter multiple times is not supported unless explicitly
+          indicated in the filter.
+
+          All filters are expected to be compatible with each other except for the
+          URLRewrite and RequestRedirect filters, which may not be combined. If an
+          implementation cannot support other combinations of filters, they must clearly
+          document that limitation. In cases where incompatible or unsupported
+          filters are specified and cause the `Accepted` condition to be set to status
+          `False`, implementations may use the `IncompatibleFilters` reason to specify
+          this configuration error.
+
+          Support: Core
+
+          +optional
+          +listType=atomic
+          +kubebuilder:validation:MaxItems=16
+          +kubebuilder:validation:XValidation:message="May specify either httpRouteFilterRequestRedirect or httpRouteFilterRequestRewrite, but not both",rule="!(self.exists(f, f.type == 'RequestRedirect') && self.exists(f, f.type == 'URLRewrite'))"
+          +kubebuilder:validation:XValidation:message="RequestHeaderModifier filter cannot be repeated",rule="self.filter(f, f.type == 'RequestHeaderModifier').size() <= 1"
+          +kubebuilder:validation:XValidation:message="ResponseHeaderModifier filter cannot be repeated",rule="self.filter(f, f.type == 'ResponseHeaderModifier').size() <= 1"
+          +kubebuilder:validation:XValidation:message="RequestRedirect filter cannot be repeated",rule="self.filter(f, f.type == 'RequestRedirect').size() <= 1"
+          +kubebuilder:validation:XValidation:message="URLRewrite filter cannot be repeated",rule="self.filter(f, f.type == 'URLRewrite').size() <= 1"
+        items:
+          $ref: '#/definitions/v1.HTTPRouteFilter'
+        type: array
+      matches:
+        description: |-
+          Matches define conditions used for matching the rule against incoming
+          HTTP requests. Each match is independent, i.e. this rule will be matched
+          if **any** one of the matches is satisfied.
+
+          For example, take the following matches configuration:
+
+          ```
+          matches:
+          - path:
+              value: "/foo"
+            headers:
+            - name: "version"
+              value: "v2"
+          - path:
+              value: "/v2/foo"
+          ```
+
+          For a request to match against this rule, a request must satisfy
+          EITHER of the two conditions:
+
+          - path prefixed with `/foo` AND contains the header `version: v2`
+          - path prefix of `/v2/foo`
+
+          See the documentation for HTTPRouteMatch on how to specify multiple
+          match conditions that should be ANDed together.
+
+          If no matches are specified, the default is a prefix
+          path match on "/", which has the effect of matching every
+          HTTP request.
+
+          Proxy or Load Balancer routing configuration generated from HTTPRoutes
+          MUST prioritize matches based on the following criteria, continuing on
+          ties. Across all rules specified on applicable Routes, precedence must be
+          given to the match having:
+
+          * "Exact" path match.
+          * "Prefix" path match with largest number of characters.
+          * Method match.
+          * Largest number of header matches.
+          * Largest number of query param matches.
+
+          Note: The precedence of RegularExpression path matches are implementation-specific.
+
+          If ties still exist across multiple Routes, matching precedence MUST be
+          determined in order of the following criteria, continuing on ties:
+
+          * The oldest Route based on creation timestamp.
+          * The Route appearing first in alphabetical order by
+            "{namespace}/{name}".
+
+          If ties still exist within an HTTPRoute, matching precedence MUST be granted
+          to the FIRST matching rule (in list order) with a match meeting the above
+          criteria.
+
+          When no rules matching a request have been successfully attached to the
+          parent a request is coming from, a HTTP 404 status code MUST be returned.
+
+          +optional
+          +listType=atomic
+          +kubebuilder:validation:MaxItems=64
+          +kubebuilder:default={{path:{ type: "PathPrefix", value: "/"}}}
+        items:
+          $ref: '#/definitions/v1.HTTPRouteMatch'
+        type: array
+      name:
+        description: |-
+          Name is the name of the route rule. This name MUST be unique within a Route if it is set.
+
+          Support: Extended
+          +optional
+        type: string
+      retry:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPRouteRetry'
+        description: |-
+          Retry defines the configuration for when to retry an HTTP request.
+
+          Support: Extended
+
+          +optional
+          <gateway:experimental>
+      sessionPersistence:
+        allOf:
+        - $ref: '#/definitions/v1.SessionPersistence'
+        description: |-
+          SessionPersistence defines and configures session persistence
+          for the route rule.
+
+          Support: Extended
+
+          +optional
+          <gateway:experimental>
+      timeouts:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPRouteTimeouts'
+        description: |-
+          Timeouts defines the timeouts that can be configured for an HTTP request.
+
+          Support: Extended
+
+          +optional
+    type: object
+  v1.HTTPRouteTimeouts:
+    properties:
+      backendRequest:
+        description: |-
+          BackendRequest specifies a timeout for an individual request from the gateway
+          to a backend. This covers the time from when the request first starts being
+          sent from the gateway to when the full response has been received from the backend.
+
+          Setting a timeout to the zero duration (e.g. "0s") SHOULD disable the timeout
+          completely. Implementations that cannot completely disable the timeout MUST
+          instead interpret the zero duration as the longest possible value to which
+          the timeout can be set.
+
+          An entire client HTTP transaction with a gateway, covered by the Request timeout,
+          may result in more than one call from the gateway to the destination backend,
+          for example, if automatic retries are supported.
+
+          The value of BackendRequest must be a Gateway API Duration string as defined by
+          GEP-2257.  When this field is unspecified, its behavior is implementation-specific;
+          when specified, the value of BackendRequest must be no more than the value of the
+          Request timeout (since the Request timeout encompasses the BackendRequest timeout).
+
+          Support: Extended
+
+          +optional
+        type: string
+      request:
+        description: |-
+          Request specifies the maximum duration for a gateway to respond to an HTTP request.
+          If the gateway has not been able to respond before this deadline is met, the gateway
+          MUST return a timeout error.
+
+          For example, setting the `rules.timeouts.request` field to the value `10s` in an
+          `HTTPRoute` will cause a timeout if a client request is taking longer than 10 seconds
+          to complete.
+
+          Setting a timeout to the zero duration (e.g. "0s") SHOULD disable the timeout
+          completely. Implementations that cannot completely disable the timeout MUST
+          instead interpret the zero duration as the longest possible value to which
+          the timeout can be set.
+
+          This timeout is intended to cover as close to the whole request-response transaction
+          as possible although an implementation MAY choose to start the timeout after the entire
+          request stream has been received instead of immediately after the transaction is
+          initiated by the client.
+
+          The value of Request is a Gateway API Duration string as defined by GEP-2257. When this
+          field is unspecified, request timeout behavior is implementation-specific.
+
+          Support: Extended
+
+          +optional
+        type: string
+    type: object
+  v1.HTTPURLRewriteFilter:
+    properties:
+      hostname:
+        description: |-
+          Hostname is the value to be used to replace the Host header value during
+          forwarding.
+
+          Support: Extended
+
+          +optional
+        type: string
+      path:
+        allOf:
+        - $ref: '#/definitions/v1.HTTPPathModifier'
+        description: |-
+          Path defines a path rewrite.
+
+          Support: Extended
+
+          +optional
+    type: object
+  v1.HeaderMatchType:
+    enum:
+    - Exact
+    - RegularExpression
+    type: string
+    x-enum-varnames:
+    - HeaderMatchExact
+    - HeaderMatchRegularExpression
   v1.LinuxContainerUser:
     properties:
       gid:
@@ -1074,16 +2669,24 @@ definitions:
           in the container
         type: integer
     type: object
-  v1.PathType:
+  v1.PathMatchType:
     enum:
     - Exact
-    - Prefix
-    - ImplementationSpecific
+    - PathPrefix
+    - RegularExpression
     type: string
     x-enum-varnames:
-    - PathTypeExact
-    - PathTypePrefix
-    - PathTypeImplementationSpecific
+    - PathMatchExact
+    - PathMatchPathPrefix
+    - PathMatchRegularExpression
+  v1.QueryParamMatchType:
+    enum:
+    - Exact
+    - RegularExpression
+    type: string
+    x-enum-varnames:
+    - QueryParamMatchExact
+    - QueryParamMatchRegularExpression
   v1.RecursiveReadOnlyMode:
     enum:
     - Disabled
@@ -1094,23 +2697,6 @@ definitions:
     - RecursiveReadOnlyDisabled
     - RecursiveReadOnlyIfPossible
     - RecursiveReadOnlyEnabled
-  v1.ResourceClaim:
-    properties:
-      name:
-        description: |-
-          Name must match the name of one entry in pod.spec.resourceClaims of
-          the Pod where this field is used. It makes that resource available
-          inside a container.
-        type: string
-      request:
-        description: |-
-          Request is the name chosen for a request in the referenced claim.
-          If empty, everything from the claim is made available, otherwise
-          only the result of this request.
-
-          +optional
-        type: string
-    type: object
   v1.ResourceHealth:
     properties:
       health:
@@ -1197,7 +2783,7 @@ definitions:
           Claims lists the names of resources, defined in spec.resourceClaims,
           that are used by this container.
 
-          This is an alpha field and requires enabling the
+          This field depends on the
           DynamicResourceAllocation feature gate.
 
           This field is immutable. It can only be set for containers.
@@ -1207,7 +2793,7 @@ definitions:
           +featureGate=DynamicResourceAllocation
           +optional
         items:
-          $ref: '#/definitions/v1.ResourceClaim'
+          $ref: '#/definitions/k8s_io_api_core_v1.ResourceClaim'
         type: array
       limits:
         allOf:
@@ -1248,37 +2834,207 @@ definitions:
           $ref: '#/definitions/v1.ResourceHealth'
         type: array
     type: object
-  v1.ServiceBackendPort:
+  v1.SessionPersistence:
     properties:
-      name:
+      absoluteTimeout:
         description: |-
-          name is the name of the port on the Service.
-          This is a mutually exclusive setting with "Number".
+          AbsoluteTimeout defines the absolute timeout of the persistent
+          session. Once the AbsoluteTimeout duration has elapsed, the
+          session becomes invalid.
+
+          Support: Extended
+
           +optional
         type: string
-      number:
+      cookieConfig:
+        allOf:
+        - $ref: '#/definitions/v1.CookieConfig'
         description: |-
-          number is the numerical port number (e.g. 80) on the Service.
-          This is a mutually exclusive setting with "Name".
+          CookieConfig provides configuration settings that are specific
+          to cookie-based session persistence.
+
+          Support: Core
+
           +optional
-        type: integer
+      idleTimeout:
+        description: |-
+          IdleTimeout defines the idle timeout of the persistent session.
+          Once the session has been idle for more than the specified
+          IdleTimeout duration, the session becomes invalid.
+
+          Support: Extended
+
+          +optional
+        type: string
+      sessionName:
+        description: |-
+          SessionName defines the name of the persistent session token
+          which may be reflected in the cookie or the header. Users
+          should avoid reusing session names to prevent unintended
+          consequences, such as rejection or unpredictable behavior.
+
+          Support: Implementation-specific
+
+          +optional
+          +kubebuilder:validation:MaxLength=128
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/v1.SessionPersistenceType'
+        description: |-
+          Type defines the type of session persistence such as through
+          the use a header or cookie. Defaults to cookie based session
+          persistence.
+
+          Support: Core for "Cookie" type
+
+          Support: Extended for "Header" type
+
+          +optional
+          +kubebuilder:default=Cookie
     type: object
-  v1.TypedLocalObjectReference:
-    properties:
-      apiGroup:
-        description: |-
-          APIGroup is the group for the resource being referenced.
-          If APIGroup is not specified, the specified Kind must be in the core API group.
-          For any other third-party types, APIGroup is required.
-          +optional
-        type: string
-      kind:
-        description: Kind is the type of resource being referenced
-        type: string
-      name:
-        description: Name is the name of resource being referenced
-        type: string
-    type: object
+  v1.SessionPersistenceType:
+    enum:
+    - Cookie
+    - Header
+    type: string
+    x-enum-varnames:
+    - CookieBasedSessionPersistence
+    - HeaderBasedSessionPersistence
+  v1.Signal:
+    enum:
+    - SIGABRT
+    - SIGALRM
+    - SIGBUS
+    - SIGCHLD
+    - SIGCLD
+    - SIGCONT
+    - SIGFPE
+    - SIGHUP
+    - SIGILL
+    - SIGINT
+    - SIGIO
+    - SIGIOT
+    - SIGKILL
+    - SIGPIPE
+    - SIGPOLL
+    - SIGPROF
+    - SIGPWR
+    - SIGQUIT
+    - SIGSEGV
+    - SIGSTKFLT
+    - SIGSTOP
+    - SIGSYS
+    - SIGTERM
+    - SIGTRAP
+    - SIGTSTP
+    - SIGTTIN
+    - SIGTTOU
+    - SIGURG
+    - SIGUSR1
+    - SIGUSR2
+    - SIGVTALRM
+    - SIGWINCH
+    - SIGXCPU
+    - SIGXFSZ
+    - SIGRTMIN
+    - SIGRTMIN+1
+    - SIGRTMIN+2
+    - SIGRTMIN+3
+    - SIGRTMIN+4
+    - SIGRTMIN+5
+    - SIGRTMIN+6
+    - SIGRTMIN+7
+    - SIGRTMIN+8
+    - SIGRTMIN+9
+    - SIGRTMIN+10
+    - SIGRTMIN+11
+    - SIGRTMIN+12
+    - SIGRTMIN+13
+    - SIGRTMIN+14
+    - SIGRTMIN+15
+    - SIGRTMAX-14
+    - SIGRTMAX-13
+    - SIGRTMAX-12
+    - SIGRTMAX-11
+    - SIGRTMAX-10
+    - SIGRTMAX-9
+    - SIGRTMAX-8
+    - SIGRTMAX-7
+    - SIGRTMAX-6
+    - SIGRTMAX-5
+    - SIGRTMAX-4
+    - SIGRTMAX-3
+    - SIGRTMAX-2
+    - SIGRTMAX-1
+    - SIGRTMAX
+    type: string
+    x-enum-varnames:
+    - SIGABRT
+    - SIGALRM
+    - SIGBUS
+    - SIGCHLD
+    - SIGCLD
+    - SIGCONT
+    - SIGFPE
+    - SIGHUP
+    - SIGILL
+    - SIGINT
+    - SIGIO
+    - SIGIOT
+    - SIGKILL
+    - SIGPIPE
+    - SIGPOLL
+    - SIGPROF
+    - SIGPWR
+    - SIGQUIT
+    - SIGSEGV
+    - SIGSTKFLT
+    - SIGSTOP
+    - SIGSYS
+    - SIGTERM
+    - SIGTRAP
+    - SIGTSTP
+    - SIGTTIN
+    - SIGTTOU
+    - SIGURG
+    - SIGUSR1
+    - SIGUSR2
+    - SIGVTALRM
+    - SIGWINCH
+    - SIGXCPU
+    - SIGXFSZ
+    - SIGRTMIN
+    - SIGRTMINPLUS1
+    - SIGRTMINPLUS2
+    - SIGRTMINPLUS3
+    - SIGRTMINPLUS4
+    - SIGRTMINPLUS5
+    - SIGRTMINPLUS6
+    - SIGRTMINPLUS7
+    - SIGRTMINPLUS8
+    - SIGRTMINPLUS9
+    - SIGRTMINPLUS10
+    - SIGRTMINPLUS11
+    - SIGRTMINPLUS12
+    - SIGRTMINPLUS13
+    - SIGRTMINPLUS14
+    - SIGRTMINPLUS15
+    - SIGRTMAXMINUS14
+    - SIGRTMAXMINUS13
+    - SIGRTMAXMINUS12
+    - SIGRTMAXMINUS11
+    - SIGRTMAXMINUS10
+    - SIGRTMAXMINUS9
+    - SIGRTMAXMINUS8
+    - SIGRTMAXMINUS7
+    - SIGRTMAXMINUS6
+    - SIGRTMAXMINUS5
+    - SIGRTMAXMINUS4
+    - SIGRTMAXMINUS3
+    - SIGRTMAXMINUS2
+    - SIGRTMAXMINUS1
+    - SIGRTMAX
   v1.VolumeMountStatus:
     properties:
       mountPath:
@@ -1604,7 +3360,7 @@ paths:
         name: user
         required: true
         type: string
-      - description: The subdomain of the analysis. AKA the ingress name
+      - description: The subdomain of the analysis. AKA the HTTP route name
         in: path
         name: host
         required: true
@@ -1664,7 +3420,7 @@ paths:
         resources asscociated with it. Does not save outputs first. Uses
         the external-id label to find all of the objects in the configured
         namespace associated with the job. Deletes the following objects:
-        ingresses, services, deployments, and configmaps.
+        HTTP routes, services, deployments, and configmaps.
       operationId: exit
       parameters:
       - description: The external ID of the VICE analysis
@@ -2118,7 +3874,7 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Returns data that is generately asynchronously from the job launch.
+      summary: Returns data that is generated asynchronously from the job launch.
   /vice/launch:
     post:
       consumes:
@@ -2235,28 +3991,6 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Lists all of the deployments.
-  /vice/listing/ingresses:
-    get:
-      description: |-
-        Lists ingresses in use by VICE apps. The query parameters
-        are used to filter the results and aren't listed as parameters.
-      operationId: filterable-ingresses
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/httphandlers.FilteredIngressesResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Lists ingresses in use by VICE apps.
   /vice/listing/pods:
     get:
       description: |-
@@ -2280,6 +4014,28 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Returns a listing of the pods in a VICE analysis.
+  /vice/listing/routes:
+    get:
+      description: |-
+        Lists HTTP routes in use by VICE apps. The query parameters
+        are used to filter the results and aren't listed as parameters.
+      operationId: filterable-routes
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httphandlers.FilteredRoutesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Lists HTTP routes in use by VICE apps.
   /vice/listing/services:
     get:
       description: |-

@@ -10,7 +10,7 @@ import (
 )
 
 func (i *Incluster) createPodDisruptionBudget(ctx context.Context, analysis *model.Analysis) (*policyv1.PodDisruptionBudget, error) {
-	labels, err := i.LabelsFromJob(ctx, analysis)
+	labels, err := i.jobInfo.JobLabels(ctx, analysis)
 	if err != nil {
 		return nil, err
 	}

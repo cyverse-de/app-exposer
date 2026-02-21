@@ -100,7 +100,7 @@ type URLReadyResponse struct {
 // @Description	and return an error if they aren't allowed to access the running app.
 // @Produce		json
 // @Param			user	query		string	true	"A user's username"
-// @Param			host	path		string	true	"The subdomain of the analysis. AKA the ingress name"
+// @Param			host	path		string	true	"The subdomain of the analysis. AKA the HTTP route name"
 // @Success		200		{object}	URLReadyResponse
 // @Failure		400		{object}	common.ErrorResponse
 // @Failure		403		{object}	common.ErrorResponse
@@ -109,7 +109,7 @@ type URLReadyResponse struct {
 // @Router			/vice/{host}/url-ready [get]
 func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 	var (
-		ingressExists bool
+		routeExists   bool
 		serviceExists bool
 		podReady      bool
 	)
@@ -134,15 +134,15 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 
 	host := c.Param("host")
 
-	// Use the name of the ingress to retrieve the externalID
+	// Use the name of the route to retrieve the externalID
 	id, err := h.incluster.GetIDFromHost(ctx, host)
 	if err != nil {
 		return err
 	}
 
-	// If getIDFromHost returns without an error, then the ingress exists
-	// since the ingresses are looked at for the host.
-	ingressExists = true
+	// If getIDFromHost returns without an error, then the route exists since the route is used to look up the
+	// ID using the host.
+	routeExists = true
 
 	set := labels.Set(map[string]string{
 		"external-id": id,
@@ -175,7 +175,7 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 	}
 
 	data := URLReadyResponse{
-		Ready: ingressExists && serviceExists && podReady,
+		Ready: routeExists && serviceExists && podReady,
 	}
 
 	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, id)
@@ -215,7 +215,7 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 // @Router			/vice/admin/{host}/url-ready [get]
 func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 	var (
-		ingressExists bool
+		routeExists   bool
 		serviceExists bool
 		podReady      bool
 	)
@@ -223,15 +223,15 @@ func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	host := c.Param("host")
 
-	// Use the name of the ingress to retrieve the externalID
+	// Use the name of the route to retrieve the externalID
 	id, err := h.incluster.GetIDFromHost(ctx, host)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
 	}
 
-	// If getIDFromHost returns without an error, then the ingress exists
-	// since the ingresses are looked at for the host.
-	ingressExists = true
+	// If getIDFromHost returns without an error, then the route exists since the route is used to look up the
+	// ID using the host.
+	routeExists = true
 
 	set := labels.Set(map[string]string{
 		"external-id": id,
@@ -264,7 +264,7 @@ func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 	}
 
 	data := URLReadyResponse{
-		Ready: ingressExists && serviceExists && podReady,
+		Ready: routeExists && serviceExists && podReady,
 	}
 
 	return c.JSON(http.StatusOK, data)

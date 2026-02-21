@@ -115,10 +115,10 @@ type AsyncData struct {
 	IPAddr     string `json:"ipAddr"`
 }
 
-// AsyncDataHandler returns data that is generately asynchronously from the job launch.
+// AsyncDataHandler returns data that is generated asynchronously from the job launch.
 //
 //	@ID				async-data
-//	@Summary		Returns data that is generately asynchronously from the job launch.
+//	@Summary		Returns data that is generated asynchronously from the job launch.
 //	@Description	Returns data that is applied to analyses outside of an API call.
 //	@Description	The returned data is not returned asynchronously, despite the name of the call.
 //	@Param			external-id	query		string	true	"External ID"
@@ -155,7 +155,7 @@ func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 	labels := deployments.Items[0].GetLabels()
 	userID := labels["user-id"]
 
-	subdomain := incluster.IngressName(userID, externalID)
+	subdomain := common.Subdomain(userID, externalID)
 	ipAddr, err := h.apps.GetUserIP(ctx, userID)
 	if err != nil {
 		log.Error(err)

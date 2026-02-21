@@ -11,6 +11,8 @@ import (
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/app-exposer/incluster/httproutes"
+	"github.com/cyverse-de/app-exposer/incluster/jobinfo"
 	"github.com/cyverse-de/app-exposer/quota"
 
 	"github.com/jmoiron/sqlx"
@@ -24,6 +26,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
 var log = common.Log
@@ -40,8 +44,7 @@ type Init struct {
 	ImagePullSecretName           string
 	ViceProxyImage                string
 	FrontendBaseURL               string
-	ViceDefaultBackendService     string
-	ViceDefaultBackendServicePort int
+	ViceDomain                    string
 	GetAnalysisIDService          string
 	CheckResourceAccessService    string
 	VICEBackendNamespace          string
@@ -55,7 +58,7 @@ type Init struct {
 	KeycloakClientID              string
 	KeycloakClientSecret          string
 	IRODSZone                     string
-	IngressClass                  string
+	GatewayProvider               string
 	LocalStorageClass             string
 	DisableViceProxyAuth          bool
 	NATSEncodedConn               *nats.EncodedConn
@@ -68,53 +71,33 @@ type Init struct {
 type Incluster struct {
 	Init
 	clientset       kubernetes.Interface
+	gatewayClient   *gatewayclient.GatewayV1Client
 	db              *sqlx.DB
 	statusPublisher AnalysisStatusPublisher
 	apps            *apps.Apps
 	quotaEnforcer   *quota.Enforcer
+	jobInfo         jobinfo.JobInfo
 }
 
 // New creates a new *Incluster.
-func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, apps *apps.Apps) *Incluster {
+func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, gatewayClient *gatewayclient.GatewayV1Client, apps *apps.Apps) *Incluster {
 	return &Incluster{
-		Init:      *init,
-		db:        db,
-		clientset: clientset,
+		Init:          *init,
+		db:            db,
+		clientset:     clientset,
+		gatewayClient: gatewayClient,
 		statusPublisher: &JSLPublisher{
 			statusURL: init.JobStatusURL,
 		},
 		apps:          apps,
 		quotaEnforcer: quota.NewEnforcer(clientset, db, apps, init.NATSEncodedConn, init.UserSuffix),
+		jobInfo:       jobinfo.NewJobInfo(apps),
 	}
 }
 
-// LabelsFromJob returns a map[string]string that can be used as labels for K8s resources.
-func (i *Incluster) LabelsFromJob(ctx context.Context, job *model.Job) (map[string]string, error) {
-	name := []rune(job.Name)
-
-	var stringmax int
-	if len(name) >= 63 {
-		stringmax = 62
-	} else {
-		stringmax = len(name) - 1
-	}
-
-	ipAddr, err := i.apps.GetUserIP(ctx, job.UserID)
-	if err != nil {
-		return nil, err
-	}
-
-	return map[string]string{
-		"external-id":   job.InvocationID,
-		"app-name":      common.LabelValueString(job.AppName),
-		"app-id":        job.AppID,
-		"username":      common.LabelValueString(job.Submitter),
-		"user-id":       job.UserID,
-		"analysis-name": common.LabelValueString(string(name[:stringmax])),
-		"app-type":      "interactive",
-		"subdomain":     IngressName(job.UserID, job.InvocationID),
-		"login-ip":      ipAddr,
-	}, nil
+// getRoutesClient returns the HTTPRoutes client for the VICE namespace.
+func (i *Incluster) getRoutesClient() gatewayclient.HTTPRouteInterface {
+	return i.gatewayClient.HTTPRoutes(i.ViceNamespace)
 }
 
 // UpsertExcludesConfigMap uses the Job passed in to assemble the ConfigMap
@@ -269,19 +252,21 @@ func (i *Incluster) UpsertDeployment(ctx context.Context, deployment *appsv1.Dep
 		}
 	}
 
-	// Create the ingress for the job
-	ingress, err := i.getIngress(ctx, job, svc, i.IngressClass)
+	// Create the HTTPRoute complete with provider-specific customizations if applicable.
+	routeBuilder := httproutes.NewHTTPRouteBuilder(
+		i.GatewayProvider,
+		i.VICEBackendNamespace,
+		i.ViceNamespace,
+		i.ViceDomain,
+		i.jobInfo,
+	)
+	route, err := routeBuilder.BuildRoute(ctx, job, svc)
 	if err != nil {
 		return err
 	}
-
-	ingressclient := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
-	_, err = ingressclient.Get(ctx, ingress.Name, metav1.GetOptions{})
+	_, err = i.getRoutesClient().Create(ctx, route, metav1.CreateOptions{})
 	if err != nil {
-		_, err = ingressclient.Create(ctx, ingress, metav1.CreateOptions{})
-		if err != nil {
-			return err
-		}
+		return err
 	}
 
 	return nil
@@ -351,15 +336,14 @@ func (i *Incluster) DoExit(ctx context.Context, externalID string) error {
 		}
 	}
 
-	// Delete the ingress
-	ingressclient := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
-	ingresslist, err := ingressclient.List(ctx, listoptions)
+	// Delete the HTTP route.
+	routesClient := i.getRoutesClient()
+	routeList, err := routesClient.List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
-
-	for _, ingress := range ingresslist.Items {
-		if err = ingressclient.Delete(ctx, ingress.Name, metav1.DeleteOptions{}); err != nil {
+	for _, route := range routeList.Items {
+		if err = routesClient.Delete(ctx, route.Name, metav1.DeleteOptions{}); err != nil {
 			log.Error(err)
 		}
 	}
@@ -438,24 +422,33 @@ func (i *Incluster) DoExit(ctx context.Context, externalID string) error {
 	return nil
 }
 
-// GetIDFromHost returns the external ID for the running VICE app, which
-// is assumed to be the same as the name of the ingress.
+// GetIDFromHost returns the external ID for the running VICE app associated with the host, which is the same as the
+// name of the HTTPRoute.
 func (i *Incluster) GetIDFromHost(ctx context.Context, host string) (string, error) {
-	ingressclient := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
-	ingresslist, err := ingressclient.List(ctx, metav1.ListOptions{})
+	routesClient := i.getRoutesClient()
+
+	// Determine the host FQDN to use when doing the search.
+	hostFQDN := host
+	if !strings.Contains(host, ".") {
+		hostFQDN = fmt.Sprintf("%s.%s", host, i.ViceDomain)
+	}
+
+	// Obtain the list of routes.
+	routeList, err := routesClient.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return "", err
 	}
 
-	for _, ingress := range ingresslist.Items {
-		for _, rule := range ingress.Spec.Rules {
-			if rule.Host == host {
-				return ingress.Name, nil
+	// Find the route with matching the given host name.
+	for _, route := range routeList.Items {
+		for _, hostname := range route.Spec.Hostnames {
+			if hostname == gatewayv1.Hostname(hostFQDN) {
+				return route.Name, nil
 			}
 		}
 	}
 
-	return "", fmt.Errorf("no ingress found for host %s", host)
+	return "", fmt.Errorf("no HTTPRoute found for host %s", host)
 }
 
 const updateTimeLimitSQL = `
