@@ -1400,25 +1400,25 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.Container": {
+        "github_com_cyverse-de_model_v10.Container": {
             "type": "object",
             "properties": {
                 "container_devices": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.Device"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.Device"
                     }
                 },
                 "container_volumes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.Volume"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.Volume"
                     }
                 },
                 "container_volumes_from": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.VolumesFrom"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.VolumesFrom"
                     }
                 },
                 "cpu_shares": {
@@ -1427,14 +1427,21 @@ const docTemplate = `{
                 "entrypoint": {
                     "type": "string"
                 },
+                "gpu_models": {
+                    "description": "A list of acceptable GPU models. Empty means no limitation.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "id": {
                     "type": "string"
                 },
                 "image": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.ContainerImage"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.ContainerImage"
                 },
                 "interactive_apps": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.InteractiveApps"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.InteractiveApps"
                 },
                 "max_cpu_cores": {
                     "description": "The maximum number of cores the container needs.",
@@ -1476,7 +1483,7 @@ const docTemplate = `{
                 "ports": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.Ports"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.Ports"
                     }
                 },
                 "skip_tmp_mount": {
@@ -1490,7 +1497,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.ContainerImage": {
+        "github_com_cyverse-de_model_v10.ContainerImage": {
             "type": "object",
             "properties": {
                 "auth": {
@@ -1513,7 +1520,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.Device": {
+        "github_com_cyverse-de_model_v10.Device": {
             "type": "object",
             "properties": {
                 "cgroup_permissions": {
@@ -1527,15 +1534,15 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.ExtraInfo": {
+        "github_com_cyverse-de_model_v10.ExtraInfo": {
             "type": "object",
             "properties": {
                 "htcondor": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.HTCondorExtraInfo"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.HTCondorExtraInfo"
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.FileMetadata": {
+        "github_com_cyverse-de_model_v10.FileMetadata": {
             "type": "object",
             "properties": {
                 "attr": {
@@ -1549,7 +1556,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.HTCondorExtraInfo": {
+        "github_com_cyverse-de_model_v10.HTCondorExtraInfo": {
             "type": "object",
             "properties": {
                 "extra_requirements": {
@@ -1557,7 +1564,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.InteractiveApps": {
+        "github_com_cyverse-de_model_v10.InteractiveApps": {
             "type": "object",
             "properties": {
                 "backend_url": {
@@ -1606,7 +1613,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.Ports": {
+        "github_com_cyverse-de_model_v10.Ports": {
             "type": "object",
             "properties": {
                 "bind_to_host": {
@@ -1620,22 +1627,22 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.Step": {
+        "github_com_cyverse-de_model_v10.Step": {
             "type": "object",
             "properties": {
                 "component": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepComponent"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepComponent"
                 },
                 "config": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepConfig"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepConfig"
                 },
                 "environment": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepEnvironment"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepEnvironment"
                 },
                 "input": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepInput"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepInput"
                     }
                 },
                 "log-file": {
@@ -1644,7 +1651,7 @@ const docTemplate = `{
                 "output": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepOutput"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepOutput"
                     }
                 },
                 "stderr": {
@@ -1661,11 +1668,11 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.StepComponent": {
+        "github_com_cyverse-de_model_v10.StepComponent": {
             "type": "object",
             "properties": {
                 "container": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.Container"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.Container"
                 },
                 "description": {
                     "type": "string"
@@ -1690,36 +1697,36 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.StepConfig": {
+        "github_com_cyverse-de_model_v10.StepConfig": {
             "type": "object",
             "properties": {
                 "input": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepInput"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepInput"
                     }
                 },
                 "output": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepOutput"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepOutput"
                     }
                 },
                 "params": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.StepParam"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepParam"
                     }
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.StepEnvironment": {
+        "github_com_cyverse-de_model_v10.StepEnvironment": {
             "type": "object",
             "additionalProperties": {
                 "type": "string"
             }
         },
-        "github_com_cyverse-de_model_v9.StepInput": {
+        "github_com_cyverse-de_model_v10.StepInput": {
             "type": "object",
             "properties": {
                 "id": {
@@ -1748,7 +1755,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.StepOutput": {
+        "github_com_cyverse-de_model_v10.StepOutput": {
             "type": "object",
             "properties": {
                 "multiplicity": {
@@ -1771,7 +1778,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.StepParam": {
+        "github_com_cyverse-de_model_v10.StepParam": {
             "type": "object",
             "properties": {
                 "id": {
@@ -1794,7 +1801,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.Volume": {
+        "github_com_cyverse-de_model_v10.Volume": {
             "type": "object",
             "properties": {
                 "container_path": {
@@ -1811,7 +1818,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_cyverse-de_model_v9.VolumesFrom": {
+        "github_com_cyverse-de_model_v10.VolumesFrom": {
             "type": "object",
             "properties": {
                 "auth": {
@@ -1902,7 +1909,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "extra": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v9.ExtraInfo"
+                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.ExtraInfo"
                 },
                 "failure_count": {
                     "type": "integer"
@@ -1913,7 +1920,7 @@ const docTemplate = `{
                 "file-metadata": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.FileMetadata"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.FileMetadata"
                     }
                 },
                 "filter_files": {
@@ -1980,7 +1987,7 @@ const docTemplate = `{
                 "steps": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v9.Step"
+                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.Step"
                     }
                 },
                 "submission_date": {

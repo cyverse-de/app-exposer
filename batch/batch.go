@@ -15,7 +15,7 @@ import (
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/resourcing"
-	"github.com/cyverse-de/model/v9"
+	"github.com/cyverse-de/model/v10"
 	"github.com/gosimple/slug"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
@@ -873,6 +873,16 @@ func (w *WorkflowMaker) addGPURequirements(workflow *v1alpha1.Workflow) error {
 				constants.GPUAffinityValue,
 			},
 		})
+
+		// Add GPU model affinity if specific models are requested
+		gpuModels := resourcing.GPUModelsRequested(w.analysis)
+		if len(gpuModels) > 0 {
+			*me = append(*me, apiv1.NodeSelectorRequirement{
+				Key:      constants.GPUModelAffinityKey,
+				Operator: apiv1.NodeSelectorOperator(constants.GPUModelAffinityOperator),
+				Values:   gpuModels,
+			})
+		}
 	}
 	return nil
 }
