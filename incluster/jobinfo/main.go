@@ -5,7 +5,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
-	"github.com/cyverse-de/model/v9"
+	"github.com/cyverse-de/model/v10"
 )
 
 // JobInfo is an interface for obtaining information about a job.

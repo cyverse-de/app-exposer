@@ -7,7 +7,7 @@ import (
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/incluster/jobinfo"
-	"github.com/cyverse-de/model/v9"
+	"github.com/cyverse-de/model/v10"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"

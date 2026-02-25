@@ -10,315 +10,6 @@ definitions:
       message:
         type: string
     type: object
-  github_com_cyverse-de_model_v10.Container:
-    properties:
-      container_devices:
-        items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v10.Device'
-        type: array
-      container_volumes:
-        items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v10.Volume'
-        type: array
-      container_volumes_from:
-        items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v10.VolumesFrom'
-        type: array
-      cpu_shares:
-        type: integer
-      entrypoint:
-        type: string
-      gpu_models:
-        description: A list of acceptable GPU models. Empty means no limitation.
-        items:
-          type: string
-        type: array
-      id:
-        type: string
-      image:
-        $ref: '#/definitions/github_com_cyverse-de_model_v10.ContainerImage'
-      interactive_apps:
-        $ref: '#/definitions/github_com_cyverse-de_model_v10.InteractiveApps'
-      max_cpu_cores:
-        description: The maximum number of cores the container needs.
-        type: number
-      max_gpus:
-        description: The maximum number of GPUs the container needs.
-        type: integer
-      memory_limit:
-        description: The maximum the container is allowed to have.
-        type: integer
-      min_cpu_cores:
-        description: The minimum number of cores the container needs.
-        type: number
-      min_disk_space:
-        description: The minimum amount of disk space that the container needs.
-        type: integer
-      min_gpus:
-        description: The minimum number of GPUs the container needs.
-        type: integer
-      min_memory_limit:
-        description: The minimum the container needs.
-        type: integer
-      name:
-        type: string
-      network_mode:
-        type: string
-      pids_limit:
-        type: integer
-      ports:
-        items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v10.Ports'
-        type: array
-      skip_tmp_mount:
-        type: boolean
-      uid:
-        type: integer
-      working_directory:
-        type: string
-    type: object
-  github_com_cyverse-de_model_v10.ContainerImage:
-    properties:
-      auth:
-        type: string
-      id:
-        type: string
-      name:
-        type: string
-      osg_image_path:
-        type: string
-      tag:
-        type: string
-      url:
-        type: string
-    type: object
-  github_com_cyverse-de_model_v10.Device:
-    properties:
-      cgroup_permissions:
-        type: string
-      container_path:
-        type: string
-      host_path:
-        type: string
-    type: object
-  github_com_cyverse-de_model_v10.ExtraInfo:
-    properties:
-      htcondor:
-        $ref: '#/definitions/github_com_cyverse-de_model_v10.HTCondorExtraInfo'
-    type: object
-  github_com_cyverse-de_model_v10.FileMetadata:
-    properties:
-      attr:
-        type: string
-      unit:
-        type: string
-      value:
-        type: string
-    type: object
-  github_com_cyverse-de_model_v10.HTCondorExtraInfo:
-    properties:
-      extra_requirements:
-        type: string
-    type: object
-  github_com_cyverse-de_model_v10.InteractiveApps:
-    properties:
-      backend_url:
-        description: |-
-          Only used if you need to override the default backendURL, which should be
-          http://<container_name>.
-        type: string
-      cas_url:
-        description: The base URL for the CAS server.
-        type: string
-      cas_validate:
-        description: The path to the validate endpoint on the CAS server.
-        type: string
-      frontend_url:
-        description: |-
-          The URL for the frontend of the application. Will get prefixed with the job
-          id.
-        type: string
-      proxy_image:
-        description: |-
-          The docker image for the reverse proxy that runs on the cluster with the
-          job steps.
-        type: string
-      proxy_name:
-        description: The name of the container for the reverse proxy.
-        type: string
-      ssl_cert_path:
-        description: The path to the SSL cert file on the Condor nodes.
-        type: string
-      ssl_key_path:
-        description: The path to the SSL key file on the Condor nodes.
-        type: string
-      websocket_path:
-        description: |-
-          If websocket handling requires a special path in the app. The default is to
-          have this be empty.
-        type: string
-      websocket_port:
-        description: |-
-          If websocket handling requires a special port in the app. The default is to
-          use the same port as the backend URL.
-        type: string
-      websocket_proto:
-        description: If websocket handling requires a protocol other than ws://.
-        type: string
-    type: object
-  github_com_cyverse-de_model_v10.Ports:
-    properties:
-      bind_to_host:
-        type: boolean
-      container_port:
-        type: integer
-      host_port:
-        type: integer
-    type: object
-  github_com_cyverse-de_model_v10.Step:
-    properties:
-      component:
-        $ref: '#/definitions/github_com_cyverse-de_model_v10.StepComponent'
-      config:
-        $ref: '#/definitions/github_com_cyverse-de_model_v10.StepConfig'
-      environment:
-        $ref: '#/definitions/github_com_cyverse-de_model_v10.StepEnvironment'
-      input:
-        items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v10.StepInput'
-        type: array
-      log-file:
-        type: string
-      output:
-        items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v10.StepOutput'
-        type: array
-      stderr:
-        type: string
-      stdin:
-        type: string
-      stdout:
-        type: string
-      type:
-        type: string
-    type: object
-  github_com_cyverse-de_model_v10.StepComponent:
-    properties:
-      container:
-        $ref: '#/definitions/github_com_cyverse-de_model_v10.Container'
-      description:
-        type: string
-      interactive:
-        type: boolean
-      location:
-        type: string
-      name:
-        type: string
-      restricted:
-        type: boolean
-      time_limit_seconds:
-        type: integer
-      type:
-        type: string
-    type: object
-  github_com_cyverse-de_model_v10.StepConfig:
-    properties:
-      input:
-        items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v10.StepInput'
-        type: array
-      output:
-        items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v10.StepOutput'
-        type: array
-      params:
-        items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v10.StepParam'
-        type: array
-    type: object
-  github_com_cyverse-de_model_v10.StepEnvironment:
-    additionalProperties:
-      type: string
-    type: object
-  github_com_cyverse-de_model_v10.StepInput:
-    properties:
-      id:
-        type: string
-      multiplicity:
-        type: string
-      name:
-        type: string
-      property:
-        type: string
-      retain:
-        type: boolean
-      ticket:
-        type: string
-      type:
-        type: string
-      value:
-        type: string
-    type: object
-  github_com_cyverse-de_model_v10.StepOutput:
-    properties:
-      multiplicity:
-        type: string
-      name:
-        type: string
-      property:
-        type: string
-      qual-id:
-        type: string
-      retain:
-        type: boolean
-      type:
-        type: string
-    type: object
-  github_com_cyverse-de_model_v10.StepParam:
-    properties:
-      id:
-        type: string
-      name:
-        type: string
-      order:
-        type: integer
-      path:
-        type: string
-      type:
-        type: string
-      value:
-        type: string
-    type: object
-  github_com_cyverse-de_model_v10.Volume:
-    properties:
-      container_path:
-        type: string
-      host_path:
-        type: string
-      mode:
-        type: string
-      read_only:
-        type: boolean
-    type: object
-  github_com_cyverse-de_model_v10.VolumesFrom:
-    properties:
-      auth:
-        type: string
-      container_path:
-        type: string
-      host_path:
-        type: string
-      name:
-        type: string
-      name_prefix:
-        type: string
-      read_only:
-        type: boolean
-      tag:
-        type: string
-      url:
-        type: string
-    type: object
   httphandlers.AnalysisInClusterResponse:
     properties:
       found:
@@ -361,14 +52,14 @@ definitions:
       exit_code:
         type: integer
       extra:
-        $ref: '#/definitions/github_com_cyverse-de_model_v10.ExtraInfo'
+        $ref: '#/definitions/model.ExtraInfo'
       failure_count:
         type: integer
       failure_threshold:
         type: integer
       file-metadata:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v10.FileMetadata'
+          $ref: '#/definitions/model.FileMetadata'
         type: array
       filter_files:
         description: comes from config, not upstream service
@@ -415,7 +106,7 @@ definitions:
         type: boolean
       steps:
         items:
-          $ref: '#/definitions/github_com_cyverse-de_model_v10.Step'
+          $ref: '#/definitions/model.Step'
         type: array
       submission_date:
         type: string
@@ -737,6 +428,315 @@ definitions:
           only the result of this request.
 
           +optional
+        type: string
+    type: object
+  model.Container:
+    properties:
+      container_devices:
+        items:
+          $ref: '#/definitions/model.Device'
+        type: array
+      container_volumes:
+        items:
+          $ref: '#/definitions/model.Volume'
+        type: array
+      container_volumes_from:
+        items:
+          $ref: '#/definitions/model.VolumesFrom'
+        type: array
+      cpu_shares:
+        type: integer
+      entrypoint:
+        type: string
+      gpu_models:
+        description: A list of acceptable GPU models. Empty means no limitation.
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      image:
+        $ref: '#/definitions/model.ContainerImage'
+      interactive_apps:
+        $ref: '#/definitions/model.InteractiveApps'
+      max_cpu_cores:
+        description: The maximum number of cores the container needs.
+        type: number
+      max_gpus:
+        description: The maximum number of GPUs the container needs.
+        type: integer
+      memory_limit:
+        description: The maximum the container is allowed to have.
+        type: integer
+      min_cpu_cores:
+        description: The minimum number of cores the container needs.
+        type: number
+      min_disk_space:
+        description: The minimum amount of disk space that the container needs.
+        type: integer
+      min_gpus:
+        description: The minimum number of GPUs the container needs.
+        type: integer
+      min_memory_limit:
+        description: The minimum the container needs.
+        type: integer
+      name:
+        type: string
+      network_mode:
+        type: string
+      pids_limit:
+        type: integer
+      ports:
+        items:
+          $ref: '#/definitions/model.Ports'
+        type: array
+      skip_tmp_mount:
+        type: boolean
+      uid:
+        type: integer
+      working_directory:
+        type: string
+    type: object
+  model.ContainerImage:
+    properties:
+      auth:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      osg_image_path:
+        type: string
+      tag:
+        type: string
+      url:
+        type: string
+    type: object
+  model.Device:
+    properties:
+      cgroup_permissions:
+        type: string
+      container_path:
+        type: string
+      host_path:
+        type: string
+    type: object
+  model.ExtraInfo:
+    properties:
+      htcondor:
+        $ref: '#/definitions/model.HTCondorExtraInfo'
+    type: object
+  model.FileMetadata:
+    properties:
+      attr:
+        type: string
+      unit:
+        type: string
+      value:
+        type: string
+    type: object
+  model.HTCondorExtraInfo:
+    properties:
+      extra_requirements:
+        type: string
+    type: object
+  model.InteractiveApps:
+    properties:
+      backend_url:
+        description: |-
+          Only used if you need to override the default backendURL, which should be
+          http://<container_name>.
+        type: string
+      cas_url:
+        description: The base URL for the CAS server.
+        type: string
+      cas_validate:
+        description: The path to the validate endpoint on the CAS server.
+        type: string
+      frontend_url:
+        description: |-
+          The URL for the frontend of the application. Will get prefixed with the job
+          id.
+        type: string
+      proxy_image:
+        description: |-
+          The docker image for the reverse proxy that runs on the cluster with the
+          job steps.
+        type: string
+      proxy_name:
+        description: The name of the container for the reverse proxy.
+        type: string
+      ssl_cert_path:
+        description: The path to the SSL cert file on the Condor nodes.
+        type: string
+      ssl_key_path:
+        description: The path to the SSL key file on the Condor nodes.
+        type: string
+      websocket_path:
+        description: |-
+          If websocket handling requires a special path in the app. The default is to
+          have this be empty.
+        type: string
+      websocket_port:
+        description: |-
+          If websocket handling requires a special port in the app. The default is to
+          use the same port as the backend URL.
+        type: string
+      websocket_proto:
+        description: If websocket handling requires a protocol other than ws://.
+        type: string
+    type: object
+  model.Ports:
+    properties:
+      bind_to_host:
+        type: boolean
+      container_port:
+        type: integer
+      host_port:
+        type: integer
+    type: object
+  model.Step:
+    properties:
+      component:
+        $ref: '#/definitions/model.StepComponent'
+      config:
+        $ref: '#/definitions/model.StepConfig'
+      environment:
+        $ref: '#/definitions/model.StepEnvironment'
+      input:
+        items:
+          $ref: '#/definitions/model.StepInput'
+        type: array
+      log-file:
+        type: string
+      output:
+        items:
+          $ref: '#/definitions/model.StepOutput'
+        type: array
+      stderr:
+        type: string
+      stdin:
+        type: string
+      stdout:
+        type: string
+      type:
+        type: string
+    type: object
+  model.StepComponent:
+    properties:
+      container:
+        $ref: '#/definitions/model.Container'
+      description:
+        type: string
+      interactive:
+        type: boolean
+      location:
+        type: string
+      name:
+        type: string
+      restricted:
+        type: boolean
+      time_limit_seconds:
+        type: integer
+      type:
+        type: string
+    type: object
+  model.StepConfig:
+    properties:
+      input:
+        items:
+          $ref: '#/definitions/model.StepInput'
+        type: array
+      output:
+        items:
+          $ref: '#/definitions/model.StepOutput'
+        type: array
+      params:
+        items:
+          $ref: '#/definitions/model.StepParam'
+        type: array
+    type: object
+  model.StepEnvironment:
+    additionalProperties:
+      type: string
+    type: object
+  model.StepInput:
+    properties:
+      id:
+        type: string
+      multiplicity:
+        type: string
+      name:
+        type: string
+      property:
+        type: string
+      retain:
+        type: boolean
+      ticket:
+        type: string
+      type:
+        type: string
+      value:
+        type: string
+    type: object
+  model.StepOutput:
+    properties:
+      multiplicity:
+        type: string
+      name:
+        type: string
+      property:
+        type: string
+      qual-id:
+        type: string
+      retain:
+        type: boolean
+      type:
+        type: string
+    type: object
+  model.StepParam:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      order:
+        type: integer
+      path:
+        type: string
+      type:
+        type: string
+      value:
+        type: string
+    type: object
+  model.Volume:
+    properties:
+      container_path:
+        type: string
+      host_path:
+        type: string
+      mode:
+        type: string
+      read_only:
+        type: boolean
+    type: object
+  model.VolumesFrom:
+    properties:
+      auth:
+        type: string
+      container_path:
+        type: string
+      host_path:
+        type: string
+      name:
+        type: string
+      name_prefix:
+        type: string
+      read_only:
+        type: boolean
+      tag:
+        type: string
+      url:
         type: string
     type: object
   resource.Quantity:

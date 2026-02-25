@@ -1394,453 +1394,6 @@
                 }
             }
         },
-        "github_com_cyverse-de_model_v10.Container": {
-            "type": "object",
-            "properties": {
-                "container_devices": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.Device"
-                    }
-                },
-                "container_volumes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.Volume"
-                    }
-                },
-                "container_volumes_from": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.VolumesFrom"
-                    }
-                },
-                "cpu_shares": {
-                    "type": "integer"
-                },
-                "entrypoint": {
-                    "type": "string"
-                },
-                "gpu_models": {
-                    "description": "A list of acceptable GPU models. Empty means no limitation.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "id": {
-                    "type": "string"
-                },
-                "image": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.ContainerImage"
-                },
-                "interactive_apps": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.InteractiveApps"
-                },
-                "max_cpu_cores": {
-                    "description": "The maximum number of cores the container needs.",
-                    "type": "number"
-                },
-                "max_gpus": {
-                    "description": "The maximum number of GPUs the container needs.",
-                    "type": "integer"
-                },
-                "memory_limit": {
-                    "description": "The maximum the container is allowed to have.",
-                    "type": "integer"
-                },
-                "min_cpu_cores": {
-                    "description": "The minimum number of cores the container needs.",
-                    "type": "number"
-                },
-                "min_disk_space": {
-                    "description": "The minimum amount of disk space that the container needs.",
-                    "type": "integer"
-                },
-                "min_gpus": {
-                    "description": "The minimum number of GPUs the container needs.",
-                    "type": "integer"
-                },
-                "min_memory_limit": {
-                    "description": "The minimum the container needs.",
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "network_mode": {
-                    "type": "string"
-                },
-                "pids_limit": {
-                    "type": "integer"
-                },
-                "ports": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.Ports"
-                    }
-                },
-                "skip_tmp_mount": {
-                    "type": "boolean"
-                },
-                "uid": {
-                    "type": "integer"
-                },
-                "working_directory": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.ContainerImage": {
-            "type": "object",
-            "properties": {
-                "auth": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "osg_image_path": {
-                    "type": "string"
-                },
-                "tag": {
-                    "type": "string"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.Device": {
-            "type": "object",
-            "properties": {
-                "cgroup_permissions": {
-                    "type": "string"
-                },
-                "container_path": {
-                    "type": "string"
-                },
-                "host_path": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.ExtraInfo": {
-            "type": "object",
-            "properties": {
-                "htcondor": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.HTCondorExtraInfo"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.FileMetadata": {
-            "type": "object",
-            "properties": {
-                "attr": {
-                    "type": "string"
-                },
-                "unit": {
-                    "type": "string"
-                },
-                "value": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.HTCondorExtraInfo": {
-            "type": "object",
-            "properties": {
-                "extra_requirements": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.InteractiveApps": {
-            "type": "object",
-            "properties": {
-                "backend_url": {
-                    "description": "Only used if you need to override the default backendURL, which should be\nhttp://\u003ccontainer_name\u003e.",
-                    "type": "string"
-                },
-                "cas_url": {
-                    "description": "The base URL for the CAS server.",
-                    "type": "string"
-                },
-                "cas_validate": {
-                    "description": "The path to the validate endpoint on the CAS server.",
-                    "type": "string"
-                },
-                "frontend_url": {
-                    "description": "The URL for the frontend of the application. Will get prefixed with the job\nid.",
-                    "type": "string"
-                },
-                "proxy_image": {
-                    "description": "The docker image for the reverse proxy that runs on the cluster with the\njob steps.",
-                    "type": "string"
-                },
-                "proxy_name": {
-                    "description": "The name of the container for the reverse proxy.",
-                    "type": "string"
-                },
-                "ssl_cert_path": {
-                    "description": "The path to the SSL cert file on the Condor nodes.",
-                    "type": "string"
-                },
-                "ssl_key_path": {
-                    "description": "The path to the SSL key file on the Condor nodes.",
-                    "type": "string"
-                },
-                "websocket_path": {
-                    "description": "If websocket handling requires a special path in the app. The default is to\nhave this be empty.",
-                    "type": "string"
-                },
-                "websocket_port": {
-                    "description": "If websocket handling requires a special port in the app. The default is to\nuse the same port as the backend URL.",
-                    "type": "string"
-                },
-                "websocket_proto": {
-                    "description": "If websocket handling requires a protocol other than ws://.",
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.Ports": {
-            "type": "object",
-            "properties": {
-                "bind_to_host": {
-                    "type": "boolean"
-                },
-                "container_port": {
-                    "type": "integer"
-                },
-                "host_port": {
-                    "type": "integer"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.Step": {
-            "type": "object",
-            "properties": {
-                "component": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepComponent"
-                },
-                "config": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepConfig"
-                },
-                "environment": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepEnvironment"
-                },
-                "input": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepInput"
-                    }
-                },
-                "log-file": {
-                    "type": "string"
-                },
-                "output": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepOutput"
-                    }
-                },
-                "stderr": {
-                    "type": "string"
-                },
-                "stdin": {
-                    "type": "string"
-                },
-                "stdout": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.StepComponent": {
-            "type": "object",
-            "properties": {
-                "container": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.Container"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "interactive": {
-                    "type": "boolean"
-                },
-                "location": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "restricted": {
-                    "type": "boolean"
-                },
-                "time_limit_seconds": {
-                    "type": "integer"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.StepConfig": {
-            "type": "object",
-            "properties": {
-                "input": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepInput"
-                    }
-                },
-                "output": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepOutput"
-                    }
-                },
-                "params": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.StepParam"
-                    }
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.StepEnvironment": {
-            "type": "object",
-            "additionalProperties": {
-                "type": "string"
-            }
-        },
-        "github_com_cyverse-de_model_v10.StepInput": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "multiplicity": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "property": {
-                    "type": "string"
-                },
-                "retain": {
-                    "type": "boolean"
-                },
-                "ticket": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "value": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.StepOutput": {
-            "type": "object",
-            "properties": {
-                "multiplicity": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "property": {
-                    "type": "string"
-                },
-                "qual-id": {
-                    "type": "string"
-                },
-                "retain": {
-                    "type": "boolean"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.StepParam": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "order": {
-                    "type": "integer"
-                },
-                "path": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "value": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.Volume": {
-            "type": "object",
-            "properties": {
-                "container_path": {
-                    "type": "string"
-                },
-                "host_path": {
-                    "type": "string"
-                },
-                "mode": {
-                    "type": "string"
-                },
-                "read_only": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "github_com_cyverse-de_model_v10.VolumesFrom": {
-            "type": "object",
-            "properties": {
-                "auth": {
-                    "type": "string"
-                },
-                "container_path": {
-                    "type": "string"
-                },
-                "host_path": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "name_prefix": {
-                    "type": "string"
-                },
-                "read_only": {
-                    "type": "boolean"
-                },
-                "tag": {
-                    "type": "string"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
         "httphandlers.AnalysisInClusterResponse": {
             "type": "object",
             "properties": {
@@ -1903,7 +1456,7 @@
                     "type": "integer"
                 },
                 "extra": {
-                    "$ref": "#/definitions/github_com_cyverse-de_model_v10.ExtraInfo"
+                    "$ref": "#/definitions/model.ExtraInfo"
                 },
                 "failure_count": {
                     "type": "integer"
@@ -1914,7 +1467,7 @@
                 "file-metadata": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.FileMetadata"
+                        "$ref": "#/definitions/model.FileMetadata"
                     }
                 },
                 "filter_files": {
@@ -1981,7 +1534,7 @@
                 "steps": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_cyverse-de_model_v10.Step"
+                        "$ref": "#/definitions/model.Step"
                     }
                 },
                 "submission_date": {
@@ -2461,6 +2014,453 @@
                 },
                 "request": {
                     "description": "Request is the name chosen for a request in the referenced claim.\nIf empty, everything from the claim is made available, otherwise\nonly the result of this request.\n\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "model.Container": {
+            "type": "object",
+            "properties": {
+                "container_devices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Device"
+                    }
+                },
+                "container_volumes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Volume"
+                    }
+                },
+                "container_volumes_from": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.VolumesFrom"
+                    }
+                },
+                "cpu_shares": {
+                    "type": "integer"
+                },
+                "entrypoint": {
+                    "type": "string"
+                },
+                "gpu_models": {
+                    "description": "A list of acceptable GPU models. Empty means no limitation.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "image": {
+                    "$ref": "#/definitions/model.ContainerImage"
+                },
+                "interactive_apps": {
+                    "$ref": "#/definitions/model.InteractiveApps"
+                },
+                "max_cpu_cores": {
+                    "description": "The maximum number of cores the container needs.",
+                    "type": "number"
+                },
+                "max_gpus": {
+                    "description": "The maximum number of GPUs the container needs.",
+                    "type": "integer"
+                },
+                "memory_limit": {
+                    "description": "The maximum the container is allowed to have.",
+                    "type": "integer"
+                },
+                "min_cpu_cores": {
+                    "description": "The minimum number of cores the container needs.",
+                    "type": "number"
+                },
+                "min_disk_space": {
+                    "description": "The minimum amount of disk space that the container needs.",
+                    "type": "integer"
+                },
+                "min_gpus": {
+                    "description": "The minimum number of GPUs the container needs.",
+                    "type": "integer"
+                },
+                "min_memory_limit": {
+                    "description": "The minimum the container needs.",
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "network_mode": {
+                    "type": "string"
+                },
+                "pids_limit": {
+                    "type": "integer"
+                },
+                "ports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Ports"
+                    }
+                },
+                "skip_tmp_mount": {
+                    "type": "boolean"
+                },
+                "uid": {
+                    "type": "integer"
+                },
+                "working_directory": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.ContainerImage": {
+            "type": "object",
+            "properties": {
+                "auth": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "osg_image_path": {
+                    "type": "string"
+                },
+                "tag": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.Device": {
+            "type": "object",
+            "properties": {
+                "cgroup_permissions": {
+                    "type": "string"
+                },
+                "container_path": {
+                    "type": "string"
+                },
+                "host_path": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.ExtraInfo": {
+            "type": "object",
+            "properties": {
+                "htcondor": {
+                    "$ref": "#/definitions/model.HTCondorExtraInfo"
+                }
+            }
+        },
+        "model.FileMetadata": {
+            "type": "object",
+            "properties": {
+                "attr": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.HTCondorExtraInfo": {
+            "type": "object",
+            "properties": {
+                "extra_requirements": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.InteractiveApps": {
+            "type": "object",
+            "properties": {
+                "backend_url": {
+                    "description": "Only used if you need to override the default backendURL, which should be\nhttp://\u003ccontainer_name\u003e.",
+                    "type": "string"
+                },
+                "cas_url": {
+                    "description": "The base URL for the CAS server.",
+                    "type": "string"
+                },
+                "cas_validate": {
+                    "description": "The path to the validate endpoint on the CAS server.",
+                    "type": "string"
+                },
+                "frontend_url": {
+                    "description": "The URL for the frontend of the application. Will get prefixed with the job\nid.",
+                    "type": "string"
+                },
+                "proxy_image": {
+                    "description": "The docker image for the reverse proxy that runs on the cluster with the\njob steps.",
+                    "type": "string"
+                },
+                "proxy_name": {
+                    "description": "The name of the container for the reverse proxy.",
+                    "type": "string"
+                },
+                "ssl_cert_path": {
+                    "description": "The path to the SSL cert file on the Condor nodes.",
+                    "type": "string"
+                },
+                "ssl_key_path": {
+                    "description": "The path to the SSL key file on the Condor nodes.",
+                    "type": "string"
+                },
+                "websocket_path": {
+                    "description": "If websocket handling requires a special path in the app. The default is to\nhave this be empty.",
+                    "type": "string"
+                },
+                "websocket_port": {
+                    "description": "If websocket handling requires a special port in the app. The default is to\nuse the same port as the backend URL.",
+                    "type": "string"
+                },
+                "websocket_proto": {
+                    "description": "If websocket handling requires a protocol other than ws://.",
+                    "type": "string"
+                }
+            }
+        },
+        "model.Ports": {
+            "type": "object",
+            "properties": {
+                "bind_to_host": {
+                    "type": "boolean"
+                },
+                "container_port": {
+                    "type": "integer"
+                },
+                "host_port": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.Step": {
+            "type": "object",
+            "properties": {
+                "component": {
+                    "$ref": "#/definitions/model.StepComponent"
+                },
+                "config": {
+                    "$ref": "#/definitions/model.StepConfig"
+                },
+                "environment": {
+                    "$ref": "#/definitions/model.StepEnvironment"
+                },
+                "input": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.StepInput"
+                    }
+                },
+                "log-file": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.StepOutput"
+                    }
+                },
+                "stderr": {
+                    "type": "string"
+                },
+                "stdin": {
+                    "type": "string"
+                },
+                "stdout": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.StepComponent": {
+            "type": "object",
+            "properties": {
+                "container": {
+                    "$ref": "#/definitions/model.Container"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "interactive": {
+                    "type": "boolean"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "restricted": {
+                    "type": "boolean"
+                },
+                "time_limit_seconds": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.StepConfig": {
+            "type": "object",
+            "properties": {
+                "input": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.StepInput"
+                    }
+                },
+                "output": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.StepOutput"
+                    }
+                },
+                "params": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.StepParam"
+                    }
+                }
+            }
+        },
+        "model.StepEnvironment": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "string"
+            }
+        },
+        "model.StepInput": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "multiplicity": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "property": {
+                    "type": "string"
+                },
+                "retain": {
+                    "type": "boolean"
+                },
+                "ticket": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.StepOutput": {
+            "type": "object",
+            "properties": {
+                "multiplicity": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "property": {
+                    "type": "string"
+                },
+                "qual-id": {
+                    "type": "string"
+                },
+                "retain": {
+                    "type": "boolean"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.StepParam": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "order": {
+                    "type": "integer"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.Volume": {
+            "type": "object",
+            "properties": {
+                "container_path": {
+                    "type": "string"
+                },
+                "host_path": {
+                    "type": "string"
+                },
+                "mode": {
+                    "type": "string"
+                },
+                "read_only": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "model.VolumesFrom": {
+            "type": "object",
+            "properties": {
+                "auth": {
+                    "type": "string"
+                },
+                "container_path": {
+                    "type": "string"
+                },
+                "host_path": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "name_prefix": {
+                    "type": "string"
+                },
+                "read_only": {
+                    "type": "boolean"
+                },
+                "tag": {
+                    "type": "string"
+                },
+                "url": {
                     "type": "string"
                 }
             }

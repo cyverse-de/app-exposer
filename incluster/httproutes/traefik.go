@@ -3,7 +3,7 @@ package httproutes
 import (
 	"context"
 
-	"github.com/cyverse-de/model/v9"
+	"github.com/cyverse-de/model/v10"
 	apiv1 "k8s.io/api/core/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
