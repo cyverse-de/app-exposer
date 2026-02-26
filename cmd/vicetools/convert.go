@@ -3,7 +3,7 @@ package vicetools
 import (
 	"fmt"
 
-	"github.com/cyverse-de/model/v9"
+	"github.com/cyverse-de/model/v10"
 	"github.com/google/uuid"
 )
 
@@ -166,9 +166,11 @@ func ConvertToJob(export *VICEAppExport, params LaunchParams) (*model.Job, error
 	}
 
 	job := &model.Job{
+		ID:              uuid.New().String(),
 		AppID:           export.SourceAppID,
 		AppName:         app.Name,
 		AppDescription:  app.Description,
+		Name:            fmt.Sprintf("%s-analysis", app.Name),
 		WikiURL:         app.WikiURL,
 		InvocationID:    uuid.New().String(),
 		Submitter:       params.User,

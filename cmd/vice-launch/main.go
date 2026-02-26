@@ -11,7 +11,7 @@ import (
 	"os"
 
 	"github.com/cyverse-de/app-exposer/cmd/vicetools"
-	"github.com/cyverse-de/model/v9"
+	"github.com/cyverse-de/model/v10"
 )
 
 func main() {

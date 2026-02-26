@@ -92,9 +92,12 @@ func (i *Incluster) LabelsFromJob(ctx context.Context, job *model.Job) (map[stri
 	name := []rune(job.Name)
 
 	var stringmax int
-	if len(name) >= 63 {
+	switch {
+	case len(name) == 0:
+		stringmax = 0
+	case len(name) >= 63:
 		stringmax = 62
-	} else {
+	default:
 		stringmax = len(name) - 1
 	}
 

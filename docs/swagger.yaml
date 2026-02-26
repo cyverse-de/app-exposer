@@ -514,6 +514,8 @@ definitions:
     type: object
   httphandlers.URLReadyResponse:
     properties:
+      access_url:
+        type: string
       ready:
         type: boolean
     type: object
@@ -736,10 +738,6 @@ definitions:
           BinarySI: e.g., 12Mi (12 * 2^20)
           DecimalExponent: e.g., 12e6
           DecimalSI: e.g., 12M  (12 * 10^6)
-        x-enum-descriptions:
-        - e.g., 12e6
-        - e.g., 12Mi (12 * 2^20)
-        - e.g., 12M  (12 * 10^6)
         x-enum-varnames:
         - DecimalExponent
         - BinarySI
@@ -1404,17 +1402,14 @@ paths:
         name: previous
         type: boolean
       - description: The number of seconds in the past to begin showing logs
-        format: int64
         in: query
         name: since
         type: integer
       - description: The number of seconds since the epoch to begin showing logs
-        format: int64
         in: query
         name: since-time
         type: integer
       - description: The number of lines from the end of the log to show
-        format: int64
         in: query
         name: tail-lines
         type: integer
