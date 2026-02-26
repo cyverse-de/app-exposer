@@ -280,7 +280,7 @@ func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 	output := []apiv1.Container{}
 
-	output = append(output, apiv1.Container{
+	viceProxyContainer := apiv1.Container{
 		Name:            constants.VICEProxyContainerName,
 		Image:           i.ViceProxyImage,
 		Command:         i.viceProxyCommand(job),
@@ -320,7 +320,26 @@ func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 				},
 			},
 		},
-	})
+	}
+
+	// Inject cluster config Secret as env vars if configured. The Secret
+	// provides VICE_BASE_URL so vice-proxy can derive its frontend URL at
+	// runtime, which is essential for multi-cluster deployments via Liqo.
+	if i.ClusterConfigSecretName != "" {
+		optional := true
+		viceProxyContainer.EnvFrom = []apiv1.EnvFromSource{
+			{
+				SecretRef: &apiv1.SecretEnvSource{
+					LocalObjectReference: apiv1.LocalObjectReference{
+						Name: i.ClusterConfigSecretName,
+					},
+					Optional: &optional,
+				},
+			},
+		}
+	}
+
+	output = append(output, viceProxyContainer)
 
 	if !i.UseCSIDriver {
 		output = append(output, apiv1.Container{

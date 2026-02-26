@@ -90,7 +90,8 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 }
 
 type URLReadyResponse struct {
-	Ready bool `json:"ready"`
+	Ready     bool   `json:"ready"`
+	AccessURL string `json:"access_url,omitempty"`
 }
 
 // @ID				url-ready
@@ -174,9 +175,7 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 		}
 	}
 
-	data := URLReadyResponse{
-		Ready: ingressExists && serviceExists && podReady,
-	}
+	resourcesReady := ingressExists && serviceExists && podReady
 
 	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, id)
 	if err != nil {
@@ -195,6 +194,25 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 
 	if !allowed {
 		return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("user %s cannot access analysis %s", user, analysisID))
+	}
+
+	data := URLReadyResponse{Ready: false}
+
+	// Only proceed with vice-proxy and public URL checks if k8s resources are ready.
+	if resourcesReady {
+		accessURL, err := h.incluster.GetAccessURL(ctx, id)
+		if err != nil {
+			log.Debugf("vice-proxy not reachable for %s: %v", id, err)
+			return c.JSON(http.StatusOK, data)
+		}
+
+		if err := h.incluster.CheckAccessURL(ctx, accessURL); err != nil {
+			log.Debugf("access URL not live for %s: %v", id, err)
+			return c.JSON(http.StatusOK, data)
+		}
+
+		data.Ready = true
+		data.AccessURL = accessURL
 	}
 
 	return c.JSON(http.StatusOK, data)
@@ -263,8 +281,24 @@ func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 		}
 	}
 
-	data := URLReadyResponse{
-		Ready: ingressExists && serviceExists && podReady,
+	resourcesReady := ingressExists && serviceExists && podReady
+	data := URLReadyResponse{Ready: false}
+
+	// Only proceed with vice-proxy and public URL checks if k8s resources are ready.
+	if resourcesReady {
+		accessURL, err := h.incluster.GetAccessURL(ctx, id)
+		if err != nil {
+			log.Debugf("vice-proxy not reachable for %s: %v", id, err)
+			return c.JSON(http.StatusOK, data)
+		}
+
+		if err := h.incluster.CheckAccessURL(ctx, accessURL); err != nil {
+			log.Debugf("access URL not live for %s: %v", id, err)
+			return c.JSON(http.StatusOK, data)
+		}
+
+		data.Ready = true
+		data.AccessURL = accessURL
 	}
 
 	return c.JSON(http.StatusOK, data)

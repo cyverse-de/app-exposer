@@ -116,6 +116,7 @@ func main() {
 		logLevel                             = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
 		batchExitHandlerImage                = flag.String("batch-exit-handler-image", "harbor.cyverse.org/de/batch-exit-handler:latest", "The image to use for the exitHandler in batch workflows")
 		disableViceProxyAuth                 = flag.Bool("disable-vice-proxy-auth", false, "Disable authentication in the vice-proxy sidecar. When true, allows unauthenticated access to VICE applications.")
+		clusterConfigSecret                  = flag.String("cluster-config-secret", "", "Name of a Secret to inject as env vars into the vice-proxy container via envFrom. Used to provide VICE_BASE_URL for multi-cluster deployments.")
 	)
 
 	var tracerCtx, cancel = context.WithCancel(context.Background())
@@ -366,6 +367,7 @@ func main() {
 		ImagePullSecretName:           imagePullSecretName,
 		LocalStorageClass:             *localStorageClass,
 		DisableViceProxyAuth:          *disableViceProxyAuth,
+		ClusterConfigSecretName:       *clusterConfigSecret,
 		BypassUsers:                   bypassUsers,
 	}
 

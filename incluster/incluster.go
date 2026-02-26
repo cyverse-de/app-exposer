@@ -56,6 +56,7 @@ type Init struct {
 	IngressClass                  string
 	LocalStorageClass             string
 	DisableViceProxyAuth          bool
+	ClusterConfigSecretName       string
 	NATSEncodedConn               *nats.EncodedConn
 	BypassUsers                   []string
 	TimeLimitExtensionSeconds     int64
