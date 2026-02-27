@@ -56,6 +56,8 @@ type Init struct {
 	IngressClass                  string
 	LocalStorageClass             string
 	DisableViceProxyAuth          bool
+	EnableLegacyViceProxyAuth     bool
+	CheckResourceAccessService    string // k8s service name, e.g. "check-resource-access"
 	ClusterConfigSecretName       string
 	NATSEncodedConn               *nats.EncodedConn
 	BypassUsers                   []string

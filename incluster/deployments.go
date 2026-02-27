@@ -63,6 +63,18 @@ func (i *Incluster) viceProxyCommand(job *model.Job) []string {
 		output = append(output, "--disable-auth")
 	}
 
+	// Conditionally add legacy auth flags for per-request permission checks
+	if i.EnableLegacyViceProxyAuth {
+		svcName := i.CheckResourceAccessService
+		if svcName == "" {
+			svcName = "check-resource-access"
+		}
+		output = append(output,
+			"--enable-legacy-auth",
+			"--check-resource-access-base", fmt.Sprintf("http://%s.%s", svcName, i.ViceNamespace),
+		)
+	}
+
 	return output
 }
 
