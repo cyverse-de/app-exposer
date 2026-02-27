@@ -16,6 +16,10 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// logoutHTTPClient is used for forwarding logout requests to vice-proxy
+// sidecars. It has a short timeout to avoid blocking the caller.
+var logoutHTTPClient = &http.Client{Timeout: 5 * time.Second}
+
 // JWKSCache caches JWKS keys from Keycloak
 type JWKSCache struct {
 	jwksURL     string
@@ -59,11 +63,11 @@ func (c *JWKSCache) GetKey(kid string) (*rsa.PublicKey, error) {
 }
 
 func (c *JWKSCache) refresh() error {
-	resp, err := http.Get(c.jwksURL)
+	resp, err := http.Get(c.jwksURL) //nolint:noctx // JWKS refresh has no caller-supplied context
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var jwks struct {
 		Keys []struct {
@@ -185,14 +189,14 @@ func (h *HTTPHandlers) forwardLogoutToViceProxy(externalID, logoutToken string) 
 		h.incluster.ViceNamespace,
 		constants.VICEProxyServicePort)
 
-	resp, err := http.PostForm(viceProxyURL, url.Values{
+	resp, err := logoutHTTPClient.PostForm(viceProxyURL, url.Values{
 		"logout_token": {logoutToken},
 	})
 	if err != nil {
 		log.Warnf("failed to forward logout to %s: %v", externalID, err)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Warnf("vice-proxy %s returned status %d for logout", externalID, resp.StatusCode)

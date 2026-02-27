@@ -44,7 +44,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("opening job file: %v", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		job = &model.Job{}
 		if err := json.NewDecoder(f).Decode(job); err != nil {
@@ -66,7 +66,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("opening export file: %v", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		var export vicetools.VICEAppExport
 		if err := json.NewDecoder(f).Decode(&export); err != nil {
@@ -97,9 +97,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("posting to %s: %v", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("warning: failed to read response body: %v", err)
+	}
 	fmt.Printf("HTTP %d %s\n", resp.StatusCode, resp.Status)
 	if len(respBody) > 0 {
 		fmt.Println(string(respBody))

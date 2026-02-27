@@ -16,9 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// One gibibyte.
-//const gibibyte = 1024 * 1024 * 1024
-
 // analysisPorts returns a list of container ports needed by the VICE analysis.
 func analysisPorts(step *model.Step) []apiv1.ContainerPort {
 	ports := []apiv1.ContainerPort{}
@@ -238,19 +235,6 @@ func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 		SecurityContext: &apiv1.SecurityContext{
 			RunAsUser:  constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
 			RunAsGroup: constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-			// Capabilities: &apiv1.Capabilities{
-			// 	Drop: []apiv1.Capability{
-			// 		"SETPCAP",
-			// 		"AUDIT_WRITE",
-			// 		"KILL",
-			// 		//"SETGID",
-			// 		//"SETUID",
-			// 		"SYS_CHROOT",
-			// 		"SETFCAP",
-			// 		"FSETID",
-			// 		//"MKNOD",
-			// 	},
-			// },
 		},
 		ReadinessProbe: &apiv1.Probe{
 			InitialDelaySeconds: 0,

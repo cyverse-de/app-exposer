@@ -4,10 +4,10 @@ import "time"
 
 // VICEAppExport is the top-level structure for exporting/importing VICE app definitions.
 type VICEAppExport struct {
-	ExportVersion string        `json:"export_version"`
-	ExportDate    time.Time     `json:"export_date"`
-	SourceAppID   string        `json:"source_app_id"`
-	App           AppDefinition `json:"app"`
+	ExportVersion string         `json:"export_version"`
+	ExportDate    time.Time      `json:"export_date"`
+	SourceAppID   string         `json:"source_app_id"`
+	App           AppDefinition  `json:"app"`
 	Tool          ToolDefinition `json:"tool"`
 }
 
@@ -24,18 +24,18 @@ type AppDefinition struct {
 
 // ToolDefinition contains the tool-level metadata.
 type ToolDefinition struct {
-	Name              string              `json:"name"`
-	Description       string              `json:"description"`
-	Version           string              `json:"version"`
-	Type              string              `json:"type"`
-	Interactive       bool                `json:"interactive"`
-	TimeLimitSeconds  int                 `json:"time_limit_seconds"`
-	Restricted        bool                `json:"restricted"`
-	Location          string              `json:"location,omitempty"`
-	Attribution       string              `json:"attribution,omitempty"`
-	ContainerImage    ContainerImageDef   `json:"container_image"`
+	Name              string               `json:"name"`
+	Description       string               `json:"description"`
+	Version           string               `json:"version"`
+	Type              string               `json:"type"`
+	Interactive       bool                 `json:"interactive"`
+	TimeLimitSeconds  int                  `json:"time_limit_seconds"`
+	Restricted        bool                 `json:"restricted"`
+	Location          string               `json:"location,omitempty"`
+	Attribution       string               `json:"attribution,omitempty"`
+	ContainerImage    ContainerImageDef    `json:"container_image"`
 	ContainerSettings ContainerSettingsDef `json:"container_settings"`
-	IntegrationData   IntegrationDataDef  `json:"integration_data"`
+	IntegrationData   IntegrationDataDef   `json:"integration_data"`
 }
 
 // IntegrationDataDef holds integrator information.
@@ -54,25 +54,25 @@ type ContainerImageDef struct {
 
 // ContainerSettingsDef holds container configuration.
 type ContainerSettingsDef struct {
-	CPUShares       int64              `json:"cpu_shares"`
-	MemoryLimit     int64              `json:"memory_limit"`
-	MinMemoryLimit  int64              `json:"min_memory_limit"`
-	MinCPUCores     float64            `json:"min_cpu_cores"`
-	MaxCPUCores     float64            `json:"max_cpu_cores"`
-	MinGPUs         int64              `json:"min_gpus"`
-	MaxGPUs         int64              `json:"max_gpus"`
-	MinDiskSpace    int64              `json:"min_disk_space"`
-	NetworkMode     string             `json:"network_mode,omitempty"`
+	CPUShares        int64             `json:"cpu_shares"`
+	MemoryLimit      int64             `json:"memory_limit"`
+	MinMemoryLimit   int64             `json:"min_memory_limit"`
+	MinCPUCores      float64           `json:"min_cpu_cores"`
+	MaxCPUCores      float64           `json:"max_cpu_cores"`
+	MinGPUs          int64             `json:"min_gpus"`
+	MaxGPUs          int64             `json:"max_gpus"`
+	MinDiskSpace     int64             `json:"min_disk_space"`
+	NetworkMode      string            `json:"network_mode,omitempty"`
 	WorkingDirectory string            `json:"working_directory,omitempty"`
-	EntryPoint      string             `json:"entrypoint,omitempty"`
-	UID             int                `json:"uid"`
-	SkipTmpMount    bool               `json:"skip_tmp_mount"`
-	PIDsLimit       int64              `json:"pids_limit"`
-	Ports           []PortDef          `json:"ports,omitempty"`
-	Devices         []DeviceDef        `json:"devices,omitempty"`
-	Volumes         []VolumeDef        `json:"volumes,omitempty"`
-	VolumesFrom     []VolumesFromDef   `json:"volumes_from,omitempty"`
-	ProxySettings   *ProxySettingsDef  `json:"proxy_settings,omitempty"`
+	EntryPoint       string            `json:"entrypoint,omitempty"`
+	UID              int               `json:"uid"`
+	SkipTmpMount     bool              `json:"skip_tmp_mount"`
+	PIDsLimit        int64             `json:"pids_limit"`
+	Ports            []PortDef         `json:"ports,omitempty"`
+	Devices          []DeviceDef       `json:"devices,omitempty"`
+	Volumes          []VolumeDef       `json:"volumes,omitempty"`
+	VolumesFrom      []VolumesFromDef  `json:"volumes_from,omitempty"`
+	ProxySettings    *ProxySettingsDef `json:"proxy_settings,omitempty"`
 }
 
 // PortDef describes a port mapping.
@@ -96,24 +96,24 @@ type VolumeDef struct {
 
 // VolumesFromDef describes a data container to mount volumes from.
 type VolumesFromDef struct {
-	Name         string `json:"name"`
-	Tag          string `json:"tag"`
-	URL          string `json:"url,omitempty"`
-	NamePrefix   string `json:"name_prefix,omitempty"`
-	ReadOnly     bool   `json:"read_only"`
-	HostPath     string `json:"host_path,omitempty"`
+	Name          string `json:"name"`
+	Tag           string `json:"tag"`
+	URL           string `json:"url,omitempty"`
+	NamePrefix    string `json:"name_prefix,omitempty"`
+	ReadOnly      bool   `json:"read_only"`
+	HostPath      string `json:"host_path,omitempty"`
 	ContainerPath string `json:"container_path,omitempty"`
 }
 
 // ProxySettingsDef holds interactive apps proxy configuration.
 type ProxySettingsDef struct {
-	Image        string `json:"image,omitempty"`
-	Name         string `json:"name,omitempty"`
-	FrontendURL  string `json:"frontend_url,omitempty"`
-	CASURL       string `json:"cas_url,omitempty"`
-	CASValidate  string `json:"cas_validate,omitempty"`
-	SSLCertPath  string `json:"ssl_cert_path,omitempty"`
-	SSLKeyPath   string `json:"ssl_key_path,omitempty"`
+	Image       string `json:"image,omitempty"`
+	Name        string `json:"name,omitempty"`
+	FrontendURL string `json:"frontend_url,omitempty"`
+	CASURL      string `json:"cas_url,omitempty"`
+	CASValidate string `json:"cas_validate,omitempty"`
+	SSLCertPath string `json:"ssl_cert_path,omitempty"`
+	SSLKeyPath  string `json:"ssl_key_path,omitempty"`
 }
 
 // ParameterGroupDef defines a group of parameters.
@@ -152,7 +152,7 @@ type ParameterValueDef struct {
 
 // ImportResult holds the IDs created by an import operation.
 type ImportResult struct {
-	AppID      string `json:"app_id"`
-	VersionID  string `json:"version_id"`
-	ToolID     string `json:"tool_id"`
+	AppID     string `json:"app_id"`
+	VersionID string `json:"version_id"`
+	ToolID    string `json:"tool_id"`
 }

@@ -30,7 +30,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("opening file: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var export vicetools.VICEAppExport
 	if err := json.NewDecoder(f).Decode(&export); err != nil {
@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("connecting to database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	result, err := vicetools.ImportApp(context.Background(), db, &export)
 	if err != nil {

@@ -159,7 +159,6 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	}
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
-	//app.router.Use(middleware.Logger())
 
 	ilInit := &instantlaunches.Init{
 		UserSuffix:      init.UserSuffix,

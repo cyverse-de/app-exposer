@@ -13,9 +13,9 @@ import (
 func ExportApp(ctx context.Context, db *sqlx.DB, appID string) (*VICEAppExport, error) {
 	// 1. Get the app record
 	var app struct {
-		ID          string `db:"id"`
-		Name        string `db:"name"`
-		Description string `db:"description"`
+		ID          string         `db:"id"`
+		Name        string         `db:"name"`
+		Description string         `db:"description"`
 		WikiURL     sql.NullString `db:"wiki_url"`
 	}
 	err := db.QueryRowxContext(ctx, `SELECT id, name, description, wiki_url FROM apps WHERE id = $1`, appID).StructScan(&app)
@@ -200,10 +200,10 @@ func ExportApp(ctx context.Context, db *sqlx.DB, appID string) (*VICEAppExport, 
 		ExportDate:    time.Now().UTC(),
 		SourceAppID:   appID,
 		App: AppDefinition{
-			Name:        app.Name,
-			Description: app.Description,
-			WikiURL:     app.WikiURL.String,
-			Version:     version.Version,
+			Name:            app.Name,
+			Description:     app.Description,
+			WikiURL:         app.WikiURL.String,
+			Version:         version.Version,
 			IntegrationData: *appIntData,
 			ParameterGroups: paramGroups,
 			References:      references,
@@ -280,7 +280,7 @@ func getContainerPorts(ctx context.Context, db *sqlx.DB, settingsID string) ([]P
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var ports []PortDef
 	for rows.Next() {
@@ -310,7 +310,7 @@ func getContainerDevices(ctx context.Context, db *sqlx.DB, settingsID string) ([
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var devices []DeviceDef
 	for rows.Next() {
@@ -338,7 +338,7 @@ func getContainerVolumes(ctx context.Context, db *sqlx.DB, settingsID string) ([
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var volumes []VolumeDef
 	for rows.Next() {
@@ -369,7 +369,7 @@ func getContainerVolumesFrom(ctx context.Context, db *sqlx.DB, settingsID string
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var vfs []VolumesFromDef
 	for rows.Next() {
@@ -434,12 +434,12 @@ func getParameterGroups(ctx context.Context, db *sqlx.DB, taskID string) ([]Para
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var groups []ParameterGroupDef
 	for rows.Next() {
 		var g struct {
-			ID           string        `db:"id"`
+			ID           string         `db:"id"`
 			Name         sql.NullString `db:"name"`
 			Description  sql.NullString `db:"description"`
 			Label        sql.NullString `db:"label"`
@@ -480,7 +480,7 @@ func getParameters(ctx context.Context, db *sqlx.DB, groupID string) ([]Paramete
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var params []ParameterDef
 	for rows.Next() {
@@ -539,7 +539,7 @@ func getParameterValues(ctx context.Context, db *sqlx.DB, paramID string) ([]Par
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var values []ParameterValueDef
 	for rows.Next() {
@@ -576,7 +576,7 @@ func getAppReferences(ctx context.Context, db *sqlx.DB, versionID string) ([]str
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var refs []string
 	for rows.Next() {

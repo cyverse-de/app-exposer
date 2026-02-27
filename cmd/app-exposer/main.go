@@ -73,17 +73,15 @@ func main() {
 		c          *koanf.Koanf
 		dbconn     *sqlx.DB
 
-		configPath = flag.String("config", cfg.DefaultConfigPath, "Path to the config file")
-		dotEnvPath = flag.String("dotenv-path", cfg.DefaultDotEnvPath, "Path to the dotenv file")
-		tlsCert    = flag.String("tlscert", gotelnats.DefaultTLSCertPath, "Path to the NATS TLS cert file")
-		tlsKey     = flag.String("tlskey", gotelnats.DefaultTLSKeyPath, "Path to the NATS TLS key file")
-		caCert     = flag.String("tlsca", gotelnats.DefaultTLSCAPath, "Path to the NATS TLS CA file")
-		credsPath  = flag.String("creds", gotelnats.DefaultCredsPath, "Path to the NATS creds file")
-		//maxReconnects                 = flag.Int("max-reconnects", gotelnats.DefaultMaxReconnects, "Maximum number of reconnection attempts to NATS")
-		//reconnectWait                 = flag.Int("reconnect-wait", gotelnats.DefaultReconnectWait, "Seconds to wait between reconnection attempts to NATS")
+		configPath                           = flag.String("config", cfg.DefaultConfigPath, "Path to the config file")
+		dotEnvPath                           = flag.String("dotenv-path", cfg.DefaultDotEnvPath, "Path to the dotenv file")
+		tlsCert                              = flag.String("tlscert", gotelnats.DefaultTLSCertPath, "Path to the NATS TLS cert file")
+		tlsKey                               = flag.String("tlskey", gotelnats.DefaultTLSKeyPath, "Path to the NATS TLS key file")
+		caCert                               = flag.String("tlsca", gotelnats.DefaultTLSCAPath, "Path to the NATS TLS CA file")
+		credsPath                            = flag.String("creds", gotelnats.DefaultCredsPath, "Path to the NATS creds file")
 		envPrefix                            = flag.String("env-prefix", cfg.DefaultEnvPrefix, "The prefix for environment variables")
 		namespace                            = flag.String("namespace", "default", "The namespace scope this process operates on for non-VICE calls")
-		viceNamespace                        = flag.String("vice-namespace", "vice-apps", "The namepsace that VICE apps are launched within")
+		viceNamespace                        = flag.String("vice-namespace", "vice-apps", "The namespace that VICE apps are launched within")
 		listenPort                           = flag.Int("port", 60000, "(optional) The port to listen on")
 		ingressClass                         = flag.String("ingress-class", "nginx", "(optional) the ingress class to use")
 		localStorageClass                    = flag.String("local-storage-class", "openebs-hostpath", "The storage class to use for the persistent host path volume")
@@ -153,7 +151,7 @@ func main() {
 
 	log.Infof("Reading config from %s", *configPath)
 	if _, err = os.Open(*configPath); err != nil {
-		log.Fatal(*configPath)
+		log.Fatalf("failed to open config file %s: %v", *configPath, err)
 	}
 
 	c, err = cfg.Init(&cfg.Settings{
