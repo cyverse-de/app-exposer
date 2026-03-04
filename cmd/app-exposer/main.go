@@ -115,7 +115,6 @@ func main() {
 		batchExitHandlerImage                = flag.String("batch-exit-handler-image", "harbor.cyverse.org/de/batch-exit-handler:latest", "The image to use for the exitHandler in batch workflows")
 		disableViceProxyAuth                 = flag.Bool("disable-vice-proxy-auth", false, "Disable authentication in the vice-proxy sidecar. When true, allows unauthenticated access to VICE applications.")
 		enableLegacyViceProxyAuth            = flag.Bool("enable-legacy-vice-proxy-auth", false, "Enable legacy per-request permission checks in vice-proxy instead of Keycloak UMA authorization.")
-		checkResourceAccessService           = flag.String("check-resource-access-service", "check-resource-access", "Kubernetes service name for the check-resource-access service (used with --enable-legacy-vice-proxy-auth).")
 		clusterConfigSecret                  = flag.String("cluster-config-secret", "", "Name of a Secret to inject as env vars into the vice-proxy container via envFrom. Used to provide VICE_BASE_URL for multi-cluster deployments.")
 	)
 
@@ -368,7 +367,7 @@ func main() {
 		LocalStorageClass:             *localStorageClass,
 		DisableViceProxyAuth:          *disableViceProxyAuth,
 		EnableLegacyViceProxyAuth:     *enableLegacyViceProxyAuth,
-		CheckResourceAccessService:    *checkResourceAccessService,
+		CheckResourceAccessURL:        c.String("vice.check-resource-access.url"),
 		ClusterConfigSecretName:       *clusterConfigSecret,
 		BypassUsers:                   bypassUsers,
 	}

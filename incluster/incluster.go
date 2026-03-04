@@ -57,7 +57,7 @@ type Init struct {
 	LocalStorageClass             string
 	DisableViceProxyAuth          bool
 	EnableLegacyViceProxyAuth     bool
-	CheckResourceAccessService    string // k8s service name, e.g. "check-resource-access"
+	CheckResourceAccessURL        string // Full base URL for the check-resource-access service, e.g. "http://check-resource-access.qa"
 	ClusterConfigSecretName       string
 	NATSEncodedConn               *nats.EncodedConn
 	BypassUsers                   []string

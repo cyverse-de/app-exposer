@@ -62,8 +62,6 @@ spec:
             - --log-level
             - debug
             - --enable-legacy-vice-proxy-auth
-            - --check-resource-access-service
-            - http://check-resource-access
             - --cluster-config-secret
             - "$(CLUSTER_CONFIG_SECRET)"
           env:

@@ -56,7 +56,7 @@ type ExposerAppInit struct {
 	LocalStorageClass             string
 	DisableViceProxyAuth          bool
 	EnableLegacyViceProxyAuth     bool
-	CheckResourceAccessService    string
+	CheckResourceAccessURL        string
 	ClusterConfigSecretName       string
 	BypassUsers                   []string
 }
@@ -132,7 +132,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		IngressClass:                  init.IngressClass,
 		DisableViceProxyAuth:          init.DisableViceProxyAuth,
 		EnableLegacyViceProxyAuth:     init.EnableLegacyViceProxyAuth,
-		CheckResourceAccessService:    init.CheckResourceAccessService,
+		CheckResourceAccessURL:        init.CheckResourceAccessURL,
 		ClusterConfigSecretName:       init.ClusterConfigSecretName,
 		NATSEncodedConn:               conn,
 		LocalStorageClass:             init.LocalStorageClass,

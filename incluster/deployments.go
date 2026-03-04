@@ -60,16 +60,17 @@ func (i *Incluster) viceProxyCommand(job *model.Job) []string {
 		output = append(output, "--disable-auth")
 	}
 
-	// Conditionally add legacy auth flags for per-request permission checks
+	// Conditionally add legacy auth flags for per-request permission checks.
+	// The URL is passed through directly from config; no namespace suffix is appended.
 	if i.EnableLegacyViceProxyAuth {
-		svcName := i.CheckResourceAccessService
-		if svcName == "" {
-			svcName = "check-resource-access"
+		if i.CheckResourceAccessURL == "" {
+			log.Warn("legacy vice-proxy auth enabled but vice.check-resource-access.url is not set; skipping legacy auth flags")
+		} else {
+			output = append(output,
+				"--enable-legacy-auth",
+				"--check-resource-access-base", i.CheckResourceAccessURL,
+			)
 		}
-		output = append(output,
-			"--enable-legacy-auth",
-			"--check-resource-access-base", fmt.Sprintf("http://%s.%s", svcName, i.ViceNamespace),
-		)
 	}
 
 	return output
