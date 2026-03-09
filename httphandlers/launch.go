@@ -27,16 +27,10 @@ import (
 // @Failure		500	{object}	common.ErrorResponse
 // @Router			/vice/launch [post]
 func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
-	var (
-		job *model.Job
-		err error
-	)
-
 	ctx := c.Request().Context()
 
-	job = &model.Job{}
-
-	if err = c.Bind(job); err != nil {
+	job := &model.Job{}
+	if err := c.Bind(job); err != nil {
 		return err
 	}
 
@@ -81,7 +75,32 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 		return err
 	}
 
-	// Create the deployment for the job.
+	// If a scheduler is configured, build a bundle and route to an operator.
+	// Use job.ID directly: job_steps rows don't exist yet at launch time, so
+	// GetAnalysisIDByExternalID (which joins through job_steps) would fail.
+	if h.scheduler != nil {
+		bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, job.ID)
+		if err != nil {
+			return err
+		}
+
+		operatorName, err := h.scheduler.LaunchAnalysis(ctx, bundle)
+		if err != nil {
+			return err
+		}
+
+		// Record which operator is running this analysis. This is best-effort:
+		// the analysis is already running, so a failure here is non-fatal.
+		// The jobs row may not be visible yet if the caller's transaction
+		// hasn't committed by the time we reach this point.
+		if err := h.apps.SetOperatorName(ctx, job.ID, operatorName); err != nil {
+			log.Errorf("failed to set operator name for analysis %s: %v", job.ID, err)
+		}
+
+		return c.NoContent(http.StatusOK)
+	}
+
+	// Fallback: apply resources directly to the local cluster.
 	if err = h.incluster.UpsertDeployment(ctx, deployment, job); err != nil {
 		return err
 	}

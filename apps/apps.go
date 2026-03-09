@@ -263,6 +263,53 @@ func (a *Apps) SetMillicoresReserved(job *model.Job, millicores *apd.Decimal) er
 	return nil
 }
 
+const setOperatorNameStmt = `
+	UPDATE jobs
+	SET operator_name = $2
+	WHERE id = $1;
+`
+
+// SetOperatorName records which operator is running the given analysis.
+// Returns an error if no matching row exists for analysisID.
+func (a *Apps) SetOperatorName(ctx context.Context, analysisID, operatorName string) error {
+	result, err := a.DB.ExecContext(ctx, setOperatorNameStmt, analysisID, operatorName)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("no jobs row found for analysis ID %s", analysisID)
+	}
+	return nil
+}
+
+const getOperatorNameQuery = `
+	SELECT operator_name
+	FROM jobs
+	WHERE id = $1
+`
+
+// GetOperatorName returns the name of the operator running an analysis,
+// or an empty string if none is set or no row exists.
+func (a *Apps) GetOperatorName(ctx context.Context, analysisID string) (string, error) {
+	var name sql.NullString
+	err := a.DB.QueryRowContext(ctx, getOperatorNameQuery, analysisID).Scan(&name)
+	if err == sql.ErrNoRows {
+		// The analysis doesn't exist in the database; treat as no operator assigned.
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if name.Valid {
+		return name.String, nil
+	}
+	return "", nil
+}
+
 const externalIDsByStatusQuery = `
 	SELECT DISTINCT js.external_id
 	  FROM jobs j
@@ -276,16 +323,11 @@ type ExternalID struct {
 	ExternalID string `db:"external_id"`
 }
 
-// ListExternalIDsByStatus lists the external IDs of analyses based on their status.
+// ListExternalIDs lists the external IDs of analyses filtered by status and kind.
 func (a *Apps) ListExternalIDs(ctx context.Context, status constants.AnalysisStatus, kind constants.AnalysisKind) ([]string, error) {
-	var (
-		err error
-		ids []string
-	)
-
-	if err = a.DB.Select(&ids, externalIDsByStatusQuery, status, constants.Interactive); err != nil {
+	var ids []string
+	if err := a.DB.SelectContext(ctx, &ids, externalIDsByStatusQuery, status, kind); err != nil {
 		return ids, err
 	}
-
 	return ids, nil
 }
