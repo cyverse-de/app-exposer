@@ -19,6 +19,7 @@ ENV GOOS=linux
 ENV GOARCH=amd64
 
 RUN go build -ldflags='-w -s' -o app-exposer cmd/app-exposer/*.go
+RUN go build -ldflags='-w -s' -o vice-operator cmd/vice-operator/*.go
 
 # Generate swagger documentation using swag (matches Justfile)
 RUN swag init --parseDependency -g app.go -d cmd/app-exposer/,httphandlers/,common/,incluster/
@@ -28,8 +29,9 @@ FROM gcr.io/distroless/static-debian12:nonroot
 
 WORKDIR /
 
-# Copy the binary from builder
+# Copy the binaries from builder
 COPY --from=builder /build/app-exposer /app-exposer
+COPY --from=builder /build/vice-operator /vice-operator
 
 # Copy swagger documentation
 COPY --from=builder /build/docs/swagger.json /docs/swagger.json

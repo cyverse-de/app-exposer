@@ -1,9 +1,12 @@
 default: build
 
-build: docs app-exposer workflow-builder vice-export vice-import vice-launch vice-list
+build: docs app-exposer vice-operator workflow-builder vice-export vice-import vice-launch vice-list
 
 app-exposer:
     go build -o bin/app-exposer cmd/app-exposer/*.go
+
+vice-operator:
+    go build -o bin/vice-operator cmd/vice-operator/*.go
 
 workflow-builder:
     go build -o bin/workflow-builder cmd/workflow-builder/*.go
@@ -26,7 +29,13 @@ test-imageinfo:
 test-common:
     go test ./common
 
-test: test-imageinfo test-common
+test-operator:
+    go test ./operator/...
+
+test-operatorclient:
+    go test ./operatorclient/...
+
+test: test-imageinfo test-common test-operator test-operatorclient
 
 fmt-docs:
     swag fmt -g app.go -d cmd/app-exposer/,httphandlers/,common/,incluster/
@@ -39,6 +48,9 @@ clean:
     go clean
     if [ -f bin/app-exposer ]; then
         rm bin/app-exposer
+    fi
+    if [ -f bin/vice-operator ]; then
+        rm bin/vice-operator
     fi
     if [ -f bin/workflow-builder ]; then
         rm bin/workflow-builder

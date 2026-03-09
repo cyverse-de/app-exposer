@@ -11,6 +11,7 @@ import (
 	"github.com/cyverse-de/app-exposer/httphandlers"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/instantlaunches"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/outcluster"
 	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf"
@@ -156,6 +157,20 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		router:     echo.New(),
 		db:         init.db,
 		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter, jwksCache),
+	}
+
+	// Configure operator scheduler if operators are defined in config.
+	var operatorConfigs []operatorclient.OperatorConfig
+	if err := c.Unmarshal("vice.operators", &operatorConfigs); err != nil {
+		log.Warnf("could not parse operators config: %v", err)
+	}
+	if len(operatorConfigs) > 0 {
+		scheduler, err := operatorclient.NewScheduler(operatorConfigs)
+		if err != nil {
+			log.Fatalf("error creating operator scheduler: %v", err)
+		}
+		app.handlers.SetScheduler(scheduler)
+		log.Infof("operator scheduler configured with %d operators", len(operatorConfigs))
 	}
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
