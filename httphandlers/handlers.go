@@ -56,6 +56,7 @@ func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID
 		return nil
 	}
 	if operatorName == "" {
+		log.Debugf("no operator name set for analysis %s, falling back to local", analysisID)
 		return nil
 	}
 	// Scheduler may not be configured if the service is running without
@@ -67,6 +68,8 @@ func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID
 	client := h.scheduler.ClientByName(operatorName)
 	if client == nil {
 		log.Warnf("operator %q not found in scheduler for analysis %s", operatorName, analysisID)
+	} else {
+		log.Debugf("analysis %s routed to operator %q", analysisID, operatorName)
 	}
 	return client
 }

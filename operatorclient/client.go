@@ -50,6 +50,8 @@ func (c *Client) Name() string {
 func (c *Client) Capacity(ctx context.Context) (*CapacityResponse, error) {
 	reqURL := c.baseURL.JoinPath("capacity")
 
+	log.Infof("operator %s: GET %s", c.name, reqURL)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating capacity request: %w", err)
@@ -57,12 +59,14 @@ func (c *Client) Capacity(ctx context.Context) (*CapacityResponse, error) {
 
 	resp, err := c.http.Do(req)
 	if err != nil {
+		log.Errorf("operator %s: capacity request failed: %v", c.name, err)
 		return nil, fmt.Errorf("querying capacity: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		log.Errorf("operator %s: capacity returned %d: %s", c.name, resp.StatusCode, string(body))
 		return nil, fmt.Errorf("capacity returned %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -70,6 +74,10 @@ func (c *Client) Capacity(ctx context.Context) (*CapacityResponse, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&cap); err != nil {
 		return nil, fmt.Errorf("decoding capacity response: %w", err)
 	}
+
+	log.Infof("operator %s: capacity response %d (running=%d, max=%d, available=%d)",
+		c.name, resp.StatusCode, cap.RunningAnalyses, cap.MaxAnalyses, cap.AvailableSlots)
+
 	return &cap, nil
 }
 
@@ -83,6 +91,8 @@ func (c *Client) Launch(ctx context.Context, bundle *AnalysisBundle) error {
 
 	reqURL := c.baseURL.JoinPath("analyses")
 
+	log.Infof("operator %s: POST %s (analysis %s)", c.name, reqURL, bundle.AnalysisID)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("creating launch request: %w", err)
@@ -91,15 +101,18 @@ func (c *Client) Launch(ctx context.Context, bundle *AnalysisBundle) error {
 
 	resp, err := c.http.Do(req)
 	if err != nil {
+		log.Errorf("operator %s: launch request failed for analysis %s: %v", c.name, bundle.AnalysisID, err)
 		return fmt.Errorf("sending launch request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusConflict {
+		log.Infof("operator %s: launch returned 409 Conflict for analysis %s", c.name, bundle.AnalysisID)
 		return ErrCapacityExhausted
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		respBody, _ := io.ReadAll(resp.Body)
+		log.Errorf("operator %s: launch returned %d for analysis %s: %s", c.name, resp.StatusCode, bundle.AnalysisID, string(respBody))
 		return fmt.Errorf("launch returned %d: %s", resp.StatusCode, string(respBody))
 	}
 	return nil
@@ -114,20 +127,26 @@ func (c *Client) analysisURL(analysisID, subpath string) string {
 func (c *Client) Exit(ctx context.Context, analysisID string) error {
 	u := c.baseURL.JoinPath("analyses", analysisID)
 
+	log.Infof("operator %s: DELETE %s (analysis %s)", c.name, u, analysisID)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u.String(), nil)
 	if err != nil {
 		return err
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
+		log.Errorf("operator %s: exit request failed for analysis %s: %v", c.name, analysisID, err)
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		body, _ := io.ReadAll(resp.Body)
+		log.Errorf("operator %s: exit returned %d for analysis %s: %s", c.name, resp.StatusCode, analysisID, string(body))
 		return fmt.Errorf("exit returned %d: %s", resp.StatusCode, string(body))
 	}
+
+	log.Infof("operator %s: exit succeeded for analysis %s", c.name, analysisID)
 	return nil
 }
 
@@ -149,20 +168,27 @@ func (c *Client) SaveOutputFiles(ctx context.Context, analysisID string) error {
 // postAnalysisAction POSTs to an analysis sub-endpoint.
 func (c *Client) postAnalysisAction(ctx context.Context, analysisID, action string) error {
 	reqURL := c.analysisURL(analysisID, action)
+
+	log.Infof("operator %s: POST %s (analysis %s, action %s)", c.name, reqURL, analysisID, action)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, nil)
 	if err != nil {
 		return err
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
+		log.Errorf("operator %s: %s request failed for analysis %s: %v", c.name, action, analysisID, err)
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		body, _ := io.ReadAll(resp.Body)
+		log.Errorf("operator %s: %s returned %d for analysis %s: %s", c.name, action, resp.StatusCode, analysisID, string(body))
 		return fmt.Errorf("%s returned %d: %s", action, resp.StatusCode, string(body))
 	}
+
+	log.Infof("operator %s: %s succeeded for analysis %s", c.name, action, analysisID)
 	return nil
 }
 
@@ -189,12 +215,16 @@ func (c *Client) Logs(ctx context.Context, analysisID string) (json.RawMessage, 
 // getAnalysisJSON GETs a JSON response from an analysis sub-endpoint.
 func (c *Client) getAnalysisJSON(ctx context.Context, analysisID, subpath string) (json.RawMessage, error) {
 	reqURL := c.analysisURL(analysisID, subpath)
+
+	log.Debugf("operator %s: GET %s (analysis %s, query %s)", c.name, reqURL, analysisID, subpath)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
+		log.Errorf("operator %s: %s request failed for analysis %s: %v", c.name, subpath, analysisID, err)
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -204,6 +234,7 @@ func (c *Client) getAnalysisJSON(ctx context.Context, analysisID, subpath string
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		log.Errorf("operator %s: %s returned %d for analysis %s: %s", c.name, subpath, resp.StatusCode, analysisID, string(body))
 		return nil, fmt.Errorf("%s returned %d: %s", subpath, resp.StatusCode, string(body))
 	}
 	return json.RawMessage(body), nil
