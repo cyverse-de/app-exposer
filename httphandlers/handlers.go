@@ -1,6 +1,7 @@
 package httphandlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -9,14 +10,13 @@ import (
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/model/v10"
 	"github.com/labstack/echo/v4"
 	"k8s.io/client-go/kubernetes"
 )
 
 var log = common.Log
-
-var otelName = "github.com/cyverse-de/app-exposer/handlers"
 
 type AnalysisLaunch model.Analysis
 
@@ -26,6 +26,7 @@ type HTTPHandlers struct {
 	clientset    kubernetes.Interface
 	batchadapter *adapter.JEXAdapter
 	jwksCache    *JWKSCache
+	scheduler    *operatorclient.Scheduler
 }
 
 func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface, batchadapter *adapter.JEXAdapter, jwksCache *JWKSCache) *HTTPHandlers {
@@ -36,6 +37,38 @@ func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.I
 		batchadapter: batchadapter,
 		jwksCache:    jwksCache,
 	}
+}
+
+// SetScheduler configures the operator scheduler for multi-cluster routing.
+// When set, launches and lifecycle operations are routed to remote operators.
+func (h *HTTPHandlers) SetScheduler(s *operatorclient.Scheduler) {
+	h.scheduler = s
+}
+
+// operatorClientForAnalysis looks up which operator is running an analysis
+// and returns the corresponding client. Returns nil if no operator name is
+// recorded, the scheduler is not configured, or the named operator is not
+// found. Callers must treat a nil return as a fatal condition.
+func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID string) *operatorclient.Client {
+	operatorName, err := h.apps.GetOperatorName(ctx, analysisID)
+	if err != nil {
+		log.Errorf("error looking up operator for analysis %s: %v", analysisID, err)
+		return nil
+	}
+	if operatorName == "" {
+		return nil
+	}
+	// Scheduler may not be configured if the service is running without
+	// operator support (e.g. single-cluster deployments).
+	if h.scheduler == nil {
+		log.Errorf("operator name %q set for analysis %s but no scheduler is configured", operatorName, analysisID)
+		return nil
+	}
+	client := h.scheduler.ClientByName(operatorName)
+	if client == nil {
+		log.Warnf("operator %q not found in scheduler for analysis %s", operatorName, analysisID)
+	}
+	return client
 }
 
 type ExternalIDResp struct {
@@ -115,10 +148,10 @@ type AsyncData struct {
 	IPAddr     string `json:"ipAddr"`
 }
 
-// AsyncDataHandler returns data that is generately asynchronously from the job launch.
+// AsyncDataHandler returns data that is generated asynchronously from the job launch.
 //
 //	@ID				async-data
-//	@Summary		Returns data that is generately asynchronously from the job launch.
+//	@Summary		Returns data that is generated asynchronously from the job launch.
 //	@Description	Returns data that is applied to analyses outside of an API call.
 //	@Description	The returned data is not returned asynchronously, despite the name of the call.
 //	@Param			external-id	query		string	true	"External ID"
