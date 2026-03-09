@@ -79,6 +79,17 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	// Use job.ID directly: job_steps rows don't exist yet at launch time, so
 	// GetAnalysisIDByExternalID (which joins through job_steps) would fail.
 	if h.scheduler != nil {
+		// Log the current database state for this job ID before launching.
+		debugInfo, debugErr := h.apps.GetJobDebugInfo(ctx, job.ID)
+		if debugErr != nil {
+			log.Errorf("debug: failed to query job %s: %v", job.ID, debugErr)
+		} else if debugInfo == nil {
+			log.Warnf("debug: no jobs row found for ID %s before launch", job.ID)
+		} else {
+			log.Infof("debug: job %s before launch: status=%s, app_id=%s, operator_name=%v",
+				debugInfo.ID, debugInfo.Status, debugInfo.AppID, debugInfo.OperatorName)
+		}
+
 		bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, job.ID)
 		if err != nil {
 			return err
@@ -91,8 +102,6 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 
 		// Record which operator is running this analysis. This is best-effort:
 		// the analysis is already running, so a failure here is non-fatal.
-		// The jobs row may not be visible yet if the caller's transaction
-		// hasn't committed by the time we reach this point.
 		if err := h.apps.SetOperatorName(ctx, job.ID, operatorName); err != nil {
 			log.Errorf("failed to set operator name for analysis %s: %v", job.ID, err)
 		}
@@ -108,6 +117,7 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
+// URLReadyResponse indicates whether a VICE analysis is accessible and provides its URL.
 type URLReadyResponse struct {
 	Ready     bool   `json:"ready"`
 	AccessURL string `json:"access_url,omitempty"`
@@ -373,27 +383,18 @@ func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error 
 //	@Failure		500			{object}	common.ErrorResponse
 //	@Router			/vice/admin/is-deployed/analysis-id/{analysis-id} [get]
 func (h *HTTPHandlers) AdminAnalysisInClusterByID(c echo.Context) error {
-	var (
-		externalID string
-		analysisID string
-		found      bool
-		err        error
-	)
 	ctx := c.Request().Context()
-	analysisID = c.Param("analysis-id")
+	analysisID := c.Param("analysis-id")
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is not set")
 	}
-	externalID, err = h.incluster.GetExternalIDByAnalysisID(ctx, analysisID)
+	externalID, err := h.incluster.GetExternalIDByAnalysisID(ctx, analysisID)
 	if err != nil {
 		return err
 	}
-	found, err = h.incluster.IsAnalysisInCluster(ctx, externalID)
+	found, err := h.incluster.IsAnalysisInCluster(ctx, externalID)
 	if err != nil {
 		return err
 	}
-	retval := AnalysisInClusterResponse{
-		Found: found,
-	}
-	return c.JSON(http.StatusOK, retval)
+	return c.JSON(http.StatusOK, AnalysisInClusterResponse{Found: found})
 }

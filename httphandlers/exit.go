@@ -10,18 +10,18 @@ import (
 // ExitHandler terminates a VICE analysis by routing through the appropriate operator.
 // It converts an external ID to an analysis ID and delegates cleanup to the operator.
 //
-// @ID				exit
-// @Summary		Terminates a VICE analysis
-// @Description	Terminates the VICE analysis deployment and cleans up
-// @Description	resources associated with it. Does not save outputs first. Uses
-// @Description	the external-id label to find all of the objects in the configured
-// @Description	namespace associated with the job. Deletes the following objects:
-// @Description	ingresses, services, deployments, and configmaps.
-// @Param			id	path	string	true	"The external ID of the VICE analysis"
-// @Success		200
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/{id}/exit [post]
+//	@ID				exit
+//	@Summary		Terminates a VICE analysis
+//	@Description	Terminates the VICE analysis deployment and cleans up
+//	@Description	resources associated with it. Does not save outputs first. Uses
+//	@Description	the external-id label to find all of the objects in the configured
+//	@Description	namespace associated with the job. Deletes the following objects:
+//	@Description	ingresses, services, deployments, and configmaps.
+//	@Param			id	path	string	true	"The external ID of the VICE analysis"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/{id}/exit [post]
 func (h *HTTPHandlers) ExitHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	externalID := c.Param("id")
@@ -44,16 +44,16 @@ func (h *HTTPHandlers) ExitHandler(c echo.Context) error {
 // AdminExitHandler terminates a VICE analysis using the analysis ID directly,
 // without requiring external ID conversion. Intended for administrative operations.
 //
-// @ID				admin-exit
-// @Summary		Terminates a VICE analysis
-// @Description	Terminates the VICE analysis based on the analysisID and
-// @Description	and should not require any user information to be provided. Otherwise, the
-// @Description	documentation for VICEExit applies here as well.
-// @Param			analysis-id	path	string	true	"The analysis ID of the VICE analysis"
-// @Success		200
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/admin/analyses/{analysis-id}/exit [post]
+//	@ID				admin-exit
+//	@Summary		Terminates a VICE analysis
+//	@Description	Terminates the VICE analysis based on the analysisID and
+//	@Description	and should not require any user information to be provided. Otherwise, the
+//	@Description	documentation for VICEExit applies here as well.
+//	@Param			analysis-id	path	string	true	"The analysis ID of the VICE analysis"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/admin/analyses/{analysis-id}/exit [post]
 func (h *HTTPHandlers) AdminExitHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
@@ -71,17 +71,17 @@ func (h *HTTPHandlers) AdminExitHandler(c echo.Context) error {
 // SaveAndExitHandler routes a save-and-exit request to the appropriate operator,
 // which saves output files before terminating the analysis.
 //
-// @ID				save-and-exit
-// @Summary		Save files and terminate VICE analysis
-// @Description	Handles requests to save the output files in iRODS and then exit.
-// @Description	The exit portion will only occur if the save operation succeeds. The operation is
-// @Description	performed inside of a goroutine so that the caller isn't waiting for hours/days for
-// @Description	output file transfers to complete.
-// @Param			id	path	string	true	"external ID of the analysis"
-// @Success		200
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/{id}/save-and-exit [post]
+//	@ID				save-and-exit
+//	@Summary		Save files and terminate VICE analysis
+//	@Description	Handles requests to save the output files in iRODS and then exit.
+//	@Description	The exit portion will only occur if the save operation succeeds. The operation is
+//	@Description	performed inside of a goroutine so that the caller isn't waiting for hours/days for
+//	@Description	output file transfers to complete.
+//	@Param			id	path	string	true	"external ID of the analysis"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/{id}/save-and-exit [post]
 func (h *HTTPHandlers) SaveAndExitHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	externalID := c.Param("id")
@@ -104,17 +104,17 @@ func (h *HTTPHandlers) SaveAndExitHandler(c echo.Context) error {
 // AdminSaveAndExitHandler routes an admin save-and-exit request using the analysis ID directly,
 // without requiring external ID conversion. Intended for administrative operations.
 //
-// @ID				admin-save-and-exit
-// @Summary		Admin endpoint to trigger output file transfer and analysis exit
-// @Description	Handles requests to save the output files in iRODS and
-// @Description	then exit. This version of the call operates based on the analysis ID and does
-// @Description	not require user information to be required by the caller. Otherwise, the docs
-// @Description	for the VICESaveAndExit function apply here as well.
-// @Param			analysis-id	path	string	true	"Analysis ID"
-// @Success		200
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/admin/analyses/{analysis-id}/save-and-exit [post]
+//	@ID				admin-save-and-exit
+//	@Summary		Admin endpoint to trigger output file transfer and analysis exit
+//	@Description	Handles requests to save the output files in iRODS and
+//	@Description	then exit. This version of the call operates based on the analysis ID and does
+//	@Description	not require user information to be required by the caller. Otherwise, the docs
+//	@Description	for the VICESaveAndExit function apply here as well.
+//	@Param			analysis-id	path	string	true	"Analysis ID"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/admin/analyses/{analysis-id}/save-and-exit [post]
 func (h *HTTPHandlers) AdminSaveAndExitHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
@@ -141,15 +141,15 @@ type TerminateAllResponse struct {
 // It queries the database for running analyses, routes each through its appropriate handler,
 // and returns a summary of succeeded and failed terminations.
 //
-// @ID				terminate-all-analyses
-// @Summary		Terminates all analyses
-// @Description	Terminates all analyses marked as running in the DE database.
-// @Description	Does not check for analyses in the cluster but not marked as running in the database.
-// @Description	Terminates both VICE and batch analyses.
-// @Success		200	{object}	TerminateAllResponse
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/admin/terminate-all [post]
+//	@ID				terminate-all-analyses
+//	@Summary		Terminates all analyses
+//	@Description	Terminates all analyses marked as running in the DE database.
+//	@Description	Does not check for analyses in the cluster but not marked as running in the database.
+//	@Description	Terminates both VICE and batch analyses.
+//	@Success		200	{object}	TerminateAllResponse
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/admin/terminate-all [post]
 func (h *HTTPHandlers) TerminateAllAnalysesHandler(c echo.Context) error {
 	var (
 		terminatedVICE  []string

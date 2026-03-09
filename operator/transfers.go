@@ -23,12 +23,16 @@ func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
 
+	log.Infof("save-and-exit requested for analysis %s", analysisID)
+
 	// Run file transfer and cleanup asynchronously so the caller doesn't block.
 	go func() {
 		bgCtx := context.Background()
 
 		if err := o.triggerFileTransfer(bgCtx, analysisID, "/upload"); err != nil {
 			log.Errorf("upload failed for %s: %v", analysisID, err)
+		} else {
+			log.Infof("upload succeeded for analysis %s", analysisID)
 		}
 
 		if err := o.deleteAnalysisResources(bgCtx, analysisID); err != nil {
@@ -47,9 +51,13 @@ func (o *Operator) HandleDownloadInputFiles(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
 
+	log.Infof("download-input-files requested for analysis %s", analysisID)
+
 	go func() {
 		if err := o.triggerFileTransfer(context.Background(), analysisID, "/download"); err != nil {
 			log.Errorf("download failed for %s: %v", analysisID, err)
+		} else {
+			log.Infof("download succeeded for analysis %s", analysisID)
 		}
 	}()
 
@@ -64,9 +72,13 @@ func (o *Operator) HandleSaveOutputFiles(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
 
+	log.Infof("save-output-files requested for analysis %s", analysisID)
+
 	go func() {
 		if err := o.triggerFileTransfer(context.Background(), analysisID, "/upload"); err != nil {
 			log.Errorf("upload failed for %s: %v", analysisID, err)
+		} else {
+			log.Infof("upload succeeded for analysis %s", analysisID)
 		}
 	}()
 
@@ -121,9 +133,19 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 		return fmt.Errorf("unmarshalling transfer response: %w", err)
 	}
 
+	log.Infof("file transfer started for analysis %s (uuid %s)", analysisID, xferResp.UUID)
+
 	// Poll until the transfer finishes.
+	pollCount := 0
 	for xferResp.Status != "completed" && xferResp.Status != "failed" {
 		time.Sleep(5 * time.Second)
+		pollCount++
+
+		// Log progress every ~60s (every 12 iterations at 5s intervals).
+		if pollCount%12 == 0 {
+			log.Infof("file transfer in progress for analysis %s (uuid %s, %ds elapsed)",
+				analysisID, xferResp.UUID, pollCount*5)
+		}
 
 		statusURL := svcURL
 		statusURL.Path = fmt.Sprintf("%s/%s", reqpath, xferResp.UUID)
@@ -148,8 +170,10 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 	}
 
 	if xferResp.Status == "failed" {
+		log.Errorf("file transfer failed for analysis %s (uuid %s)", analysisID, xferResp.UUID)
 		return fmt.Errorf("file transfer failed for analysis %s", analysisID)
 	}
 
+	log.Infof("file transfer complete for analysis %s (uuid %s)", analysisID, xferResp.UUID)
 	return nil
 }

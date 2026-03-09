@@ -176,7 +176,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "The external ID of the VICE analysis",
+                        "description": "The analysis ID of the VICE analysis",
                         "name": "analysis-id",
                         "in": "path",
                         "required": true
@@ -226,6 +226,39 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "id parameter is empty",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/analyses/{analysis-id}/save-and-exit": {
+            "post": {
+                "description": "Handles requests to save the output files in iRODS and\nthen exit. This version of the call operates based on the analysis ID and does\nnot require user information to be required by the caller. Otherwise, the docs\nfor the VICESaveAndExit function apply here as well.",
+                "summary": "Admin endpoint to trigger output file transfer and analysis exit",
+                "operationId": "admin-save-and-exit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
@@ -335,39 +368,6 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/incluster.TimeLimit"
                         }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/vice/admin/analyses/{}/save-and-exit": {
-            "post": {
-                "description": "Handles requests to save the output files in iRODS and\nthen exit. This version of the call operates based on the analysis ID and does\nnot require user information to be required by the caller. Otherwise, the docs\nfor the VICESaveAndExit function apply here as well.",
-                "summary": "Admin endpoint to trigger output file transfer and analysis exit",
-                "operationId": "admin-save-and-exit",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Analysis ID",
-                        "name": "analysis-id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -621,7 +621,7 @@ const docTemplate = `{
         "/vice/async-data": {
             "get": {
                 "description": "Returns data that is applied to analyses outside of an API call.\nThe returned data is not returned asynchronously, despite the name of the call.",
-                "summary": "Returns data that is generately asynchronously from the job launch.",
+                "summary": "Returns data that is generated asynchronously from the job launch.",
                 "operationId": "async-data",
                 "parameters": [
                     {
@@ -1283,7 +1283,7 @@ const docTemplate = `{
         },
         "/vice/{id}/exit": {
             "post": {
-                "description": "Terminates the VICE analysis deployment and cleans up\nresources asscociated with it. Does not save outputs first. Uses\nthe external-id label to find all of the objects in the configured\nnamespace associated with the job. Deletes the following objects:\ningresses, services, deployments, and configmaps.",
+                "description": "Terminates the VICE analysis deployment and cleans up\nresources associated with it. Does not save outputs first. Uses\nthe external-id label to find all of the objects in the configured\nnamespace associated with the job. Deletes the following objects:\ningresses, services, deployments, and configmaps.",
                 "summary": "Terminates a VICE analysis",
                 "operationId": "exit",
                 "parameters": [

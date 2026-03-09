@@ -22,6 +22,9 @@ func analysisLabelSelector(analysisID string) metav1.ListOptions {
 
 // applyBundle creates or updates all K8s resources in the bundle.
 func (o *Operator) applyBundle(ctx context.Context, bundle *operatorclient.AnalysisBundle) error {
+	log.Infof("applying bundle for analysis %s (%d configmaps, %d pvs, %d pvcs)",
+		bundle.AnalysisID, len(bundle.ConfigMaps), len(bundle.PersistentVolumes), len(bundle.PersistentVolumeClaims))
+
 	// ConfigMaps
 	for _, cm := range bundle.ConfigMaps {
 		if cm == nil {
@@ -80,6 +83,7 @@ func (o *Operator) applyBundle(ctx context.Context, bundle *operatorclient.Analy
 		}
 	}
 
+	log.Infof("bundle applied for analysis %s", bundle.AnalysisID)
 	return nil
 }
 
@@ -87,8 +91,10 @@ func (o *Operator) upsertConfigMap(ctx context.Context, cm *apiv1.ConfigMap) err
 	client := o.clientset.CoreV1().ConfigMaps(o.namespace)
 	_, err := client.Get(ctx, cm.Name, metav1.GetOptions{})
 	if err != nil {
+		log.Debugf("creating ConfigMap %s", cm.Name)
 		_, err = client.Create(ctx, cm, metav1.CreateOptions{})
 	} else {
+		log.Debugf("updating ConfigMap %s", cm.Name)
 		_, err = client.Update(ctx, cm, metav1.UpdateOptions{})
 	}
 	return err
@@ -98,8 +104,10 @@ func (o *Operator) upsertPersistentVolume(ctx context.Context, pv *apiv1.Persist
 	client := o.clientset.CoreV1().PersistentVolumes()
 	_, err := client.Get(ctx, pv.Name, metav1.GetOptions{})
 	if err != nil {
+		log.Debugf("creating PersistentVolume %s", pv.Name)
 		_, err = client.Create(ctx, pv, metav1.CreateOptions{})
 	} else {
+		log.Debugf("updating PersistentVolume %s", pv.Name)
 		_, err = client.Update(ctx, pv, metav1.UpdateOptions{})
 	}
 	return err
@@ -109,8 +117,10 @@ func (o *Operator) upsertPersistentVolumeClaim(ctx context.Context, pvc *apiv1.P
 	client := o.clientset.CoreV1().PersistentVolumeClaims(o.namespace)
 	_, err := client.Get(ctx, pvc.Name, metav1.GetOptions{})
 	if err != nil {
+		log.Debugf("creating PersistentVolumeClaim %s", pvc.Name)
 		_, err = client.Create(ctx, pvc, metav1.CreateOptions{})
 	} else {
+		log.Debugf("updating PersistentVolumeClaim %s", pvc.Name)
 		_, err = client.Update(ctx, pvc, metav1.UpdateOptions{})
 	}
 	return err
@@ -120,8 +130,10 @@ func (o *Operator) upsertDeployment(ctx context.Context, dep *appsv1.Deployment)
 	client := o.clientset.AppsV1().Deployments(o.namespace)
 	_, err := client.Get(ctx, dep.Name, metav1.GetOptions{})
 	if err != nil {
+		log.Debugf("creating Deployment %s", dep.Name)
 		_, err = client.Create(ctx, dep, metav1.CreateOptions{})
 	} else {
+		log.Debugf("updating Deployment %s", dep.Name)
 		_, err = client.Update(ctx, dep, metav1.UpdateOptions{})
 	}
 	return err
@@ -131,8 +143,10 @@ func (o *Operator) upsertService(ctx context.Context, svc *apiv1.Service) error 
 	client := o.clientset.CoreV1().Services(o.namespace)
 	_, err := client.Get(ctx, svc.Name, metav1.GetOptions{})
 	if err != nil {
+		log.Debugf("creating Service %s", svc.Name)
 		_, err = client.Create(ctx, svc, metav1.CreateOptions{})
 	} else {
+		log.Debugf("updating Service %s", svc.Name)
 		_, err = client.Update(ctx, svc, metav1.UpdateOptions{})
 	}
 	return err
@@ -142,8 +156,10 @@ func (o *Operator) upsertIngress(ctx context.Context, ing *netv1.Ingress) error 
 	client := o.clientset.NetworkingV1().Ingresses(o.namespace)
 	_, err := client.Get(ctx, ing.Name, metav1.GetOptions{})
 	if err != nil {
+		log.Debugf("creating Ingress %s", ing.Name)
 		_, err = client.Create(ctx, ing, metav1.CreateOptions{})
 	} else {
+		log.Debugf("updating Ingress %s", ing.Name)
 		_, err = client.Update(ctx, ing, metav1.UpdateOptions{})
 	}
 	return err
@@ -153,8 +169,10 @@ func (o *Operator) upsertPDB(ctx context.Context, pdb *policyv1.PodDisruptionBud
 	client := o.clientset.PolicyV1().PodDisruptionBudgets(o.namespace)
 	_, err := client.Get(ctx, pdb.Name, metav1.GetOptions{})
 	if err != nil {
+		log.Debugf("creating PodDisruptionBudget %s", pdb.Name)
 		_, err = client.Create(ctx, pdb, metav1.CreateOptions{})
 	} else {
+		log.Debugf("updating PodDisruptionBudget %s", pdb.Name)
 		_, err = client.Update(ctx, pdb, metav1.UpdateOptions{})
 	}
 	return err
@@ -162,6 +180,7 @@ func (o *Operator) upsertPDB(ctx context.Context, pdb *policyv1.PodDisruptionBud
 
 // deleteAnalysisResources deletes all K8s resources matching the analysis-id label.
 func (o *Operator) deleteAnalysisResources(ctx context.Context, analysisID string) error {
+	log.Infof("deleting resources for analysis %s", analysisID)
 	opts := analysisLabelSelector(analysisID)
 
 	// Delete PDB
@@ -248,5 +267,6 @@ func (o *Operator) deleteAnalysisResources(ctx context.Context, analysisID strin
 		}
 	}
 
+	log.Infof("resources deleted for analysis %s", analysisID)
 	return nil
 }

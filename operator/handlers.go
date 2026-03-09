@@ -63,9 +63,6 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	if cap.AvailableSlots <= 0 {
-		return echo.NewHTTPError(http.StatusConflict, "operator at capacity")
-	}
 
 	var bundle operatorclient.AnalysisBundle
 	if err := c.Bind(&bundle); err != nil {
@@ -76,14 +73,23 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysisID is required")
 	}
 
+	if cap.AvailableSlots <= 0 {
+		log.Infof("launch rejected: at capacity (analysis %s)", bundle.AnalysisID)
+		return echo.NewHTTPError(http.StatusConflict, "operator at capacity")
+	}
+
+	log.Infof("launching analysis %s", bundle.AnalysisID)
+
 	// Transform the Ingress for this cluster's routing type.
 	bundle.Ingress = TransformIngress(bundle.Ingress, o.routingType, o.ingressClass)
 
 	// Apply all resources via upsert pattern.
 	if err := o.applyBundle(ctx, &bundle); err != nil {
+		log.Errorf("launch failed for analysis %s: %v", bundle.AnalysisID, err)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	log.Infof("launch succeeded for analysis %s", bundle.AnalysisID)
 	return c.JSON(http.StatusCreated, map[string]string{"analysisID": bundle.AnalysisID})
 }
 
@@ -96,10 +102,14 @@ func (o *Operator) HandleExit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
 
+	log.Infof("exiting analysis %s", analysisID)
+
 	if err := o.deleteAnalysisResources(ctx, analysisID); err != nil {
+		log.Errorf("exit failed for analysis %s: %v", analysisID, err)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	log.Infof("exit complete for analysis %s", analysisID)
 	return c.NoContent(http.StatusOK)
 }
 
@@ -130,6 +140,7 @@ type PodInfo struct {
 func (o *Operator) HandleStatus(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
+	log.Debugf("status check for analysis %s", analysisID)
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
@@ -198,6 +209,7 @@ type URLReadyResponse struct {
 func (o *Operator) HandleURLReady(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
+	log.Debugf("url-ready check for analysis %s", analysisID)
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
@@ -239,6 +251,7 @@ func (o *Operator) HandleURLReady(c echo.Context) error {
 func (o *Operator) HandlePods(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
+	log.Debugf("pods check for analysis %s", analysisID)
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
@@ -282,6 +295,7 @@ type LogEntry struct {
 func (o *Operator) HandleLogs(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
+	log.Debugf("logs request for analysis %s", analysisID)
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
@@ -326,6 +340,7 @@ func (o *Operator) HandleLogs(c echo.Context) error {
 
 // HandleListing lists all VICE resources in the operator's namespace.
 func (o *Operator) HandleListing(c echo.Context) error {
+	log.Debug("listing all VICE resources")
 	ctx := c.Request().Context()
 	viceSelector := labels.Set{"app-type": "interactive"}.AsSelector().String()
 	opts := metav1.ListOptions{LabelSelector: viceSelector}
