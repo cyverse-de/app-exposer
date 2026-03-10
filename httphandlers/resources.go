@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
@@ -364,25 +365,44 @@ func (h *HTTPHandlers) AdminFilterableResourcesHandler(c echo.Context) error {
 func (h *HTTPHandlers) AdminOperatorListingHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	merged := &reporting.ResourceInfo{}
+	merged := reporting.NewResourceInfo()
 
 	if h.scheduler == nil {
 		// No operators configured; return empty resource info.
 		return c.JSON(http.StatusOK, merged)
 	}
 
-	for _, client := range h.scheduler.Clients() {
-		info, err := client.Listing(ctx)
-		if err != nil {
-			log.Errorf("error listing analyses from operator %s: %v", client.Name(), err)
+	// Query all operators in parallel and collect results.
+	clients := h.scheduler.Clients()
+	type result struct {
+		info *reporting.ResourceInfo
+		name string
+		err  error
+	}
+	results := make([]result, len(clients))
+
+	var wg sync.WaitGroup
+	for i, client := range clients {
+		wg.Go(func() {
+			info, err := client.Listing(ctx)
+			results[i] = result{info: info, name: client.Name(), err: err}
+		})
+	}
+	wg.Wait()
+
+	for _, r := range results {
+		if r.err != nil {
+			log.Errorf("error listing analyses from operator %s: %v", r.name, r.err)
 			continue
 		}
-		merged.Deployments = append(merged.Deployments, info.Deployments...)
-		merged.Pods = append(merged.Pods, info.Pods...)
-		merged.ConfigMaps = append(merged.ConfigMaps, info.ConfigMaps...)
-		merged.Services = append(merged.Services, info.Services...)
-		merged.Ingresses = append(merged.Ingresses, info.Ingresses...)
+		merged.Deployments = append(merged.Deployments, r.info.Deployments...)
+		merged.Pods = append(merged.Pods, r.info.Pods...)
+		merged.ConfigMaps = append(merged.ConfigMaps, r.info.ConfigMaps...)
+		merged.Services = append(merged.Services, r.info.Services...)
+		merged.Ingresses = append(merged.Ingresses, r.info.Ingresses...)
 	}
+
+	reporting.SortByCreationTime(merged)
 
 	return c.JSON(http.StatusOK, merged)
 }
