@@ -14,18 +14,22 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-// @ID				launch-app
-// @Summary		Launch a VICE analysis
-// @Description	The HTTP handler that orchestrates the launching of a VICE analysis inside
-// @Description	the k8s cluster. This gets passed to the router to be associated with a route. The Job
-// @Description	is passed in as the body of the request.
-// @Accept			json
-// @Param			request						body	AnalysisLaunch	true	"The request body containing the analysis details"
-// @Param			disable-resource-tracking	query	boolean			false	"Bypass resource tracking"	default(false)
-// @Success		200
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/launch [post]
+// LaunchAppHandler orchestrates the launch of a VICE analysis: validates the job,
+// builds K8s resources, selects an operator with capacity, and records the
+// operator assignment. Idempotent — returns 200 if the analysis is already running.
+//
+//	@ID				launch-app
+//	@Summary		Launch a VICE analysis
+//	@Description	The HTTP handler that orchestrates the launching of a VICE analysis inside
+//	@Description	the k8s cluster. This gets passed to the router to be associated with a route. The Job
+//	@Description	is passed in as the body of the request.
+//	@Accept			json
+//	@Param			request						body	AnalysisLaunch	true	"The request body containing the analysis details"
+//	@Param			disable-resource-tracking	query	boolean			false	"Bypass resource tracking"	default(false)
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/launch [post]
 func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -42,6 +46,12 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	// If the deployment for this invocation ID is already in the cluster, there's nothing to do.
 	if found {
 		return c.NoContent(http.StatusOK)
+	}
+
+	// Scheduler is required for multi-cluster routing. Fail fast before doing
+	// any expensive work.
+	if h.scheduler == nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "no scheduler configured for VICE launches")
 	}
 
 	if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
@@ -75,43 +85,33 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 		return err
 	}
 
-	// If a scheduler is configured, build a bundle and route to an operator.
-	// Use job.ID directly: job_steps rows don't exist yet at launch time, so
-	// GetAnalysisIDByExternalID (which joins through job_steps) would fail.
-	if h.scheduler != nil {
-		// Log the current database state for this job ID before launching.
-		debugInfo, debugErr := h.apps.GetJobDebugInfo(ctx, job.ID)
-		if debugErr != nil {
-			log.Errorf("debug: failed to query job %s: %v", job.ID, debugErr)
-		} else if debugInfo == nil {
-			log.Warnf("debug: no jobs row found for ID %s before launch", job.ID)
-		} else {
-			log.Infof("debug: job %s before launch: status=%s, app_id=%s, operator_name=%v",
-				debugInfo.ID, debugInfo.Status, debugInfo.AppID, debugInfo.OperatorName)
-		}
-
-		bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, job.ID)
-		if err != nil {
-			return err
-		}
-
-		operatorName, err := h.scheduler.LaunchAnalysis(ctx, bundle)
-		if err != nil {
-			return err
-		}
-
-		// Record which operator is running this analysis. This is best-effort:
-		// the analysis is already running, so a failure here is non-fatal.
-		if err := h.apps.SetOperatorName(ctx, job.ID, operatorName); err != nil {
-			log.Errorf("failed to set operator name for analysis %s: %v", job.ID, err)
-		}
-
-		return c.NoContent(http.StatusOK)
+	// Log the current database state for this job ID before launching.
+	debugInfo, debugErr := h.apps.GetJobDebugInfo(ctx, job.ID)
+	if debugErr != nil {
+		log.Errorf("debug: failed to query job %s: %v", job.ID, debugErr)
+	} else if debugInfo == nil {
+		log.Warnf("debug: no jobs row found for ID %s before launch", job.ID)
+	} else {
+		log.Infof("debug: job %s before launch: status=%s, app_id=%s, operator_name=%v",
+			debugInfo.ID, debugInfo.Status, debugInfo.AppID, debugInfo.OperatorName)
 	}
 
-	// Fallback: apply resources directly to the local cluster.
-	if err = h.incluster.UpsertDeployment(ctx, deployment, job); err != nil {
+	// Build a bundle and route to an operator. Uses job.ID directly because
+	// job_steps rows don't exist yet at launch time.
+	bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, job.ID)
+	if err != nil {
 		return err
+	}
+
+	operatorName, err := h.scheduler.LaunchAnalysis(ctx, bundle)
+	if err != nil {
+		return err
+	}
+
+	// Record which operator is running this analysis. This is best-effort:
+	// the analysis is already running, so a failure here is non-fatal.
+	if err := h.apps.SetOperatorName(ctx, job.ID, operatorName); err != nil {
+		log.Errorf("failed to set operator name for analysis %s: %v", job.ID, err)
 	}
 
 	return c.NoContent(http.StatusOK)
@@ -123,27 +123,24 @@ type URLReadyResponse struct {
 	AccessURL string `json:"access_url,omitempty"`
 }
 
-// @ID				url-ready
-// @Summary		Check if a VICE app is ready for users to access it.
-// @Description	Returns whether or not a VICE app is ready
-// @Description	for users to access it. This version will check the user's permissions
-// @Description	and return an error if they aren't allowed to access the running app.
-// @Produce		json
-// @Param			user	query		string	true	"A user's username"
-// @Param			host	path		string	true	"The subdomain of the analysis. AKA the ingress name"
-// @Success		200		{object}	URLReadyResponse
-// @Failure		400		{object}	common.ErrorResponse
-// @Failure		403		{object}	common.ErrorResponse
-// @Failure		404		{object}	common.ErrorResponse
-// @Failure		500		{object}	common.ErrorResponse
-// @Router			/vice/{host}/url-ready [get]
+// URLReadyHandler checks whether the VICE analysis for the given subdomain is
+// accessible, verifying user permissions before performing the check.
+//
+//	@ID				url-ready
+//	@Summary		Check if a VICE app is ready for users to access it.
+//	@Description	Returns whether or not a VICE app is ready
+//	@Description	for users to access it. This version will check the user's permissions
+//	@Description	and return an error if they aren't allowed to access the running app.
+//	@Produce		json
+//	@Param			user	query		string	true	"A user's username"
+//	@Param			host	path		string	true	"The subdomain of the analysis. AKA the ingress name"
+//	@Success		200		{object}	URLReadyResponse
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		403		{object}	common.ErrorResponse
+//	@Failure		404		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Router			/vice/{host}/url-ready [get]
 func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
-	var (
-		ingressExists bool
-		serviceExists bool
-		podReady      bool
-	)
-
 	ctx := c.Request().Context()
 
 	user := c.QueryParam("user")
@@ -164,47 +161,38 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 
 	host := c.Param("host")
 
-	// Use the name of the ingress to retrieve the externalID
+	// GetIDFromHost queries existing ingresses, so a successful return implies the ingress exists.
 	id, err := h.incluster.GetIDFromHost(ctx, host)
 	if err != nil {
 		return err
 	}
 
-	// If getIDFromHost returns without an error, then the ingress exists
-	// since the ingresses are looked at for the host.
-	ingressExists = true
-
-	set := labels.Set(map[string]string{
-		"external-id": id,
-	})
-
 	listoptions := metav1.ListOptions{
-		LabelSelector: set.AsSelector().String(),
+		LabelSelector: labels.Set{"external-id": id}.AsSelector().String(),
 	}
 
-	// check the service existence
-	svcclient := h.clientset.CoreV1().Services(h.incluster.ViceNamespace)
-	svclist, err := svcclient.List(ctx, listoptions)
+	// Check service existence.
+	svclist, err := h.clientset.CoreV1().Services(h.incluster.ViceNamespace).List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
-	if len(svclist.Items) > 0 {
-		serviceExists = true
-	}
+	serviceExists := len(svclist.Items) > 0
 
-	// Check pod status through the deployment
-	depclient := h.clientset.AppsV1().Deployments(h.incluster.ViceNamespace)
-	deplist, err := depclient.List(ctx, listoptions)
+	// Check whether any deployment has ready replicas.
+	deplist, err := h.clientset.AppsV1().Deployments(h.incluster.ViceNamespace).List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
+	var podReady bool
 	for _, dep := range deplist.Items {
 		if dep.Status.ReadyReplicas > 0 {
 			podReady = true
+			break
 		}
 	}
 
-	resourcesReady := ingressExists && serviceExists && podReady
+	// Ingress existence is implied by GetIDFromHost succeeding above.
+	resourcesReady := serviceExists && podReady
 
 	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, id)
 	if err != nil {
@@ -247,70 +235,58 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, data)
 }
 
-// @ID				admin-url-ready
-// @Summary		Checks the status of a running VICE app in K8s
-// @Description	Handles requests to check the status of a running VICE app in K8s.
-// @Description	This will return an overall status and status for the individual containers in
-// @Description	the app's pod. Uses the state of the readiness checks in K8s, along with the
-// @Description	existence of the various resources created for the app.
-// @Produce		json
-// @Param			host	path		string	true	"The subdomain of the analysis"
-// @Success		200		{object}	URLReadyResponse
-// @Failure		400		{object}	common.ErrorResponse
-// @Failure		404		{object}	common.ErrorResponse
-// @Failure		500		{object}	common.ErrorResponse
-// @Router			/vice/admin/{host}/url-ready [get]
+// AdminURLReadyHandler checks K8s resource readiness for the given subdomain
+// without user permission checks.
+//
+//	@ID				admin-url-ready
+//	@Summary		Checks the status of a running VICE app in K8s
+//	@Description	Handles requests to check the status of a running VICE app in K8s.
+//	@Description	This will return an overall status and status for the individual containers in
+//	@Description	the app's pod. Uses the state of the readiness checks in K8s, along with the
+//	@Description	existence of the various resources created for the app.
+//	@Produce		json
+//	@Param			host	path		string	true	"The subdomain of the analysis"
+//	@Success		200		{object}	URLReadyResponse
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		404		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Router			/vice/admin/{host}/url-ready [get]
 func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
-	var (
-		ingressExists bool
-		serviceExists bool
-		podReady      bool
-	)
-
 	ctx := c.Request().Context()
 	host := c.Param("host")
 
-	// Use the name of the ingress to retrieve the externalID
+	// GetIDFromHost queries existing ingresses, so a successful return implies the ingress exists.
 	id, err := h.incluster.GetIDFromHost(ctx, host)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
 	}
 
-	// If getIDFromHost returns without an error, then the ingress exists
-	// since the ingresses are looked at for the host.
-	ingressExists = true
-
-	set := labels.Set(map[string]string{
-		"external-id": id,
-	})
-
 	listoptions := metav1.ListOptions{
-		LabelSelector: set.AsSelector().String(),
+		LabelSelector: labels.Set{"external-id": id}.AsSelector().String(),
 	}
 
-	// check the service existence
-	svcclient := h.clientset.CoreV1().Services(h.incluster.ViceNamespace)
-	svclist, err := svcclient.List(ctx, listoptions)
+	// Check service existence.
+	svclist, err := h.clientset.CoreV1().Services(h.incluster.ViceNamespace).List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
-	if len(svclist.Items) > 0 {
-		serviceExists = true
-	}
+	serviceExists := len(svclist.Items) > 0
 
-	// Check pod status through the deployment
-	depclient := h.clientset.AppsV1().Deployments(h.incluster.ViceNamespace)
-	deplist, err := depclient.List(ctx, listoptions)
+	// Check whether any deployment has ready replicas.
+	deplist, err := h.clientset.AppsV1().Deployments(h.incluster.ViceNamespace).List(ctx, listoptions)
 	if err != nil {
 		return err
 	}
+	var podReady bool
 	for _, dep := range deplist.Items {
 		if dep.Status.ReadyReplicas > 0 {
 			podReady = true
+			break
 		}
 	}
 
-	resourcesReady := ingressExists && serviceExists && podReady
+	// Ingress existence is implied by GetIDFromHost succeeding above.
+	resourcesReady := serviceExists && podReady
 	data := URLReadyResponse{Ready: false}
 
 	// Only proceed with vice-proxy and public URL checks if k8s resources are ready.
@@ -333,6 +309,7 @@ func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, data)
 }
 
+// AnalysisInClusterResponse is the response body for the in-cluster check endpoints.
 type AnalysisInClusterResponse struct {
 	Found bool `json:"found"`
 }
