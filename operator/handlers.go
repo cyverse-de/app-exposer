@@ -6,6 +6,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/operatorclient"
+	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 
@@ -44,6 +45,16 @@ func NewOperator(
 }
 
 // HandleCapacity returns the current cluster capacity.
+//
+//	@Summary		Get cluster capacity
+//	@Description	Returns the current cluster capacity including available slots,
+//	@Description	allocatable CPU/memory, and current usage.
+//	@Tags			capacity
+//	@Produce		json
+//	@Success		200	{object}	operatorclient.CapacityResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/capacity [get]
 func (o *Operator) HandleCapacity(c echo.Context) error {
 	ctx := c.Request().Context()
 	cap, err := o.capacityCalc.Calculate(ctx)
@@ -55,6 +66,20 @@ func (o *Operator) HandleCapacity(c echo.Context) error {
 
 // HandleLaunch receives an AnalysisBundle, transforms routing, and applies
 // all resources to the local cluster.
+//
+//	@Summary		Launch a VICE analysis
+//	@Description	Receives a pre-built AnalysisBundle, transforms routing for
+//	@Description	this cluster, and applies all K8s resources. Returns 409 if at capacity.
+//	@Tags			analyses
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		operatorclient.AnalysisBundle	true	"The analysis bundle to launch"
+//	@Success		201		{object}	map[string]string
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		409		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses [post]
 func (o *Operator) HandleLaunch(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -95,6 +120,16 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 
 // HandleExit deletes all K8s resources associated with an analysis by its
 // analysis-id label.
+//
+//	@Summary		Exit (delete) a VICE analysis
+//	@Description	Deletes all K8s resources associated with an analysis.
+//	@Tags			analyses
+//	@Param			analysis-id	path	string	true	"The analysis ID"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id} [delete]
 func (o *Operator) HandleExit(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
@@ -137,6 +172,18 @@ type PodInfo struct {
 }
 
 // HandleStatus returns the status of all K8s resources for an analysis.
+//
+//	@Summary		Get analysis status
+//	@Description	Returns the status of all K8s resources (deployments, pods,
+//	@Description	services, ingresses) for the given analysis.
+//	@Tags			analyses
+//	@Produce		json
+//	@Param			analysis-id	path		string	true	"The analysis ID"
+//	@Success		200			{object}	StatusResponse
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/status [get]
 func (o *Operator) HandleStatus(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
@@ -206,6 +253,18 @@ type URLReadyResponse struct {
 
 // HandleURLReady checks if deployment has ready replicas, service exists,
 // and ingress exists for the given analysis.
+//
+//	@Summary		Check if analysis URL is ready
+//	@Description	Returns whether the analysis has ready replicas, a service,
+//	@Description	and an ingress — i.e. whether its URL is accessible.
+//	@Tags			analyses
+//	@Produce		json
+//	@Param			analysis-id	path		string	true	"The analysis ID"
+//	@Success		200			{object}	URLReadyResponse
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/url-ready [get]
 func (o *Operator) HandleURLReady(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
@@ -225,6 +284,7 @@ func (o *Operator) HandleURLReady(c echo.Context) error {
 	for _, d := range deps.Items {
 		if d.Status.ReadyReplicas > 0 {
 			podReady = true
+			break
 		}
 	}
 
@@ -248,6 +308,18 @@ func (o *Operator) HandleURLReady(c echo.Context) error {
 }
 
 // HandlePods returns pod information for an analysis.
+//
+//	@Summary		Get analysis pods
+//	@Description	Returns pod name, phase, and readiness for all pods
+//	@Description	belonging to the given analysis.
+//	@Tags			analyses
+//	@Produce		json
+//	@Param			analysis-id	path		string	true	"The analysis ID"
+//	@Success		200			{array}		PodInfo
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/pods [get]
 func (o *Operator) HandlePods(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
@@ -292,6 +364,18 @@ type LogEntry struct {
 }
 
 // HandleLogs returns container logs for an analysis's pods.
+//
+//	@Summary		Get analysis logs
+//	@Description	Returns the last 5 minutes of container logs for all pods
+//	@Description	belonging to the given analysis.
+//	@Tags			analyses
+//	@Produce		json
+//	@Param			analysis-id	path		string	true	"The analysis ID"
+//	@Success		200			{array}		LogEntry
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/logs [get]
 func (o *Operator) HandleLogs(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
@@ -338,35 +422,71 @@ func (o *Operator) HandleLogs(c echo.Context) error {
 	return c.JSON(http.StatusOK, entries)
 }
 
-// HandleListing lists all VICE resources in the operator's namespace.
+// HandleListing lists all VICE resources in the operator's namespace,
+// returning full resource info (deployments, pods, configmaps, services,
+// ingresses) for aggregation by app-exposer.
+//
+//	@Summary		List running VICE analyses
+//	@Description	Returns all interactive (VICE) resources in the operator's namespace
+//	@Description	including deployments, pods, configmaps, services, and ingresses.
+//	@Tags			analyses
+//	@Produce		json
+//	@Success		200	{object}	reporting.ResourceInfo
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses [get]
 func (o *Operator) HandleListing(c echo.Context) error {
 	log.Debug("listing all VICE resources")
 	ctx := c.Request().Context()
 	viceSelector := labels.Set{"app-type": "interactive"}.AsSelector().String()
 	opts := metav1.ListOptions{LabelSelector: viceSelector}
 
+	result := &reporting.ResourceInfo{}
+
+	// Deployments
 	deps, err := o.clientset.AppsV1().Deployments(o.namespace).List(ctx, opts)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-
-	type listItem struct {
-		AnalysisID string `json:"analysisID"`
-		Name       string `json:"name"`
-		Username   string `json:"username"`
-		AppName    string `json:"appName"`
-	}
-
-	var items []listItem
 	for _, d := range deps.Items {
-		lbls := d.GetLabels()
-		items = append(items, listItem{
-			AnalysisID: lbls["analysis-id"],
-			Name:       d.Name,
-			Username:   lbls["username"],
-			AppName:    lbls["app-name"],
-		})
+		result.Deployments = append(result.Deployments, *reporting.DeploymentInfoFrom(&d))
 	}
 
-	return c.JSON(http.StatusOK, items)
+	// Pods
+	pods, err := o.clientset.CoreV1().Pods(o.namespace).List(ctx, opts)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	for _, p := range pods.Items {
+		result.Pods = append(result.Pods, *reporting.PodInfoFrom(&p))
+	}
+
+	// ConfigMaps
+	cms, err := o.clientset.CoreV1().ConfigMaps(o.namespace).List(ctx, opts)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	for _, cm := range cms.Items {
+		result.ConfigMaps = append(result.ConfigMaps, *reporting.ConfigMapInfoFrom(&cm))
+	}
+
+	// Services
+	svcs, err := o.clientset.CoreV1().Services(o.namespace).List(ctx, opts)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	for _, svc := range svcs.Items {
+		result.Services = append(result.Services, *reporting.ServiceInfoFrom(&svc))
+	}
+
+	// Ingresses
+	ings, err := o.clientset.NetworkingV1().Ingresses(o.namespace).List(ctx, opts)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	for _, ing := range ings.Items {
+		result.Ingresses = append(result.Ingresses, *reporting.IngressInfoFrom(&ing))
+	}
+
+	return c.JSON(http.StatusOK, result)
 }

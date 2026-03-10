@@ -8,23 +8,28 @@ import (
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/permissions"
+	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/labstack/echo/v4"
 )
 
+// FilteredDeploymentsResponse is the response body for the filterable deployments endpoint.
 type FilteredDeploymentsResponse struct {
 	Deployments []incluster.DeploymentInfo `json:"deployments"`
 }
 
-// @ID				filterable-deployments
-// @Summary		Lists all of the deployments.
-// @Description	Returns a filtered listing of deployments in use by VICE apps.
-// @Description	The key-value pairs in the query string are used to filter the deployments.
-// @Description	The key-value pairs are not listed as parameters.
-// @Produce		json
-// @Success		200	{object}	FilteredDeploymentsResponse
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/listing/deployments [get]
+// FilterableDeploymentsHandler returns a filtered listing of VICE deployments.
+// Query string key-value pairs are used as label filters.
+//
+//	@ID				filterable-deployments
+//	@Summary		Lists all of the deployments.
+//	@Description	Returns a filtered listing of deployments in use by VICE apps.
+//	@Description	The key-value pairs in the query string are used to filter the deployments.
+//	@Description	The key-value pairs are not listed as parameters.
+//	@Produce		json
+//	@Success		200	{object}	FilteredDeploymentsResponse
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/listing/deployments [get]
 func (h *HTTPHandlers) FilterableDeploymentsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := common.FilterMap(c.Request().URL.Query())
@@ -39,20 +44,24 @@ func (h *HTTPHandlers) FilterableDeploymentsHandler(c echo.Context) error {
 	})
 }
 
+// FilteredPodsResponse is the response body for the filterable pods endpoint.
 type FilteredPodsResponse struct {
 	Pods []incluster.PodInfo `json:"pods"`
 }
 
-// @ID				filterable-pods
-// @Summary		Returns a listing of the pods in a VICE analysis.
-// @Description	Returns a filtered listing of pods in use by VICE apps.
-// @Description	The key-value pairs in the query string are used to filter the pods.
-// @Description	The key-value pairs are not listed as parameters.
-// @Produce		json
-// @Success		200	{object}	FilteredPodsResponse
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/listing/pods [get]
+// FilterablePodsHandler returns a filtered listing of VICE pods.
+// Query string key-value pairs are used as label filters.
+//
+//	@ID				filterable-pods
+//	@Summary		Returns a listing of the pods in a VICE analysis.
+//	@Description	Returns a filtered listing of pods in use by VICE apps.
+//	@Description	The key-value pairs in the query string are used to filter the pods.
+//	@Description	The key-value pairs are not listed as parameters.
+//	@Produce		json
+//	@Success		200	{object}	FilteredPodsResponse
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/listing/pods [get]
 func (h *HTTPHandlers) FilterablePodsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := common.FilterMap(c.Request().URL.Query())
@@ -67,19 +76,23 @@ func (h *HTTPHandlers) FilterablePodsHandler(c echo.Context) error {
 	})
 }
 
+// FilteredConfigMapsResponse is the response body for the filterable configmaps endpoint.
 type FilteredConfigMapsResponse struct {
 	ConfigMaps []incluster.ConfigMapInfo `json:"configmaps"`
 }
 
-// @ID				filterable-configmaps
-// @Summary		Lists configmaps in use by VICE apps.
-// @Description	Lists configmaps in use by VICE apps. The query parameters
-// @Description	are used to filter the results and aren't listed as parameters.
-// @Produce		json
-// @Success		200	{object}	FilteredConfigMapsResponse
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/listing/configmaps [get]
+// FilterableConfigMapsHandler returns a filtered listing of VICE ConfigMaps.
+// Query string key-value pairs are used as label filters.
+//
+//	@ID				filterable-configmaps
+//	@Summary		Lists configmaps in use by VICE apps.
+//	@Description	Lists configmaps in use by VICE apps. The query parameters
+//	@Description	are used to filter the results and aren't listed as parameters.
+//	@Produce		json
+//	@Success		200	{object}	FilteredConfigMapsResponse
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/listing/configmaps [get]
 func (h *HTTPHandlers) FilterableConfigMapsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := common.FilterMap(c.Request().URL.Query())
@@ -94,19 +107,23 @@ func (h *HTTPHandlers) FilterableConfigMapsHandler(c echo.Context) error {
 	})
 }
 
+// FilteredServicesResponse is the response body for the filterable services endpoint.
 type FilteredServicesResponse struct {
 	Services []incluster.ServiceInfo `json:"services"`
 }
 
-// @ID				filterable-services
-// @Summary		Lists services in use by VICE apps.
-// @Description	Lists services in use by VICE apps. The query parameters
-// @Description	are used to filter the results and aren't listed as parameters.
-// @Produce		json
-// @Success		200	{object}	FilteredServicesResponse
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/listing/services [get]
+// FilterableServicesHandler returns a filtered listing of VICE Services.
+// Query string key-value pairs are used as label filters.
+//
+//	@ID				filterable-services
+//	@Summary		Lists services in use by VICE apps.
+//	@Description	Lists services in use by VICE apps. The query parameters
+//	@Description	are used to filter the results and aren't listed as parameters.
+//	@Produce		json
+//	@Success		200	{object}	FilteredServicesResponse
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/listing/services [get]
 func (h *HTTPHandlers) FilterableServicesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := common.FilterMap(c.Request().URL.Query())
@@ -121,19 +138,23 @@ func (h *HTTPHandlers) FilterableServicesHandler(c echo.Context) error {
 	})
 }
 
+// FilteredIngressesResponse is the response body for the filterable ingresses endpoint.
 type FilteredIngressesResponse struct {
 	Ingresses []incluster.IngressInfo `json:"ingresses"`
 }
 
-// @ID				filterable-ingresses
-// @Summary		Lists ingresses in use by VICE apps.
-// @Description	Lists ingresses in use by VICE apps. The query parameters
-// @Description	are used to filter the results and aren't listed as parameters.
-// @Produce		json
-// @Success		200	{object}	FilteredIngressesResponse
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/listing/ingresses [get]
+// FilterableIngressesHandler returns a filtered listing of VICE Ingresses.
+// Query string key-value pairs are used as label filters.
+//
+//	@ID				filterable-ingresses
+//	@Summary		Lists ingresses in use by VICE apps.
+//	@Description	Lists ingresses in use by VICE apps. The query parameters
+//	@Description	are used to filter the results and aren't listed as parameters.
+//	@Produce		json
+//	@Success		200	{object}	FilteredIngressesResponse
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/listing/ingresses [get]
 func (h *HTTPHandlers) FilterableIngressesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := common.FilterMap(c.Request().URL.Query())
@@ -148,15 +169,18 @@ func (h *HTTPHandlers) FilterableIngressesHandler(c echo.Context) error {
 	})
 }
 
-// @ID				admin-describe-analysis
-// @Summary		Lists resources by subdomain
-// @Description	Returns a listing entry for a single analysis
-// @Description	associated with the host/subdomain passed in as 'host' from the URL.
-// @Param			host	path		string	true	"Host/Subdomain"
-// @Success		200		{object}	incluster.ResourceInfo
-// @Failure		400		{object}	common.ErrorResponse
-// @Failure		500		{object}	common.ErrorResponse
-// @Router			/vice/admin/{host}/description [get]
+// AdminDescribeAnalysisHandler returns the K8s resource listing for the
+// analysis whose subdomain matches the 'host' path parameter.
+//
+//	@ID				admin-describe-analysis
+//	@Summary		Lists resources by subdomain
+//	@Description	Returns a listing entry for a single analysis
+//	@Description	associated with the host/subdomain passed in as 'host' from the URL.
+//	@Param			host	path		string	true	"Host/Subdomain"
+//	@Success		200		{object}	incluster.ResourceInfo
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Router			/vice/admin/{host}/description [get]
 func (h *HTTPHandlers) AdminDescribeAnalysisHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	host := c.Param("host")
@@ -172,31 +196,32 @@ func (h *HTTPHandlers) AdminDescribeAnalysisHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, listing)
 }
 
-// @ID				describe-analysis
-// @Summary		Returns resources by user and subdomain.
-// @Description	Returns a listing entry for a single analysis associated
-// @Description	with the host/subdomain passed in as 'host' from the URL.
-// @Description	The user passed in must have access to the VICE analysis.
-// @Produce		json
-// @Param			user	query		string	true	"username"
-// @Param			host	path		string	tru		"subdomain"
-// @Success		200		{object}	incluster.ResourceInfo
-// @Failure		400		{object}	common.ErrorResponse
-// @Failure		403		{object}	common.ErrorResponse
-// @Failure		404		{object}	common.ErrorResponse
-// @Failure		500		{object}	common.ErrorResponse
-// @Router			/vice/{host}/description [get]
+// DescribeAnalysisHandler returns the K8s resource listing for the analysis
+// matching the given subdomain, checking that the requesting user has permission
+// to access it.
+//
+//	@ID				describe-analysis
+//	@Summary		Returns resources by user and subdomain.
+//	@Description	Returns a listing entry for a single analysis associated
+//	@Description	with the host/subdomain passed in as 'host' from the URL.
+//	@Description	The user passed in must have access to the VICE analysis.
+//	@Produce		json
+//	@Param			user	query		string	true	"username"
+//	@Param			host	path		string	true	"subdomain"
+//	@Success		200		{object}	incluster.ResourceInfo
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		403		{object}	common.ErrorResponse
+//	@Failure		404		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Router			/vice/{host}/description [get]
 func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	log.Info("in DescribeAnalysisHandler")
 	host := c.Param("host")
 	user := c.QueryParam("user")
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter must be set")
 	}
-
-	log.Infof("user: %s, user suffix: %s, host: %s", user, h.incluster.UserSuffix, host)
 
 	// Since some usernames don't come through the labelling process unscathed, we have to use
 	// the user ID.
@@ -208,8 +233,6 @@ func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 		}
 		return err
 	}
-
-	log.Infof("2 user: %s, user suffix: %s, host: %s", user, h.incluster.UserSuffix, host)
 
 	filter := map[string]string{
 		"subdomain": host,
@@ -249,20 +272,24 @@ func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, listing)
 }
 
-// @ID				filterable-resources
-// @Summary		Returns resources for a VICE analysis
-// @Description	Returns all of the k8s resources associated with a VICE analysis
-// @Description	but checks permissions to see if the requesting user has permission
-// @Description	to access the resource. The rest of the query map is used to filter
-// @Description	resources returned from the handler.
-// @Produce		json
-// @Param			user	query		string	true	"username"
-// @Success		200		{object}	incluster.ResourceInfo
-// @Failure		400		{object}	common.ErrorResponse
-// @Failure		403		{object}	common.ErrorResponse
-// @Failure		404		{object}	common.ErrorResponse
-// @Failure		500		{object}	common.ErrorResponse
-// @Router			/vice/listing [get]
+// FilterableResourcesHandler returns all K8s resources for the requesting user's
+// VICE analyses, filtered by query string parameters. Requires a valid 'user'
+// query parameter.
+//
+//	@ID				filterable-resources
+//	@Summary		Returns resources for a VICE analysis
+//	@Description	Returns all of the k8s resources associated with a VICE analysis
+//	@Description	but checks permissions to see if the requesting user has permission
+//	@Description	to access the resource. The rest of the query map is used to filter
+//	@Description	resources returned from the handler.
+//	@Produce		json
+//	@Param			user	query		string	true	"username"
+//	@Success		200		{object}	incluster.ResourceInfo
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		403		{object}	common.ErrorResponse
+//	@Failure		404		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Router			/vice/listing [get]
 func (h *HTTPHandlers) FilterableResourcesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	user := c.QueryParam("user")
@@ -296,15 +323,18 @@ func (h *HTTPHandlers) FilterableResourcesHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, listing)
 }
 
-// @ID				admin-filterable-resources
-// @Summary		Lists resources based on a filter
-// @Description	Returns k8s resources in the cluster based on the filter. The query
-// @Description	parameters are used as the filter and are not listed as params here.
-// @Produce		json
-// @Success		200	{object}	incluster.ResourceInfo
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/admin/listing [get]
+// AdminFilterableResourcesHandler returns K8s resources filtered by query string
+// parameters without requiring user authentication.
+//
+//	@ID				admin-filterable-resources
+//	@Summary		Lists resources based on a filter
+//	@Description	Returns k8s resources in the cluster based on the filter. The query
+//	@Description	parameters are used as the filter and are not listed as params here.
+//	@Produce		json
+//	@Success		200	{object}	incluster.ResourceInfo
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/admin/listing [get]
 func (h *HTTPHandlers) AdminFilterableResourcesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	filter := common.FilterMap(c.Request().URL.Query())
@@ -317,23 +347,67 @@ func (h *HTTPHandlers) AdminFilterableResourcesHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, listing)
 }
 
+// AdminOperatorListingHandler returns an aggregated listing of all running VICE
+// analyses across all configured operators. Returns full resource info
+// (deployments, pods, configmaps, services, ingresses) merged from all
+// clusters. Partial results are returned if some operators are unreachable.
+//
+//	@ID				admin-operator-listing
+//	@Summary		Lists running analyses across all operators
+//	@Description	Aggregates the listing endpoints of all configured operators
+//	@Description	and returns combined resource info. Errors for individual
+//	@Description	operators are logged but do not prevent partial results.
+//	@Produce		json
+//	@Success		200	{object}	reporting.ResourceInfo
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/admin/operator-listing [get]
+func (h *HTTPHandlers) AdminOperatorListingHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	merged := &reporting.ResourceInfo{}
+
+	if h.scheduler == nil {
+		// No operators configured; return empty resource info.
+		return c.JSON(http.StatusOK, merged)
+	}
+
+	for _, client := range h.scheduler.Clients() {
+		info, err := client.Listing(ctx)
+		if err != nil {
+			log.Errorf("error listing analyses from operator %s: %v", client.Name(), err)
+			continue
+		}
+		merged.Deployments = append(merged.Deployments, info.Deployments...)
+		merged.Pods = append(merged.Pods, info.Pods...)
+		merged.ConfigMaps = append(merged.ConfigMaps, info.ConfigMaps...)
+		merged.Services = append(merged.Services, info.Services...)
+		merged.Ingresses = append(merged.Ingresses, info.Ingresses...)
+	}
+
+	return c.JSON(http.StatusOK, merged)
+}
+
+// ListPodsResponse is the response body for the pods listing endpoint.
 type ListPodsResponse struct {
 	Pods []incluster.RetPod `json:"pods"`
 }
 
-// @ID				list-pods
-// @Summary		Lists the k8s pods associated with the provided external-id
-// @Description	Lists the k8s pods associated with the provided external-id. For now
-// @Description	just returns pod info in the format `{"pods" : [{}]}`
-// @Produce		json
-// @Param			analysis-id	path		string	true	"Analysis ID"
-// @Param			user		query		string	true	"Username"
-// @Success		200			{object}	ListPodsResponse
-// @Failure		400			{object}	common.ErrorResponse
-// @Failure		403			{object}	common.ErrorResponse
-// @Failure		404			{object}	common.ErrorResponse
-// @Failure		500			{object}	common.ErrorResponse
-// @Router			/vice/{analysis-id}/pods [get]
+// PodsHandler lists the K8s pods associated with the given analysis ID for the
+// requesting user.
+//
+//	@ID				list-pods
+//	@Summary		Lists the k8s pods associated with the provided external-id
+//	@Description	Lists the k8s pods associated with the provided external-id. For now
+//	@Description	just returns pod info in the format `{"pods" : [{}]}`
+//	@Produce		json
+//	@Param			analysis-id	path		string	true	"Analysis ID"
+//	@Param			user		query		string	true	"Username"
+//	@Success		200			{object}	ListPodsResponse
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		403			{object}	common.ErrorResponse
+//	@Failure		404			{object}	common.ErrorResponse
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Router			/vice/{analysis-id}/pods [get]
 func (h *HTTPHandlers) PodsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 

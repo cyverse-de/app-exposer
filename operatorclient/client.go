@@ -11,6 +11,7 @@ import (
 	"net/url"
 
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -23,9 +24,11 @@ var ErrCapacityExhausted = errors.New("operator at capacity")
 
 // Client communicates with a single vice-operator instance via HTTP.
 type Client struct {
-	name    string
-	baseURL *url.URL
-	http    *http.Client
+	name     string
+	baseURL  *url.URL
+	http     *http.Client
+	username string
+	password string
 }
 
 // NewClient creates a new operator Client from an OperatorConfig.
@@ -35,10 +38,19 @@ func NewClient(cfg OperatorConfig) (*Client, error) {
 		return nil, fmt.Errorf("parsing operator URL %q: %w", cfg.URL, err)
 	}
 	return &Client{
-		name:    cfg.Name,
-		baseURL: u,
-		http:    &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		name:     cfg.Name,
+		baseURL:  u,
+		http:     &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		username: cfg.Username,
+		password: cfg.Password,
 	}, nil
+}
+
+// setAuth adds basic auth credentials to the request when configured.
+func (c *Client) setAuth(req *http.Request) {
+	if c.username != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
 }
 
 // Name returns the operator's configured name.
@@ -56,6 +68,7 @@ func (c *Client) Capacity(ctx context.Context) (*CapacityResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating capacity request: %w", err)
 	}
+	c.setAuth(req)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -65,7 +78,7 @@ func (c *Client) Capacity(ctx context.Context) (*CapacityResponse, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
 		log.Errorf("operator %s: capacity returned %d: %s", c.name, resp.StatusCode, string(body))
 		return nil, fmt.Errorf("capacity returned %d: %s", resp.StatusCode, string(body))
 	}
@@ -98,6 +111,7 @@ func (c *Client) Launch(ctx context.Context, bundle *AnalysisBundle) error {
 		return fmt.Errorf("creating launch request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	c.setAuth(req)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -111,7 +125,7 @@ func (c *Client) Launch(ctx context.Context, bundle *AnalysisBundle) error {
 		return ErrCapacityExhausted
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
 		log.Errorf("operator %s: launch returned %d for analysis %s: %s", c.name, resp.StatusCode, bundle.AnalysisID, string(respBody))
 		return fmt.Errorf("launch returned %d: %s", resp.StatusCode, string(respBody))
 	}
@@ -133,6 +147,8 @@ func (c *Client) Exit(ctx context.Context, analysisID string) error {
 	if err != nil {
 		return err
 	}
+	c.setAuth(req)
+
 	resp, err := c.http.Do(req)
 	if err != nil {
 		log.Errorf("operator %s: exit request failed for analysis %s: %v", c.name, analysisID, err)
@@ -141,7 +157,7 @@ func (c *Client) Exit(ctx context.Context, analysisID string) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
 		log.Errorf("operator %s: exit returned %d for analysis %s: %s", c.name, resp.StatusCode, analysisID, string(body))
 		return fmt.Errorf("exit returned %d: %s", resp.StatusCode, string(body))
 	}
@@ -175,6 +191,8 @@ func (c *Client) postAnalysisAction(ctx context.Context, analysisID, action stri
 	if err != nil {
 		return err
 	}
+	c.setAuth(req)
+
 	resp, err := c.http.Do(req)
 	if err != nil {
 		log.Errorf("operator %s: %s request failed for analysis %s: %v", c.name, action, analysisID, err)
@@ -183,13 +201,64 @@ func (c *Client) postAnalysisAction(ctx context.Context, analysisID, action stri
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
 		log.Errorf("operator %s: %s returned %d for analysis %s: %s", c.name, action, resp.StatusCode, analysisID, string(body))
 		return fmt.Errorf("%s returned %d: %s", action, resp.StatusCode, string(body))
 	}
 
 	log.Infof("operator %s: %s succeeded for analysis %s", c.name, action, analysisID)
 	return nil
+}
+
+// Listing returns full resource info for all running VICE analyses from
+// this operator's cluster.
+func (c *Client) Listing(ctx context.Context) (*reporting.ResourceInfo, error) {
+	reqURL := c.baseURL.JoinPath("analyses")
+
+	log.Debugf("operator %s: GET %s (listing)", c.name, reqURL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating listing request: %w", err)
+	}
+	c.setAuth(req)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("querying listing: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		return nil, fmt.Errorf("listing returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var info reporting.ResourceInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, fmt.Errorf("decoding listing response: %w", err)
+	}
+
+	return &info, nil
+}
+
+// HasAnalysis checks whether this operator's cluster has the given analysis
+// by calling the status endpoint and checking for deployments.
+func (c *Client) HasAnalysis(ctx context.Context, analysisID string) (bool, error) {
+	raw, err := c.getAnalysisJSON(ctx, analysisID, "status")
+	if err != nil {
+		return false, err
+	}
+
+	// Decode just enough to check for deployments.
+	var status struct {
+		Deployments []json.RawMessage `json:"deployments"`
+	}
+	if err := json.Unmarshal(raw, &status); err != nil {
+		return false, fmt.Errorf("decoding status response: %w", err)
+	}
+
+	return len(status.Deployments) > 0, nil
 }
 
 // Status queries the resource status for an analysis from the operator.
@@ -222,6 +291,8 @@ func (c *Client) getAnalysisJSON(ctx context.Context, analysisID, subpath string
 	if err != nil {
 		return nil, err
 	}
+	c.setAuth(req)
+
 	resp, err := c.http.Do(req)
 	if err != nil {
 		log.Errorf("operator %s: %s request failed for analysis %s: %v", c.name, subpath, analysisID, err)
