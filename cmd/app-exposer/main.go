@@ -196,6 +196,16 @@ func main() {
 		log.Fatal("The harbor.pass setting must be specified in the config file")
 	}
 
+	viceDomain := c.String("vice.domain")
+	if viceDomain == "" {
+		log.Fatal("The vice.domain setting must be specified in the configuration file")
+	}
+
+	viceGatewayProvider := c.String("vice.gateway_provider")
+	if viceGatewayProvider == "" {
+		log.Fatal("The vice.gateway_provider setting must be specified in the configuration file")
+	}
+
 	setter := func(unparsedQuantity string, setFn func(qn resourcev1.Quantity)) {
 		v, err := resourcev1.ParseQuantity(unparsedQuantity)
 		if err != nil {
