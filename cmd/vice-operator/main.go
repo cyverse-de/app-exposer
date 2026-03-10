@@ -29,6 +29,9 @@ func main() {
 		maxAnalyses       int
 		nodeLabelSelector string
 		logLevel          string
+		basicAuth         bool
+		basicAuthUsername string
+		basicAuthPassword string
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -39,7 +42,15 @@ func main() {
 	flag.IntVar(&maxAnalyses, "max-analyses", 50, "Max concurrent analyses")
 	flag.StringVar(&nodeLabelSelector, "node-label-selector", "", "Filter schedulable nodes by label")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level")
+	flag.BoolVar(&basicAuth, "basic-auth", false, "Enable basic auth for the API")
+	flag.StringVar(&basicAuthUsername, "basic-auth-username", "", "Basic auth username (required when --basic-auth is set)")
+	flag.StringVar(&basicAuthPassword, "basic-auth-password", "", "Basic auth password (required when --basic-auth is set)")
 	flag.Parse()
+
+	// Validate basic auth flags.
+	if basicAuth && (basicAuthUsername == "" || basicAuthPassword == "") {
+		log.Fatal("--basic-auth-username and --basic-auth-password are required when --basic-auth is enabled")
+	}
 
 	// Configure log level.
 	level, err := logrus.ParseLevel(logLevel)
@@ -72,7 +83,7 @@ func main() {
 	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
 	op := operator.NewOperator(clientset, namespace, rt, ingressClass, capacityCalc)
 
-	app := NewApp(op)
+	app := NewApp(op, basicAuth, basicAuthUsername, basicAuthPassword)
 	listenAddr := fmt.Sprintf(":%d", port)
 	log.Infof("vice-operator listening on %s (namespace=%s, routing=%s, ingress-class=%s, max-analyses=%d)",
 		listenAddr, namespace, routingType, ingressClass, maxAnalyses)

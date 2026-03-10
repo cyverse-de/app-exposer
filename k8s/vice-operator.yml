@@ -25,7 +25,7 @@ spec:
             - "--port=60001"
             - "--routing-type=nginx"
             - "--ingress-class=nginx"
-            - "--max-analyses=5"
+            - "--max-analyses=100"
           ports:
             - containerPort: 60001
               name: http

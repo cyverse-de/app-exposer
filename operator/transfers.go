@@ -17,6 +17,16 @@ const fileTransfersPort = int32(60001)
 
 // HandleSaveAndExit triggers the file transfer sidecar to upload outputs,
 // then deletes all analysis resources.
+//
+//	@Summary		Save outputs and exit
+//	@Description	Triggers the file-transfer sidecar to upload output files,
+//	@Description	then deletes all K8s resources for the analysis. Runs asynchronously.
+//	@Tags			transfers
+//	@Param			analysis-id	path	string	true	"The analysis ID"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/save-and-exit [post]
 func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 	analysisID := c.Param("analysis-id")
 	if analysisID == "" {
@@ -26,6 +36,8 @@ func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 	log.Infof("save-and-exit requested for analysis %s", analysisID)
 
 	// Run file transfer and cleanup asynchronously so the caller doesn't block.
+	// A fresh background context is used because the HTTP request context will
+	// be cancelled once this handler returns, which would abort the transfer.
 	go func() {
 		bgCtx := context.Background()
 
@@ -45,6 +57,16 @@ func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 
 // HandleDownloadInputFiles triggers the file-transfer sidecar to download
 // input files for an analysis.
+//
+//	@Summary		Download input files
+//	@Description	Triggers the file-transfer sidecar to download input files
+//	@Description	for the analysis. Runs asynchronously.
+//	@Tags			transfers
+//	@Param			analysis-id	path	string	true	"The analysis ID"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/download-input-files [post]
 func (o *Operator) HandleDownloadInputFiles(c echo.Context) error {
 	analysisID := c.Param("analysis-id")
 	if analysisID == "" {
@@ -53,6 +75,7 @@ func (o *Operator) HandleDownloadInputFiles(c echo.Context) error {
 
 	log.Infof("download-input-files requested for analysis %s", analysisID)
 
+	// Use a fresh context: the HTTP request context cancels when this handler returns.
 	go func() {
 		if err := o.triggerFileTransfer(context.Background(), analysisID, "/download"); err != nil {
 			log.Errorf("download failed for %s: %v", analysisID, err)
@@ -66,6 +89,16 @@ func (o *Operator) HandleDownloadInputFiles(c echo.Context) error {
 
 // HandleSaveOutputFiles triggers the file-transfer sidecar to upload
 // output files for an analysis.
+//
+//	@Summary		Save output files
+//	@Description	Triggers the file-transfer sidecar to upload output files
+//	@Description	for the analysis. Runs asynchronously.
+//	@Tags			transfers
+//	@Param			analysis-id	path	string	true	"The analysis ID"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/save-output-files [post]
 func (o *Operator) HandleSaveOutputFiles(c echo.Context) error {
 	analysisID := c.Param("analysis-id")
 	if analysisID == "" {
@@ -74,6 +107,7 @@ func (o *Operator) HandleSaveOutputFiles(c echo.Context) error {
 
 	log.Infof("save-output-files requested for analysis %s", analysisID)
 
+	// Use a fresh context: the HTTP request context cancels when this handler returns.
 	go func() {
 		if err := o.triggerFileTransfer(context.Background(), analysisID, "/upload"); err != nil {
 			log.Errorf("upload failed for %s: %v", analysisID, err)
@@ -116,7 +150,7 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode < 200 || resp.StatusCode > 399 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("transfer request returned %d", resp.StatusCode)
 	}
 
@@ -147,8 +181,8 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 				analysisID, xferResp.UUID, pollCount*5)
 		}
 
-		statusURL := svcURL
-		statusURL.Path = fmt.Sprintf("%s/%s", reqpath, xferResp.UUID)
+		// JoinPath appends the transfer UUID to the base path (e.g. /upload/<uuid>).
+		statusURL := *svcURL.JoinPath(xferResp.UUID)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL.String(), nil)
 		if err != nil {
@@ -160,7 +194,7 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 		}
 
 		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
+		_ = resp.Body.Close() // inline close: defer inside a loop defers until function return, not loop iteration
 		if err != nil {
 			return fmt.Errorf("reading status response: %w", err)
 		}

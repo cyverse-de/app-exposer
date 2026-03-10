@@ -80,6 +80,12 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 	return "", ErrAllOperatorsExhausted
 }
 
+// Clients returns all operator clients so callers can iterate for aggregation
+// (e.g. listing analyses across all clusters).
+func (s *Scheduler) Clients() []*Client {
+	return s.operators
+}
+
 // ClientByName returns the operator client with the given name, or nil.
 func (s *Scheduler) ClientByName(name string) *Client {
 	for _, op := range s.operators {

@@ -1,6 +1,6 @@
 default: build
 
-build: docs app-exposer vice-operator workflow-builder vice-export vice-import vice-launch vice-list
+build: docs operator-docs app-exposer vice-operator workflow-builder vice-export vice-import vice-launch vice-list
 
 app-exposer:
     go build -o bin/app-exposer cmd/app-exposer/*.go
@@ -42,6 +42,12 @@ fmt-docs:
 
 docs: fmt-docs
     swag init --parseDependency -g app.go -d cmd/app-exposer/,httphandlers/,common/,incluster/
+
+fmt-operator-docs:
+    swag fmt -g app.go -d cmd/vice-operator/,operator/,operatorclient/,common/
+
+operator-docs: fmt-operator-docs
+    swag init --parseDependency -g app.go -d cmd/vice-operator/,operator/,operatorclient/,common/ -o operatordocs/ --instanceName operator
 
 clean:
     #!/usr/bin/env bash
