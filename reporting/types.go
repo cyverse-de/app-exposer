@@ -5,6 +5,9 @@
 package reporting
 
 import (
+	"cmp"
+	"slices"
+
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 )
@@ -79,4 +82,31 @@ type ResourceInfo struct {
 	ConfigMaps  []ConfigMapInfo  `json:"configMaps"`
 	Services    []ServiceInfo    `json:"services"`
 	Ingresses   []IngressInfo    `json:"ingresses"`
+}
+
+// NewResourceInfo returns a ResourceInfo with all slices initialized to empty
+// (non-nil) so that JSON serialization produces [] instead of null.
+func NewResourceInfo() *ResourceInfo {
+	return &ResourceInfo{
+		Deployments: []DeploymentInfo{},
+		Pods:        []PodInfo{},
+		ConfigMaps:  []ConfigMapInfo{},
+		Services:    []ServiceInfo{},
+		Ingresses:   []IngressInfo{},
+	}
+}
+
+// SortByCreationTime sorts each slice in the ResourceInfo by
+// CreationTimestamp descending (newest first). CreationTimestamp is an
+// RFC 3339 string, so lexicographic comparison is correct.
+func SortByCreationTime(r *ResourceInfo) {
+	byTime := func(a, b MetaInfo) int {
+		// Reverse order: newer timestamps sort first.
+		return cmp.Compare(b.CreationTimestamp, a.CreationTimestamp)
+	}
+	slices.SortFunc(r.Deployments, func(a, b DeploymentInfo) int { return byTime(a.MetaInfo, b.MetaInfo) })
+	slices.SortFunc(r.Pods, func(a, b PodInfo) int { return byTime(a.MetaInfo, b.MetaInfo) })
+	slices.SortFunc(r.ConfigMaps, func(a, b ConfigMapInfo) int { return byTime(a.MetaInfo, b.MetaInfo) })
+	slices.SortFunc(r.Services, func(a, b ServiceInfo) int { return byTime(a.MetaInfo, b.MetaInfo) })
+	slices.SortFunc(r.Ingresses, func(a, b IngressInfo) int { return byTime(a.MetaInfo, b.MetaInfo) })
 }

@@ -441,7 +441,7 @@ func (o *Operator) HandleListing(c echo.Context) error {
 	viceSelector := labels.Set{"app-type": "interactive"}.AsSelector().String()
 	opts := metav1.ListOptions{LabelSelector: viceSelector}
 
-	result := &reporting.ResourceInfo{}
+	result := reporting.NewResourceInfo()
 
 	// Deployments
 	deps, err := o.clientset.AppsV1().Deployments(o.namespace).List(ctx, opts)
