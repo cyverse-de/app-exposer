@@ -657,23 +657,23 @@ definitions:
     properties:
       configMaps:
         items:
-          $ref: '#/definitions/incluster.ConfigMapInfo'
+          $ref: '#/definitions/reporting.ConfigMapInfo'
         type: array
       deployments:
         items:
-          $ref: '#/definitions/incluster.DeploymentInfo'
+          $ref: '#/definitions/reporting.DeploymentInfo'
         type: array
       ingresses:
         items:
-          $ref: '#/definitions/incluster.IngressInfo'
+          $ref: '#/definitions/reporting.IngressInfo'
         type: array
       pods:
         items:
-          $ref: '#/definitions/incluster.PodInfo'
+          $ref: '#/definitions/reporting.PodInfo'
         type: array
       services:
         items:
-          $ref: '#/definitions/incluster.ServiceInfo'
+          $ref: '#/definitions/reporting.ServiceInfo'
         type: array
     type: object
   incluster.RetPod:
@@ -699,14 +699,187 @@ definitions:
         type: string
       ports:
         items:
-          $ref: '#/definitions/incluster.ServiceInfoPort'
+          $ref: '#/definitions/reporting.ServiceInfoPort'
         type: array
       userID:
         type: string
       username:
         type: string
     type: object
-  incluster.ServiceInfoPort:
+  incluster.TimeLimit:
+    properties:
+      time_limit:
+        type: string
+    type: object
+  reporting.ConfigMapInfo:
+    properties:
+      analysisName:
+        type: string
+      appID:
+        type: string
+      appName:
+        type: string
+      creationTimestamp:
+        type: string
+      data:
+        additionalProperties:
+          type: string
+        type: object
+      externalID:
+        type: string
+      name:
+        type: string
+      namespace:
+        type: string
+      userID:
+        type: string
+      username:
+        type: string
+    type: object
+  reporting.DeploymentInfo:
+    properties:
+      analysisName:
+        type: string
+      appID:
+        type: string
+      appName:
+        type: string
+      command:
+        items:
+          type: string
+        type: array
+      creationTimestamp:
+        type: string
+      externalID:
+        type: string
+      group:
+        type: integer
+      image:
+        type: string
+      name:
+        type: string
+      namespace:
+        type: string
+      port:
+        type: integer
+      user:
+        type: integer
+      userID:
+        type: string
+      username:
+        type: string
+    type: object
+  reporting.IngressInfo:
+    properties:
+      analysisName:
+        type: string
+      appID:
+        type: string
+      appName:
+        type: string
+      creationTimestamp:
+        type: string
+      defaultBackend:
+        type: string
+      externalID:
+        type: string
+      name:
+        type: string
+      namespace:
+        type: string
+      rules:
+        items:
+          $ref: '#/definitions/v1.IngressRule'
+        type: array
+      userID:
+        type: string
+      username:
+        type: string
+    type: object
+  reporting.PodInfo:
+    properties:
+      analysisName:
+        type: string
+      appID:
+        type: string
+      appName:
+        type: string
+      containerStatuses:
+        items:
+          $ref: '#/definitions/v1.ContainerStatus'
+        type: array
+      creationTimestamp:
+        type: string
+      externalID:
+        type: string
+      initContainerStatuses:
+        items:
+          $ref: '#/definitions/v1.ContainerStatus'
+        type: array
+      message:
+        type: string
+      name:
+        type: string
+      namespace:
+        type: string
+      phase:
+        type: string
+      reason:
+        type: string
+      userID:
+        type: string
+      username:
+        type: string
+    type: object
+  reporting.ResourceInfo:
+    properties:
+      configMaps:
+        items:
+          $ref: '#/definitions/reporting.ConfigMapInfo'
+        type: array
+      deployments:
+        items:
+          $ref: '#/definitions/reporting.DeploymentInfo'
+        type: array
+      ingresses:
+        items:
+          $ref: '#/definitions/reporting.IngressInfo'
+        type: array
+      pods:
+        items:
+          $ref: '#/definitions/reporting.PodInfo'
+        type: array
+      services:
+        items:
+          $ref: '#/definitions/reporting.ServiceInfo'
+        type: array
+    type: object
+  reporting.ServiceInfo:
+    properties:
+      analysisName:
+        type: string
+      appID:
+        type: string
+      appName:
+        type: string
+      creationTimestamp:
+        type: string
+      externalID:
+        type: string
+      name:
+        type: string
+      namespace:
+        type: string
+      ports:
+        items:
+          $ref: '#/definitions/reporting.ServiceInfoPort'
+        type: array
+      userID:
+        type: string
+      username:
+        type: string
+    type: object
+  reporting.ServiceInfoPort:
     properties:
       name:
         type: string
@@ -719,11 +892,6 @@ definitions:
       targetPort:
         type: integer
       targetPortName:
-        type: string
-    type: object
-  incluster.TimeLimit:
-    properties:
-      time_limit:
         type: string
     type: object
   resource.Quantity:
@@ -1573,6 +1741,7 @@ paths:
       - description: subdomain
         in: path
         name: host
+        required: true
         type: string
       produces:
       - application/json
@@ -1642,7 +1811,9 @@ paths:
       summary: Check if a VICE app is ready for users to access it.
   /vice/{id}/download-input-files:
     post:
-      description: Triggers input downloads for an analysis
+      description: |-
+        Triggers input downloads for an analysis by routing through
+        the operator running it.
       operationId: trigger-downloads
       parameters:
       - description: External ID
@@ -1719,7 +1890,9 @@ paths:
       summary: Save files and terminate VICE analysis
   /vice/{id}/save-output-files:
     post:
-      description: Triggers output uploads from a running analysis.
+      description: |-
+        Triggers output uploads from a running analysis by routing
+        through the operator running it.
       operationId: trigger-uploads
       parameters:
       - description: External ID
@@ -1804,10 +1977,8 @@ paths:
   /vice/admin/analyses/{analysis-id}/download-input-files:
     post:
       description: |-
-        Handles requests to trigger file downloads
-        without requiring user information in the request and also operates from
-        the analysis UUID rather than the external ID. For use with tools that
-        require the caller to have administrative privileges.
+        Handles requests to trigger file downloads without requiring
+        user information, operating from the analysis UUID.
       operationId: admin-trigger-downloads
       parameters:
       - description: Analysis ID
@@ -1911,10 +2082,8 @@ paths:
   /vice/admin/analyses/{analysis-id}/save-output-files:
     post:
       description: |-
-        Handles requests to trigger file uploads without
-        requiring user information in the request, while also operating from the
-        analysis UUID rather than the external UUID. For use with tools that
-        require the caller to have administrative privileges.
+        Handles requests to trigger file uploads without requiring
+        user information, operating from the analysis UUID.
       operationId: admin-trigger-uploads
       parameters:
       - description: Analysis ID
@@ -2061,6 +2230,25 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Lists resources based on a filter
+  /vice/admin/operator-listing:
+    get:
+      description: |-
+        Aggregates the listing endpoints of all configured operators
+        and returns combined resource info. Errors for individual
+        operators are logged but do not prevent partial results.
+      operationId: admin-operator-listing
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/reporting.ResourceInfo'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Lists running analyses across all operators
   /vice/admin/terminate-all:
     post:
       description: |-

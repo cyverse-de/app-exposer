@@ -134,7 +134,7 @@ const docTemplate = `{
         },
         "/vice/admin/analyses/{analysis-id}/download-input-files": {
             "post": {
-                "description": "Handles requests to trigger file downloads\nwithout requiring user information in the request and also operates from\nthe analysis UUID rather than the external ID. For use with tools that\nrequire the caller to have administrative privileges.",
+                "description": "Handles requests to trigger file downloads without requiring\nuser information, operating from the analysis UUID.",
                 "produces": [
                     "application/json"
                 ],
@@ -274,7 +274,7 @@ const docTemplate = `{
         },
         "/vice/admin/analyses/{analysis-id}/save-output-files": {
             "post": {
-                "description": "Handles requests to trigger file uploads without\nrequiring user information in the request, while also operating from the\nanalysis UUID rather than the external UUID. For use with tools that\nrequire the caller to have administrative privileges.",
+                "description": "Handles requests to trigger file uploads without requiring\nuser information, operating from the analysis UUID.",
                 "produces": [
                     "application/json"
                 ],
@@ -475,6 +475,30 @@ const docTemplate = `{
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/operator-listing": {
+            "get": {
+                "description": "Aggregates the listing endpoints of all configured operators\nand returns combined resource info. Errors for individual\noperators are logged but do not prevent partial results.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists running analyses across all operators",
+                "operationId": "admin-operator-listing",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/reporting.ResourceInfo"
                         }
                     },
                     "500": {
@@ -1150,7 +1174,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "subdomain",
                         "name": "host",
-                        "in": "path"
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -1247,7 +1272,7 @@ const docTemplate = `{
         },
         "/vice/{id}/download-input-files": {
             "post": {
-                "description": "Triggers input downloads for an analysis",
+                "description": "Triggers input downloads for an analysis by routing through\nthe operator running it.",
                 "produces": [
                     "application/json"
                 ],
@@ -1349,7 +1374,7 @@ const docTemplate = `{
         },
         "/vice/{id}/save-output-files": {
             "post": {
-                "description": "Triggers output uploads from a running analysis.",
+                "description": "Triggers output uploads from a running analysis by routing\nthrough the operator running it.",
                 "produces": [
                     "application/json"
                 ],
@@ -2358,31 +2383,31 @@ const docTemplate = `{
                 "configMaps": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/incluster.ConfigMapInfo"
+                        "$ref": "#/definitions/reporting.ConfigMapInfo"
                     }
                 },
                 "deployments": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/incluster.DeploymentInfo"
+                        "$ref": "#/definitions/reporting.DeploymentInfo"
                     }
                 },
                 "ingresses": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/incluster.IngressInfo"
+                        "$ref": "#/definitions/reporting.IngressInfo"
                     }
                 },
                 "pods": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/incluster.PodInfo"
+                        "$ref": "#/definitions/reporting.PodInfo"
                     }
                 },
                 "services": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/incluster.ServiceInfo"
+                        "$ref": "#/definitions/reporting.ServiceInfo"
                     }
                 }
             }
@@ -2422,7 +2447,7 @@ const docTemplate = `{
                 "ports": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/incluster.ServiceInfoPort"
+                        "$ref": "#/definitions/reporting.ServiceInfoPort"
                     }
                 },
                 "userID": {
@@ -2433,7 +2458,270 @@ const docTemplate = `{
                 }
             }
         },
-        "incluster.ServiceInfoPort": {
+        "incluster.TimeLimit": {
+            "type": "object",
+            "properties": {
+                "time_limit": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.ConfigMapInfo": {
+            "type": "object",
+            "properties": {
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.DeploymentInfo": {
+            "type": "object",
+            "properties": {
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "command": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "group": {
+                    "type": "integer"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "user": {
+                    "type": "integer"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.IngressInfo": {
+            "type": "object",
+            "properties": {
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "defaultBackend": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "rules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.IngressRule"
+                    }
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.PodInfo": {
+            "type": "object",
+            "properties": {
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "containerStatuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerStatus"
+                    }
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "initContainerStatuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerStatus"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "phase": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.ResourceInfo": {
+            "type": "object",
+            "properties": {
+                "configMaps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.ConfigMapInfo"
+                    }
+                },
+                "deployments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.DeploymentInfo"
+                    }
+                },
+                "ingresses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.IngressInfo"
+                    }
+                },
+                "pods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.PodInfo"
+                    }
+                },
+                "services": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.ServiceInfo"
+                    }
+                }
+            }
+        },
+        "reporting.ServiceInfo": {
+            "type": "object",
+            "properties": {
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "ports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.ServiceInfoPort"
+                    }
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.ServiceInfoPort": {
             "type": "object",
             "properties": {
                 "name": {
@@ -2452,14 +2740,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "targetPortName": {
-                    "type": "string"
-                }
-            }
-        },
-        "incluster.TimeLimit": {
-            "type": "object",
-            "properties": {
-                "time_limit": {
                     "type": "string"
                 }
             }
