@@ -1,6 +1,6 @@
 default: build
 
-build: docs operator-docs app-exposer vice-operator workflow-builder vice-export vice-import vice-launch vice-list vice-bundle
+build: docs operator-docs app-exposer vice-operator workflow-builder vice-export vice-import vice-launch vice-list vice-bundle vice-userid
 
 app-exposer:
     go build -o bin/app-exposer cmd/app-exposer/*.go
@@ -25,6 +25,9 @@ vice-list:
 
 vice-bundle:
     go build -o bin/vice-bundle cmd/vice-bundle/*.go
+
+vice-userid:
+    go build -o bin/vice-userid cmd/vice-userid/*.go
 
 test-imageinfo:
     go test ./imageinfo
@@ -78,4 +81,7 @@ clean:
     fi
     if [ -f bin/vice-bundle ]; then
         rm bin/vice-bundle
+    fi
+    if [ -f bin/vice-userid ]; then
+        rm bin/vice-userid
     fi
