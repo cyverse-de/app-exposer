@@ -7,6 +7,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
+	_ "github.com/cyverse-de/app-exposer/operatorclient" // swagger type reference
 	"github.com/cyverse-de/app-exposer/permissions"
 	"github.com/cyverse-de/model/v10"
 	"github.com/labstack/echo/v4"
@@ -115,6 +116,49 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusOK)
+}
+
+// DryRunBundleHandler builds the AnalysisBundle for a job without launching it.
+// Useful for debugging, testing, and inspecting what would be sent to a
+// vice-operator without any side effects.
+//
+//	@ID				dry-run-bundle
+//	@Summary		Build an AnalysisBundle without launching
+//	@Description	Accepts the same model.Job body as /vice/launch but returns the
+//	@Description	assembled AnalysisBundle JSON instead of dispatching it to an operator.
+//	@Description	No side effects (no ConfigMaps, no scheduling, no DB writes).
+//	@Accept			json
+//	@Produce		json
+//	@Param			request		body		AnalysisLaunch	true	"The job to build a bundle for"
+//	@Param			validate	query		boolean			false	"Run validation checks on the job"	default(false)
+//	@Success		200			{object}	operatorclient.AnalysisBundle
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Router			/vice/dry-run [post]
+func (h *HTTPHandlers) DryRunBundleHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	job := &model.Job{}
+	if err := c.Bind(job); err != nil {
+		return err
+	}
+
+	// Opt-in validation via query parameter.
+	if c.QueryParam("validate") == "true" {
+		if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
+			if validationErr, ok := err.(common.ErrorResponse); ok {
+				return validationErr
+			}
+			return echo.NewHTTPError(status, err.Error())
+		}
+	}
+
+	bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, job.ID)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, bundle)
 }
 
 // URLReadyResponse indicates whether a VICE analysis is accessible and provides its URL.
