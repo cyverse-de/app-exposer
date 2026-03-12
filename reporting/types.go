@@ -16,6 +16,7 @@ import (
 type MetaInfo struct {
 	Name              string `json:"name"`
 	Namespace         string `json:"namespace"`
+	AnalysisID        string `json:"analysisID"`
 	AnalysisName      string `json:"analysisName"`
 	AppName           string `json:"appName"`
 	AppID             string `json:"appID"`

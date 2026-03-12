@@ -774,6 +774,9 @@ const docTemplateoperator = `{
         "reporting.ConfigMapInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -812,6 +815,9 @@ const docTemplateoperator = `{
         "reporting.DeploymentInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -862,6 +868,9 @@ const docTemplateoperator = `{
         "reporting.IngressInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -903,6 +912,9 @@ const docTemplateoperator = `{
         "reporting.PodInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -997,6 +1009,9 @@ const docTemplateoperator = `{
         "reporting.RouteInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -1035,6 +1050,9 @@ const docTemplateoperator = `{
         "reporting.ServiceInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },

@@ -226,6 +226,8 @@ definitions:
     type: object
   incluster.ConfigMapInfo:
     properties:
+      analysisID:
+        type: string
       analysisName:
         type: string
       appID:
@@ -251,6 +253,8 @@ definitions:
     type: object
   incluster.DeploymentInfo:
     properties:
+      analysisID:
+        type: string
       analysisName:
         type: string
       appID:
@@ -284,6 +288,8 @@ definitions:
     type: object
   incluster.PodInfo:
     properties:
+      analysisID:
+        type: string
       analysisName:
         type: string
       appID:
@@ -347,6 +353,8 @@ definitions:
     type: object
   incluster.RouteInfo:
     properties:
+      analysisID:
+        type: string
       analysisName:
         type: string
       appID:
@@ -372,6 +380,8 @@ definitions:
     type: object
   incluster.ServiceInfo:
     properties:
+      analysisID:
+        type: string
       analysisName:
         type: string
       appID:
@@ -875,6 +885,8 @@ definitions:
     type: object
   reporting.ConfigMapInfo:
     properties:
+      analysisID:
+        type: string
       analysisName:
         type: string
       appID:
@@ -900,6 +912,8 @@ definitions:
     type: object
   reporting.DeploymentInfo:
     properties:
+      analysisID:
+        type: string
       analysisName:
         type: string
       appID:
@@ -933,6 +947,8 @@ definitions:
     type: object
   reporting.IngressInfo:
     properties:
+      analysisID:
+        type: string
       analysisName:
         type: string
       appID:
@@ -960,6 +976,8 @@ definitions:
     type: object
   reporting.PodInfo:
     properties:
+      analysisID:
+        type: string
       analysisName:
         type: string
       appID:
@@ -1022,6 +1040,8 @@ definitions:
     type: object
   reporting.RouteInfo:
     properties:
+      analysisID:
+        type: string
       analysisName:
         type: string
       appID:
@@ -1047,6 +1067,8 @@ definitions:
     type: object
   reporting.ServiceInfo:
     properties:
+      analysisID:
+        type: string
       analysisName:
         type: string
       appID:

@@ -768,6 +768,9 @@
         "reporting.ConfigMapInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -806,6 +809,9 @@
         "reporting.DeploymentInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -856,6 +862,9 @@
         "reporting.IngressInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -897,6 +906,9 @@
         "reporting.PodInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -991,6 +1003,9 @@
         "reporting.RouteInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -1029,6 +1044,9 @@
         "reporting.ServiceInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },

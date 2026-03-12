@@ -1802,6 +1802,9 @@ const docTemplate = `{
         "incluster.ConfigMapInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -1840,6 +1843,9 @@ const docTemplate = `{
         "incluster.DeploymentInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -1890,6 +1896,9 @@ const docTemplate = `{
         "incluster.PodInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -1986,6 +1995,9 @@ const docTemplate = `{
         "incluster.RouteInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -2024,6 +2036,9 @@ const docTemplate = `{
         "incluster.ServiceInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -2686,6 +2701,9 @@ const docTemplate = `{
         "reporting.ConfigMapInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -2724,6 +2742,9 @@ const docTemplate = `{
         "reporting.DeploymentInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -2774,6 +2795,9 @@ const docTemplate = `{
         "reporting.IngressInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -2815,6 +2839,9 @@ const docTemplate = `{
         "reporting.PodInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -2909,6 +2936,9 @@ const docTemplate = `{
         "reporting.RouteInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -2947,6 +2977,9 @@ const docTemplate = `{
         "reporting.ServiceInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },

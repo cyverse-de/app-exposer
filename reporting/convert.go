@@ -15,6 +15,7 @@ func MetaInfoFromLabels(name, namespace, creationTimestamp string, labels map[st
 	return MetaInfo{
 		Name:              name,
 		Namespace:         namespace,
+		AnalysisID:        labels["analysis-id"],
 		AnalysisName:      labels["analysis-name"],
 		AppName:           labels["app-name"],
 		AppID:             labels["app-id"],
