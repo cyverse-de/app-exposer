@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
 var log = common.Log
@@ -37,7 +38,7 @@ func main() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
 	flag.StringVar(&namespace, "namespace", "vice-apps", "Namespace for VICE resources")
 	flag.IntVar(&port, "port", 60001, "Listen port")
-	flag.StringVar(&routingType, "routing-type", "nginx", "Routing type: nginx or tailscale")
+	flag.StringVar(&routingType, "routing-type", "gateway", "Routing type: gateway, nginx, or tailscale")
 	flag.StringVar(&ingressClass, "ingress-class", "nginx", "Ingress class name")
 	flag.IntVar(&maxAnalyses, "max-analyses", 50, "Max concurrent analyses")
 	flag.StringVar(&nodeLabelSelector, "node-label-selector", "", "Filter schedulable nodes by label")
@@ -75,13 +76,22 @@ func main() {
 		log.Fatalf("error creating k8s client: %v", err)
 	}
 
-	rt := operator.RoutingNginx
-	if routingType == "tailscale" {
-		rt = operator.RoutingTailscale
+	rt, err := operator.ParseRoutingType(routingType)
+	if err != nil {
+		log.Fatalf("invalid routing type: %v", err)
+	}
+
+	// Create gateway client when using gateway routing.
+	var gwClient *gatewayclient.GatewayV1Client
+	if rt == operator.RoutingGateway {
+		gwClient, err = gatewayclient.NewForConfig(config)
+		if err != nil {
+			log.Fatalf("error creating gateway API client: %v", err)
+		}
 	}
 
 	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
-	op := operator.NewOperator(clientset, namespace, rt, ingressClass, capacityCalc)
+	op := operator.NewOperator(clientset, gwClient, namespace, rt, ingressClass, capacityCalc)
 
 	app := NewApp(op, basicAuth, basicAuthUsername, basicAuthPassword)
 	listenAddr := fmt.Sprintf(":%d", port)

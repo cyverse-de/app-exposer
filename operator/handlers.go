@@ -14,34 +14,54 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
 var log = common.Log.WithFields(logrus.Fields{"package": "operator"})
 
 // Operator holds the state and dependencies for the vice-operator HTTP handlers.
 type Operator struct {
-	clientset    kubernetes.Interface
-	namespace    string
-	routingType  RoutingType
-	ingressClass string
-	capacityCalc *CapacityCalculator
+	clientset     kubernetes.Interface
+	gatewayClient *gatewayclient.GatewayV1Client
+	namespace     string
+	routingType   RoutingType
+	ingressClass  string
+	capacityCalc  *CapacityCalculator
 }
 
-// NewOperator creates a new Operator.
+// NewOperator creates a new Operator. Panics if required dependencies are nil
+// or invalid, since these indicate programmer error in wiring.
 func NewOperator(
 	clientset kubernetes.Interface,
+	gatewayClient *gatewayclient.GatewayV1Client,
 	namespace string,
 	routingType RoutingType,
 	ingressClass string,
 	capacityCalc *CapacityCalculator,
 ) *Operator {
-	return &Operator{
-		clientset:    clientset,
-		namespace:    namespace,
-		routingType:  routingType,
-		ingressClass: ingressClass,
-		capacityCalc: capacityCalc,
+	if clientset == nil {
+		panic("operator: clientset must not be nil")
 	}
+	if namespace == "" {
+		panic("operator: namespace must not be empty")
+	}
+	if capacityCalc == nil {
+		panic("operator: capacityCalc must not be nil")
+	}
+
+	return &Operator{
+		clientset:     clientset,
+		gatewayClient: gatewayClient,
+		namespace:     namespace,
+		routingType:   routingType,
+		ingressClass:  ingressClass,
+		capacityCalc:  capacityCalc,
+	}
+}
+
+// hasGatewayClient returns true if the operator has a Gateway API client.
+func (o *Operator) hasGatewayClient() bool {
+	return o.gatewayClient != nil
 }
 
 // HandleCapacity returns the current cluster capacity.
@@ -105,8 +125,18 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 
 	log.Infof("launching analysis %s", bundle.AnalysisID)
 
-	// Transform the Ingress for this cluster's routing type.
-	bundle.Ingress = TransformIngress(bundle.Ingress, o.routingType, o.ingressClass)
+	// Transform routing: convert HTTPRoute to the appropriate resource type.
+	if bundle.HTTPRoute != nil {
+		route, ingress := TransformRouting(bundle.HTTPRoute, o.routingType, o.ingressClass)
+		bundle.HTTPRoute = route
+		// If the transform produced an ingress (nginx/tailscale fallback), set it.
+		if ingress != nil {
+			bundle.Ingress = ingress
+		}
+	} else if bundle.Ingress != nil {
+		// Legacy bundle with only an Ingress: transform it directly.
+		bundle.Ingress = TransformIngress(bundle.Ingress, o.routingType, o.ingressClass)
+	}
 
 	// Apply all resources via upsert pattern.
 	if err := o.applyBundle(ctx, &bundle); err != nil {
@@ -155,6 +185,7 @@ type StatusResponse struct {
 	Pods        []PodInfo        `json:"pods"`
 	Services    []string         `json:"services"`
 	Ingresses   []string         `json:"ingresses"`
+	Routes      []string         `json:"routes,omitempty"`
 }
 
 // DeploymentInfo holds basic deployment status.
@@ -175,7 +206,7 @@ type PodInfo struct {
 //
 //	@Summary		Get analysis status
 //	@Description	Returns the status of all K8s resources (deployments, pods,
-//	@Description	services, ingresses) for the given analysis.
+//	@Description	services, ingresses/routes) for the given analysis.
 //	@Tags			analyses
 //	@Produce		json
 //	@Param			analysis-id	path		string	true	"The analysis ID"
@@ -212,7 +243,7 @@ func (o *Operator) HandleStatus(c echo.Context) error {
 		})
 	}
 
-	// Pods (selected by analysis-id label)
+	// Pods
 	pods, err := o.clientset.CoreV1().Pods(o.namespace).List(ctx, opts)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -234,6 +265,17 @@ func (o *Operator) HandleStatus(c echo.Context) error {
 		resp.Services = append(resp.Services, s.Name)
 	}
 
+	// Check for HTTPRoutes if gateway client is available.
+	if o.hasGatewayClient() {
+		routes, err := o.gatewayClient.HTTPRoutes(o.namespace).List(ctx, opts)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		for _, r := range routes.Items {
+			resp.Routes = append(resp.Routes, r.Name)
+		}
+	}
+
 	// Ingresses
 	ings, err := o.clientset.NetworkingV1().Ingresses(o.namespace).List(ctx, opts)
 	if err != nil {
@@ -252,11 +294,11 @@ type URLReadyResponse struct {
 }
 
 // HandleURLReady checks if deployment has ready replicas, service exists,
-// and ingress exists for the given analysis.
+// and routing resource exists for the given analysis.
 //
 //	@Summary		Check if analysis URL is ready
 //	@Description	Returns whether the analysis has ready replicas, a service,
-//	@Description	and an ingress — i.e. whether its URL is accessible.
+//	@Description	and a routing resource (HTTPRoute or Ingress).
 //	@Tags			analyses
 //	@Produce		json
 //	@Param			analysis-id	path		string	true	"The analysis ID"
@@ -295,15 +337,29 @@ func (o *Operator) HandleURLReady(c echo.Context) error {
 	}
 	serviceExists := len(svcs.Items) > 0
 
-	// Check ingress exists.
-	ings, err := o.clientset.NetworkingV1().Ingresses(o.namespace).List(ctx, opts)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	// Check routing resource exists (HTTPRoute or Ingress).
+	routingExists := false
+	if o.hasGatewayClient() {
+		routes, err := o.gatewayClient.HTTPRoutes(o.namespace).List(ctx, opts)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		if len(routes.Items) > 0 {
+			routingExists = true
+		}
 	}
-	ingressExists := len(ings.Items) > 0
+	if !routingExists {
+		ings, err := o.clientset.NetworkingV1().Ingresses(o.namespace).List(ctx, opts)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		if len(ings.Items) > 0 {
+			routingExists = true
+		}
+	}
 
 	return c.JSON(http.StatusOK, URLReadyResponse{
-		Ready: podReady && serviceExists && ingressExists,
+		Ready: podReady && serviceExists && routingExists,
 	})
 }
 
@@ -390,7 +446,7 @@ func (o *Operator) HandleLogs(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	sinceSeconds := int64(300) // Last 5 minutes by default
+	sinceSeconds := int64(300)
 	logOpts := &apiv1.PodLogOptions{
 		SinceSeconds: &sinceSeconds,
 	}
@@ -423,12 +479,11 @@ func (o *Operator) HandleLogs(c echo.Context) error {
 }
 
 // HandleListing lists all VICE resources in the operator's namespace,
-// returning full resource info (deployments, pods, configmaps, services,
-// ingresses) for aggregation by app-exposer.
+// returning full resource info for aggregation by app-exposer.
 //
 //	@Summary		List running VICE analyses
 //	@Description	Returns all interactive (VICE) resources in the operator's namespace
-//	@Description	including deployments, pods, configmaps, services, and ingresses.
+//	@Description	including deployments, pods, configmaps, services, and ingresses/routes.
 //	@Tags			analyses
 //	@Produce		json
 //	@Success		200	{object}	reporting.ResourceInfo
@@ -479,7 +534,18 @@ func (o *Operator) HandleListing(c echo.Context) error {
 		result.Services = append(result.Services, *reporting.ServiceInfoFrom(&svc))
 	}
 
-	// Ingresses
+	// HTTPRoutes (gateway-first)
+	if o.hasGatewayClient() {
+		routes, err := o.gatewayClient.HTTPRoutes(o.namespace).List(ctx, opts)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		for _, route := range routes.Items {
+			result.Routes = append(result.Routes, *reporting.RouteInfoFrom(&route))
+		}
+	}
+
+	// Ingresses (fallback or legacy)
 	ings, err := o.clientset.NetworkingV1().Ingresses(o.namespace).List(ctx, opts)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

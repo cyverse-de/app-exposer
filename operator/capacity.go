@@ -19,13 +19,24 @@ type CapacityCalculator struct {
 	nodeLabelSelector string
 }
 
-// NewCapacityCalculator creates a new CapacityCalculator.
+// NewCapacityCalculator creates a new CapacityCalculator. Panics if required
+// dependencies are nil or invalid, since these indicate programmer error.
 func NewCapacityCalculator(
 	clientset kubernetes.Interface,
 	namespace string,
 	maxAnalyses int,
 	nodeLabelSelector string,
 ) *CapacityCalculator {
+	if clientset == nil {
+		panic("capacity: clientset must not be nil")
+	}
+	if namespace == "" {
+		panic("capacity: namespace must not be empty")
+	}
+	if maxAnalyses <= 0 {
+		panic("capacity: maxAnalyses must be positive")
+	}
+
 	return &CapacityCalculator{
 		clientset:         clientset,
 		namespace:         namespace,

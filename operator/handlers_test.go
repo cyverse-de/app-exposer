@@ -23,7 +23,7 @@ func newTestOperator(t *testing.T, maxAnalyses int) (*Operator, *fake.Clientset)
 	t.Helper()
 	clientset := fake.NewSimpleClientset()
 	calc := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
-	op := NewOperator(clientset, "vice-apps", RoutingNginx, "nginx", calc)
+	op := NewOperator(clientset, nil, "vice-apps", RoutingNginx, "nginx", calc)
 	return op, clientset
 }
 
@@ -32,6 +32,7 @@ func TestHandleLaunch(t *testing.T) {
 		name       string
 		bundle     operatorclient.AnalysisBundle
 		maxSlots   int
+		setup      func(t *testing.T, cs *fake.Clientset) // optional pre-test setup
 		wantStatus int
 	}{
 		{
@@ -81,7 +82,25 @@ func TestHandleLaunch(t *testing.T) {
 			bundle: operatorclient.AnalysisBundle{
 				AnalysisID: "test-analysis-2",
 			},
-			maxSlots:   0,
+			maxSlots: 1,
+			setup: func(t *testing.T, cs *fake.Clientset) {
+				t.Helper()
+				// Pre-fill the single slot with an existing VICE deployment.
+				_, err := cs.AppsV1().Deployments("vice-apps").Create(context.Background(), &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "existing-dep",
+						Labels: map[string]string{"app-type": "interactive"},
+					},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "existing"}},
+						Template: apiv1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "existing"}},
+							Spec:       apiv1.PodSpec{Containers: []apiv1.Container{{Name: "c", Image: "img"}}},
+						},
+					},
+				}, metav1.CreateOptions{})
+				require.NoError(t, err)
+			},
 			wantStatus: http.StatusConflict,
 		},
 		{
@@ -95,7 +114,9 @@ func TestHandleLaunch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			op, clientset := newTestOperator(t, tt.maxSlots)
-			_ = clientset
+			if tt.setup != nil {
+				tt.setup(t, clientset)
+			}
 
 			body, err := json.Marshal(tt.bundle)
 			require.NoError(t, err)

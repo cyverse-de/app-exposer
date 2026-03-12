@@ -42,13 +42,14 @@ func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 		bgCtx := context.Background()
 
 		if err := o.triggerFileTransfer(bgCtx, analysisID, "/upload"); err != nil {
-			log.Errorf("upload failed for %s: %v", analysisID, err)
-		} else {
-			log.Infof("upload succeeded for analysis %s", analysisID)
+			log.Errorf("upload failed for analysis %s, aborting resource cleanup: %v", analysisID, err)
+			return
 		}
 
+		log.Infof("upload complete for analysis %s, proceeding with cleanup", analysisID)
+
 		if err := o.deleteAnalysisResources(bgCtx, analysisID); err != nil {
-			log.Errorf("exit failed for %s: %v", analysisID, err)
+			log.Errorf("cleanup failed for analysis %s: %v", analysisID, err)
 		}
 	}()
 
@@ -169,11 +170,16 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 
 	log.Infof("file transfer started for analysis %s (uuid %s)", analysisID, xferResp.UUID)
 
-	// Poll until the transfer finishes.
+	// Poll until the transfer finishes, with an upper bound to prevent infinite loops.
+	const maxPollIterations = 720 // 1 hour at 5s intervals
 	pollCount := 0
 	for xferResp.Status != "completed" && xferResp.Status != "failed" {
-		time.Sleep(5 * time.Second)
 		pollCount++
+		if pollCount >= maxPollIterations {
+			return fmt.Errorf("file transfer timed out for analysis %s after %d seconds", analysisID, pollCount*5)
+		}
+
+		time.Sleep(5 * time.Second)
 
 		// Log progress every ~60s (every 12 iterations at 5s intervals).
 		if pollCount%12 == 0 {
