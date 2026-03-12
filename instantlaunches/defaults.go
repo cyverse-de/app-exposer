@@ -16,7 +16,7 @@ import (
 //
 // swagger:response defaultMapping
 //
-//		In: body
+//	In: body
 type DefaultInstantLaunchMapping struct {
 	// Unique identifier.
 	//
@@ -162,7 +162,7 @@ func (a *App) DeleteDefaultsByVersionHandler(c echo.Context) error {
 //
 // swagger:response listAllDefaults
 //
-//		In: Body
+//	In: Body
 type ListAllDefaultsResponse struct {
 	// The defaults being listed.
 	Defaults []DefaultInstantLaunchMapping `json:"defaults"`

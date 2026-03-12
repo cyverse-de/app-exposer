@@ -37,6 +37,7 @@ func (j *DefaultJobInfo) JobLabels(ctx context.Context, job *model.Job) (map[str
 
 	return map[string]string{
 		"external-id":   job.InvocationID,
+		"analysis-id":   job.ID,
 		"app-name":      common.LabelValueString(job.AppName),
 		"app-id":        job.AppID,
 		"username":      common.LabelValueString(job.Submitter),

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v10"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
@@ -31,10 +32,6 @@ var (
 	doVICEProxyCPUResourceLimit = true
 	doVICEProxyMemResourceLimit = true
 	doVICEProxyStorageLimit     = true
-)
-
-const (
-	ShmDevice = "/dev/shm"
 )
 
 func SetDefaultCPUResourceRequest(value resourcev1.Quantity) {
@@ -165,9 +162,9 @@ func GPUEnabled(analysis *model.Analysis) bool {
 // getIntField is a small reflection helper to safely read an (exported) integer
 // field by name from a struct value. Returns 0 when the field doesn't exist or
 // can't be converted to an int.
-func getIntField(v interface{}, name string) int {
+func getIntField(v any, name string) int {
 	val := reflect.ValueOf(v)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 	if val.Kind() != reflect.Struct {
@@ -195,9 +192,9 @@ func maxGPUs(c model.Container) int { return getIntField(c, "MaxGPUs") }
 // getStringSliceField is a reflection helper to safely read a string slice field
 // from a struct value. Returns empty slice when the field doesn't exist or
 // can't be converted to a []string.
-func getStringSliceField(v interface{}, name string) []string {
+func getStringSliceField(v any, name string) []string {
 	val := reflect.ValueOf(v)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 	if val.Kind() != reflect.Struct {
@@ -314,7 +311,7 @@ func SharedMemoryAmount(analysis *model.Analysis) *resourcev1.Quantity {
 	var shmAmount resourcev1.Quantity
 	var err error
 	for _, device := range analysis.Steps[0].Component.Container.Devices {
-		if strings.HasPrefix(strings.ToLower(device.HostPath), ShmDevice) {
+		if strings.HasPrefix(strings.ToLower(device.HostPath), constants.ShmDevice) {
 			shmAmount, err = resourcev1.ParseQuantity(device.ContainerPath)
 			if err != nil {
 				log.Warn(err)

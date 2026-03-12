@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/cyverse-de/app-exposer/httphandlers"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/instantlaunches"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/outcluster"
 	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf"
@@ -23,7 +25,6 @@ import (
 
 	_ "github.com/cyverse-de/app-exposer/docs"
 	echoSwagger "github.com/swaggo/echo-swagger"
-	//"github.com/labstack/gommon/log"
 )
 
 // ExposerApp encapsulates the overall application-logic, tying together the
@@ -42,22 +43,26 @@ type ExposerApp struct {
 
 // ExposerAppInit contains configuration settings for creating a new ExposerApp.
 type ExposerAppInit struct {
-	Namespace                  string // The namespace that the routes settings are added to.
-	ViceNamespace              string // The namespace containing the running VICE apps.
-	ViceProxyImage             string
-	ViceDomain                 string
-	GetAnalysisIDService       string
-	CheckResourceAccessService string
-	db                         *sqlx.DB
-	UserSuffix                 string
-	IRODSZone                  string
-	ClientSet                  kubernetes.Interface
-	GatewayClient              *gatewayclient.GatewayV1Client
-	batchadapter               *adapter.JEXAdapter
-	ImagePullSecretName        string
-	LocalStorageClass          string
-	DisableViceProxyAuth       bool
-	BypassUsers                []string
+	Namespace                     string // The namespace that the route settings are added to.
+	ViceNamespace                 string // The namespace containing the running VICE apps.
+	ViceProxyImage                string
+	ViceDomain                    string
+	ViceDefaultBackendService     string
+	ViceDefaultBackendServicePort int
+	db                            *sqlx.DB
+	UserSuffix                    string
+	IRODSZone                     string
+	IngressClass                  string
+	ClientSet                     kubernetes.Interface
+	GatewayClient                 *gatewayclient.GatewayV1Client
+	batchadapter                  *adapter.JEXAdapter
+	ImagePullSecretName           string
+	LocalStorageClass             string
+	DisableViceProxyAuth          bool
+	EnableLegacyViceProxyAuth     bool
+	CheckResourceAccessURL        string
+	ClusterConfigSecretName       string
+	BypassUsers                   []string
 }
 
 //	@title			app-exposer
@@ -119,8 +124,8 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		ImagePullSecretName:           init.ImagePullSecretName,
 		ViceProxyImage:                init.ViceProxyImage,
 		FrontendBaseURL:               c.String("k8s.frontend.base"),
-		GetAnalysisIDService:          init.GetAnalysisIDService,
-		CheckResourceAccessService:    init.CheckResourceAccessService,
+		ViceDefaultBackendService:     init.ViceDefaultBackendService,
+		ViceDefaultBackendServicePort: init.ViceDefaultBackendServicePort,
 		VICEBackendNamespace:          deNamespace,
 		AppsServiceBaseURL:            appsServiceBaseURL,
 		JobStatusURL:                  jobStatusURL,
@@ -133,6 +138,9 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		IRODSZone:                     init.IRODSZone,
 		GatewayProvider:               c.String("vice.gateway_provider"),
 		DisableViceProxyAuth:          init.DisableViceProxyAuth,
+		EnableLegacyViceProxyAuth:     init.EnableLegacyViceProxyAuth,
+		CheckResourceAccessURL:        init.CheckResourceAccessURL,
+		ClusterConfigSecretName:       init.ClusterConfigSecretName,
 		NATSEncodedConn:               conn,
 		LocalStorageClass:             init.LocalStorageClass,
 		BypassUsers:                   init.BypassUsers,
@@ -141,6 +149,12 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, init.GatewayClient, apps)
 
+	// Create JWKS cache for logout token validation
+	jwksURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/certs",
+		c.String("keycloak.base"),
+		c.String("keycloak.realm"))
+	jwksCache := httphandlers.NewJWKSCache(jwksURL)
+
 	app := &ExposerApp{
 		outcluster: outcluster.New(init.ClientSet, init.GatewayClient, deNamespace, init.Namespace, init.ViceDomain),
 		incluster:  incluster,
@@ -148,11 +162,24 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		clientset:  init.ClientSet,
 		router:     echo.New(),
 		db:         init.db,
-		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter),
+		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter, jwksCache),
+	}
+
+	// Configure operator scheduler if operators are defined in config.
+	var operatorConfigs []operatorclient.OperatorConfig
+	if err := c.Unmarshal("vice.operators", &operatorConfigs); err != nil {
+		log.Warnf("could not parse operators config: %v", err)
+	}
+	if len(operatorConfigs) > 0 {
+		scheduler, err := operatorclient.NewScheduler(operatorConfigs)
+		if err != nil {
+			log.Fatalf("error creating operator scheduler: %v", err)
+		}
+		app.handlers.SetScheduler(scheduler)
+		log.Infof("operator scheduler configured with %d operators", len(operatorConfigs))
 	}
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
-	//app.router.Use(middleware.Logger())
 
 	ilInit := &instantlaunches.Init{
 		UserSuffix:      init.UserSuffix,
@@ -194,9 +221,13 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	batchGroup.POST("/cleanup", app.handlers.BatchStopByUUID)
 	batchGroup.DELETE("/stop/:id", app.handlers.BatchStopHandler)
 
+	// Back-channel logout endpoint (at root level for Keycloak compatibility)
+	app.router.POST("/backchannel-logout", app.handlers.HandleBackChannelLogout)
+
 	vice := app.router.Group("/vice")
 	vice.Use(middleware.Logger())
 	vice.POST("/launch", app.handlers.LaunchAppHandler)
+	vice.POST("/dry-run", app.handlers.DryRunBundleHandler)
 	vice.POST("/apply-labels", app.handlers.ApplyAsyncLabelsHandler)
 	vice.GET("/async-data", app.handlers.AsyncDataHandler)
 	vice.GET("/listing", app.handlers.FilterableResourcesHandler)
@@ -221,6 +252,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	viceadmin := vice.Group("/admin")
 	viceadmin.GET("/listing", app.handlers.AdminFilterableResourcesHandler)
+	viceadmin.GET("/operator-listing", app.handlers.AdminOperatorListingHandler)
 	viceadmin.POST("/terminate-all", app.handlers.TerminateAllAnalysesHandler)
 	viceadmin.GET("/:host/description", app.handlers.AdminDescribeAnalysisHandler)
 	viceadmin.GET("/:host/url-ready", app.handlers.AdminURLReadyHandler)

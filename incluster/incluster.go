@@ -45,8 +45,9 @@ type Init struct {
 	ViceProxyImage                string
 	FrontendBaseURL               string
 	ViceDomain                    string
-	GetAnalysisIDService          string
-	CheckResourceAccessService    string
+	ViceDefaultBackendService     string
+	ViceDefaultBackendServicePort int
+	IngressClass                  string
 	VICEBackendNamespace          string
 	AppsServiceBaseURL            string
 	ViceNamespace                 string
@@ -61,6 +62,9 @@ type Init struct {
 	GatewayProvider               string
 	LocalStorageClass             string
 	DisableViceProxyAuth          bool
+	EnableLegacyViceProxyAuth     bool
+	CheckResourceAccessURL        string // Full base URL for the check-resource-access service, e.g. "http://check-resource-access.qa"
+	ClusterConfigSecretName       string
 	NATSEncodedConn               *nats.EncodedConn
 	BypassUsers                   []string
 	TimeLimitExtensionSeconds     int64

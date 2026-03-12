@@ -74,17 +74,15 @@ func main() {
 		c          *koanf.Koanf
 		dbconn     *sqlx.DB
 
-		configPath = flag.String("config", cfg.DefaultConfigPath, "Path to the config file")
-		dotEnvPath = flag.String("dotenv-path", cfg.DefaultDotEnvPath, "Path to the dotenv file")
-		tlsCert    = flag.String("tlscert", gotelnats.DefaultTLSCertPath, "Path to the NATS TLS cert file")
-		tlsKey     = flag.String("tlskey", gotelnats.DefaultTLSKeyPath, "Path to the NATS TLS key file")
-		caCert     = flag.String("tlsca", gotelnats.DefaultTLSCAPath, "Path to the NATS TLS CA file")
-		credsPath  = flag.String("creds", gotelnats.DefaultCredsPath, "Path to the NATS creds file")
-		//maxReconnects                 = flag.Int("max-reconnects", gotelnats.DefaultMaxReconnects, "Maximum number of reconnection attempts to NATS")
-		//reconnectWait                 = flag.Int("reconnect-wait", gotelnats.DefaultReconnectWait, "Seconds to wait between reconnection attempts to NATS")
+		configPath                           = flag.String("config", cfg.DefaultConfigPath, "Path to the config file")
+		dotEnvPath                           = flag.String("dotenv-path", cfg.DefaultDotEnvPath, "Path to the dotenv file")
+		tlsCert                              = flag.String("tlscert", gotelnats.DefaultTLSCertPath, "Path to the NATS TLS cert file")
+		tlsKey                               = flag.String("tlskey", gotelnats.DefaultTLSKeyPath, "Path to the NATS TLS key file")
+		caCert                               = flag.String("tlsca", gotelnats.DefaultTLSCAPath, "Path to the NATS TLS CA file")
+		credsPath                            = flag.String("creds", gotelnats.DefaultCredsPath, "Path to the NATS creds file")
 		envPrefix                            = flag.String("env-prefix", cfg.DefaultEnvPrefix, "The prefix for environment variables")
 		namespace                            = flag.String("namespace", "default", "The namespace scope this process operates on for non-VICE calls")
-		viceNamespace                        = flag.String("vice-namespace", "vice-apps", "The namepsace that VICE apps are launched within")
+		viceNamespace                        = flag.String("vice-namespace", "vice-apps", "The namespace that VICE apps are launched within")
 		listenPort                           = flag.Int("port", 60000, "(optional) The port to listen on")
 		localStorageClass                    = flag.String("local-storage-class", "openebs-hostpath", "The storage class to use for the persistent host path volume")
 		viceProxy                            = flag.String("vice-proxy", "harbor.cyverse.org/de/vice-proxy", "The image name of the proxy to use for VICE apps. The image tag is set in the config.")
@@ -92,8 +90,9 @@ func main() {
 		transferWorkingDir                   = flag.String("transfer-working-dir", "/de-app-work", "The working directory within the file transfer image.")
 		transferLogLevel                     = flag.String("transfer-log-level", "debug", "The log level of the output of the file transfer tool.")
 		statusSenderImage                    = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
-		getAnalysisIDService                 = flag.String("get-analysis-id-service", "get-analysis-id", "The service name for the service that provides analysis ID lookups")
-		checkResourceAccessService           = flag.String("check-resource-access-service", "check-resource-access", "The name of the service that validates whether a user can access a resource")
+		ingressClass                         = flag.String("ingress-class", "nginx", "(optional) The ingress class to use for operator fallback")
+		viceDefaultBackendService            = flag.String("vice-default-backend", "vice-default-backend", "The name of the service to use as the default backend for VICE ingresses")
+		viceDefaultBackendServicePort        = flag.Int("vice-default-backend-port", 80, "The port for the default backend for VICE ingresses")
 		userSuffix                           = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
 		defaultMillicores                    = flag.Float64("default-millicores", 4000.0, "The default number of millicores reserved for an analysis.")
 		argoWorkflowNS                       = flag.String("workflow-namespace", "argo", "The namespace Argo Workflows run in.")
@@ -116,6 +115,8 @@ func main() {
 		logLevel                             = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
 		batchExitHandlerImage                = flag.String("batch-exit-handler-image", "harbor.cyverse.org/de/batch-exit-handler:latest", "The image to use for the exitHandler in batch workflows")
 		disableViceProxyAuth                 = flag.Bool("disable-vice-proxy-auth", false, "Disable authentication in the vice-proxy sidecar. When true, allows unauthenticated access to VICE applications.")
+		enableLegacyViceProxyAuth            = flag.Bool("enable-legacy-vice-proxy-auth", false, "Enable legacy per-request permission checks in vice-proxy instead of Keycloak UMA authorization.")
+		clusterConfigSecret                  = flag.String("cluster-config-secret", "", "Name of a Secret to inject as env vars into the vice-proxy container via envFrom. Used to provide VICE_BASE_URL for multi-cluster deployments.")
 	)
 
 	var tracerCtx, cancel = context.WithCancel(context.Background())
@@ -150,7 +151,7 @@ func main() {
 
 	log.Infof("Reading config from %s", *configPath)
 	if _, err = os.Open(*configPath); err != nil {
-		log.Fatal(*configPath)
+		log.Fatalf("failed to open config file %s: %v", *configPath, err)
 	}
 
 	c, err = cfg.Init(&cfg.Settings{
@@ -367,22 +368,26 @@ func main() {
 	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer, clientset)
 
 	exposerInit := &ExposerAppInit{
-		Namespace:                  *namespace,
-		ViceNamespace:              *viceNamespace,
-		ViceProxyImage:             proxyImage,
-		ViceDomain:                 c.String("vice.domain"),
-		GetAnalysisIDService:       *getAnalysisIDService,
-		CheckResourceAccessService: *checkResourceAccessService,
-		db:                         dbconn,
-		UserSuffix:                 *userSuffix,
-		IRODSZone:                  zone,
-		ClientSet:                  clientset,
-		GatewayClient:              gatewayClient,
-		batchadapter:               jexAdapter,
-		ImagePullSecretName:        imagePullSecretName,
-		LocalStorageClass:          *localStorageClass,
-		DisableViceProxyAuth:       *disableViceProxyAuth,
-		BypassUsers:                bypassUsers,
+		Namespace:                     *namespace,
+		ViceNamespace:                 *viceNamespace,
+		ViceProxyImage:                proxyImage,
+		ViceDomain:                    c.String("vice.domain"),
+		ViceDefaultBackendService:     *viceDefaultBackendService,
+		ViceDefaultBackendServicePort: *viceDefaultBackendServicePort,
+		db:                            dbconn,
+		UserSuffix:                    *userSuffix,
+		IRODSZone:                     zone,
+		IngressClass:                  *ingressClass,
+		ClientSet:                     clientset,
+		GatewayClient:                 gatewayClient,
+		batchadapter:                  jexAdapter,
+		ImagePullSecretName:           imagePullSecretName,
+		LocalStorageClass:             *localStorageClass,
+		DisableViceProxyAuth:          *disableViceProxyAuth,
+		EnableLegacyViceProxyAuth:     *enableLegacyViceProxyAuth,
+		CheckResourceAccessURL:        c.String("vice.check-resource-access.url"),
+		ClusterConfigSecretName:       *clusterConfigSecret,
+		BypassUsers:                   bypassUsers,
 	}
 
 	// app is the base app-exposer functionality.
