@@ -16,6 +16,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"k8s.io/client-go/kubernetes"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -41,23 +42,22 @@ type ExposerApp struct {
 
 // ExposerAppInit contains configuration settings for creating a new ExposerApp.
 type ExposerAppInit struct {
-	Namespace                     string // The namespace that the Ingress settings are added to.
-	ViceNamespace                 string // The namespace containing the running VICE apps.
-	ViceProxyImage                string
-	ViceDefaultBackendService     string
-	ViceDefaultBackendServicePort int
-	GetAnalysisIDService          string
-	CheckResourceAccessService    string
-	db                            *sqlx.DB
-	UserSuffix                    string
-	IRODSZone                     string
-	IngressClass                  string
-	ClientSet                     kubernetes.Interface
-	batchadapter                  *adapter.JEXAdapter
-	ImagePullSecretName           string
-	LocalStorageClass             string
-	DisableViceProxyAuth          bool
-	BypassUsers                   []string
+	Namespace                  string // The namespace that the routes settings are added to.
+	ViceNamespace              string // The namespace containing the running VICE apps.
+	ViceProxyImage             string
+	ViceDomain                 string
+	GetAnalysisIDService       string
+	CheckResourceAccessService string
+	db                         *sqlx.DB
+	UserSuffix                 string
+	IRODSZone                  string
+	ClientSet                  kubernetes.Interface
+	GatewayClient              *gatewayclient.GatewayV1Client
+	batchadapter               *adapter.JEXAdapter
+	ImagePullSecretName        string
+	LocalStorageClass          string
+	DisableViceProxyAuth       bool
+	BypassUsers                []string
 }
 
 //	@title			app-exposer
@@ -106,8 +106,11 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	timeLimitExtensionSeconds := int64(timeLimitExtensionDuration.Seconds())
 	log.Infof("VICE time limit extension set to %s (%d seconds)", timeLimitExtensionStr, timeLimitExtensionSeconds)
 
+	deNamespace := c.String("vice.backend-namespace")
+
 	inclusterInit := &incluster.Init{
 		ViceNamespace:                 init.ViceNamespace,
+		ViceDomain:                    init.ViceDomain,
 		PorklockImage:                 c.String("vice.file-transfers.image"),
 		PorklockTag:                   c.String("vice.file-transfers.tag"),
 		UseCSIDriver:                  c.Bool("vice.use_csi_driver"),
@@ -116,11 +119,9 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		ImagePullSecretName:           init.ImagePullSecretName,
 		ViceProxyImage:                init.ViceProxyImage,
 		FrontendBaseURL:               c.String("k8s.frontend.base"),
-		ViceDefaultBackendService:     init.ViceDefaultBackendService,
-		ViceDefaultBackendServicePort: init.ViceDefaultBackendServicePort,
 		GetAnalysisIDService:          init.GetAnalysisIDService,
 		CheckResourceAccessService:    init.CheckResourceAccessService,
-		VICEBackendNamespace:          c.String("vice.backend-namespace"),
+		VICEBackendNamespace:          deNamespace,
 		AppsServiceBaseURL:            appsServiceBaseURL,
 		JobStatusURL:                  jobStatusURL,
 		UserSuffix:                    init.UserSuffix,
@@ -130,7 +131,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		KeycloakClientID:              c.String("keycloak.client-id"),
 		KeycloakClientSecret:          c.String("keycloak.client-secret"),
 		IRODSZone:                     init.IRODSZone,
-		IngressClass:                  init.IngressClass,
+		GatewayProvider:               c.String("vice.gateway_provider"),
 		DisableViceProxyAuth:          init.DisableViceProxyAuth,
 		NATSEncodedConn:               conn,
 		LocalStorageClass:             init.LocalStorageClass,
@@ -138,10 +139,10 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		TimeLimitExtensionSeconds:     timeLimitExtensionSeconds,
 	}
 
-	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, apps)
+	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, init.GatewayClient, apps)
 
 	app := &ExposerApp{
-		outcluster: outcluster.New(init.ClientSet, init.Namespace, init.IngressClass),
+		outcluster: outcluster.New(init.ClientSet, init.GatewayClient, deNamespace, init.Namespace, init.ViceDomain),
 		incluster:  incluster,
 		namespace:  init.Namespace,
 		clientset:  init.ClientSet,
@@ -216,7 +217,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	vicelisting.GET("/pods", app.handlers.FilterablePodsHandler)
 	vicelisting.GET("/configmaps", app.handlers.FilterableConfigMapsHandler)
 	vicelisting.GET("/services", app.handlers.FilterableServicesHandler)
-	vicelisting.GET("/ingresses", app.handlers.FilterableIngressesHandler)
+	vicelisting.GET("/routes", app.handlers.FilterableRoutesHandler)
 
 	viceadmin := vice.Group("/admin")
 	viceadmin.GET("/listing", app.handlers.AdminFilterableResourcesHandler)
@@ -250,12 +251,12 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	endpoint.GET("/:name", app.outcluster.GetEndpointHandler)
 	endpoint.DELETE("/:name", app.outcluster.DeleteEndpointHandler)
 
-	ingress := app.router.Group("/ingress")
-	ingress.Use(middleware.Logger())
-	ingress.POST("/:name", app.outcluster.CreateIngressHandler)
-	ingress.PUT("/:name", app.outcluster.UpdateIngressHandler)
-	ingress.GET("/:name", app.outcluster.GetIngressHandler)
-	ingress.DELETE("/:name", app.outcluster.DeleteIngressHandler)
+	routes := app.router.Group("/routes")
+	routes.Use(middleware.Logger())
+	routes.POST("/:name", app.outcluster.CreateRouteHandler)
+	routes.PUT("/:name", app.outcluster.UpdateRouteHandler)
+	routes.GET("/:name", app.outcluster.GetRouteHandler)
+	routes.DELETE("/:name", app.outcluster.DeleteRouteHandler)
 
 	ilgroup := app.router.Group("/instantlaunches")
 	ilgroup.Use(middleware.Logger())

@@ -9,10 +9,10 @@ import (
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 func getListSelector(customLabels map[string]string) labels.Selector {
@@ -100,16 +100,15 @@ func (i *Incluster) serviceList(ctx context.Context, namespace string, customLab
 	return svcList, nil
 }
 
-func (i *Incluster) ingressList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*netv1.IngressList, error) {
+func (i *Incluster) routeList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*gatewayv1.HTTPRouteList, error) {
 	listOptions := getListOptions(customLabels, missingLabels)
 
-	client := i.clientset.NetworkingV1().Ingresses(namespace)
-	ingList, err := client.List(ctx, listOptions)
+	client := i.gatewayClient.HTTPRoutes(namespace)
+	routeList, err := client.List(ctx, listOptions)
 	if err != nil {
 		return nil, err
 	}
-
-	return ingList, nil
+	return routeList, nil
 }
 
 // MetaInfo contains useful information provided by multiple resource types.
@@ -287,34 +286,29 @@ func serviceInfo(svc *corev1.Service) *ServiceInfo {
 	}
 }
 
-// IngressInfo contains useful Ingress VICE info.
-type IngressInfo struct {
+// RouteInfo contains information about HTTP routes used for VICE apps.
+type RouteInfo struct {
 	MetaInfo
-	DefaultBackend string              `json:"defaultBackend"`
-	Rules          []netv1.IngressRule `json:"rules"`
+	Rules []gatewayv1.HTTPRouteRule `json:"rules"`
 }
 
-func ingressInfo(ingress *netv1.Ingress) *IngressInfo {
-	labels := ingress.GetObjectMeta().GetLabels()
+// routeInfo returns an RouteInfo struct for an HTTPRoute.
+func routeInfo(route *gatewayv1.HTTPRoute) *RouteInfo {
+	labels := route.GetObjectMeta().GetLabels()
 
-	return &IngressInfo{
+	return &RouteInfo{
 		MetaInfo: MetaInfo{
-			Name:              ingress.GetName(),
-			Namespace:         ingress.GetNamespace(),
+			Name:              route.GetName(),
+			Namespace:         route.GetNamespace(),
 			AnalysisName:      labels["analysis-name"],
 			AppName:           labels["app-name"],
 			AppID:             labels["app-id"],
 			ExternalID:        labels["external-id"],
 			UserID:            labels["user-id"],
 			Username:          labels["username"],
-			CreationTimestamp: ingress.GetCreationTimestamp().String(),
+			CreationTimestamp: route.GetCreationTimestamp().String(),
 		},
-		Rules: ingress.Spec.Rules,
-		DefaultBackend: fmt.Sprintf(
-			"%s:%d",
-			ingress.Spec.DefaultBackend.Service.Name,
-			ingress.Spec.DefaultBackend.Service.Port.Number,
-		),
+		Rules: route.Spec.Rules,
 	}
 }
 
@@ -382,20 +376,18 @@ func (i *Incluster) GetFilteredServices(ctx context.Context, filter map[string]s
 	return svcs, nil
 }
 
-func (i *Incluster) GetFilteredIngresses(ctx context.Context, filter map[string]string) ([]IngressInfo, error) {
-	ingList, err := i.ingressList(ctx, i.ViceNamespace, filter, []string{})
+func (i *Incluster) GetFilteredRoutes(ctx context.Context, filter map[string]string) ([]RouteInfo, error) {
+	routeList, err := i.routeList(ctx, i.ViceNamespace, filter, []string{})
 	if err != nil {
 		return nil, err
 	}
 
-	ingresses := []IngressInfo{}
-
-	for _, ingress := range ingList.Items {
-		info := ingressInfo(&ingress)
-		ingresses = append(ingresses, *info)
+	routes := make([]RouteInfo, len(routeList.Items))
+	for i, route := range routeList.Items {
+		routes[i] = *routeInfo(&route)
 	}
 
-	return ingresses, nil
+	return routes, nil
 }
 
 // ResourceInfo contains all of the k8s resource information about a running VICE analysis
@@ -405,7 +397,7 @@ type ResourceInfo struct {
 	Pods        []PodInfo        `json:"pods"`
 	ConfigMaps  []ConfigMapInfo  `json:"configMaps"`
 	Services    []ServiceInfo    `json:"services"`
-	Ingresses   []IngressInfo    `json:"ingresses"`
+	Routes      []RouteInfo      `json:"routes"`
 }
 
 func (i *Incluster) FixUsername(username string) string {
@@ -433,7 +425,7 @@ func (i *Incluster) DoResourceListing(ctx context.Context, filter map[string]str
 		return nil, err
 	}
 
-	ingresses, err := i.GetFilteredIngresses(ctx, filter)
+	routes, err := i.GetFilteredRoutes(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -443,7 +435,7 @@ func (i *Incluster) DoResourceListing(ctx context.Context, filter map[string]str
 		Pods:        pods,
 		ConfigMaps:  cms,
 		Services:    svcs,
-		Ingresses:   ingresses,
+		Routes:      routes,
 	}, nil
 }
 
@@ -467,7 +459,7 @@ func populateSubdomain(existingLabels map[string]string) map[string]string {
 	if _, ok := existingLabels["subdomain"]; !ok {
 		if externalID, ok := existingLabels["external-id"]; ok {
 			if userID, ok := existingLabels["user-id"]; ok {
-				existingLabels["subdomain"] = IngressName(userID, externalID)
+				existingLabels["subdomain"] = common.Subdomain(userID, externalID)
 			}
 		}
 	}
@@ -489,6 +481,23 @@ func populateLoginIP(ctx context.Context, a *apps.Apps, existingLabels map[strin
 	return existingLabels, nil
 }
 
+func (i *Incluster) populateAdditionalLabels(ctx context.Context, existingLabels map[string]string) (map[string]string, []error) {
+	var err error
+	errors := []error{}
+
+	existingLabels = populateSubdomain(existingLabels)
+	existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
+	if err != nil {
+		errors = append(errors, err)
+	}
+	existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
+	if err != nil {
+		errors = append(errors, err)
+	}
+
+	return existingLabels, errors
+}
+
 func (i *Incluster) relabelDeployments(ctx context.Context) []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
@@ -500,21 +509,11 @@ func (i *Incluster) relabelDeployments(ctx context.Context) []error {
 	}
 
 	for _, deployment := range deployments.Items {
-		existingLabels := deployment.GetLabels()
-
-		existingLabels = populateSubdomain(existingLabels)
-
-		existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
+		labels, deploymentErrors := i.populateAdditionalLabels(ctx, deployment.GetLabels())
+		if len(deploymentErrors) > 0 {
+			errors = append(errors, deploymentErrors...)
 		}
-
-		existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
-		}
-
-		deployment.SetLabels(existingLabels)
+		deployment.SetLabels(labels)
 		_, err = i.clientset.AppsV1().Deployments(i.ViceNamespace).Update(ctx, &deployment, metav1.UpdateOptions{})
 		if err != nil {
 			errors = append(errors, err)
@@ -535,21 +534,11 @@ func (i *Incluster) relabelConfigMaps(ctx context.Context) []error {
 	}
 
 	for _, configmap := range cms.Items {
-		existingLabels := configmap.GetLabels()
-
-		existingLabels = populateSubdomain(existingLabels)
-
-		existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
+		labels, configmapErrors := i.populateAdditionalLabels(ctx, configmap.GetLabels())
+		if len(configmapErrors) > 0 {
+			errors = append(errors, configmapErrors...)
 		}
-
-		existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
-		}
-
-		configmap.SetLabels(existingLabels)
+		configmap.SetLabels(labels)
 		_, err = i.clientset.CoreV1().ConfigMaps(i.ViceNamespace).Update(ctx, &configmap, metav1.UpdateOptions{})
 		if err != nil {
 			errors = append(errors, err)
@@ -570,21 +559,11 @@ func (i *Incluster) relabelServices(ctx context.Context) []error {
 	}
 
 	for _, service := range svcs.Items {
-		existingLabels := service.GetLabels()
-
-		existingLabels = populateSubdomain(existingLabels)
-
-		existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
+		labels, serviceErrors := i.populateAdditionalLabels(ctx, service.GetLabels())
+		if len(serviceErrors) > 0 {
+			errors = append(errors, serviceErrors...)
 		}
-
-		existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
-		}
-
-		service.SetLabels(existingLabels)
+		service.SetLabels(labels)
 		_, err = i.clientset.CoreV1().Services(i.ViceNamespace).Update(ctx, &service, metav1.UpdateOptions{})
 		if err != nil {
 			errors = append(errors, err)
@@ -594,34 +573,23 @@ func (i *Incluster) relabelServices(ctx context.Context) []error {
 	return errors
 }
 
-func (i *Incluster) relabelIngresses(ctx context.Context) []error {
+func (i *Incluster) relabelRoutes(ctx context.Context) []error {
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	errors := []error{}
 
-	ingresses, err := i.ingressList(ctx, i.ViceNamespace, filter, []string{"subdomain"})
+	routes, err := i.routeList(ctx, i.ViceNamespace, filter, []string{"subdomain"})
 	if err != nil {
 		errors = append(errors, err)
 		return errors
 	}
 
-	for _, ingress := range ingresses.Items {
-		existingLabels := ingress.GetLabels()
-
-		existingLabels = populateSubdomain(existingLabels)
-
-		existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
+	for _, route := range routes.Items {
+		labels, routeErrors := i.populateAdditionalLabels(ctx, route.GetLabels())
+		if len(routeErrors) > 0 {
+			errors = append(errors, routeErrors...)
 		}
-
-		existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
-		if err != nil {
-			errors = append(errors, err)
-		}
-
-		ingress.SetLabels(existingLabels)
-		client := i.clientset.NetworkingV1().Ingresses(i.ViceNamespace)
-		_, err = client.Update(ctx, &ingress, metav1.UpdateOptions{})
+		route.SetLabels(labels)
+		_, err = i.gatewayClient.HTTPRoutes(i.ViceNamespace).Update(ctx, &route, metav1.UpdateOptions{})
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -651,9 +619,9 @@ func (i *Incluster) ApplyAsyncLabels(ctx context.Context) []error {
 		errors = append(errors, labelSVCErrors...)
 	}
 
-	labelIngressesErrors := i.relabelIngresses(ctx)
-	if len(labelIngressesErrors) > 0 {
-		errors = append(errors, labelIngressesErrors...)
+	labelRoutesErrors := i.relabelRoutes(ctx)
+	if len(labelRoutesErrors) > 0 {
+		errors = append(errors, labelRoutesErrors...)
 	}
 
 	return errors

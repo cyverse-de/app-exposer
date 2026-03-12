@@ -17,7 +17,7 @@ import (
 // @Description	resources asscociated with it. Does not save outputs first. Uses
 // @Description	the external-id label to find all of the objects in the configured
 // @Description	namespace associated with the job. Deletes the following objects:
-// @Description	ingresses, services, deployments, and configmaps.
+// @Description	HTTP routes, services, deployments, and configmaps.
 // @Param			id	path	string	true	"The external ID of the VICE analysis"
 // @Success		200
 // @Failure		400	{object}	common.ErrorResponse

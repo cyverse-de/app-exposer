@@ -4,32 +4,47 @@
 package outcluster
 
 import (
+	"fmt"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/labstack/echo/v4"
 	"k8s.io/client-go/kubernetes"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
 var log = common.Log
+var rfc1123Pattern = regexp.MustCompile("[[:alnum:]][-.[:alnum:]]{0,251}[[:alnum:]]")
 
 // Outcluster contains the support for running VICE apps outside of k8s.
 type Outcluster struct {
+	deNamespace        string
 	namespace          string
+	domain             string
 	clientset          kubernetes.Interface
 	ServiceController  ServiceCrudder
 	EndpointController EndpointCrudder
-	IngressController  IngressCrudder
+	RouteController    RouteCrudder
 }
 
 // New returns a new *Outcluster.
-func New(cs kubernetes.Interface, namespace, ingressClass string) *Outcluster {
+func New(
+	cs kubernetes.Interface,
+	gc *gatewayclient.GatewayV1Client,
+	deNamespace string,
+	namespace string,
+	viceDomain string,
+) *Outcluster {
 	return &Outcluster{
 		clientset:          cs,
+		deNamespace:        deNamespace,
 		namespace:          namespace,
+		domain:             viceDomain,
 		ServiceController:  NewServicer(cs.CoreV1().Services(namespace)),
 		EndpointController: NewEndpointer(cs.CoreV1().Endpoints(namespace)),
-		IngressController:  NewIngresser(cs.NetworkingV1().Ingresses(namespace), ingressClass),
+		RouteController:    NewRouter(deNamespace, viceDomain, gc),
 	}
 }
 
@@ -387,6 +402,43 @@ func (e *Outcluster) GetEndpointHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, returnOpts)
 }
 
+// bindRouteOptions extracts a RouteObjects object from the request body.
+func (e *Outcluster) bindRouteOptions(c echo.Context, routeName string) (*RouteOptions, error) {
+	var err error
+	var opts RouteOptions
+
+	if err = c.Bind(&opts); err != nil {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, err)
+	}
+
+	if opts.Service == "" {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "missing service from the route JSON")
+	}
+
+	if opts.Port == 0 {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "Port was either not set or set to 0")
+	}
+	if opts.Port < 1 || opts.Port > 65535 {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "port number %d is out of range (1-65535)", opts.Port)
+	}
+
+	opts.Name = routeName
+	if routeName == "" {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "no route name provided")
+	}
+	routeFQDN := routeName
+	if !strings.Contains(routeName, ".") {
+		routeFQDN = fmt.Sprintf("%s.%s", routeName, e.domain)
+	}
+	if !rfc1123Pattern.MatchString(routeFQDN) {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "invalid route name provided: %s", routeFQDN)
+	}
+
+	opts.Namespace = e.namespace
+
+	return &opts, nil
+}
+
 // DeleteEndpointHandler is an http handler for deleting an Endpoints object from a k8s cluster.
 //
 // Expects no request body and returns no body in the response. Returns a 200
@@ -408,188 +460,99 @@ func (e *Outcluster) DeleteEndpointHandler(c echo.Context) error {
 	return nil
 }
 
-// CreateIngressHandler is an http handler for creating an Ingress object in a k8s cluster.
-//
-// Expects a JSON encoded request body in the following format:
-//
-//	{
-//		"service" : "The name of the Service that the Ingress is configured for, as a string.",
-//		"port" : The port of the Service that the Ingress is configured for, as an integer
-//	}
-//
-// The name of the Ingress is extracted from the URL that the request is sent to.
-// The namespace for the Ingress object comes from the daemon configuration setting.
-func (e *Outcluster) CreateIngressHandler(c echo.Context) error {
-	var ingress string
+// CreateRouteHandler is an HTTP handler for creating an HTTPRoute object in a k8s cluster.
+func (e *Outcluster) CreateRouteHandler(c echo.Context) error {
 	var err error
 
 	ctx := c.Request().Context()
-	ingress = c.Param("name")
-	if ingress == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "missing ingress name in the URL")
+	routeName := c.Param("name")
+	if routeName == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "missing route name in the URL")
 	}
 
-	log.Printf("CreateIngress: create an ingress named %s", ingress)
-
-	opts := &IngressOptions{}
-	if err = c.Bind(opts); err != nil {
-		return err
-	}
-
-	if opts.Service == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "missing service from the ingress JSON")
-	}
-	log.Printf("CreateIngress: service name for ingress %s will be %s", ingress, opts.Service)
-
-	if opts.Port == 0 {
-		return echo.NewHTTPError(http.StatusBadRequest, "Port was either not set or set to 0")
-	}
-	log.Printf("CreateIngress: port for ingress %s will be %d", ingress, opts.Port)
-
-	opts.Name = ingress
-	opts.Namespace = e.namespace
-
-	log.Printf("CreateIngress: namespace for ingress %s will be %s", ingress, opts.Namespace)
-
-	ing, err := e.IngressController.Create(ctx, opts)
+	opts, err := e.bindRouteOptions(c, routeName)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("CreateIngress: done creating ingress %s", ingress)
-
-	returnOpts := &IngressOptions{
-		Name:      ing.Name,
-		Namespace: ing.Namespace,
-		Service:   ing.Spec.DefaultBackend.Service.Name,
-		Port:      int(ing.Spec.DefaultBackend.Service.Port.Number),
+	route, err := e.RouteController.Create(ctx, opts)
+	if err != nil {
+		return err
 	}
 
-	return c.JSON(http.StatusOK, returnOpts)
+	routeOptions, err := e.RouteController.OptsFromHTTPRoute(route)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, routeOptions)
 }
 
-// UpdateIngressHandler is an http handler for updating an Ingress object in a k8s cluster.
-//
-// Expects a JSON encoded request body in the following format:
-//
-//	{
-//		"service" : "The name of the Service that the Ingress is configured for, as a string.",
-//		"port" : The port of the Service that the Ingress is configured for, as an integer
-//	}
-//
-// The name of the Ingress is extracted from the URL that the request is sent to.
-// The namespace for the Ingress object comes from the daemon configuration setting.
-func (e *Outcluster) UpdateIngressHandler(c echo.Context) error {
-	var (
-		ingress string
-		err     error
-	)
+// GetRouteHandler is an http handler for getting an HTTPRoute object from a k8s cluster.
+func (e *Outcluster) GetRouteHandler(c echo.Context) error {
+	var err error
 
 	ctx := c.Request().Context()
-
-	ingress = c.Param("name")
-	if ingress == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "missing ingress name in the URL")
+	routeName := c.Param("name")
+	if routeName == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "missing route name in the URL")
 	}
 
-	log.Printf("UpdateIngress: updating ingress %s", ingress)
-
-	opts := &IngressOptions{}
-	if err = c.Bind(opts); err != nil {
-		return nil
-	}
-
-	if opts.Service == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "missing service from the ingress JSON")
-	}
-	log.Printf("UpdateIngress: service for ingress %s should be %s", ingress, opts.Service)
-
-	if opts.Port == 0 {
-		return echo.NewHTTPError(http.StatusBadRequest, "Port was either not set or set to 0")
-	}
-	log.Printf("UpdateIngress: port for ingress %s should be %d", ingress, opts.Port)
-
-	opts.Name = ingress
-	opts.Namespace = e.namespace
-
-	log.Printf("UpdateIngress: namespace for ingress %s should be %s", ingress, opts.Namespace)
-
-	ing, err := e.IngressController.Update(ctx, opts)
+	route, err := e.RouteController.Get(ctx, e.namespace, routeName)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("UpdateIngress: finished updating ingress %s", ingress)
-
-	returnOpts := &IngressOptions{
-		Name:      ing.Name,
-		Namespace: ing.Namespace,
-		Service:   ing.Spec.DefaultBackend.Service.Name,
-		Port:      int(ing.Spec.DefaultBackend.Service.Port.Number),
-	}
-
-	return c.JSON(http.StatusOK, returnOpts)
-}
-
-// GetIngressHandler is an http handler for getting an Ingress object from a k8s cluster.
-//
-// Expects no request body and returns a JSON-encoded body in the response in the
-// following format:
-//
-//	{
-//		"name" : "The name of the Ingress, as a string.",
-//		"namespace" : "The Kubernetes namespace that the Ingress exists in, as a string.",
-//		"service" : "The name of the Service that the Ingress is configured for, as a string.",
-//		"port" : The port of the Service that the Ingress is configured for, as an integer
-//	}
-func (e *Outcluster) GetIngressHandler(c echo.Context) error {
-	var (
-		ingress string
-		err     error
-	)
-
-	ctx := c.Request().Context()
-
-	ingress = c.Param("name")
-	if ingress == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "missing ingress name in the URL")
-	}
-
-	log.Printf("GetIngress: getting ingress %s", ingress)
-
-	ing, err := e.IngressController.Get(ctx, ingress)
+	routeOptions, err := e.RouteController.OptsFromHTTPRoute(route)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("GetIngress: done getting ingress %s", ingress)
-
-	returnOpts := &IngressOptions{
-		Name:      ing.Name,
-		Namespace: ing.Namespace,
-		Service:   ing.Spec.DefaultBackend.Service.Name,
-		Port:      int(ing.Spec.DefaultBackend.Service.Port.Number),
-	}
-
-	return c.JSON(http.StatusOK, returnOpts)
+	return c.JSON(http.StatusOK, routeOptions)
 }
 
-// DeleteIngressHandler is an http handler for deleting an Ingress object from a k8s cluster.
-//
-// Expects no request body and returns no body in the response. Returns a 200
-// if you attempt to delete an Endpoints object that doesn't exist.
-func (e *Outcluster) DeleteIngressHandler(c echo.Context) error {
+// UpdateRouteHandler is an HTTP handler for updating an HTTPRoute object in a k8s cluster.
+func (e *Outcluster) UpdateRouteHandler(c echo.Context) error {
+	var err error
+
 	ctx := c.Request().Context()
-	var ingress = c.Param("name")
-	if ingress == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "missing ingress name in the URL")
+	routeName := c.Param("name")
+	if routeName == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "missing route name in the URL")
 	}
 
-	log.Printf("DeleteIngress: deleting ingress %s", ingress)
-
-	err := e.IngressController.Delete(ctx, ingress)
+	opts, err := e.bindRouteOptions(c, routeName)
 	if err != nil {
-		log.Error(err) // Do this so that repeated deletion requests don't return an error.
+		return err
+	}
+
+	route, err := e.RouteController.Update(ctx, opts)
+	if err != nil {
+		return err
+	}
+
+	routeOptions, err := e.RouteController.OptsFromHTTPRoute(route)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, routeOptions)
+}
+
+// DeleteRouteHandler is an HTTP handler for deleting an HTTPRoute object in a Kubernetes cluster.
+func (e *Outcluster) DeleteRouteHandler(c echo.Context) error {
+	var err error
+
+	ctx := c.Request().Context()
+	routeName := c.Param("name")
+	if routeName == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "missing route name in the URL")
+	}
+
+	// If the deletion fails, we just log it so that repeated error attempts don't create too much noise.
+	err = e.RouteController.Delete(ctx, e.namespace, routeName)
+	if err != nil {
+		log.Infof("unable to delete HTTPRoute: %s", err)
 	}
 
 	return nil

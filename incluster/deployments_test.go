@@ -32,8 +32,7 @@ func TestViceProxyCommandWithAuthEnabled(t *testing.T) {
 		ImagePullSecretName:           "imanimagepullsecret",
 		ViceProxyImage:                "harbor.cyverse.org/de/vice-proxy",
 		FrontendBaseURL:               "https://de.example.org",
-		ViceDefaultBackendService:     "vice-default-backend",
-		ViceDefaultBackendServicePort: 80,
+		ViceDomain:                    "cyverse.run",
 		GetAnalysisIDService:          "get-analysis-id",
 		CheckResourceAccessService:    "check-resource-access",
 		VICEBackendNamespace:          "prod",
@@ -47,12 +46,12 @@ func TestViceProxyCommandWithAuthEnabled(t *testing.T) {
 		KeycloakClientID:              "theclient",
 		KeycloakClientSecret:          "thesecret",
 		IRODSZone:                     "example",
-		IngressClass:                  "nginx",
+		GatewayProvider:               "traefik",
 		LocalStorageClass:             "example",
 		DisableViceProxyAuth:          false, // Authentication enabled
 		NATSEncodedConn:               nil,
 	}
-	i := New(init, nil, nil, nil)
+	i := New(init, nil, nil, nil, nil)
 	job := testJob()
 
 	command := i.viceProxyCommand(job)
@@ -81,8 +80,7 @@ func TestViceProxyCommandWithAuthDisabled(t *testing.T) {
 		ImagePullSecretName:           "imanimagepullsecret",
 		ViceProxyImage:                "harbor.cyverse.org/de/vice-proxy",
 		FrontendBaseURL:               "https://de.example.org",
-		ViceDefaultBackendService:     "vice-default-backend",
-		ViceDefaultBackendServicePort: 80,
+		ViceDomain:                    "cyverse.run",
 		GetAnalysisIDService:          "get-analysis-id",
 		CheckResourceAccessService:    "check-resource-access",
 		VICEBackendNamespace:          "prod",
@@ -96,12 +94,12 @@ func TestViceProxyCommandWithAuthDisabled(t *testing.T) {
 		KeycloakClientID:              "theclient",
 		KeycloakClientSecret:          "thesecret",
 		IRODSZone:                     "example",
-		IngressClass:                  "nginx",
+		GatewayProvider:               "traefik",
 		LocalStorageClass:             "example",
 		DisableViceProxyAuth:          true, // Authentication disabled
 		NATSEncodedConn:               nil,
 	}
-	i := New(init, nil, nil, nil)
+	i := New(init, nil, nil, nil, nil)
 	job := testJob()
 
 	command := i.viceProxyCommand(job)
@@ -127,8 +125,7 @@ func TestViceProxyCommandFlagOrdering(t *testing.T) {
 		ImagePullSecretName:           "imanimagepullsecret",
 		ViceProxyImage:                "harbor.cyverse.org/de/vice-proxy",
 		FrontendBaseURL:               "https://de.example.org",
-		ViceDefaultBackendService:     "vice-default-backend",
-		ViceDefaultBackendServicePort: 80,
+		ViceDomain:                    "cyverse.run",
 		GetAnalysisIDService:          "get-analysis-id",
 		CheckResourceAccessService:    "check-resource-access",
 		VICEBackendNamespace:          "prod",
@@ -142,12 +139,12 @@ func TestViceProxyCommandFlagOrdering(t *testing.T) {
 		KeycloakClientID:              "theclient",
 		KeycloakClientSecret:          "thesecret",
 		IRODSZone:                     "example",
-		IngressClass:                  "nginx",
+		GatewayProvider:               "traefik",
 		LocalStorageClass:             "example",
 		DisableViceProxyAuth:          true,
 		NATSEncodedConn:               nil,
 	}
-	i := New(init, nil, nil, nil)
+	i := New(init, nil, nil, nil, nil)
 	job := testJob()
 
 	command := i.viceProxyCommand(job)

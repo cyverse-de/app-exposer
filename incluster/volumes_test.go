@@ -21,8 +21,7 @@ func newIncluster() *Incluster {
 		ImagePullSecretName:           "imanimagepullsecret",
 		ViceProxyImage:                "harbor.cyverse.org/de/vice-proxy",
 		FrontendBaseURL:               "https://de.example.org",
-		ViceDefaultBackendService:     "vice-default-backend",
-		ViceDefaultBackendServicePort: 80,
+		ViceDomain:                    "cyverse.run",
 		GetAnalysisIDService:          "get-analysis-id",
 		CheckResourceAccessService:    "check-resource-access",
 		VICEBackendNamespace:          "prod",
@@ -36,11 +35,11 @@ func newIncluster() *Incluster {
 		KeycloakClientID:              "theclient",
 		KeycloakClientSecret:          "thesecret",
 		IRODSZone:                     "example",
-		IngressClass:                  "nginx",
+		GatewayProvider:               "traefik",
 		LocalStorageClass:             "example",
 		NATSEncodedConn:               nil,
 	}
-	return New(init, nil, nil, nil)
+	return New(init, nil, nil, nil, nil)
 }
 
 func jobWithDiskRequirements(capacities ...int64) *model.Job {

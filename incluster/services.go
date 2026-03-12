@@ -15,7 +15,7 @@ import (
 // getService assembles and returns the Service needed for the VICE analysis.
 // It does not call the k8s API.
 func (i *Incluster) getService(ctx context.Context, job *model.Job) (*apiv1.Service, error) {
-	labels, err := i.LabelsFromJob(ctx, job)
+	labels, err := i.jobInfo.JobLabels(ctx, job)
 	if err != nil {
 		return nil, err
 	}
