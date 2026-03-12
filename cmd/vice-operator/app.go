@@ -30,6 +30,7 @@ func NewApp(op *operator.Operator, basicAuth bool, username, password string) *A
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	e.Use(middleware.CORS())
 
 	// Health check is always unauthenticated.
 	e.GET("/", func(c echo.Context) error {
