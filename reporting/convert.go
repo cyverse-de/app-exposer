@@ -6,11 +6,12 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-// metaInfoFromLabels builds a MetaInfo from a K8s object's name, namespace,
+// MetaInfoFromLabels builds a MetaInfo from a K8s object's name, namespace,
 // creation timestamp, and labels.
-func metaInfoFromLabels(name, namespace, creationTimestamp string, labels map[string]string) MetaInfo {
+func MetaInfoFromLabels(name, namespace, creationTimestamp string, labels map[string]string) MetaInfo {
 	return MetaInfo{
 		Name:              name,
 		Namespace:         namespace,
@@ -41,14 +42,23 @@ func DeploymentInfoFrom(deployment *appsv1.Deployment) *DeploymentInfo {
 		if container.Name == "analysis" {
 			image = container.Image
 			command = container.Command
-			port = container.Ports[0].ContainerPort
-			user = *container.SecurityContext.RunAsUser
-			group = *container.SecurityContext.RunAsGroup
+
+			if len(container.Ports) > 0 {
+				port = container.Ports[0].ContainerPort
+			}
+			if container.SecurityContext != nil {
+				if container.SecurityContext.RunAsUser != nil {
+					user = *container.SecurityContext.RunAsUser
+				}
+				if container.SecurityContext.RunAsGroup != nil {
+					group = *container.SecurityContext.RunAsGroup
+				}
+			}
 		}
 	}
 
 	return &DeploymentInfo{
-		MetaInfo: metaInfoFromLabels(
+		MetaInfo: MetaInfoFromLabels(
 			deployment.GetName(),
 			deployment.GetNamespace(),
 			deployment.GetCreationTimestamp().String(),
@@ -67,7 +77,7 @@ func PodInfoFrom(pod *corev1.Pod) *PodInfo {
 	labels := pod.GetObjectMeta().GetLabels()
 
 	return &PodInfo{
-		MetaInfo: metaInfoFromLabels(
+		MetaInfo: MetaInfoFromLabels(
 			pod.GetName(),
 			pod.GetNamespace(),
 			pod.GetCreationTimestamp().String(),
@@ -86,7 +96,7 @@ func ConfigMapInfoFrom(cm *corev1.ConfigMap) *ConfigMapInfo {
 	labels := cm.GetObjectMeta().GetLabels()
 
 	return &ConfigMapInfo{
-		MetaInfo: metaInfoFromLabels(
+		MetaInfo: MetaInfoFromLabels(
 			cm.GetName(),
 			cm.GetNamespace(),
 			cm.GetCreationTimestamp().String(),
@@ -115,7 +125,7 @@ func ServiceInfoFrom(svc *corev1.Service) *ServiceInfo {
 	}
 
 	return &ServiceInfo{
-		MetaInfo: metaInfoFromLabels(
+		MetaInfo: MetaInfoFromLabels(
 			svc.GetName(),
 			svc.GetNamespace(),
 			svc.GetCreationTimestamp().String(),
@@ -129,18 +139,39 @@ func ServiceInfoFrom(svc *corev1.Service) *ServiceInfo {
 func IngressInfoFrom(ingress *netv1.Ingress) *IngressInfo {
 	labels := ingress.GetObjectMeta().GetLabels()
 
+	var defaultBackend string
+	if db := ingress.Spec.DefaultBackend; db != nil && db.Service != nil {
+		defaultBackend = fmt.Sprintf("%s:%d", db.Service.Name, db.Service.Port.Number)
+	}
+
 	return &IngressInfo{
-		MetaInfo: metaInfoFromLabels(
+		MetaInfo: MetaInfoFromLabels(
 			ingress.GetName(),
 			ingress.GetNamespace(),
 			ingress.GetCreationTimestamp().String(),
 			labels,
 		),
-		Rules: ingress.Spec.Rules,
-		DefaultBackend: fmt.Sprintf(
-			"%s:%d",
-			ingress.Spec.DefaultBackend.Service.Name,
-			ingress.Spec.DefaultBackend.Service.Port.Number,
+		Rules:          ingress.Spec.Rules,
+		DefaultBackend: defaultBackend,
+	}
+}
+
+// RouteInfoFrom converts a Gateway API HTTPRoute into a RouteInfo.
+func RouteInfoFrom(route *gatewayv1.HTTPRoute) *RouteInfo {
+	labels := route.GetObjectMeta().GetLabels()
+
+	hostnames := make([]string, 0, len(route.Spec.Hostnames))
+	for _, h := range route.Spec.Hostnames {
+		hostnames = append(hostnames, string(h))
+	}
+
+	return &RouteInfo{
+		MetaInfo: MetaInfoFromLabels(
+			route.GetName(),
+			route.GetNamespace(),
+			route.GetCreationTimestamp().String(),
+			labels,
 		),
+		Hostnames: hostnames,
 	}
 }

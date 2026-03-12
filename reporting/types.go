@@ -74,6 +74,12 @@ type IngressInfo struct {
 	Rules          []netv1.IngressRule `json:"rules"`
 }
 
+// RouteInfo contains information about an HTTPRoute used for VICE apps.
+type RouteInfo struct {
+	MetaInfo
+	Hostnames []string `json:"hostnames"`
+}
+
 // ResourceInfo contains all of the K8s resource information about running
 // VICE analyses that we know of and care about.
 type ResourceInfo struct {
@@ -82,6 +88,7 @@ type ResourceInfo struct {
 	ConfigMaps  []ConfigMapInfo  `json:"configMaps"`
 	Services    []ServiceInfo    `json:"services"`
 	Ingresses   []IngressInfo    `json:"ingresses"`
+	Routes      []RouteInfo      `json:"routes"`
 }
 
 // NewResourceInfo returns a ResourceInfo with all slices initialized to empty
@@ -93,12 +100,14 @@ func NewResourceInfo() *ResourceInfo {
 		ConfigMaps:  []ConfigMapInfo{},
 		Services:    []ServiceInfo{},
 		Ingresses:   []IngressInfo{},
+		Routes:      []RouteInfo{},
 	}
 }
 
 // SortByCreationTime sorts each slice in the ResourceInfo by
-// CreationTimestamp descending (newest first). CreationTimestamp is an
-// RFC 3339 string, so lexicographic comparison is correct.
+// CreationTimestamp descending (newest first). CreationTimestamp is produced
+// by metav1.Time.String() with the date in YYYY-MM-DD format, so
+// lexicographic comparison is correct.
 func SortByCreationTime(r *ResourceInfo) {
 	byTime := func(a, b MetaInfo) int {
 		// Reverse order: newer timestamps sort first.
@@ -109,4 +118,5 @@ func SortByCreationTime(r *ResourceInfo) {
 	slices.SortFunc(r.ConfigMaps, func(a, b ConfigMapInfo) int { return byTime(a.MetaInfo, b.MetaInfo) })
 	slices.SortFunc(r.Services, func(a, b ServiceInfo) int { return byTime(a.MetaInfo, b.MetaInfo) })
 	slices.SortFunc(r.Ingresses, func(a, b IngressInfo) int { return byTime(a.MetaInfo, b.MetaInfo) })
+	slices.SortFunc(r.Routes, func(a, b RouteInfo) int { return byTime(a.MetaInfo, b.MetaInfo) })
 }
