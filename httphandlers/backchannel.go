@@ -1,6 +1,7 @@
 package httphandlers
 
 import (
+	"context"
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cyverse-de/app-exposer/constants"
@@ -38,8 +40,8 @@ func NewJWKSCache(jwksURL string) *JWKSCache {
 	}
 }
 
-// GetKey retrieves a public key by kid, fetching from Keycloak if needed
-func (c *JWKSCache) GetKey(kid string) (*rsa.PublicKey, error) {
+// GetKey retrieves a public key by kid, fetching from Keycloak if needed.
+func (c *JWKSCache) GetKey(ctx context.Context, kid string) (*rsa.PublicKey, error) {
 	c.mu.RLock()
 	if time.Since(c.lastFetched) < c.cacheTTL {
 		if key, ok := c.keys[kid]; ok {
@@ -49,8 +51,8 @@ func (c *JWKSCache) GetKey(kid string) (*rsa.PublicKey, error) {
 	}
 	c.mu.RUnlock()
 
-	// Fetch fresh keys
-	if err := c.refresh(); err != nil {
+	// Fetch fresh keys from the JWKS endpoint.
+	if err := c.refresh(ctx); err != nil {
 		return nil, err
 	}
 
@@ -62,28 +64,44 @@ func (c *JWKSCache) GetKey(kid string) (*rsa.PublicKey, error) {
 	return nil, fmt.Errorf("key %s not found in JWKS", kid)
 }
 
-func (c *JWKSCache) refresh() error {
-	resp, err := http.Get(c.jwksURL) //nolint:noctx // JWKS refresh has no caller-supplied context
+// refresh fetches the JWKS key set from the configured endpoint and updates
+// the cache. Only RSA keys are kept, and the cache is only updated when at
+// least one valid key was parsed.
+func (c *JWKSCache) refresh(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.jwksURL, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("creating JWKS request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("fetching JWKS: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("JWKS endpoint returned HTTP %d", resp.StatusCode)
+	}
+
 	var jwks struct {
 		Keys []struct {
+			Kty string `json:"kty"`
 			Kid string `json:"kid"`
 			N   string `json:"n"`
 			E   string `json:"e"`
 		} `json:"keys"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&jwks); err != nil {
-		return err
+		return fmt.Errorf("decoding JWKS response: %w", err)
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
+	newKeys := make(map[string]*rsa.PublicKey)
 	for _, key := range jwks.Keys {
+		// Only process RSA keys.
+		if key.Kty != "RSA" {
+			continue
+		}
+
 		nBytes, err := base64.RawURLEncoding.DecodeString(key.N)
 		if err != nil {
 			log.Warnf("failed to decode N for key %s: %v", key.Kid, err)
@@ -97,9 +115,16 @@ func (c *JWKSCache) refresh() error {
 
 		n := new(big.Int).SetBytes(nBytes)
 		e := int(new(big.Int).SetBytes(eBytes).Int64())
-
-		c.keys[key.Kid] = &rsa.PublicKey{N: n, E: e}
+		newKeys[key.Kid] = &rsa.PublicKey{N: n, E: e}
 	}
+
+	if len(newKeys) == 0 {
+		return fmt.Errorf("JWKS response contained no valid RSA keys")
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.keys = newKeys
 	c.lastFetched = time.Now()
 	return nil
 }
@@ -114,32 +139,44 @@ func (h *HTTPHandlers) HandleBackChannelLogout(c echo.Context) error {
 	}
 
 	// Parse and validate the token
-	userID, err := h.validateLogoutToken(logoutToken)
+	userID, err := h.validateLogoutToken(ctx, logoutToken)
 	if err != nil {
 		log.Errorf("invalid logout token: %v", err)
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid logout token")
 	}
 
-	// Find all VICE deployments for this user
+	// Find all VICE deployments for this user.
 	deployments, err := h.incluster.GetDeploymentsByUserID(ctx, userID)
 	if err != nil {
 		log.Errorf("error finding deployments for user %s: %v", userID, err)
-		// Per OIDC spec, return 200 even on errors
-		return c.NoContent(http.StatusOK)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to process logout")
 	}
 
 	log.Infof("forwarding logout to %d deployments for user %s", len(deployments), userID)
 
-	// Forward logout to each vice-proxy (best effort, fire and forget)
+	// Forward logout to each vice-proxy and wait for all to complete.
+	var wg sync.WaitGroup
+	var successCount atomic.Int32
 	for _, dep := range deployments {
-		go h.forwardLogoutToViceProxy(dep.ExternalID, logoutToken)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := h.forwardLogoutToViceProxy(dep.ExternalID, logoutToken); err != nil {
+				log.Errorf("failed to forward logout to %s: %v", dep.ExternalID, err)
+			} else {
+				successCount.Add(1)
+			}
+		}()
 	}
+	wg.Wait()
 
-	// Per OIDC Back-Channel Logout spec, return 200 OK
+	log.Infof("forwarded logout to %d/%d VICE sessions for user %s",
+		successCount.Load(), len(deployments), userID)
+
 	return c.NoContent(http.StatusOK)
 }
 
-func (h *HTTPHandlers) validateLogoutToken(tokenString string) (string, error) {
+func (h *HTTPHandlers) validateLogoutToken(ctx context.Context, tokenString string) (string, error) {
 	// Parse without validation first to get the kid
 	token, _, err := jwt.NewParser().ParseUnverified(tokenString, jwt.MapClaims{})
 	if err != nil {
@@ -152,7 +189,7 @@ func (h *HTTPHandlers) validateLogoutToken(tokenString string) (string, error) {
 	}
 
 	// Get the public key from cache
-	key, err := h.jwksCache.GetKey(kid)
+	key, err := h.jwksCache.GetKey(ctx, kid)
 	if err != nil {
 		return "", fmt.Errorf("failed to get signing key: %w", err)
 	}
@@ -182,8 +219,9 @@ func (h *HTTPHandlers) validateLogoutToken(tokenString string) (string, error) {
 	return sub, nil
 }
 
-func (h *HTTPHandlers) forwardLogoutToViceProxy(externalID, logoutToken string) {
-	// Service naming: vice-{external-id} on port 60000
+// forwardLogoutToViceProxy sends the logout token to a single vice-proxy
+// sidecar and returns an error if the request fails or returns non-200.
+func (h *HTTPHandlers) forwardLogoutToViceProxy(externalID, logoutToken string) error {
 	viceProxyURL := fmt.Sprintf("http://vice-%s.%s:%d/backchannel-logout",
 		externalID,
 		h.incluster.ViceNamespace,
@@ -193,14 +231,14 @@ func (h *HTTPHandlers) forwardLogoutToViceProxy(externalID, logoutToken string) 
 		"logout_token": {logoutToken},
 	})
 	if err != nil {
-		log.Warnf("failed to forward logout to %s: %v", externalID, err)
-		return
+		return fmt.Errorf("POST to %s: %w", externalID, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Warnf("vice-proxy %s returned status %d for logout", externalID, resp.StatusCode)
-	} else {
-		log.Infof("successfully forwarded logout to %s", externalID)
+		return fmt.Errorf("vice-proxy %s returned status %d", externalID, resp.StatusCode)
 	}
+
+	log.Infof("successfully forwarded logout to %s", externalID)
+	return nil
 }
