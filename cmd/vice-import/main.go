@@ -48,7 +48,7 @@ func main() {
 		log.Fatalf("importing app: %v", err)
 	}
 
-	fmt.Printf("Import successful:\n")
+	fmt.Println("Import successful:")
 	fmt.Printf("  App ID:     %s\n", result.AppID)
 	fmt.Printf("  Version ID: %s\n", result.VersionID)
 	fmt.Printf("  Tool ID:    %s\n", result.ToolID)

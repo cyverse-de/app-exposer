@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -399,5 +398,5 @@ func main() {
 	)
 
 	log.Printf("listening on port %d", *listenPort)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", strconv.Itoa(*listenPort)), app.router))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *listenPort), app.router))
 }

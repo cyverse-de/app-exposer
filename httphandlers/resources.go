@@ -170,7 +170,6 @@ func (h *HTTPHandlers) FilterableRoutesHandler(c echo.Context) error {
 	})
 }
 
-
 // AdminDescribeAnalysisHandler returns the K8s resource listing for the
 // analysis whose subdomain matches the 'host' path parameter.
 //

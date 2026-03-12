@@ -34,110 +34,142 @@ var (
 	doVICEProxyStorageLimit     = true
 )
 
+// SetDefaultCPUResourceRequest sets the default CPU resource request for analyses.
 func SetDefaultCPUResourceRequest(value resourcev1.Quantity) {
 	defaultCPUResourceRequest = value
 }
 
+// SetDefaultCPUResourceLimit sets the default CPU resource limit for analyses.
 func SetDefaultCPUResourceLimit(value resourcev1.Quantity) {
 	defaultCPUResourceLimit = value
 }
 
+// SetDoDefaultCPUResourceLimit controls whether a default CPU resource limit
+// is applied to analyses.
 func SetDoDefaultCPUResourceLimit(value bool) {
 	doDefaultCPUResourceLimit = value
 }
 
+// SetDefaultMemResourceRequest sets the default memory resource request for analyses.
 func SetDefaultMemResourceRequest(value resourcev1.Quantity) {
 	defaultMemResourceRequest = value
 }
 
+// SetDefaultMemResourceLimit sets the default memory resource limit for analyses.
 func SetDefaultMemResourceLimit(value resourcev1.Quantity) {
 	defaultMemResourceLimit = value
 }
 
+// SetDoDefaultMemResourceLimit controls whether a default memory resource limit
+// is applied to analyses.
 func SetDoDefaultMemResourceLimit(value bool) {
 	doDefaultMemResourceLimit = value
 }
 
+// SetDefaultStorageRequest sets the default ephemeral storage request for analyses.
 func SetDefaultStorageRequest(value resourcev1.Quantity) {
 	defaultStorageRequest = value
 }
 
+// SetVICEProxyCPUResourceRequest sets the CPU resource request for the VICE proxy sidecar.
 func SetVICEProxyCPUResourceRequest(value resourcev1.Quantity) {
 	viceProxyCPUResourceRequest = value
 }
 
+// SetVICEProxyCPUResourceLimit sets the CPU resource limit for the VICE proxy sidecar.
 func SetVICEProxyCPUResourceLimit(value resourcev1.Quantity) {
 	viceProxyCPUResourceLimit = value
 }
 
+// SetDoVICEProxyCPUResourceLimit controls whether a CPU resource limit is
+// applied to the VICE proxy sidecar.
 func SetDoVICEProxyCPUResourceLimit(value bool) {
 	doVICEProxyCPUResourceLimit = value
 }
 
+// SetVICEProxyMemResourceRequest sets the memory resource request for the VICE proxy sidecar.
 func SetVICEProxyMemResourceRequest(value resourcev1.Quantity) {
 	viceProxyMemResourceRequest = value
 }
 
+// SetVICEProxyMemResourceLimit sets the memory resource limit for the VICE proxy sidecar.
 func SetVICEProxyMemResourceLimit(value resourcev1.Quantity) {
 	viceProxyMemResourceLimit = value
 }
 
+// SetDoVICEProxyMemResourceLimit controls whether a memory resource limit is
+// applied to the VICE proxy sidecar.
 func SetDoVICEProxyMemResourceLimit(value bool) {
 	doVICEProxyMemResourceLimit = value
 }
 
+// SetVICEProxyStorageRequest sets the ephemeral storage request for the VICE proxy sidecar.
 func SetVICEProxyStorageRequest(value resourcev1.Quantity) {
 	viceProxyStorageRequest = value
 }
 
+// SetVICEProxyStorageLimit sets the ephemeral storage limit for the VICE proxy sidecar.
 func SetVICEProxyStorageLimit(value resourcev1.Quantity) {
 	viceProxyStorageLimit = value
 }
 
+// SetDoVICEProxyStorageLimit controls whether an ephemeral storage limit is
+// applied to the VICE proxy sidecar.
 func SetDoVICEProxyStorageLimit(value bool) {
 	doVICEProxyStorageLimit = value
 }
 
+// DefaultCPUResourceRequest returns the default CPU resource request for analyses.
 func DefaultCPUResourceRequest() resourcev1.Quantity {
 	return defaultCPUResourceRequest
 }
 
+// DefaultCPUResourceLimit returns the default CPU resource limit for analyses.
 func DefaultCPUResourceLimit() resourcev1.Quantity {
 	return defaultCPUResourceLimit
 }
 
+// DefaultMemResourceRequest returns the default memory resource request for analyses.
 func DefaultMemResourceRequest() resourcev1.Quantity {
 	return defaultMemResourceRequest
 }
 
+// DefaultMemResourceLimit returns the default memory resource limit for analyses.
 func DefaultMemResourceLimit() resourcev1.Quantity {
 	return defaultMemResourceLimit
 }
 
+// DefaultStorageRequest returns the default ephemeral storage request for analyses.
 func DefaultStorageRequest() resourcev1.Quantity {
 	return defaultStorageRequest
 }
 
+// VICEProxyCPUResourceRequest returns the CPU resource request for the VICE proxy sidecar.
 func VICEProxyCPUResourceRequest() resourcev1.Quantity {
 	return viceProxyCPUResourceRequest
 }
 
+// VICEProxyCPUResourceLimit returns the CPU resource limit for the VICE proxy sidecar.
 func VICEProxyCPUResourceLimit() resourcev1.Quantity {
 	return viceProxyCPUResourceLimit
 }
 
+// VICEProxyMemResourceRequest returns the memory resource request for the VICE proxy sidecar.
 func VICEProxyMemResourceRequest() resourcev1.Quantity {
 	return viceProxyMemResourceRequest
 }
 
+// VICEProxyMemResourceLimit returns the memory resource limit for the VICE proxy sidecar.
 func VICEProxyMemResourceLimit() resourcev1.Quantity {
 	return viceProxyMemResourceLimit
 }
 
+// VICEProxyStorageRequest returns the ephemeral storage request for the VICE proxy sidecar.
 func VICEProxyStorageRequest() resourcev1.Quantity {
 	return viceProxyStorageRequest
 }
 
+// VICEProxyStorageLimit returns the ephemeral storage limit for the VICE proxy sidecar.
 func VICEProxyStorageLimit() resourcev1.Quantity {
 	return viceProxyStorageLimit
 }
