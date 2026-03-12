@@ -34,8 +34,8 @@ func getListSelector(customLabels map[string]string) labels.Selector {
 
 // getListOptions returns a ListOptions for listing a resource that has the
 // labels provided in customLabels, but is missing the labels provided in missingLabels.
-func getListOptions(customLabels map[string]string, missingLabels []string) metav1.ListOptions {
-	// Get the selector populated with the labels that should be present
+func getListOptions(customLabels map[string]string, missingLabels []string) (metav1.ListOptions, error) {
+	// Get the selector populated with the labels that should be present.
 	s := getListSelector(customLabels)
 
 	// Accumulate requirements for labels that must be absent from listed objects.
@@ -44,24 +44,26 @@ func getListOptions(customLabels map[string]string, missingLabels []string) meta
 	for _, missingLabel := range missingLabels {
 		newReq, err := labels.NewRequirement(missingLabel, selection.DoesNotExist, []string{})
 		if err != nil {
-			log.Error(err)
-		} else {
-			reqs = append(reqs, *newReq)
+			return metav1.ListOptions{}, fmt.Errorf("invalid label requirement %q: %w", missingLabel, err)
 		}
+		reqs = append(reqs, *newReq)
 	}
 
 	s = s.Add(reqs...)
 
 	return metav1.ListOptions{
 		LabelSelector: s.String(),
-	}
+	}, nil
 }
 
 // DeploymentList returns all Deployments in namespace matching customLabels
 // and lacking any of the missingLabels. The "app-type=interactive" selector
 // is always applied.
 func (i *Incluster) DeploymentList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*v1.DeploymentList, error) {
-	listOptions := getListOptions(customLabels, missingLabels)
+	listOptions, err := getListOptions(customLabels, missingLabels)
+	if err != nil {
+		return nil, err
+	}
 
 	depList, err := i.clientset.AppsV1().Deployments(namespace).List(ctx, listOptions)
 	if err != nil {
@@ -107,7 +109,10 @@ func (i *Incluster) GetDeploymentsByUserID(ctx context.Context, userID string) (
 }
 
 func (i *Incluster) podList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.PodList, error) {
-	listOptions := getListOptions(customLabels, missingLabels)
+	listOptions, err := getListOptions(customLabels, missingLabels)
+	if err != nil {
+		return nil, err
+	}
 
 	podList, err := i.clientset.CoreV1().Pods(namespace).List(ctx, listOptions)
 	if err != nil {
@@ -118,7 +123,10 @@ func (i *Incluster) podList(ctx context.Context, namespace string, customLabels 
 }
 
 func (i *Incluster) configmapsList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.ConfigMapList, error) {
-	listOptions := getListOptions(customLabels, missingLabels)
+	listOptions, err := getListOptions(customLabels, missingLabels)
+	if err != nil {
+		return nil, err
+	}
 
 	cfgList, err := i.clientset.CoreV1().ConfigMaps(namespace).List(ctx, listOptions)
 	if err != nil {
@@ -129,7 +137,10 @@ func (i *Incluster) configmapsList(ctx context.Context, namespace string, custom
 }
 
 func (i *Incluster) serviceList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.ServiceList, error) {
-	listOptions := getListOptions(customLabels, missingLabels)
+	listOptions, err := getListOptions(customLabels, missingLabels)
+	if err != nil {
+		return nil, err
+	}
 
 	svcList, err := i.clientset.CoreV1().Services(namespace).List(ctx, listOptions)
 	if err != nil {
@@ -140,7 +151,14 @@ func (i *Incluster) serviceList(ctx context.Context, namespace string, customLab
 }
 
 func (i *Incluster) routeList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*gatewayv1.HTTPRouteList, error) {
-	listOptions := getListOptions(customLabels, missingLabels)
+	if i.gatewayClient == nil {
+		return &gatewayv1.HTTPRouteList{}, nil
+	}
+
+	listOptions, err := getListOptions(customLabels, missingLabels)
+	if err != nil {
+		return nil, err
+	}
 
 	client := i.gatewayClient.HTTPRoutes(namespace)
 	routeList, err := client.List(ctx, listOptions)
@@ -159,7 +177,10 @@ type ServiceInfoPort = reporting.ServiceInfoPort
 type ServiceInfo = reporting.ServiceInfo
 type IngressInfo = reporting.IngressInfo
 
-// RouteInfo contains information about HTTP routes used for VICE apps.
+// RouteInfo is defined locally (not aliased from reporting) because the
+// incluster listing exposes the full HTTPRoute rules for detailed status,
+// while reporting.RouteInfo uses simplified hostname-only info for
+// cross-cluster aggregation.
 type RouteInfo struct {
 	MetaInfo
 	Rules []gatewayv1.HTTPRouteRule `json:"rules"`
@@ -167,20 +188,13 @@ type RouteInfo struct {
 
 // routeInfo returns a RouteInfo struct for an HTTPRoute.
 func routeInfo(route *gatewayv1.HTTPRoute) *RouteInfo {
-	labels := route.GetObjectMeta().GetLabels()
-
 	return &RouteInfo{
-		MetaInfo: MetaInfo{
-			Name:              route.GetName(),
-			Namespace:         route.GetNamespace(),
-			AnalysisName:      labels["analysis-name"],
-			AppName:           labels["app-name"],
-			AppID:             labels["app-id"],
-			ExternalID:        labels["external-id"],
-			UserID:            labels["user-id"],
-			Username:          labels["username"],
-			CreationTimestamp: route.GetCreationTimestamp().String(),
-		},
+		MetaInfo: reporting.MetaInfoFromLabels(
+			route.GetName(),
+			route.GetNamespace(),
+			route.GetCreationTimestamp().String(),
+			route.GetObjectMeta().GetLabels(),
+		),
 		Rules: route.Spec.Rules,
 	}
 }
@@ -369,7 +383,7 @@ func populateLoginIP(ctx context.Context, a *apps.Apps, existingLabels map[strin
 
 func (i *Incluster) populateAdditionalLabels(ctx context.Context, existingLabels map[string]string) (map[string]string, []error) {
 	var err error
-	errs := []error{}
+	var errs []error
 
 	existingLabels = populateSubdomain(existingLabels)
 	existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
@@ -457,6 +471,10 @@ func (i *Incluster) relabelServices(ctx context.Context) []error {
 }
 
 func (i *Incluster) relabelRoutes(ctx context.Context) []error {
+	if i.gatewayClient == nil {
+		return nil
+	}
+
 	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
 	var errs []error
 
