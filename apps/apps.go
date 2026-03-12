@@ -128,13 +128,9 @@ const getUserIPQuery = `
      LIMIT 1
 `
 
-// GetUserIP returns the latest login ip address for the given user ID.
+// GetUserIP returns the latest login IP address for the given user ID.
 func (a *Apps) GetUserIP(ctx context.Context, userID string) (string, error) {
-	var (
-		ipAddr sql.NullString
-		retval string
-	)
-
+	var ipAddr sql.NullString
 	err := a.DB.QueryRowContext(ctx, getUserIPQuery, userID).Scan(&ipAddr)
 	if err == sql.ErrNoRows {
 		log.Errorf("no logins recorded for %s; please check admin Keycloak settings", userID)
@@ -143,14 +139,7 @@ func (a *Apps) GetUserIP(ctx context.Context, userID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	if ipAddr.Valid {
-		retval = ipAddr.String
-	} else {
-		retval = ""
-	}
-
-	return retval, nil
+	return ipAddr.String, nil
 }
 
 const getAnalysisStatusQuery = `
@@ -217,7 +206,7 @@ func (a *Apps) setMillicoresReserved(ctx context.Context, analysisID string, mil
 }
 
 func (a *Apps) tryForAnalysisID(ctx context.Context, job *model.Job, maxAttempts int) (string, error) {
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		analysisID, err := a.GetAnalysisIDByExternalID(ctx, job.InvocationID)
 		if err != nil {
 			time.Sleep(1 * time.Second)
@@ -229,29 +218,128 @@ func (a *Apps) tryForAnalysisID(ctx context.Context, job *model.Job, maxAttempts
 }
 
 func (a *Apps) storeMillicoresInternal(ctx context.Context, job *model.Job, millicores *apd.Decimal) error {
-	analysisID, err := a.tryForAnalysisID(ctx, job, 30)
-	if err != nil {
-		return err
+	var analysisID string
+
+	// Prefer job.ID if available (new vice-proxy provides this directly).
+	if job.ID != "" {
+		analysisID = job.ID
+	} else {
+		// Fallback to lookup by external ID for backward compatibility.
+		var err error
+		analysisID, err = a.tryForAnalysisID(ctx, job, 30)
+		if err != nil {
+			return err
+		}
 	}
 
-	if err = a.setMillicoresReserved(ctx, analysisID, millicores); err != nil {
-		return err
-	}
-
-	return err
+	return a.setMillicoresReserved(ctx, analysisID, millicores)
 }
 
-// SetMillicoresReserved updates the number of millicores reserved for a single job.
+// SetMillicoresReserved enqueues a job to asynchronously update the millicores
+// reserved for the given analysis.
 func (a *Apps) SetMillicoresReserved(job *model.Job, millicores *apd.Decimal) error {
-	newjob := millicoresJob{
+	a.addJob <- millicoresJob{
 		ID:                 uuid.New(),
 		Job:                *job,
 		MillicoresReserved: millicores,
 	}
-
-	a.addJob <- newjob
-
 	return nil
+}
+
+const setOperatorNameStmt = `
+	UPDATE jobs
+	SET operator_name = $2
+	WHERE id = $1;
+`
+
+// SetOperatorName records which operator is running an analysis. It retries
+// briefly because the jobs row may not be visible yet if the caller's
+// transaction hasn't committed by the time we reach this point.
+func (a *Apps) SetOperatorName(ctx context.Context, analysisID, operatorName string) error {
+	const maxRetries = 5
+	const retryDelay = 1 * time.Second
+
+	for attempt := range maxRetries {
+		result, err := a.DB.ExecContext(ctx, setOperatorNameStmt, analysisID, operatorName)
+		if err != nil {
+			return err
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows > 0 {
+			log.Infof("set operator name to %q for analysis %s (attempt %d)", operatorName, analysisID, attempt+1)
+			return nil
+		}
+
+		// Row not found yet; wait for the caller's transaction to commit.
+		if attempt < maxRetries-1 {
+			log.Debugf("jobs row not yet visible for analysis %s, retrying in %s (attempt %d/%d)",
+				analysisID, retryDelay, attempt+1, maxRetries)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(retryDelay):
+			}
+		}
+	}
+
+	return fmt.Errorf("no jobs row found for analysis ID %s after %d attempts", analysisID, maxRetries)
+}
+
+// JobDebugInfo holds key fields from the jobs table for diagnostic logging.
+type JobDebugInfo struct {
+	ID           string         `db:"id"`
+	OperatorName sql.NullString `db:"operator_name"`
+	Status       string         `db:"status"`
+	AppID        string         `db:"app_id"`
+}
+
+const getJobDebugInfoQuery = `
+	SELECT j.id, j.operator_name, j.status, j.app_id
+	FROM jobs j
+	WHERE j.id = $1
+`
+
+// GetJobDebugInfo returns diagnostic fields for a job by its analysis ID,
+// or nil if no row exists.
+func (a *Apps) GetJobDebugInfo(ctx context.Context, analysisID string) (*JobDebugInfo, error) {
+	var info JobDebugInfo
+	err := a.DB.QueryRowContext(ctx, getJobDebugInfoQuery, analysisID).Scan(
+		&info.ID, &info.OperatorName, &info.Status, &info.AppID,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
+const getOperatorNameQuery = `
+	SELECT operator_name
+	FROM jobs
+	WHERE id = $1
+`
+
+// GetOperatorName returns the name of the operator running an analysis,
+// or an empty string if none is set or no row exists.
+func (a *Apps) GetOperatorName(ctx context.Context, analysisID string) (string, error) {
+	var name sql.NullString
+	err := a.DB.QueryRowContext(ctx, getOperatorNameQuery, analysisID).Scan(&name)
+	if err == sql.ErrNoRows {
+		// The analysis doesn't exist in the database; treat as no operator assigned.
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if name.Valid {
+		return name.String, nil
+	}
+	return "", nil
 }
 
 const externalIDsByStatusQuery = `
@@ -263,20 +351,11 @@ const externalIDsByStatusQuery = `
        AND jt.system_id = $2;
 `
 
-type ExternalID struct {
-	ExternalID string `db:"external_id"`
-}
-
-// ListExternalIDsByStatus lists the external IDs of analyses based on their status.
+// ListExternalIDs lists the external IDs of analyses filtered by status and kind.
 func (a *Apps) ListExternalIDs(ctx context.Context, status constants.AnalysisStatus, kind constants.AnalysisKind) ([]string, error) {
-	var (
-		err error
-		ids []string
-	)
-
-	if err = a.DB.Select(&ids, externalIDsByStatusQuery, status, constants.Interactive); err != nil {
+	var ids []string
+	if err := a.DB.SelectContext(ctx, &ids, externalIDsByStatusQuery, status, kind); err != nil {
 		return ids, err
 	}
-
 	return ids, nil
 }

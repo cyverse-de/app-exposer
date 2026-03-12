@@ -28,6 +28,7 @@ require (
 	github.com/cyverse-de/messaging/v12 v12.0.0
 	github.com/cyverse-de/model/v10 v10.0.0
 	github.com/cyverse-de/p/go/qms v0.1.13
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/gosimple/slug v1.15.0
