@@ -3,6 +3,8 @@
 package operatorclient
 
 import (
+	"fmt"
+
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -38,6 +40,20 @@ type CapacityResponse struct {
 	AllocatableMemory int64 `json:"allocatableMemory"` // bytes
 	UsedCPU           int64 `json:"usedCPU"`           // millicores
 	UsedMemory        int64 `json:"usedMemory"`        // bytes
+}
+
+// Validate checks that the bundle has the minimum required fields.
+func (b *AnalysisBundle) Validate() error {
+	if b.AnalysisID == "" {
+		return fmt.Errorf("analysisID is required")
+	}
+	if b.Deployment == nil {
+		return fmt.Errorf("deployment is required")
+	}
+	if b.Service == nil {
+		return fmt.Errorf("service is required")
+	}
+	return nil
 }
 
 // OperatorConfig holds the configuration for a single vice-operator instance.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 )
 
 // Sentinel errors for scheduler failure modes.
@@ -50,10 +51,15 @@ func NewScheduler(configs []OperatorConfig) (*Scheduler, error) {
 // analysis. This minimizes usage of later (potentially more expensive)
 // clusters.
 func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) (string, error) {
+	// Track capacity-check errors separately so we can distinguish
+	// "all operators unreachable" from "all operators at capacity."
+	var capacityErrors int
+
 	for _, op := range s.operators {
 		// Check capacity first.
 		cap, err := op.Capacity(ctx)
 		if err != nil {
+			capacityErrors++
 			log.Warnf("operator %s capacity check failed: %v", op.Name(), err)
 			continue
 		}
@@ -77,13 +83,19 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 		return op.Name(), nil
 	}
 
+	// Every operator failed with an error (none were reachable).
+	if capacityErrors == len(s.operators) {
+		return "", fmt.Errorf("all %d operators unreachable: %w", len(s.operators), ErrAllOperatorsExhausted)
+	}
+
 	return "", ErrAllOperatorsExhausted
 }
 
-// Clients returns all operator clients so callers can iterate for aggregation
-// (e.g. listing analyses across all clusters).
+// Clients returns a copy of all operator clients so callers can iterate for
+// aggregation (e.g. listing analyses across all clusters) without mutating
+// the scheduler's internal state.
 func (s *Scheduler) Clients() []*Client {
-	return s.operators
+	return slices.Clone(s.operators)
 }
 
 // ClientByName returns the operator client with the given name, or nil.
