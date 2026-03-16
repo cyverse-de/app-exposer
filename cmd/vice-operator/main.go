@@ -27,6 +27,7 @@ func main() {
 		port              int
 		routingType       string
 		ingressClass      string
+		gpuVendorFlag     string
 		maxAnalyses       int
 		nodeLabelSelector string
 		logLevel          string
@@ -40,6 +41,7 @@ func main() {
 	flag.IntVar(&port, "port", 60001, "Listen port")
 	flag.StringVar(&routingType, "routing-type", "gateway", "Routing type: gateway, nginx, or tailscale")
 	flag.StringVar(&ingressClass, "ingress-class", "nginx", "Ingress class name")
+	flag.StringVar(&gpuVendorFlag, "gpu-vendor", "nvidia", "GPU vendor: nvidia or amd")
 	flag.IntVar(&maxAnalyses, "max-analyses", 50, "Max concurrent analyses")
 	flag.StringVar(&nodeLabelSelector, "node-label-selector", "", "Filter schedulable nodes by label")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level")
@@ -81,6 +83,11 @@ func main() {
 		log.Fatalf("invalid routing type: %v", err)
 	}
 
+	gpuVendor, err := operator.ParseGPUVendor(gpuVendorFlag)
+	if err != nil {
+		log.Fatalf("invalid GPU vendor: %v", err)
+	}
+
 	// Create gateway client when using gateway routing.
 	var gwClient *gatewayclient.GatewayV1Client
 	if rt == operator.RoutingGateway {
@@ -91,12 +98,12 @@ func main() {
 	}
 
 	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
-	op := operator.NewOperator(clientset, gwClient, namespace, rt, ingressClass, capacityCalc)
+	op := operator.NewOperator(clientset, gwClient, namespace, rt, ingressClass, gpuVendor, capacityCalc)
 
 	app := NewApp(op, basicAuth, basicAuthUsername, basicAuthPassword)
 	listenAddr := fmt.Sprintf(":%d", port)
-	log.Infof("vice-operator listening on %s (namespace=%s, routing=%s, ingress-class=%s, max-analyses=%d)",
-		listenAddr, namespace, routingType, ingressClass, maxAnalyses)
+	log.Infof("vice-operator listening on %s (namespace=%s, routing=%s, ingress-class=%s, gpu-vendor=%s, max-analyses=%d)",
+		listenAddr, namespace, routingType, ingressClass, gpuVendorFlag, maxAnalyses)
 
 	if err := app.Start(listenAddr); err != nil {
 		log.Error(err)

@@ -26,6 +26,7 @@ type Operator struct {
 	namespace     string
 	routingType   RoutingType
 	ingressClass  string
+	gpuVendor     GPUVendor
 	capacityCalc  *CapacityCalculator
 }
 
@@ -37,6 +38,7 @@ func NewOperator(
 	namespace string,
 	routingType RoutingType,
 	ingressClass string,
+	gpuVendor GPUVendor,
 	capacityCalc *CapacityCalculator,
 ) *Operator {
 	if clientset == nil {
@@ -55,6 +57,7 @@ func NewOperator(
 		namespace:     namespace,
 		routingType:   routingType,
 		ingressClass:  ingressClass,
+		gpuVendor:     gpuVendor,
 		capacityCalc:  capacityCalc,
 	}
 }
@@ -137,6 +140,9 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 		// Legacy bundle with only an Ingress: transform it directly.
 		bundle.Ingress = TransformIngress(bundle.Ingress, o.routingType, o.ingressClass)
 	}
+
+	// Rewrite GPU resource names to match the cluster's GPU vendor.
+	TransformGPUVendor(bundle.Deployment, o.gpuVendor)
 
 	// Apply all resources via upsert pattern.
 	if err := o.applyBundle(ctx, &bundle); err != nil {

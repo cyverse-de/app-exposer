@@ -7,10 +7,105 @@ import (
 	"fmt"
 	"strings"
 
+	appsv1 "k8s.io/api/apps/v1"
+	apiv1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
+
+// GPU resource and affinity key constants used by TransformGPUVendor.
+const (
+	nvidiaGPUResource    apiv1.ResourceName = "nvidia.com/gpu"
+	amdGPUResource       apiv1.ResourceName = "amd.com/gpu"
+	nvidiaModelAffinityK                    = "nvidia.com/gpu.product"
+	// amdModelAffinityK mirrors the NVIDIA convention; verify against actual
+	// AMD device plugin labels in the target cluster.
+	amdModelAffinityK = "amd.com/gpu.product"
+)
+
+// GPUVendor describes which GPU vendor the operator's cluster uses.
+type GPUVendor string
+
+const (
+	// GPUVendorNvidia represents NVIDIA GPU hardware (the default; bundles
+	// arrive pre-configured for NVIDIA).
+	GPUVendorNvidia GPUVendor = "nvidia"
+
+	// GPUVendorAMD represents AMD GPU hardware.
+	GPUVendorAMD GPUVendor = "amd"
+)
+
+// ParseGPUVendor validates and returns a GPUVendor from a string.
+// Returns an error for unrecognized values.
+func ParseGPUVendor(s string) (GPUVendor, error) {
+	switch GPUVendor(s) {
+	case GPUVendorNvidia, GPUVendorAMD:
+		return GPUVendor(s), nil
+	default:
+		return "", fmt.Errorf("unknown GPU vendor %q (valid: nvidia, amd)", s)
+	}
+}
+
+// TransformGPUVendor rewrites GPU-specific resource names in all containers
+// (including init containers) and node affinity keys to match the target vendor.
+// Bundles arrive with NVIDIA references; when vendor is AMD, those are rewritten
+// to the AMD equivalents. Modifies the deployment in place.
+func TransformGPUVendor(deployment *appsv1.Deployment, vendor GPUVendor) {
+	if deployment == nil || vendor == GPUVendorNvidia {
+		return
+	}
+
+	// Rewrite container resource requests and limits.
+	for i := range deployment.Spec.Template.Spec.Containers {
+		renameGPUResource(&deployment.Spec.Template.Spec.Containers[i].Resources)
+	}
+	for i := range deployment.Spec.Template.Spec.InitContainers {
+		renameGPUResource(&deployment.Spec.Template.Spec.InitContainers[i].Resources)
+	}
+
+	// Rewrite node affinity keys in both required and preferred terms.
+	affinity := deployment.Spec.Template.Spec.Affinity
+	if affinity == nil || affinity.NodeAffinity == nil {
+		return
+	}
+	if req := affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution; req != nil {
+		for i := range req.NodeSelectorTerms {
+			rewriteMatchExpressions(req.NodeSelectorTerms[i].MatchExpressions)
+		}
+	}
+	for i := range affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+		rewriteMatchExpressions(affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution[i].Preference.MatchExpressions)
+	}
+}
+
+// rewriteMatchExpressions renames nvidia.com/gpu.product keys to the AMD
+// equivalent in a slice of NodeSelectorRequirements.
+func rewriteMatchExpressions(exprs []apiv1.NodeSelectorRequirement) {
+	for i := range exprs {
+		if exprs[i].Key == nvidiaModelAffinityK {
+			exprs[i].Key = amdModelAffinityK
+		}
+	}
+}
+
+// renameGPUResource replaces nvidia.com/gpu with amd.com/gpu in both the
+// Requests and Limits maps of a ResourceRequirements.
+func renameGPUResource(res *apiv1.ResourceRequirements) {
+	swapResource(res.Requests)
+	swapResource(res.Limits)
+}
+
+// swapResource moves a resource quantity from the NVIDIA key to the AMD key.
+func swapResource(rl apiv1.ResourceList) {
+	if rl == nil {
+		return
+	}
+	if qty, ok := rl[nvidiaGPUResource]; ok {
+		rl[amdGPUResource] = qty.DeepCopy()
+		delete(rl, nvidiaGPUResource)
+	}
+}
 
 // RoutingType describes which networking approach the operator's cluster uses.
 type RoutingType string
