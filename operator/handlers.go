@@ -224,10 +224,10 @@ type PodInfo struct {
 func (o *Operator) HandleStatus(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
-	log.Debugf("status check for analysis %s", analysisID)
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
+	log.Debugf("status check for analysis %s", analysisID)
 
 	opts := analysisLabelSelector(analysisID)
 	resp := StatusResponse{AnalysisID: analysisID}
@@ -316,10 +316,10 @@ type URLReadyResponse struct {
 func (o *Operator) HandleURLReady(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
-	log.Debugf("url-ready check for analysis %s", analysisID)
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
+	log.Debugf("url-ready check for analysis %s", analysisID)
 
 	opts := analysisLabelSelector(analysisID)
 
@@ -385,10 +385,10 @@ func (o *Operator) HandleURLReady(c echo.Context) error {
 func (o *Operator) HandlePods(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
-	log.Debugf("pods check for analysis %s", analysisID)
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
+	log.Debugf("pods check for analysis %s", analysisID)
 
 	opts := analysisLabelSelector(analysisID)
 	pods, err := o.clientset.CoreV1().Pods(o.namespace).List(ctx, opts)
@@ -441,10 +441,10 @@ type LogEntry struct {
 func (o *Operator) HandleLogs(c echo.Context) error {
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
-	log.Debugf("logs request for analysis %s", analysisID)
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
+	log.Debugf("logs request for analysis %s", analysisID)
 
 	opts := analysisLabelSelector(analysisID)
 	pods, err := o.clientset.CoreV1().Pods(o.namespace).List(ctx, opts)

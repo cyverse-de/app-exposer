@@ -39,6 +39,10 @@ func main() {
 		basicAuthPassword   string
 		viceBaseURL         string
 		clusterConfigSecret string
+		imagePullSecret     string
+		registryServer      string
+		registryUsername    string
+		registryPassword    string
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -55,6 +59,10 @@ func main() {
 	flag.StringVar(&basicAuthPassword, "basic-auth-password", "", "Basic auth password (required when --basic-auth is set)")
 	flag.StringVar(&viceBaseURL, "vice-base-url", "https://cyverse.run", "Base URL for VICE, stored in the cluster config secret")
 	flag.StringVar(&clusterConfigSecret, "cluster-config-secret", "cluster-config-secret", "Name of the K8s Secret holding cluster config (e.g. VICE_BASE_URL)")
+	flag.StringVar(&imagePullSecret, "image-pull-secret", "vice-image-pull-secret", "Name of the K8s image pull Secret")
+	flag.StringVar(&registryServer, "registry-server", "", "Docker registry server (e.g. harbor.cyverse.org)")
+	flag.StringVar(&registryUsername, "registry-username", "", "Docker registry username")
+	flag.StringVar(&registryPassword, "registry-password", "", "Docker registry password")
 	flag.Parse()
 
 	// Validate basic auth flags.
@@ -66,6 +74,12 @@ func main() {
 	parsedURL, parseErr := url.Parse(viceBaseURL)
 	if parseErr != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
 		log.Fatalf("--vice-base-url must be a valid HTTP(S) URL, got %q", viceBaseURL)
+	}
+
+	// Validate registry flags: all three required together, or none.
+	registryFlagsSet := registryServer != "" || registryUsername != "" || registryPassword != ""
+	if registryFlagsSet && (registryServer == "" || registryUsername == "" || registryPassword == "") {
+		log.Fatal("--registry-server, --registry-username, and --registry-password must all be provided together")
 	}
 
 	// Configure log level.
@@ -94,10 +108,19 @@ func main() {
 	// Ensure the cluster config secret exists with the correct VICE_BASE_URL
 	// before starting the operator, so vice-proxy containers can reference it
 	// as env vars via EnvFrom.
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := operator.EnsureClusterConfigSecret(ctx, clientset, namespace, clusterConfigSecret, viceBaseURL); err != nil {
+	configCtx, configCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer configCancel()
+	if err := operator.EnsureClusterConfigSecret(configCtx, clientset, namespace, clusterConfigSecret, viceBaseURL); err != nil {
 		log.Fatalf("failed to ensure cluster config secret: %v", err)
+	}
+
+	// Ensure the image pull secret exists so pods can pull from private registries.
+	if registryServer != "" {
+		pullCtx, pullCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer pullCancel()
+		if err := operator.EnsureImagePullSecret(pullCtx, clientset, namespace, imagePullSecret, registryServer, registryUsername, registryPassword); err != nil {
+			log.Fatalf("failed to ensure image pull secret: %v", err)
+		}
 	}
 
 	rt, err := operator.ParseRoutingType(routingType)
