@@ -15,6 +15,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -23,7 +24,7 @@ func newTestOperator(t *testing.T, maxAnalyses int) (*Operator, *fake.Clientset)
 	t.Helper()
 	clientset := fake.NewSimpleClientset()
 	calc := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
-	op := NewOperator(clientset, nil, "vice-apps", RoutingNginx, "nginx", calc)
+	op := NewOperator(clientset, nil, "vice-apps", RoutingNginx, "nginx", GPUVendorNvidia, calc)
 	return op, clientset
 }
 
@@ -150,6 +151,83 @@ func TestHandleLaunch(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestHandleLaunchGPUVendorAMD verifies that HandleLaunch rewrites NVIDIA GPU
+// resources to AMD when the operator is configured with GPUVendorAMD.
+func TestHandleLaunchGPUVendorAMD(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	calc := NewCapacityCalculator(clientset, "vice-apps", 10, "")
+	op := NewOperator(clientset, nil, "vice-apps", RoutingNginx, "nginx", GPUVendorAMD, calc)
+
+	bundle := operatorclient.AnalysisBundle{
+		AnalysisID: "gpu-amd-test",
+		Deployment: &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "gpu-dep",
+				Labels: map[string]string{"analysis-id": "gpu-amd-test"},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
+				Template: apiv1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+					Spec: apiv1.PodSpec{
+						Containers: []apiv1.Container{
+							{
+								Name:  "analysis",
+								Image: "img",
+								Resources: apiv1.ResourceRequirements{
+									Requests: apiv1.ResourceList{
+										apiv1.ResourceName("nvidia.com/gpu"): resource.MustParse("1"),
+									},
+									Limits: apiv1.ResourceList{
+										apiv1.ResourceName("nvidia.com/gpu"): resource.MustParse("1"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Service: &apiv1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "gpu-svc",
+				Labels: map[string]string{"analysis-id": "gpu-amd-test"},
+			},
+			Spec: apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 80}}},
+		},
+		Ingress: &netv1.Ingress{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "gpu-ing",
+				Labels: map[string]string{"analysis-id": "gpu-amd-test"},
+			},
+		},
+	}
+
+	body, err := json.Marshal(bundle)
+	require.NoError(t, err)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/analyses", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err = op.HandleLaunch(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// Verify the deployed deployment has AMD GPU resources, not NVIDIA.
+	ctx := context.Background()
+	dep, err := clientset.AppsV1().Deployments("vice-apps").Get(ctx, "gpu-dep", metav1.GetOptions{})
+	require.NoError(t, err)
+
+	reqs := dep.Spec.Template.Spec.Containers[0].Resources.Requests
+	_, hasAMD := reqs[apiv1.ResourceName("amd.com/gpu")]
+	assert.True(t, hasAMD, "deployed deployment should have amd.com/gpu in requests")
+	_, hasNvidia := reqs[apiv1.ResourceName("nvidia.com/gpu")]
+	assert.False(t, hasNvidia, "deployed deployment should not have nvidia.com/gpu in requests")
 }
 
 func TestHandleExit(t *testing.T) {
