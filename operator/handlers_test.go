@@ -178,10 +178,10 @@ func TestHandleLaunchGPUVendorAMD(t *testing.T) {
 								Image: "img",
 								Resources: apiv1.ResourceRequirements{
 									Requests: apiv1.ResourceList{
-										apiv1.ResourceName("nvidia.com/gpu"): resource.MustParse("1"),
+										nvidiaGPUResource: resource.MustParse("1"),
 									},
 									Limits: apiv1.ResourceList{
-										apiv1.ResourceName("nvidia.com/gpu"): resource.MustParse("1"),
+										nvidiaGPUResource: resource.MustParse("1"),
 									},
 								},
 							},
@@ -224,9 +224,9 @@ func TestHandleLaunchGPUVendorAMD(t *testing.T) {
 	require.NoError(t, err)
 
 	reqs := dep.Spec.Template.Spec.Containers[0].Resources.Requests
-	_, hasAMD := reqs[apiv1.ResourceName("amd.com/gpu")]
+	_, hasAMD := reqs[amdGPUResource]
 	assert.True(t, hasAMD, "deployed deployment should have amd.com/gpu in requests")
-	_, hasNvidia := reqs[apiv1.ResourceName("nvidia.com/gpu")]
+	_, hasNvidia := reqs[nvidiaGPUResource]
 	assert.False(t, hasNvidia, "deployed deployment should not have nvidia.com/gpu in requests")
 }
 

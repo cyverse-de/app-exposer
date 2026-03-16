@@ -4,9 +4,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
+	"time"
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/operator"
@@ -22,18 +25,20 @@ var log = common.Log
 
 func main() {
 	var (
-		kubeconfig        string
-		namespace         string
-		port              int
-		routingType       string
-		ingressClass      string
-		gpuVendorFlag     string
-		maxAnalyses       int
-		nodeLabelSelector string
-		logLevel          string
-		basicAuth         bool
-		basicAuthUsername string
-		basicAuthPassword string
+		kubeconfig          string
+		namespace           string
+		port                int
+		routingType         string
+		ingressClass        string
+		gpuVendorFlag       string
+		maxAnalyses         int
+		nodeLabelSelector   string
+		logLevel            string
+		basicAuth           bool
+		basicAuthUsername   string
+		basicAuthPassword   string
+		viceBaseURL         string
+		clusterConfigSecret string
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -48,11 +53,19 @@ func main() {
 	flag.BoolVar(&basicAuth, "basic-auth", false, "Enable basic auth for the API")
 	flag.StringVar(&basicAuthUsername, "basic-auth-username", "", "Basic auth username (required when --basic-auth is set)")
 	flag.StringVar(&basicAuthPassword, "basic-auth-password", "", "Basic auth password (required when --basic-auth is set)")
+	flag.StringVar(&viceBaseURL, "vice-base-url", "https://cyverse.run", "Base URL for VICE, stored in the cluster config secret")
+	flag.StringVar(&clusterConfigSecret, "cluster-config-secret", "cluster-config-secret", "Name of the K8s Secret holding cluster config (e.g. VICE_BASE_URL)")
 	flag.Parse()
 
 	// Validate basic auth flags.
 	if basicAuth && (basicAuthUsername == "" || basicAuthPassword == "") {
 		log.Fatal("--basic-auth-username and --basic-auth-password are required when --basic-auth is enabled")
+	}
+
+	// Validate vice-base-url is a proper HTTP(S) URL.
+	parsedURL, parseErr := url.Parse(viceBaseURL)
+	if parseErr != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
+		log.Fatalf("--vice-base-url must be a valid HTTP(S) URL, got %q", viceBaseURL)
 	}
 
 	// Configure log level.
@@ -76,6 +89,15 @@ func main() {
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Fatalf("error creating k8s client: %v", err)
+	}
+
+	// Ensure the cluster config secret exists with the correct VICE_BASE_URL
+	// before starting the operator, so vice-proxy containers can reference it
+	// as env vars via EnvFrom.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := operator.EnsureClusterConfigSecret(ctx, clientset, namespace, clusterConfigSecret, viceBaseURL); err != nil {
+		log.Fatalf("failed to ensure cluster config secret: %v", err)
 	}
 
 	rt, err := operator.ParseRoutingType(routingType)
@@ -102,8 +124,8 @@ func main() {
 
 	app := NewApp(op, basicAuth, basicAuthUsername, basicAuthPassword)
 	listenAddr := fmt.Sprintf(":%d", port)
-	log.Infof("vice-operator listening on %s (namespace=%s, routing=%s, ingress-class=%s, gpu-vendor=%s, max-analyses=%d)",
-		listenAddr, namespace, routingType, ingressClass, gpuVendorFlag, maxAnalyses)
+	log.Infof("vice-operator listening on %s (namespace=%s, routing=%s, ingress-class=%s, gpu-vendor=%s, vice-base-url=%s, max-analyses=%d)",
+		listenAddr, namespace, routingType, ingressClass, gpuVendorFlag, viceBaseURL, maxAnalyses)
 
 	if err := app.Start(listenAddr); err != nil {
 		log.Error(err)
