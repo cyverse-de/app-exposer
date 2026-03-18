@@ -1,1 +1,211 @@
-<!DOCTYPE html><html><body>Loading...</body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Launching: {{.AppName}}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+        }
+        h1 { font-size: 1.4em; margin-bottom: 24px; font-weight: 500; }
+        .progress-bar {
+            background: #e0e0e0;
+            border-radius: 4px;
+            height: 8px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            background: #1976d2;
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+        .progress-fill.error { background: #d32f2f; }
+        .status-msg {
+            font-size: 0.95em;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .status-msg.error { color: #d32f2f; font-weight: 500; }
+        .support-link {
+            display: none;
+            margin-top: 16px;
+            color: #1976d2;
+            text-decoration: none;
+        }
+        .support-link:hover { text-decoration: underline; }
+        .details-toggle {
+            margin-top: 20px;
+            font-size: 0.85em;
+            color: #999;
+            cursor: pointer;
+            user-select: none;
+        }
+        .details-toggle:hover { color: #666; }
+        .details {
+            display: none;
+            margin-top: 12px;
+            text-align: left;
+            font-size: 0.8em;
+            background: #fafafa;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .details pre {
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: "SF Mono", Monaco, Consolas, monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Launching: {{.AppName}}</h1>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress"></div>
+        </div>
+        <div class="status-msg" id="status">Connecting...</div>
+        <a class="support-link" id="support" href="mailto:support@cyverse.org?subject=VICE%20Launch%20Failure%20-%20{{.AnalysisID}}">
+            Contact Support
+        </a>
+        <div class="details-toggle" id="toggle">Show Details</div>
+        <div class="details" id="details">
+            <pre id="details-content">Waiting for status...</pre>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        var analysisID = "{{.AnalysisID}}";
+        var timeoutMs = {{.TimeoutMs}};
+        var startTime = Date.now();
+        var pollInterval = 5000;
+        var progress = document.getElementById("progress");
+        var status = document.getElementById("status");
+        var support = document.getElementById("support");
+        var toggle = document.getElementById("toggle");
+        var details = document.getElementById("details");
+        var detailsContent = document.getElementById("details-content");
+        var detailsVisible = false;
+
+        toggle.addEventListener("click", function() {
+            detailsVisible = !detailsVisible;
+            details.style.display = detailsVisible ? "block" : "none";
+            toggle.textContent = detailsVisible ? "Hide Details" : "Show Details";
+        });
+
+        var stageProgress = {
+            "deploying": 20,
+            "starting": 50,
+            "almost-ready": 80,
+            "ready": 100,
+            "error": 0
+        };
+
+        var stageMessages = {
+            "deploying": "Deploying...",
+            "starting": "Starting...",
+            "almost-ready": "Almost ready...",
+            "ready": "Ready! Redirecting...",
+            "error": "Failed to start."
+        };
+
+        function poll() {
+            // Check client-side timeout.
+            if (timeoutMs > 0 && (Date.now() - startTime) > timeoutMs) {
+                showError("Launch timed out. Please contact support.");
+                return;
+            }
+
+            fetch("/loading/status")
+                .then(function(resp) {
+                    if (!resp.ok) throw new Error("status " + resp.status);
+                    return resp.json();
+                })
+                .then(function(data) {
+                    var pct = stageProgress[data.stage] || 0;
+                    progress.style.width = pct + "%";
+
+                    if (data.stage === "error") {
+                        showError(data.error || stageMessages.error);
+                        updateDetails(data);
+                        return;
+                    }
+
+                    status.textContent = stageMessages[data.stage] || data.stage;
+                    status.className = "status-msg";
+                    progress.className = "progress-fill";
+
+                    updateDetails(data);
+
+                    if (data.ready) {
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 1000);
+                        return;
+                    }
+
+                    setTimeout(poll, pollInterval);
+                })
+                .catch(function(err) {
+                    console.warn("poll error:", err);
+                    setTimeout(poll, pollInterval);
+                });
+        }
+
+        function showError(msg) {
+            status.textContent = msg;
+            status.className = "status-msg error";
+            progress.className = "progress-fill error";
+            support.style.display = "inline";
+        }
+
+        function updateDetails(data) {
+            if (!data.pods || data.pods.length === 0) {
+                detailsContent.textContent = "No pods found yet.";
+                return;
+            }
+            var lines = [];
+            data.pods.forEach(function(pod) {
+                lines.push("Pod: " + pod.name + " (" + pod.phase + ", ready=" + pod.ready + ")");
+                if (pod.containerStatuses) {
+                    pod.containerStatuses.forEach(function(cs) {
+                        var line = "  " + cs.name + ": " + cs.state;
+                        if (cs.reason) line += " (" + cs.reason + ")";
+                        line += " ready=" + cs.ready + " restarts=" + cs.restartCount;
+                        lines.push(line);
+                    });
+                }
+            });
+            detailsContent.textContent = lines.join("\n");
+        }
+
+        poll();
+    })();
+    </script>
+</body>
+</html>
