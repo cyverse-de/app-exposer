@@ -185,9 +185,13 @@ func (o *Operator) HandleLoadingPage(c echo.Context) error {
 		TimeoutMs:  o.loadingTimeoutMs,
 	}
 
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	c.Response().WriteHeader(http.StatusOK)
-	return loadingTemplate.Execute(c.Response().Writer, data)
+	// Buffer the template output before writing so we can return a 500 if
+	// rendering fails instead of writing a partial response body with a 200 header.
+	var buf strings.Builder
+	if err := loadingTemplate.Execute(&buf, data); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to render loading page")
+	}
+	return c.HTML(http.StatusOK, buf.String())
 }
 
 // HandleLoadingStatus returns the current loading status for the analysis
@@ -233,11 +237,15 @@ func (o *Operator) HandleLoadingStatus(c echo.Context) error {
 	stage, errMsg := computeStage(podList.Items, depReady, svcExists)
 	ready := stage == StageReady
 
-	// Perform route swap if ready.
+	// Perform route swap if ready. If the swap fails, report an error to the
+	// loading page so the user sees a meaningful message instead of being
+	// redirected to a still-loading-page URL.
 	if ready {
 		if swapErr := o.SwapRoute(ctx, analysisID); swapErr != nil {
 			log.Errorf("route swap failed for analysis %s: %v", analysisID, swapErr)
-			// Don't fail the status response; report ready but log the swap error.
+			stage = StageError
+			errMsg = fmt.Sprintf("route swap failed: %v", swapErr)
+			ready = false
 		}
 	}
 

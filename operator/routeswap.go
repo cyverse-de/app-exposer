@@ -35,10 +35,11 @@ func (o *Operator) SwapRoute(ctx context.Context, analysisID string) error {
 	// Swap based on routing type to avoid touching resources that don't apply.
 	switch o.routingType {
 	case RoutingGateway:
-		if o.hasGatewayClient() {
-			if err := o.swapHTTPRouteBackend(ctx, opts, targetSvcName, targetPort); err != nil {
-				return err
-			}
+		if !o.hasGatewayClient() {
+			return fmt.Errorf("routing type is gateway but no gateway API client is configured")
+		}
+		if err := o.swapHTTPRouteBackend(ctx, opts, targetSvcName, targetPort); err != nil {
+			return err
 		}
 	case RoutingNginx, RoutingTailscale:
 		if err := o.swapIngressBackend(ctx, opts, targetSvcName, targetPort); err != nil {
@@ -50,10 +51,15 @@ func (o *Operator) SwapRoute(ctx context.Context, analysisID string) error {
 	return nil
 }
 
+// swapHTTPRouteBackend rewrites all BackendRef entries in HTTPRoutes matching
+// opts to point at svcName:svcPort.
 func (o *Operator) swapHTTPRouteBackend(ctx context.Context, opts metav1.ListOptions, svcName string, svcPort int32) error {
 	routes, err := o.gatewayClient.HTTPRoutes(o.namespace).List(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("listing HTTPRoutes: %w", err)
+	}
+	if len(routes.Items) == 0 {
+		return fmt.Errorf("no HTTPRoute found matching selector; cannot swap route")
 	}
 
 	port := gatewayv1.PortNumber(svcPort)
@@ -72,10 +78,15 @@ func (o *Operator) swapHTTPRouteBackend(ctx context.Context, opts metav1.ListOpt
 	return nil
 }
 
+// swapIngressBackend rewrites DefaultBackend and all HTTP path backends in
+// Ingresses matching opts to point at svcName:svcPort.
 func (o *Operator) swapIngressBackend(ctx context.Context, opts metav1.ListOptions, svcName string, svcPort int32) error {
 	ings, err := o.clientset.NetworkingV1().Ingresses(o.namespace).List(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("listing Ingresses: %w", err)
+	}
+	if len(ings.Items) == 0 {
+		return fmt.Errorf("no Ingress found matching selector; cannot swap route")
 	}
 
 	for _, ing := range ings.Items {

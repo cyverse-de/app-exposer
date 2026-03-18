@@ -168,7 +168,7 @@ func main() {
 	go func() {
 		log.Infof("loading page server starting on %s", loadingAddr)
 		if err := loadingApp.Start(loadingAddr); err != nil {
-			log.Errorf("loading page server error: %v", err)
+			log.Fatalf("loading page server failed: %v", err)
 		}
 	}()
 
