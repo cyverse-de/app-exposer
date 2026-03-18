@@ -43,6 +43,9 @@ func main() {
 		registryServer      string
 		registryUsername    string
 		registryPassword    string
+		loadingServiceName  string
+		loadingServicePort  int
+		loadingTimeoutMs    int64
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -63,6 +66,9 @@ func main() {
 	flag.StringVar(&registryServer, "registry-server", "", "Docker registry server (e.g. harbor.cyverse.org)")
 	flag.StringVar(&registryUsername, "registry-username", "", "Docker registry username")
 	flag.StringVar(&registryPassword, "registry-password", "", "Docker registry password")
+	flag.StringVar(&loadingServiceName, "loading-service-name", "vice-operator-loading", "Name of the loading page service")
+	flag.IntVar(&loadingServicePort, "loading-service-port", 80, "Port of the loading page service")
+	flag.Int64Var(&loadingTimeoutMs, "loading-timeout-ms", 600000, "Loading page timeout in milliseconds")
 	flag.Parse()
 
 	// Validate basic auth flags.
@@ -143,7 +149,9 @@ func main() {
 	}
 
 	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
-	op := operator.NewOperator(clientset, gwClient, namespace, rt, ingressClass, gpuVendor, capacityCalc)
+	imageCache := operator.NewImageCacheManager(clientset, namespace, imagePullSecret)
+	op := operator.NewOperator(clientset, gwClient, namespace, rt, ingressClass, gpuVendor, capacityCalc, imageCache,
+		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs)
 
 	app := NewApp(op, basicAuth, basicAuthUsername, basicAuthPassword)
 	listenAddr := fmt.Sprintf(":%d", port)

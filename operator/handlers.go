@@ -21,13 +21,17 @@ var log = common.Log.WithFields(logrus.Fields{"package": "operator"})
 
 // Operator holds the state and dependencies for the vice-operator HTTP handlers.
 type Operator struct {
-	clientset     kubernetes.Interface
-	gatewayClient *gatewayclient.GatewayV1Client
-	namespace     string
-	routingType   RoutingType
-	ingressClass  string
-	gpuVendor     GPUVendor
-	capacityCalc  *CapacityCalculator
+	clientset          kubernetes.Interface
+	gatewayClient      *gatewayclient.GatewayV1Client
+	namespace          string
+	routingType        RoutingType
+	ingressClass       string
+	gpuVendor          GPUVendor
+	capacityCalc       *CapacityCalculator
+	imageCache         *ImageCacheManager
+	loadingServiceName string
+	loadingServicePort int32
+	loadingTimeoutMs   int64
 }
 
 // NewOperator creates a new Operator. Panics if required dependencies are nil
@@ -40,6 +44,10 @@ func NewOperator(
 	ingressClass string,
 	gpuVendor GPUVendor,
 	capacityCalc *CapacityCalculator,
+	imageCache *ImageCacheManager,
+	loadingServiceName string,
+	loadingServicePort int32,
+	loadingTimeoutMs int64,
 ) *Operator {
 	if clientset == nil {
 		panic("operator: clientset must not be nil")
@@ -50,15 +58,22 @@ func NewOperator(
 	if capacityCalc == nil {
 		panic("operator: capacityCalc must not be nil")
 	}
+	if imageCache == nil {
+		panic("operator: imageCache must not be nil")
+	}
 
 	return &Operator{
-		clientset:     clientset,
-		gatewayClient: gatewayClient,
-		namespace:     namespace,
-		routingType:   routingType,
-		ingressClass:  ingressClass,
-		gpuVendor:     gpuVendor,
-		capacityCalc:  capacityCalc,
+		clientset:          clientset,
+		gatewayClient:      gatewayClient,
+		namespace:          namespace,
+		routingType:        routingType,
+		ingressClass:       ingressClass,
+		gpuVendor:          gpuVendor,
+		capacityCalc:       capacityCalc,
+		imageCache:         imageCache,
+		loadingServiceName: loadingServiceName,
+		loadingServicePort: loadingServicePort,
+		loadingTimeoutMs:   loadingTimeoutMs,
 	}
 }
 

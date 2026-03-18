@@ -24,7 +24,8 @@ func newTestOperator(t *testing.T, maxAnalyses int) (*Operator, *fake.Clientset)
 	t.Helper()
 	clientset := fake.NewSimpleClientset()
 	calc := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
-	op := NewOperator(clientset, nil, "vice-apps", RoutingNginx, "nginx", GPUVendorNvidia, calc)
+	cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
+	op := NewOperator(clientset, nil, "vice-apps", RoutingNginx, "nginx", GPUVendorNvidia, calc, cache, "vice-operator-loading", 80, 600000)
 	return op, clientset
 }
 
@@ -158,7 +159,8 @@ func TestHandleLaunch(t *testing.T) {
 func TestHandleLaunchGPUVendorAMD(t *testing.T) {
 	clientset := fake.NewSimpleClientset()
 	calc := NewCapacityCalculator(clientset, "vice-apps", 10, "")
-	op := NewOperator(clientset, nil, "vice-apps", RoutingNginx, "nginx", GPUVendorAMD, calc)
+	cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
+	op := NewOperator(clientset, nil, "vice-apps", RoutingNginx, "nginx", GPUVendorAMD, calc, cache, "vice-operator-loading", 80, 600000)
 
 	bundle := operatorclient.AnalysisBundle{
 		AnalysisID: "gpu-amd-test",
