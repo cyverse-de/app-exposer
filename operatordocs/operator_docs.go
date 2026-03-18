@@ -436,6 +436,81 @@ const docTemplateoperator = `{
                 }
             }
         },
+        "/batch/launch": {
+            "post": {
+                "description": "Launch a batch analysis",
+                "summary": "Launch a batch analysis",
+                "operationId": "batch-launch",
+                "parameters": [
+                    {
+                        "description": "Analysis Definition",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.AnalysisLaunch"
+                        }
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Bypass resource tracking",
+                        "name": "disable-resource-tracking",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/batch/stop/{id}": {
+            "delete": {
+                "description": "Stop a batch analysis by its external UUID",
+                "summary": "Stop a batch analysis by its external UUID",
+                "operationId": "batch-stop",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "External UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/capacity": {
             "get": {
                 "security": [
@@ -466,6 +541,1578 @@ const docTemplateoperator = `{
                     }
                 }
             }
+        },
+        "/cleanup": {
+            "post": {
+                "description": "Stop a batch analysis by its external UUID",
+                "consumes": [
+                    "application/json"
+                ],
+                "summary": "Stop a batch analysis by its external UUID",
+                "operationId": "batch-cleanup",
+                "parameters": [
+                    {
+                        "description": "External UUID",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.uuidBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/image-cache": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Returns all image cache DaemonSets with their pull status.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "image-cache"
+                ],
+                "summary": "List cached images",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/operator.ImageCacheListResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Creates a DaemonSet per image to pre-pull it onto every node.\nEach DaemonSet uses an init container with the target image and\na pause main container. For distroless/scratch images lacking\n\"true\", the init container will CrashLoopBackOff — this is expected\nand the image is still cached. Status will show \"cached-with-errors\".",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "image-cache"
+                ],
+                "summary": "Cache container images",
+                "parameters": [
+                    {
+                        "description": "Images to cache",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/operator.ImageCacheRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "All images cached successfully",
+                        "schema": {
+                            "$ref": "#/definitions/operator.ImageCacheBulkResponse"
+                        }
+                    },
+                    "207": {
+                        "description": "Partial success",
+                        "schema": {
+                            "$ref": "#/definitions/operator.ImageCacheBulkResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Deletes the cache DaemonSets for the specified images.\nNon-existent images are silently ignored (idempotent).\nNote: some HTTP clients drop the body on DELETE requests.\nUse DELETE /image-cache/:id for single-image removal from browsers.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "image-cache"
+                ],
+                "summary": "Remove cached images (bulk)",
+                "parameters": [
+                    {
+                        "description": "Images to remove",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/operator.ImageCacheRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/operator.ImageCacheBulkResponse"
+                        }
+                    },
+                    "207": {
+                        "description": "Partial success",
+                        "schema": {
+                            "$ref": "#/definitions/operator.ImageCacheBulkResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/image-cache/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Returns the cache status for a single image by its slug ID\n(from the \"id\" field in list responses).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "image-cache"
+                ],
+                "summary": "Get cached image status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Image cache slug ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/operator.ImageCacheStatus"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Deletes the cache DaemonSet for the image with the given slug ID.\nReturns success even if already absent (idempotent).",
+                "tags": [
+                    "image-cache"
+                ],
+                "summary": "Remove a cached image",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Image cache slug ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/analyses/{analysis-id}/download-input-files": {
+            "post": {
+                "description": "Handles requests to trigger file downloads without requiring\nuser information, operating from the analysis UUID.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Administratively trigger file downloads to an analysis",
+                "operationId": "admin-trigger-downloads",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/analyses/{analysis-id}/exit": {
+            "post": {
+                "description": "Terminates the VICE analysis based on the analysisID and\nand should not require any user information to be provided. Otherwise, the\ndocumentation for VICEExit applies here as well.",
+                "summary": "Terminates a VICE analysis",
+                "operationId": "admin-exit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The analysis ID of the VICE analysis",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/analyses/{analysis-id}/external-id": {
+            "get": {
+                "description": "Returns the external ID associated with the provided analysis ID.\nOnly returns the first external ID in multi-step analyses.",
+                "summary": "Returns external ID",
+                "operationId": "admin-get-external-id",
+                "parameters": [
+                    {
+                        "maxLength": 36,
+                        "minLength": 36,
+                        "type": "string",
+                        "description": "analysis UUID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.ExternalIDResp"
+                        }
+                    },
+                    "400": {
+                        "description": "id parameter is empty",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/analyses/{analysis-id}/save-and-exit": {
+            "post": {
+                "description": "Handles requests to save the output files in iRODS and\nthen exit. This version of the call operates based on the analysis ID and does\nnot require user information to be required by the caller. Otherwise, the docs\nfor the VICESaveAndExit function apply here as well.",
+                "summary": "Admin endpoint to trigger output file transfer and analysis exit",
+                "operationId": "admin-save-and-exit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/analyses/{analysis-id}/save-output-files": {
+            "post": {
+                "description": "Handles requests to trigger file uploads without requiring\nuser information, operating from the analysis UUID.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Administratively trigger output file uploads from an analysis",
+                "operationId": "admin-trigger-uploads",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/analyses/{analysis-id}/time-limit": {
+            "get": {
+                "description": "Gets an analysis's time limit without requiring user info.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Gets an analysis's time limit without requiring user info.",
+                "operationId": "admin-get-time-limit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.TimeLimit"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Updates the time limit on an analysis without requiring user information.\nThe time limit is increased by a configurable amount (default 4 hours, set via vice.time-limit-extension).",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Updates the time limit on an analysis without requiring user information",
+                "operationId": "admin-time-limit-update",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.TimeLimit"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/is-deployed/analysis-id/{analysis-id}": {
+            "get": {
+                "description": "Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state",
+                "summary": "Returns whether a deployment for an analysis is in the cluster",
+                "operationId": "admin-analysis-in-cluster-by-id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "analysis id",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.AnalysisInClusterResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/is-deployed/external-id/{external-id}": {
+            "get": {
+                "description": "Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state",
+                "summary": "Returns whether a deployment for an analysis is in the cluster",
+                "operationId": "admin-analysis-in-cluster-by-external-id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "external id",
+                        "name": "external-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.AnalysisInClusterResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/listing": {
+            "get": {
+                "description": "Returns k8s resources in the cluster based on the filter. The query\nparameters are used as the filter and are not listed as params here.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists resources based on a filter",
+                "operationId": "admin-filterable-resources",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.ResourceInfo"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/operator-listing": {
+            "get": {
+                "description": "Aggregates the listing endpoints of all configured operators\nand returns combined resource info. Errors for individual\noperators are logged but do not prevent partial results.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists running analyses across all operators",
+                "operationId": "admin-operator-listing",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/reporting.ResourceInfo"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/terminate-all": {
+            "post": {
+                "description": "Terminates all analyses marked as running in the DE database.\nDoes not check for analyses in the cluster but not marked as running in the database.\nTerminates both VICE and batch analyses.",
+                "summary": "Terminates all analyses",
+                "operationId": "terminate-all-analyses",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.TerminateAllResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/{host}/description": {
+            "get": {
+                "description": "Returns a listing entry for a single analysis\nassociated with the host/subdomain passed in as 'host' from the URL.",
+                "summary": "Lists resources by subdomain",
+                "operationId": "admin-describe-analysis",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Host/Subdomain",
+                        "name": "host",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.ResourceInfo"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/{host}/url-ready": {
+            "get": {
+                "description": "Handles requests to check the status of a running VICE app in K8s.\nThis will return an overall status and status for the individual containers in\nthe app's pod. Uses the state of the readiness checks in K8s, along with the\nexistence of the various resources created for the app.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Checks the status of a running VICE app in K8s",
+                "operationId": "admin-url-ready",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The subdomain of the analysis",
+                        "name": "host",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.URLReadyResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/apply-labels": {
+            "post": {
+                "description": "Asynchronously applies labels to all running VICE analyses.\nThe application of the labels may not be complete by the time the response is returned.",
+                "summary": "Applies labels to running VICE analyses.",
+                "operationId": "apply-async-labels",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/async-data": {
+            "get": {
+                "description": "Returns data that is applied to analyses outside of an API call.\nThe returned data is not returned asynchronously, despite the name of the call.",
+                "summary": "Returns data that is generated asynchronously from the job launch.",
+                "operationId": "async-data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "External ID",
+                        "name": "external-id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.AsyncData"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/dry-run": {
+            "post": {
+                "description": "Accepts the same model.Job body as /vice/launch but returns the\nassembled AnalysisBundle JSON instead of dispatching it to an operator.\nNo side effects (no ConfigMaps, no scheduling, no DB writes).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Build an AnalysisBundle without launching",
+                "operationId": "dry-run-bundle",
+                "parameters": [
+                    {
+                        "description": "The job to build a bundle for",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.AnalysisLaunch"
+                        }
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Run validation checks on the job",
+                        "name": "validate",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/operatorclient.AnalysisBundle"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/launch": {
+            "post": {
+                "description": "The HTTP handler that orchestrates the launching of a VICE analysis inside\nthe k8s cluster. This gets passed to the router to be associated with a route. The Job\nis passed in as the body of the request.",
+                "consumes": [
+                    "application/json"
+                ],
+                "summary": "Launch a VICE analysis",
+                "operationId": "launch-app",
+                "parameters": [
+                    {
+                        "description": "The request body containing the analysis details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.AnalysisLaunch"
+                        }
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Bypass resource tracking",
+                        "name": "disable-resource-tracking",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/listing": {
+            "get": {
+                "description": "Returns all of the k8s resources associated with a VICE analysis\nbut checks permissions to see if the requesting user has permission\nto access the resource. The rest of the query map is used to filter\nresources returned from the handler.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Returns resources for a VICE analysis",
+                "operationId": "filterable-resources",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "username",
+                        "name": "user",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.ResourceInfo"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/listing/configmaps": {
+            "get": {
+                "description": "Lists configmaps in use by VICE apps. The query parameters\nare used to filter the results and aren't listed as parameters.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists configmaps in use by VICE apps.",
+                "operationId": "filterable-configmaps",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.FilteredConfigMapsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/listing/deployments": {
+            "get": {
+                "description": "Returns a filtered listing of deployments in use by VICE apps.\nThe key-value pairs in the query string are used to filter the deployments.\nThe key-value pairs are not listed as parameters.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists all of the deployments.",
+                "operationId": "filterable-deployments",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.FilteredDeploymentsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/listing/pods": {
+            "get": {
+                "description": "Returns a filtered listing of pods in use by VICE apps.\nThe key-value pairs in the query string are used to filter the pods.\nThe key-value pairs are not listed as parameters.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Returns a listing of the pods in a VICE analysis.",
+                "operationId": "filterable-pods",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.FilteredPodsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/listing/routes": {
+            "get": {
+                "description": "Lists HTTP routes in use by VICE apps. The query parameters\nare used to filter the results and aren't listed as parameters.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists HTTP routes in use by VICE apps.",
+                "operationId": "filterable-routes",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.FilteredRoutesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/listing/services": {
+            "get": {
+                "description": "Lists services in use by VICE apps. The query parameters\nare used to filter the results and aren't listed as parameters.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists services in use by VICE apps.",
+                "operationId": "filterable-services",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.FilteredServicesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{analysis-id}/logs": {
+            "get": {
+                "description": "Handlers requests to access the container logs for a pod in a running\nVICE app.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Return the logs for a running analysis",
+                "operationId": "logs",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "description": "Whether to return previously terminated container logs",
+                        "name": "previous",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "The number of seconds in the past to begin showing logs",
+                        "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "The number of seconds since the epoch to begin showing logs",
+                        "name": "since-time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "The number of lines from the end of the log to show",
+                        "name": "tail-lines",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Whether to display timestamps at the beginning of each log line",
+                        "name": "timestamps",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "The name of the container to display logs from",
+                        "name": "container",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.VICELogEntry"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{analysis-id}/pods": {
+            "get": {
+                "description": "Lists the k8s pods associated with the provided external-id. For now\njust returns pod info in the format ` + "`" + `{\"pods\" : [{}]}` + "`" + `",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists the k8s pods associated with the provided external-id",
+                "operationId": "list-pods",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Username",
+                        "name": "user",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.ListPodsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{analysis-id}/time-limit": {
+            "get": {
+                "description": "Gets the time limit for an analysis on behalf of a user.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Gets the time limit for an analysis on behalf of a user.",
+                "operationId": "get-time-limit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Username",
+                        "name": "user",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.TimeLimit"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Updates the time limit on a running VICE app for a user. The user\nmust have access to the analysis. The time limit is increased by a\nconfigurable amount (default 4 hours, set via vice.time-limit-extension).",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Handles requests to update the time limit on an already running VICE app.",
+                "operationId": "time-limit-update",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.TimeLimit"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{host}/description": {
+            "get": {
+                "description": "Returns a listing entry for a single analysis associated\nwith the host/subdomain passed in as 'host' from the URL.\nThe user passed in must have access to the VICE analysis.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Returns resources by user and subdomain.",
+                "operationId": "describe-analysis",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "username",
+                        "name": "user",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "subdomain",
+                        "name": "host",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/incluster.ResourceInfo"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{host}/url-ready": {
+            "get": {
+                "description": "Returns whether or not a VICE app is ready\nfor users to access it. This version will check the user's permissions\nand return an error if they aren't allowed to access the running app.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Check if a VICE app is ready for users to access it.",
+                "operationId": "url-ready",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "A user's username",
+                        "name": "user",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "The subdomain of the analysis. AKA the ingress name",
+                        "name": "host",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.URLReadyResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{id}/download-input-files": {
+            "post": {
+                "description": "Triggers input downloads for an analysis by routing through\nthe operator running it.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Triggers input downloads for an analysis",
+                "operationId": "trigger-downloads",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "External ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{id}/exit": {
+            "post": {
+                "description": "Terminates the VICE analysis deployment and cleans up\nresources associated with it. Does not save outputs first. Uses\nthe external-id label to find all of the objects in the configured\nnamespace associated with the job. Deletes the following objects:\nHTTP routes, services, deployments, and configmaps.",
+                "summary": "Terminates a VICE analysis",
+                "operationId": "exit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The external ID of the VICE analysis",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{id}/save-and-exit": {
+            "post": {
+                "description": "Handles requests to save the output files in iRODS and then exit.\nThe exit portion will only occur if the save operation succeeds. The operation is\nperformed inside of a goroutine so that the caller isn't waiting for hours/days for\noutput file transfers to complete.",
+                "summary": "Save files and terminate VICE analysis",
+                "operationId": "save-and-exit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "external ID of the analysis",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{id}/save-output-files": {
+            "post": {
+                "description": "Triggers output uploads from a running analysis by routing\nthrough the operator running it.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Triggers output uploads from an analysis",
+                "operationId": "trigger-uploads",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "External ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -480,6 +2127,504 @@ const docTemplateoperator = `{
                     "type": "string"
                 },
                 "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_cyverse-de_app-exposer_incluster.DeploymentInfo": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "command": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "group": {
+                    "type": "integer"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "user": {
+                    "type": "integer"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "httphandlers.AnalysisInClusterResponse": {
+            "type": "object",
+            "properties": {
+                "found": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "httphandlers.AnalysisLaunch": {
+            "type": "object"
+        },
+        "httphandlers.AsyncData": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "ipAddr": {
+                    "type": "string"
+                },
+                "subdomain": {
+                    "type": "string"
+                }
+            }
+        },
+        "httphandlers.ExternalIDResp": {
+            "type": "object",
+            "properties": {
+                "external_id": {
+                    "type": "string",
+                    "example": "bb52aefb-e021-4ece-89e5-fd73ce30643c"
+                }
+            }
+        },
+        "httphandlers.FilteredConfigMapsResponse": {
+            "type": "object",
+            "properties": {
+                "configmaps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.ConfigMapInfo"
+                    }
+                }
+            }
+        },
+        "httphandlers.FilteredDeploymentsResponse": {
+            "type": "object",
+            "properties": {
+                "deployments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_cyverse-de_app-exposer_incluster.DeploymentInfo"
+                    }
+                }
+            }
+        },
+        "httphandlers.FilteredPodsResponse": {
+            "type": "object",
+            "properties": {
+                "pods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.PodInfo"
+                    }
+                }
+            }
+        },
+        "httphandlers.FilteredRoutesResponse": {
+            "type": "object",
+            "properties": {
+                "routes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.RouteInfo"
+                    }
+                }
+            }
+        },
+        "httphandlers.FilteredServicesResponse": {
+            "type": "object",
+            "properties": {
+                "services": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.ServiceInfo"
+                    }
+                }
+            }
+        },
+        "httphandlers.ListPodsResponse": {
+            "type": "object",
+            "properties": {
+                "pods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.RetPod"
+                    }
+                }
+            }
+        },
+        "httphandlers.TerminateAllResponse": {
+            "type": "object",
+            "properties": {
+                "batch": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "failed_batch": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "failed_vice": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "vice": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "httphandlers.URLReadyResponse": {
+            "type": "object",
+            "properties": {
+                "access_url": {
+                    "type": "string"
+                },
+                "ready": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "httphandlers.VICELogEntry": {
+            "type": "object",
+            "properties": {
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "since_time": {
+                    "type": "string"
+                }
+            }
+        },
+        "httphandlers.uuidBody": {
+            "type": "object",
+            "properties": {
+                "uuid": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.ConfigMapInfo": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.DeploymentInfo": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "command": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "group": {
+                    "type": "integer"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "user": {
+                    "type": "integer"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.PodInfo": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "containerStatuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerStatus"
+                    }
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "initContainerStatuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerStatus"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "phase": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.ResourceInfo": {
+            "type": "object",
+            "properties": {
+                "configMaps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.ConfigMapInfo"
+                    }
+                },
+                "deployments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.DeploymentInfo"
+                    }
+                },
+                "pods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.PodInfo"
+                    }
+                },
+                "routes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.RouteInfo"
+                    }
+                },
+                "services": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/incluster.ServiceInfo"
+                    }
+                }
+            }
+        },
+        "incluster.RetPod": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.RouteInfo": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "rules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.HTTPRouteRule"
+                    }
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.ServiceInfo": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "ports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.ServiceInfoPort"
+                    }
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "incluster.TimeLimit": {
+            "type": "object",
+            "properties": {
+                "time_limit": {
                     "type": "string"
                 }
             }
@@ -623,6 +2768,76 @@ const docTemplateoperator = `{
                 },
                 "readyReplicas": {
                     "type": "integer"
+                }
+            }
+        },
+        "operator.ImageCacheBulkResponse": {
+            "type": "object",
+            "properties": {
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operator.ImageCacheResult"
+                    }
+                }
+            }
+        },
+        "operator.ImageCacheListResponse": {
+            "type": "object",
+            "properties": {
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operator.ImageCacheStatus"
+                    }
+                }
+            }
+        },
+        "operator.ImageCacheRequest": {
+            "type": "object",
+            "properties": {
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "operator.ImageCacheResult": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "description": "present only when status is \"error\"",
+                    "type": "string"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "\"ok\" or \"error\"",
+                    "type": "string"
+                }
+            }
+        },
+        "operator.ImageCacheStatus": {
+            "type": "object",
+            "properties": {
+                "desired": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "ready": {
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "\"ready\", \"pulling\", \"cached-with-errors\", \"error\"",
+                    "type": "string"
                 }
             }
         },
