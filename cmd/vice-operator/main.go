@@ -43,6 +43,7 @@ func main() {
 		registryServer      string
 		registryUsername    string
 		registryPassword    string
+		loadingPort         int
 		loadingServiceName  string
 		loadingServicePort  int
 		loadingTimeoutMs    int64
@@ -66,6 +67,7 @@ func main() {
 	flag.StringVar(&registryServer, "registry-server", "", "Docker registry server (e.g. harbor.cyverse.org)")
 	flag.StringVar(&registryUsername, "registry-username", "", "Docker registry username")
 	flag.StringVar(&registryPassword, "registry-password", "", "Docker registry password")
+	flag.IntVar(&loadingPort, "loading-port", 8080, "Listen port for loading page server")
 	flag.StringVar(&loadingServiceName, "loading-service-name", "vice-operator-loading", "Name of the loading page service")
 	flag.IntVar(&loadingServicePort, "loading-service-port", 80, "Port of the loading page service")
 	flag.Int64Var(&loadingTimeoutMs, "loading-timeout-ms", 600000, "Loading page timeout in milliseconds")
@@ -154,11 +156,24 @@ func main() {
 		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs)
 
 	app := NewApp(op, basicAuth, basicAuthUsername, basicAuthPassword)
-	listenAddr := fmt.Sprintf(":%d", port)
-	log.Infof("vice-operator listening on %s (namespace=%s, routing=%s, ingress-class=%s, gpu-vendor=%s, vice-base-url=%s, max-analyses=%d)",
-		listenAddr, namespace, routingType, ingressClass, gpuVendorFlag, viceBaseURL, maxAnalyses)
+	loadingApp := NewLoadingApp(op)
 
-	if err := app.Start(listenAddr); err != nil {
+	apiAddr := fmt.Sprintf(":%d", port)
+	loadingAddr := fmt.Sprintf(":%d", loadingPort)
+
+	log.Infof("vice-operator listening on %s (loading page on %s, namespace=%s, routing=%s, ingress-class=%s, gpu-vendor=%s, vice-base-url=%s, max-analyses=%d)",
+		apiAddr, loadingAddr, namespace, routingType, ingressClass, gpuVendorFlag, viceBaseURL, maxAnalyses)
+
+	// Start loading page server in a goroutine.
+	go func() {
+		log.Infof("loading page server starting on %s", loadingAddr)
+		if err := loadingApp.Start(loadingAddr); err != nil {
+			log.Errorf("loading page server error: %v", err)
+		}
+	}()
+
+	// API server blocks on the main goroutine.
+	if err := app.Start(apiAddr); err != nil {
 		log.Error(err)
 		os.Exit(1)
 	}

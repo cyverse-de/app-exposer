@@ -63,11 +63,42 @@ func NewApp(op *operator.Operator, basicAuth bool, username, password string) *A
 	analyses.POST("/save-output-files", op.HandleSaveOutputFiles)
 	analyses.GET("/pods", op.HandlePods)
 	analyses.GET("/logs", op.HandleLogs)
+	analyses.POST("/swap-route", op.HandleSwapRoute)
+
+	// Image cache routes.
+	api.PUT("/image-cache", op.HandleCacheImages)
+	api.DELETE("/image-cache", op.HandleRemoveCachedImages)
+	api.GET("/image-cache", op.HandleListCachedImages)
+	api.GET("/image-cache/:id", op.HandleGetCachedImage)
+	api.DELETE("/image-cache/:id", op.HandleDeleteCachedImage)
 
 	return &App{router: e}
 }
 
 // Start begins listening on the given address.
 func (a *App) Start(addr string) error {
+	return a.router.Start(addr)
+}
+
+// LoadingApp wraps the Echo router for the loading page server.
+type LoadingApp struct {
+	router *echo.Echo
+}
+
+// NewLoadingApp creates a new loading page server with routes for serving
+// loading pages on analysis subdomains.
+func NewLoadingApp(op *operator.Operator) *LoadingApp {
+	e := echo.New()
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
+
+	e.GET("/", op.HandleLoadingPage)
+	e.GET("/loading/status", op.HandleLoadingStatus)
+
+	return &LoadingApp{router: e}
+}
+
+// Start begins listening on the given address.
+func (a *LoadingApp) Start(addr string) error {
 	return a.router.Start(addr)
 }
