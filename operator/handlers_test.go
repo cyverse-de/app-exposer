@@ -280,6 +280,70 @@ func TestHandleExit(t *testing.T) {
 	assert.Empty(t, svcs.Items)
 }
 
+func TestHandleSwapRoute(t *testing.T) {
+	op, clientset := newTestOperator(t, 10)
+	ctx := context.Background()
+	analysisID := "swap-route-test"
+	labels := map[string]string{"analysis-id": analysisID}
+
+	_, err := clientset.CoreV1().Services("vice-apps").Create(ctx, &apiv1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "analysis-svc", Labels: labels},
+		Spec:       apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 80}}},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	pathType := netv1.PathTypePrefix
+	_, err = clientset.NetworkingV1().Ingresses("vice-apps").Create(ctx, &netv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-ing", Labels: labels},
+		Spec: netv1.IngressSpec{
+			DefaultBackend: &netv1.IngressBackend{
+				Service: &netv1.IngressServiceBackend{
+					Name: "vice-operator-loading",
+					Port: netv1.ServiceBackendPort{Number: 80},
+				},
+			},
+			Rules: []netv1.IngressRule{
+				{
+					Host: "abc123.cyverse.run",
+					IngressRuleValue: netv1.IngressRuleValue{
+						HTTP: &netv1.HTTPIngressRuleValue{
+							Paths: []netv1.HTTPIngressPath{
+								{
+									Path:     "/",
+									PathType: &pathType,
+									Backend: netv1.IngressBackend{
+										Service: &netv1.IngressServiceBackend{
+											Name: "vice-operator-loading",
+											Port: netv1.ServiceBackendPort{Number: 80},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/analyses/"+analysisID+"/swap-route", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("analysis-id")
+	c.SetParamValues(analysisID)
+
+	err = op.HandleSwapRoute(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	ings, err := clientset.NetworkingV1().Ingresses("vice-apps").List(ctx, analysisLabelSelector(analysisID))
+	require.NoError(t, err)
+	require.Len(t, ings.Items, 1)
+	assert.Equal(t, "analysis-svc", ings.Items[0].Spec.DefaultBackend.Service.Name)
+}
+
 func TestHandleURLReady(t *testing.T) {
 	op, clientset := newTestOperator(t, 10)
 	ctx := context.Background()

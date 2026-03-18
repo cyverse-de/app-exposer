@@ -159,6 +159,9 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 	// Rewrite GPU resource names to match the cluster's GPU vendor.
 	TransformGPUVendor(bundle.Deployment, o.gpuVendor)
 
+	// Rewrite routing backend to point at vice-operator's loading page service.
+	TransformBackendToLoadingService(bundle.HTTPRoute, bundle.Ingress, o.loadingServiceName, o.loadingServicePort)
+
 	// Apply all resources via upsert pattern.
 	if err := o.applyBundle(ctx, &bundle); err != nil {
 		log.Errorf("launch failed for analysis %s: %v", bundle.AnalysisID, err)
@@ -497,6 +500,35 @@ func (o *Operator) HandleLogs(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, entries)
+}
+
+// HandleSwapRoute manually triggers the route swap for an analysis, pointing
+// its HTTPRoute/Ingress at the analysis Service regardless of readiness.
+//
+//	@Summary		Manually swap route to analysis service
+//	@Description	Swaps the HTTPRoute or Ingress backend from the loading page
+//	@Description	service to the analysis Service. Idempotent.
+//	@Tags			analyses
+//	@Param			analysis-id	path	string	true	"The analysis ID"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/swap-route [post]
+func (o *Operator) HandleSwapRoute(c echo.Context) error {
+	ctx := c.Request().Context()
+	analysisID := c.Param("analysis-id")
+	if analysisID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	}
+
+	log.Infof("manual route swap requested for analysis %s", analysisID)
+
+	if err := o.SwapRoute(ctx, analysisID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.NoContent(http.StatusOK)
 }
 
 // HandleListing lists all VICE resources in the operator's namespace,
