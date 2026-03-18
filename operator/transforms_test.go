@@ -568,14 +568,14 @@ func TestTransformGPUVendorInitContainers(t *testing.T) {
 
 	TransformGPUVendor(dep, GPUVendorAMD)
 
-	init := dep.Spec.Template.Spec.InitContainers[0]
-	qty, ok := init.Resources.Requests[amdGPUResource]
+	initContainer := dep.Spec.Template.Spec.InitContainers[0]
+	qty, ok := initContainer.Resources.Requests[amdGPUResource]
 	assert.True(t, ok, "init container should have amd.com/gpu in requests")
 	assert.Equal(t, "2", qty.String(), "init container GPU quantity should be preserved")
-	_, ok = init.Resources.Requests[nvidiaGPUResource]
+	_, ok = initContainer.Resources.Requests[nvidiaGPUResource]
 	assert.False(t, ok, "init container should not have nvidia.com/gpu in requests")
 
-	qty, ok = init.Resources.Limits[amdGPUResource]
+	qty, ok = initContainer.Resources.Limits[amdGPUResource]
 	assert.True(t, ok, "init container should have amd.com/gpu in limits")
 	assert.Equal(t, "2", qty.String(), "init container GPU limit quantity should be preserved")
 }

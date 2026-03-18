@@ -14,6 +14,7 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestComputeStage(t *testing.T) {
@@ -134,18 +135,16 @@ func TestComputeStage(t *testing.T) {
 	}
 }
 
-func TestHandleLoadingPage(t *testing.T) {
-	op, clientset := newTestOperator(t, 10)
-	ctx := context.Background()
-	analysisID := "loading-page-test"
-
-	_, err := clientset.AppsV1().Deployments("vice-apps").Create(ctx, &appsv1.Deployment{
+// makeLoadingPageDeployment creates a Deployment with the labels needed by
+// resolveSubdomain for loading page tests.
+func makeLoadingPageDeployment(analysisID, subdomain, appName string) *appsv1.Deployment {
+	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-dep",
 			Labels: map[string]string{
 				"analysis-id": analysisID,
-				"subdomain":   "a1234abcd",
-				"app-name":    "JupyterLab",
+				"subdomain":   subdomain,
+				"app-name":    appName,
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -155,176 +154,208 @@ func TestHandleLoadingPage(t *testing.T) {
 				Spec:       apiv1.PodSpec{Containers: []apiv1.Container{{Name: "c", Image: "img"}}},
 			},
 		},
-	}, metav1.CreateOptions{})
-	require.NoError(t, err)
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Host = "a1234abcd.cyverse.run"
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	err = op.HandleLoadingPage(c)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Body.String(), "JupyterLab")
-	assert.Contains(t, rec.Body.String(), analysisID)
+	}
 }
 
-func TestHandleLoadingPageUnknownSubdomain(t *testing.T) {
-	op, _ := newTestOperator(t, 10)
+func TestHandleLoadingPage(t *testing.T) {
+	tests := []struct {
+		name         string
+		host         string
+		setup        func(t *testing.T, clientset *fake.Clientset)
+		wantErrCode  int // non-zero: expect an HTTPError with this code
+		wantContains []string
+	}{
+		{
+			name: "known subdomain renders loading page",
+			host: "a1234abcd.cyverse.run",
+			setup: func(t *testing.T, clientset *fake.Clientset) {
+				t.Helper()
+				_, err := clientset.AppsV1().Deployments("vice-apps").Create(
+					context.Background(),
+					makeLoadingPageDeployment("loading-page-test", "a1234abcd", "JupyterLab"),
+					metav1.CreateOptions{},
+				)
+				require.NoError(t, err)
+			},
+			wantContains: []string{"JupyterLab", "loading-page-test"},
+		},
+		{
+			name:        "unknown subdomain returns 404",
+			host:        "unknown.cyverse.run",
+			wantErrCode: http.StatusNotFound,
+		},
+	}
 
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Host = "unknown.cyverse.run"
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, clientset := newTestOperator(t, 10)
+			if tt.setup != nil {
+				tt.setup(t, clientset)
+			}
 
-	err := op.HandleLoadingPage(c)
-	require.Error(t, err)
-	he, ok := err.(*echo.HTTPError)
-	require.True(t, ok)
-	assert.Equal(t, http.StatusNotFound, he.Code)
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Host = tt.host
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			err := op.HandleLoadingPage(c)
+			if tt.wantErrCode != 0 {
+				require.Error(t, err)
+				he, ok := err.(*echo.HTTPError)
+				require.True(t, ok)
+				assert.Equal(t, tt.wantErrCode, he.Code)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusOK, rec.Code)
+			body := rec.Body.String()
+			for _, s := range tt.wantContains {
+				assert.Contains(t, body, s)
+			}
+		})
+	}
 }
 
 func TestHandleLoadingStatus(t *testing.T) {
-	op, clientset := newTestOperator(t, 10)
-	ctx := context.Background()
-	analysisID := "status-test"
-
-	_, err := clientset.AppsV1().Deployments("vice-apps").Create(ctx, &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "dep1",
-			Labels: map[string]string{
-				"analysis-id": analysisID,
-				"subdomain":   "b5678efgh",
-				"app-name":    "RStudio",
+	tests := []struct {
+		name       string
+		host       string
+		analysisID string
+		subdomain  string
+		setup      func(t *testing.T, clientset *fake.Clientset, analysisID string)
+		wantReady  bool
+		wantStage  string
+		// verify is called after the handler succeeds to perform extra assertions.
+		verify func(t *testing.T, clientset *fake.Clientset, analysisID string)
+	}{
+		{
+			name:       "not-ready analysis returns deploying",
+			host:       "b5678efgh.cyverse.run",
+			analysisID: "status-test",
+			subdomain:  "b5678efgh",
+			setup: func(t *testing.T, clientset *fake.Clientset, analysisID string) {
+				t.Helper()
+				_, err := clientset.AppsV1().Deployments("vice-apps").Create(
+					context.Background(),
+					makeLoadingPageDeployment(analysisID, "b5678efgh", "RStudio"),
+					metav1.CreateOptions{},
+				)
+				require.NoError(t, err)
 			},
+			wantReady: false,
+			wantStage: StageDeploying,
 		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
-			Template: apiv1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
-				Spec:       apiv1.PodSpec{Containers: []apiv1.Container{{Name: "c", Image: "img"}}},
-			},
-		},
-	}, metav1.CreateOptions{})
-	require.NoError(t, err)
+		{
+			name:       "ready analysis returns ready and swaps route",
+			host:       "c9999xyz.cyverse.run",
+			analysisID: "ready-status-test",
+			subdomain:  "c9999xyz",
+			setup: func(t *testing.T, clientset *fake.Clientset, analysisID string) {
+				t.Helper()
+				ctx := context.Background()
 
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/loading/status", nil)
-	req.Host = "b5678efgh.cyverse.run"
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+				dep := makeLoadingPageDeployment(analysisID, "c9999xyz", "JupyterLab")
+				dep.Status.ReadyReplicas = 1
+				_, err := clientset.AppsV1().Deployments("vice-apps").Create(ctx, dep, metav1.CreateOptions{})
+				require.NoError(t, err)
 
-	err = op.HandleLoadingStatus(c)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, rec.Code)
+				_, err = clientset.CoreV1().Services("vice-apps").Create(ctx, &apiv1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "analysis-svc", Labels: map[string]string{"analysis-id": analysisID}},
+					Spec:       apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 80}}},
+				}, metav1.CreateOptions{})
+				require.NoError(t, err)
 
-	var resp LoadingStatusResponse
-	err = json.Unmarshal(rec.Body.Bytes(), &resp)
-	require.NoError(t, err)
-	assert.False(t, resp.Ready)
-	assert.Equal(t, StageDeploying, resp.Stage)
-}
+				_, err = clientset.CoreV1().Pods("vice-apps").Create(ctx, &apiv1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "pod1",
+						Labels: map[string]string{"analysis-id": analysisID},
+					},
+					Status: apiv1.PodStatus{
+						Phase: apiv1.PodRunning,
+						Conditions: []apiv1.PodCondition{
+							{Type: apiv1.PodReady, Status: apiv1.ConditionTrue},
+						},
+						ContainerStatuses: []apiv1.ContainerStatus{
+							{Name: "analysis", Ready: true, State: apiv1.ContainerState{Running: &apiv1.ContainerStateRunning{}}},
+						},
+					},
+				}, metav1.CreateOptions{})
+				require.NoError(t, err)
 
-func TestHandleLoadingStatusReady(t *testing.T) {
-	op, clientset := newTestOperator(t, 10)
-	ctx := context.Background()
-	analysisID := "ready-status-test"
-
-	_, err := clientset.AppsV1().Deployments("vice-apps").Create(ctx, &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "dep1",
-			Labels: map[string]string{
-				"analysis-id": analysisID,
-				"subdomain":   "c9999xyz",
-				"app-name":    "JupyterLab",
-			},
-		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
-			Template: apiv1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
-				Spec:       apiv1.PodSpec{Containers: []apiv1.Container{{Name: "c", Image: "img"}}},
-			},
-		},
-		Status: appsv1.DeploymentStatus{ReadyReplicas: 1},
-	}, metav1.CreateOptions{})
-	require.NoError(t, err)
-
-	_, err = clientset.CoreV1().Services("vice-apps").Create(ctx, &apiv1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "analysis-svc", Labels: map[string]string{"analysis-id": analysisID}},
-		Spec:       apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 80}}},
-	}, metav1.CreateOptions{})
-	require.NoError(t, err)
-
-	_, err = clientset.CoreV1().Pods("vice-apps").Create(ctx, &apiv1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "pod1",
-			Labels: map[string]string{"analysis-id": analysisID},
-		},
-		Status: apiv1.PodStatus{
-			Phase: apiv1.PodRunning,
-			Conditions: []apiv1.PodCondition{
-				{Type: apiv1.PodReady, Status: apiv1.ConditionTrue},
-			},
-			ContainerStatuses: []apiv1.ContainerStatus{
-				{Name: "analysis", Ready: true, State: apiv1.ContainerState{Running: &apiv1.ContainerStateRunning{}}},
-			},
-		},
-	}, metav1.CreateOptions{})
-	require.NoError(t, err)
-
-	pathType := netv1.PathTypePrefix
-	_, err = clientset.NetworkingV1().Ingresses("vice-apps").Create(ctx, &netv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-ing", Labels: map[string]string{"analysis-id": analysisID}},
-		Spec: netv1.IngressSpec{
-			DefaultBackend: &netv1.IngressBackend{
-				Service: &netv1.IngressServiceBackend{
-					Name: "vice-operator-loading",
-					Port: netv1.ServiceBackendPort{Number: 80},
-				},
-			},
-			Rules: []netv1.IngressRule{{
-				Host: "c9999xyz.cyverse.run",
-				IngressRuleValue: netv1.IngressRuleValue{
-					HTTP: &netv1.HTTPIngressRuleValue{
-						Paths: []netv1.HTTPIngressPath{{
-							Path: "/", PathType: &pathType,
-							Backend: netv1.IngressBackend{
-								Service: &netv1.IngressServiceBackend{
-									Name: "vice-operator-loading",
-									Port: netv1.ServiceBackendPort{Number: 80},
+				pathType := netv1.PathTypePrefix
+				_, err = clientset.NetworkingV1().Ingresses("vice-apps").Create(ctx, &netv1.Ingress{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-ing", Labels: map[string]string{"analysis-id": analysisID}},
+					Spec: netv1.IngressSpec{
+						DefaultBackend: &netv1.IngressBackend{
+							Service: &netv1.IngressServiceBackend{
+								Name: "vice-operator-loading",
+								Port: netv1.ServiceBackendPort{Number: 80},
+							},
+						},
+						Rules: []netv1.IngressRule{{
+							Host: "c9999xyz.cyverse.run",
+							IngressRuleValue: netv1.IngressRuleValue{
+								HTTP: &netv1.HTTPIngressRuleValue{
+									Paths: []netv1.HTTPIngressPath{{
+										Path:     "/",
+										PathType: &pathType,
+										Backend: netv1.IngressBackend{
+											Service: &netv1.IngressServiceBackend{
+												Name: "vice-operator-loading",
+												Port: netv1.ServiceBackendPort{Number: 80},
+											},
+										},
+									}},
 								},
 							},
 						}},
 					},
-				},
-			}},
+				}, metav1.CreateOptions{})
+				require.NoError(t, err)
+			},
+			wantReady: true,
+			wantStage: StageReady,
+			verify: func(t *testing.T, clientset *fake.Clientset, analysisID string) {
+				t.Helper()
+				// Verify the ingress was swapped to the analysis service.
+				ings, err := clientset.NetworkingV1().Ingresses("vice-apps").List(
+					context.Background(), analysisLabelSelector(analysisID),
+				)
+				require.NoError(t, err)
+				require.Len(t, ings.Items, 1)
+				assert.Equal(t, "analysis-svc", ings.Items[0].Spec.DefaultBackend.Service.Name)
+			},
 		},
-	}, metav1.CreateOptions{})
-	require.NoError(t, err)
+	}
 
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/loading/status", nil)
-	req.Host = "c9999xyz.cyverse.run"
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, clientset := newTestOperator(t, 10)
+			if tt.setup != nil {
+				tt.setup(t, clientset, tt.analysisID)
+			}
 
-	err = op.HandleLoadingStatus(c)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, rec.Code)
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, "/loading/status", nil)
+			req.Host = tt.host
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
 
-	var resp LoadingStatusResponse
-	err = json.Unmarshal(rec.Body.Bytes(), &resp)
-	require.NoError(t, err)
-	assert.True(t, resp.Ready)
-	assert.Equal(t, StageReady, resp.Stage)
+			err := op.HandleLoadingStatus(c)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusOK, rec.Code)
 
-	// Verify the ingress was swapped to the analysis service.
-	ings, err := clientset.NetworkingV1().Ingresses("vice-apps").List(ctx, analysisLabelSelector(analysisID))
-	require.NoError(t, err)
-	require.Len(t, ings.Items, 1)
-	assert.Equal(t, "analysis-svc", ings.Items[0].Spec.DefaultBackend.Service.Name)
+			var resp LoadingStatusResponse
+			err = json.Unmarshal(rec.Body.Bytes(), &resp)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantReady, resp.Ready)
+			assert.Equal(t, tt.wantStage, resp.Stage)
+
+			if tt.verify != nil {
+				tt.verify(t, clientset, tt.analysisID)
+			}
+		})
+	}
 }
