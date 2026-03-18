@@ -170,9 +170,28 @@ func (m *ImageCacheManager) buildCacheDaemonSet(image, slug string) *appsv1.Daem
 		labelImageCacheID: slug,
 	}
 
-	minResources := apiv1.ResourceList{
-		apiv1.ResourceCPU:    resource.MustParse("1m"),
-		apiv1.ResourceMemory: resource.MustParse("1Mi"),
+	// The init container needs enough memory to start the entrypoint process
+	// (even just "true") without being OOM-killed. The pause container is a
+	// tiny static binary and can run with minimal resources.
+	initResources := apiv1.ResourceRequirements{
+		Requests: apiv1.ResourceList{
+			apiv1.ResourceCPU:    resource.MustParse("1m"),
+			apiv1.ResourceMemory: resource.MustParse("64Mi"),
+		},
+		Limits: apiv1.ResourceList{
+			apiv1.ResourceCPU:    resource.MustParse("10m"),
+			apiv1.ResourceMemory: resource.MustParse("64Mi"),
+		},
+	}
+	pauseResources := apiv1.ResourceRequirements{
+		Requests: apiv1.ResourceList{
+			apiv1.ResourceCPU:    resource.MustParse("1m"),
+			apiv1.ResourceMemory: resource.MustParse("16Mi"),
+		},
+		Limits: apiv1.ResourceList{
+			apiv1.ResourceCPU:    resource.MustParse("1m"),
+			apiv1.ResourceMemory: resource.MustParse("16Mi"),
+		},
 	}
 
 	return &appsv1.DaemonSet{
@@ -200,10 +219,7 @@ func (m *ImageCacheManager) buildCacheDaemonSet(image, slug string) *appsv1.Daem
 							Image:           image,
 							Command:         []string{"true"},
 							ImagePullPolicy: apiv1.PullAlways,
-							Resources: apiv1.ResourceRequirements{
-								Requests: minResources,
-								Limits:   minResources,
-							},
+							Resources:       initResources,
 						},
 					},
 					Containers: []apiv1.Container{
@@ -211,10 +227,7 @@ func (m *ImageCacheManager) buildCacheDaemonSet(image, slug string) *appsv1.Daem
 							Name:            "pause",
 							Image:           pauseImage,
 							ImagePullPolicy: apiv1.PullIfNotPresent,
-							Resources: apiv1.ResourceRequirements{
-								Requests: minResources,
-								Limits:   minResources,
-							},
+							Resources:       pauseResources,
 						},
 					},
 					Tolerations: []apiv1.Toleration{
