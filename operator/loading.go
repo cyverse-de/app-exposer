@@ -5,8 +5,10 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"net/http"
 	"strings"
 
+	"github.com/labstack/echo/v4"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -164,6 +166,87 @@ func containerStateString(state apiv1.ContainerState) (string, string) {
 		return "terminated", state.Terminated.Reason
 	}
 	return "unknown", ""
+}
+
+// HandleLoadingPage serves the loading page HTML for the analysis identified
+// by the request's Host header subdomain.
+func (o *Operator) HandleLoadingPage(c echo.Context) error {
+	ctx := c.Request().Context()
+	host := c.Request().Host
+
+	analysisID, appName, err := o.resolveSubdomain(ctx, host)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Analysis not found.")
+	}
+
+	data := loadingPageData{
+		AppName:    appName,
+		AnalysisID: analysisID,
+		TimeoutMs:  o.loadingTimeoutMs,
+	}
+
+	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+	c.Response().WriteHeader(http.StatusOK)
+	return loadingTemplate.Execute(c.Response().Writer, data)
+}
+
+// HandleLoadingStatus returns the current loading status for the analysis
+// identified by the request's Host header subdomain. If the analysis is ready,
+// performs the route swap before responding.
+func (o *Operator) HandleLoadingStatus(c echo.Context) error {
+	ctx := c.Request().Context()
+	host := c.Request().Host
+
+	analysisID, _, err := o.resolveSubdomain(ctx, host)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Analysis not found.")
+	}
+
+	opts := analysisLabelSelector(analysisID)
+
+	// Check deployment readiness.
+	deps, err := o.clientset.AppsV1().Deployments(o.namespace).List(ctx, opts)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	depReady := false
+	for _, d := range deps.Items {
+		if d.Status.ReadyReplicas > 0 {
+			depReady = true
+			break
+		}
+	}
+
+	// Check service existence.
+	svcs, err := o.clientset.CoreV1().Services(o.namespace).List(ctx, opts)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	svcExists := len(svcs.Items) > 0
+
+	// Get pods.
+	podList, err := o.clientset.CoreV1().Pods(o.namespace).List(ctx, opts)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	stage, errMsg := computeStage(podList.Items, depReady, svcExists)
+	ready := stage == StageReady
+
+	// Perform route swap if ready.
+	if ready {
+		if swapErr := o.SwapRoute(ctx, analysisID); swapErr != nil {
+			log.Errorf("route swap failed for analysis %s: %v", analysisID, swapErr)
+			// Don't fail the status response; report ready but log the swap error.
+		}
+	}
+
+	return c.JSON(http.StatusOK, LoadingStatusResponse{
+		Ready: ready,
+		Stage: stage,
+		Error: errMsg,
+		Pods:  buildLoadingPodInfo(podList.Items),
+	})
 }
 
 // resolveSubdomain extracts the subdomain from the Host header and looks up
