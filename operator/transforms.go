@@ -280,6 +280,46 @@ func transformToTailscale(ingress *netv1.Ingress, ingressClass string) *netv1.In
 	return ingress
 }
 
+// TransformBackendToLoadingService rewrites the HTTPRoute and/or Ingress
+// backend service references to point at the vice-operator loading page
+// service. This is called in HandleLaunch so that initial traffic for a new
+// analysis routes to the loading page instead of the (not-yet-ready) analysis.
+func TransformBackendToLoadingService(
+	route *gatewayv1.HTTPRoute,
+	ingress *netv1.Ingress,
+	serviceName string,
+	servicePort int32,
+) {
+	if route != nil {
+		port := gatewayv1.PortNumber(servicePort)
+		name := gatewayv1.ObjectName(serviceName)
+		for i := range route.Spec.Rules {
+			for j := range route.Spec.Rules[i].BackendRefs {
+				route.Spec.Rules[i].BackendRefs[j].Name = name
+				route.Spec.Rules[i].BackendRefs[j].Port = &port
+			}
+		}
+	}
+
+	if ingress != nil {
+		if ingress.Spec.DefaultBackend != nil && ingress.Spec.DefaultBackend.Service != nil {
+			ingress.Spec.DefaultBackend.Service.Name = serviceName
+			ingress.Spec.DefaultBackend.Service.Port = netv1.ServiceBackendPort{Number: servicePort}
+		}
+		for i := range ingress.Spec.Rules {
+			if ingress.Spec.Rules[i].HTTP == nil {
+				continue
+			}
+			for j := range ingress.Spec.Rules[i].HTTP.Paths {
+				if ingress.Spec.Rules[i].HTTP.Paths[j].Backend.Service != nil {
+					ingress.Spec.Rules[i].HTTP.Paths[j].Backend.Service.Name = serviceName
+					ingress.Spec.Rules[i].HTTP.Paths[j].Backend.Service.Port = netv1.ServiceBackendPort{Number: servicePort}
+				}
+			}
+		}
+	}
+}
+
 // isNginxAnnotation returns true if the annotation key is nginx-specific.
 func isNginxAnnotation(key string) bool {
 	return strings.HasPrefix(key, "nginx.ingress.kubernetes.io/")

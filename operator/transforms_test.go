@@ -456,6 +456,92 @@ func TestTransformGPUVendor(t *testing.T) {
 	}
 }
 
+func TestTransformBackendToLoadingService(t *testing.T) {
+	tests := []struct {
+		name        string
+		route       *gatewayv1.HTTPRoute
+		ingress     *netv1.Ingress
+		serviceName string
+		servicePort int32
+		wantRoute   bool
+		wantIngress bool
+	}{
+		{
+			name:        "HTTPRoute backend is rewritten",
+			route:       makeTestHTTPRoute(),
+			serviceName: "vice-operator-loading",
+			servicePort: 80,
+			wantRoute:   true,
+		},
+		{
+			name: "Ingress backend is rewritten",
+			ingress: &netv1.Ingress{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-ing"},
+				Spec: netv1.IngressSpec{
+					DefaultBackend: &netv1.IngressBackend{
+						Service: &netv1.IngressServiceBackend{
+							Name: "analysis-svc",
+							Port: netv1.ServiceBackendPort{Number: 8080},
+						},
+					},
+					Rules: []netv1.IngressRule{
+						{
+							Host: "abc123.vice.example.com",
+							IngressRuleValue: netv1.IngressRuleValue{
+								HTTP: &netv1.HTTPIngressRuleValue{
+									Paths: []netv1.HTTPIngressPath{
+										{
+											Backend: netv1.IngressBackend{
+												Service: &netv1.IngressServiceBackend{
+													Name: "analysis-svc",
+													Port: netv1.ServiceBackendPort{Number: 8080},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			serviceName: "vice-operator-loading",
+			servicePort: 80,
+			wantIngress: true,
+		},
+		{
+			name:        "nil route and nil ingress is no-op",
+			serviceName: "vice-operator-loading",
+			servicePort: 80,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			TransformBackendToLoadingService(tt.route, tt.ingress, tt.serviceName, tt.servicePort)
+
+			if tt.wantRoute {
+				require.NotNil(t, tt.route)
+				ref := tt.route.Spec.Rules[0].BackendRefs[0]
+				assert.Equal(t, gatewayv1.ObjectName(tt.serviceName), ref.Name)
+				assert.Equal(t, gatewayv1.PortNumber(tt.servicePort), *ref.Port)
+			}
+
+			if tt.wantIngress {
+				require.NotNil(t, tt.ingress)
+				assert.Equal(t, tt.serviceName, tt.ingress.Spec.DefaultBackend.Service.Name)
+				assert.Equal(t, tt.servicePort, tt.ingress.Spec.DefaultBackend.Service.Port.Number)
+				for _, rule := range tt.ingress.Spec.Rules {
+					for _, path := range rule.HTTP.Paths {
+						assert.Equal(t, tt.serviceName, path.Backend.Service.Name)
+						assert.Equal(t, tt.servicePort, path.Backend.Service.Port.Number)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestTransformGPUVendorInitContainers(t *testing.T) {
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: "gpu-init"},
