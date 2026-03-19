@@ -11,35 +11,9 @@ const (
 	gib = 1024 * 1024 * 1024
 )
 
+// newIncluster creates an Incluster for volume-related tests using the shared baseInit helper.
 func newIncluster() *Incluster {
-	init := &Init{
-		PorklockImage:                 "harbor.cyverse.org/de/porklock",
-		PorklockTag:                   "latest",
-		UseCSIDriver:                  true,
-		InputPathListIdentifier:       "imapathlist",
-		TicketInputPathListIdentifier: "imaticketpathlist",
-		ImagePullSecretName:           "imanimagepullsecret",
-		ViceProxyImage:                "harbor.cyverse.org/de/vice-proxy",
-		FrontendBaseURL:               "https://de.example.org",
-		ViceDomain:                    "cyverse.run",
-		ViceDefaultBackendService:     "vice-default-backend",
-		ViceDefaultBackendServicePort: 80,
-		VICEBackendNamespace:          "prod",
-		AppsServiceBaseURL:            "http://apps.prod",
-		ViceNamespace:                 "vice-apps",
-		JobStatusURL:                  "http://job-satus-recorder.prod",
-		UserSuffix:                    "@example.org",
-		PermissionsURL:                "http://permissions.prod",
-		KeycloakBaseURL:               "https://keycloak.example.org/auth",
-		KeycloakRealm:                 "example",
-		KeycloakClientID:              "theclient",
-		KeycloakClientSecret:          "thesecret",
-		IRODSZone:                     "example",
-		GatewayProvider:               "traefik",
-		LocalStorageClass:             "example",
-		NATSEncodedConn:               nil,
-	}
-	return New(init, nil, nil, nil, nil)
+	return New(baseInit(), nil, nil, nil, nil)
 }
 
 func jobWithDiskRequirements(capacities ...int64) *model.Job {

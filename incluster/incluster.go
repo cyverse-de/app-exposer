@@ -55,16 +55,9 @@ type Init struct {
 	JobStatusURL                  string
 	UserSuffix                    string
 	PermissionsURL                string
-	KeycloakBaseURL               string
-	KeycloakRealm                 string
-	KeycloakClientID              string
-	KeycloakClientSecret          string
 	IRODSZone                     string
 	GatewayProvider               string
 	LocalStorageClass             string
-	DisableViceProxyAuth          bool
-	EnableLegacyViceProxyAuth     bool
-	CheckResourceAccessURL        string // Full base URL for the check-resource-access service, e.g. "http://check-resource-access.qa"
 	ClusterConfigSecretName       string
 	NATSEncodedConn               *nats.EncodedConn
 	BypassUsers                   []string
