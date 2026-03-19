@@ -12,9 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayfake "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
 )
 
 func TestComputeStage(t *testing.T) {
@@ -188,7 +189,7 @@ func TestHandleLoadingPage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			op, clientset := newTestOperator(t, 10)
+			op, clientset, _ := newTestOperator(t, 10)
 			if tt.setup != nil {
 				tt.setup(t, clientset)
 			}
@@ -224,18 +225,18 @@ func TestHandleLoadingStatus(t *testing.T) {
 		host       string
 		analysisID string
 		subdomain  string
-		setup      func(t *testing.T, clientset *fake.Clientset, analysisID string)
+		setup      func(t *testing.T, clientset *fake.Clientset, gwClientset *gatewayfake.Clientset, analysisID string)
 		wantReady  bool
 		wantStage  string
 		// verify is called after the handler succeeds to perform extra assertions.
-		verify func(t *testing.T, clientset *fake.Clientset, analysisID string)
+		verify func(t *testing.T, gwClientset *gatewayfake.Clientset, analysisID string)
 	}{
 		{
 			name:       "not-ready analysis returns deploying",
 			host:       "b5678efgh.cyverse.run",
 			analysisID: "status-test",
 			subdomain:  "b5678efgh",
-			setup: func(t *testing.T, clientset *fake.Clientset, analysisID string) {
+			setup: func(t *testing.T, clientset *fake.Clientset, _ *gatewayfake.Clientset, analysisID string) {
 				t.Helper()
 				_, err := clientset.AppsV1().Deployments("vice-apps").Create(
 					context.Background(),
@@ -252,7 +253,7 @@ func TestHandleLoadingStatus(t *testing.T) {
 			host:       "c9999xyz.cyverse.run",
 			analysisID: "ready-status-test",
 			subdomain:  "c9999xyz",
-			setup: func(t *testing.T, clientset *fake.Clientset, analysisID string) {
+			setup: func(t *testing.T, clientset *fake.Clientset, gwClientset *gatewayfake.Clientset, analysisID string) {
 				t.Helper()
 				ctx := context.Background()
 
@@ -263,7 +264,10 @@ func TestHandleLoadingStatus(t *testing.T) {
 
 				_, err = clientset.CoreV1().Services("vice-apps").Create(ctx, &apiv1.Service{
 					ObjectMeta: metav1.ObjectMeta{Name: "analysis-svc", Labels: map[string]string{"analysis-id": analysisID}},
-					Spec:       apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 80}}},
+					Spec: apiv1.ServiceSpec{Ports: []apiv1.ServicePort{
+						{Name: "tcp-input", Port: 60001},
+						{Name: "tcp-proxy", Port: 60000},
+					}},
 				}, metav1.CreateOptions{})
 				require.NoError(t, err)
 
@@ -284,57 +288,54 @@ func TestHandleLoadingStatus(t *testing.T) {
 				}, metav1.CreateOptions{})
 				require.NoError(t, err)
 
-				pathType := netv1.PathTypePrefix
-				_, err = clientset.NetworkingV1().Ingresses("vice-apps").Create(ctx, &netv1.Ingress{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-ing", Labels: map[string]string{"analysis-id": analysisID}},
-					Spec: netv1.IngressSpec{
-						DefaultBackend: &netv1.IngressBackend{
-							Service: &netv1.IngressServiceBackend{
-								Name: "vice-operator-loading",
-								Port: netv1.ServiceBackendPort{Number: 80},
-							},
-						},
-						Rules: []netv1.IngressRule{{
-							Host: "c9999xyz.cyverse.run",
-							IngressRuleValue: netv1.IngressRuleValue{
-								HTTP: &netv1.HTTPIngressRuleValue{
-									Paths: []netv1.HTTPIngressPath{{
-										Path:     "/",
-										PathType: &pathType,
-										Backend: netv1.IngressBackend{
-											Service: &netv1.IngressServiceBackend{
+				// Create an HTTPRoute pointing at the loading page service.
+				port := gatewayv1.PortNumber(80)
+				_, err = gwClientset.GatewayV1().HTTPRoutes("vice-apps").Create(ctx, &gatewayv1.HTTPRoute{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "test-route",
+						Labels: map[string]string{"analysis-id": analysisID},
+					},
+					Spec: gatewayv1.HTTPRouteSpec{
+						Hostnames: []gatewayv1.Hostname{"c9999xyz.cyverse.run"},
+						Rules: []gatewayv1.HTTPRouteRule{
+							{
+								BackendRefs: []gatewayv1.HTTPBackendRef{
+									{
+										BackendRef: gatewayv1.BackendRef{
+											BackendObjectReference: gatewayv1.BackendObjectReference{
 												Name: "vice-operator-loading",
-												Port: netv1.ServiceBackendPort{Number: 80},
+												Port: &port,
 											},
 										},
-									}},
+									},
 								},
 							},
-						}},
+						},
 					},
 				}, metav1.CreateOptions{})
 				require.NoError(t, err)
 			},
 			wantReady: true,
 			wantStage: StageReady,
-			verify: func(t *testing.T, clientset *fake.Clientset, analysisID string) {
+			verify: func(t *testing.T, gwClientset *gatewayfake.Clientset, analysisID string) {
 				t.Helper()
-				// Verify the ingress was swapped to the analysis service.
-				ings, err := clientset.NetworkingV1().Ingresses("vice-apps").List(
+				// Verify the HTTPRoute was swapped to the analysis service.
+				routes, err := gwClientset.GatewayV1().HTTPRoutes("vice-apps").List(
 					context.Background(), analysisLabelSelector(analysisID),
 				)
 				require.NoError(t, err)
-				require.Len(t, ings.Items, 1)
-				assert.Equal(t, "analysis-svc", ings.Items[0].Spec.DefaultBackend.Service.Name)
+				require.Len(t, routes.Items, 1)
+				ref := routes.Items[0].Spec.Rules[0].BackendRefs[0]
+				assert.Equal(t, gatewayv1.ObjectName("analysis-svc"), ref.Name)
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			op, clientset := newTestOperator(t, 10)
+			op, clientset, gwClientset := newTestOperator(t, 10)
 			if tt.setup != nil {
-				tt.setup(t, clientset, tt.analysisID)
+				tt.setup(t, clientset, gwClientset, tt.analysisID)
 			}
 
 			e := echo.New()
@@ -354,7 +355,7 @@ func TestHandleLoadingStatus(t *testing.T) {
 			assert.Equal(t, tt.wantStage, resp.Stage)
 
 			if tt.verify != nil {
-				tt.verify(t, clientset, tt.analysisID)
+				tt.verify(t, gwClientset, tt.analysisID)
 			}
 		})
 	}

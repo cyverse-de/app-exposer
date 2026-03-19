@@ -7,9 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apiv1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 func TestSwapRoute(t *testing.T) {
@@ -17,85 +16,52 @@ func TestSwapRoute(t *testing.T) {
 	labels := map[string]string{"analysis-id": analysisID}
 	targetSvcName := "analysis-svc"
 
-	tests := []struct {
-		name        string
-		routingType RoutingType
-	}{
-		{
-			name:        "nginx: swaps Ingress backend",
-			routingType: RoutingNginx,
-		},
-		{
-			name:        "tailscale: swaps Ingress backend",
-			routingType: RoutingTailscale,
-		},
-	}
+	ctx := context.Background()
+	op, clientset, gwClientset := newTestOperator(t, 10)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			clientset := fake.NewSimpleClientset()
-			calc := NewCapacityCalculator(clientset, "vice-apps", 10, "")
-			cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
-			op := NewOperator(clientset, nil, "vice-apps", tt.routingType, "nginx", GPUVendorNvidia, calc, cache,
-				"vice-operator-loading", 80, 600000)
+	// Create the target analysis service with the expected port names.
+	_, err := clientset.CoreV1().Services("vice-apps").Create(ctx, &apiv1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: targetSvcName, Labels: labels},
+		Spec: apiv1.ServiceSpec{Ports: []apiv1.ServicePort{
+			{Name: "tcp-input", Port: 60001},
+			{Name: "tcp-proxy", Port: 60000},
+		}},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
 
-			// Create the target analysis service.
-			_, err := clientset.CoreV1().Services("vice-apps").Create(ctx, &apiv1.Service{
-				ObjectMeta: metav1.ObjectMeta{Name: targetSvcName, Labels: labels},
-				Spec:       apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 80}}},
-			}, metav1.CreateOptions{})
-			require.NoError(t, err)
-
-			// Create ingress pointing at loading page service.
-			pathType := netv1.PathTypePrefix
-			_, err = clientset.NetworkingV1().Ingresses("vice-apps").Create(ctx, &netv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-ing", Namespace: "vice-apps", Labels: labels},
-				Spec: netv1.IngressSpec{
-					DefaultBackend: &netv1.IngressBackend{
-						Service: &netv1.IngressServiceBackend{
-							Name: "vice-operator-loading",
-							Port: netv1.ServiceBackendPort{Number: 80},
-						},
-					},
-					Rules: []netv1.IngressRule{
+	// Create an HTTPRoute pointing at the loading page service.
+	port := gatewayv1.PortNumber(80)
+	_, err = gwClientset.GatewayV1().HTTPRoutes("vice-apps").Create(ctx, &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-route", Namespace: "vice-apps", Labels: labels},
+		Spec: gatewayv1.HTTPRouteSpec{
+			Hostnames: []gatewayv1.Hostname{"abc123.localhost"},
+			Rules: []gatewayv1.HTTPRouteRule{
+				{
+					BackendRefs: []gatewayv1.HTTPBackendRef{
 						{
-							Host: "abc123.vice.example.com",
-							IngressRuleValue: netv1.IngressRuleValue{
-								HTTP: &netv1.HTTPIngressRuleValue{
-									Paths: []netv1.HTTPIngressPath{
-										{
-											Path:     "/",
-											PathType: &pathType,
-											Backend: netv1.IngressBackend{
-												Service: &netv1.IngressServiceBackend{
-													Name: "vice-operator-loading",
-													Port: netv1.ServiceBackendPort{Number: 80},
-												},
-											},
-										},
-									},
+							BackendRef: gatewayv1.BackendRef{
+								BackendObjectReference: gatewayv1.BackendObjectReference{
+									Name: "vice-operator-loading",
+									Port: &port,
 								},
 							},
 						},
 					},
 				},
-			}, metav1.CreateOptions{})
-			require.NoError(t, err)
+			},
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
 
-			err = op.SwapRoute(ctx, analysisID)
-			require.NoError(t, err)
+	err = op.SwapRoute(ctx, analysisID)
+	require.NoError(t, err)
 
-			// Verify the ingress was swapped.
-			ings, err := clientset.NetworkingV1().Ingresses("vice-apps").List(ctx, analysisLabelSelector(analysisID))
-			require.NoError(t, err)
-			require.Len(t, ings.Items, 1)
-			assert.Equal(t, targetSvcName, ings.Items[0].Spec.DefaultBackend.Service.Name)
-			for _, rule := range ings.Items[0].Spec.Rules {
-				for _, path := range rule.HTTP.Paths {
-					assert.Equal(t, targetSvcName, path.Backend.Service.Name)
-				}
-			}
-		})
-	}
+	// Verify the HTTPRoute was swapped to the analysis service.
+	routes, err := gwClientset.GatewayV1().HTTPRoutes("vice-apps").List(ctx, analysisLabelSelector(analysisID))
+	require.NoError(t, err)
+	require.Len(t, routes.Items, 1)
+	ref := routes.Items[0].Spec.Rules[0].BackendRefs[0]
+	assert.Equal(t, gatewayv1.ObjectName(targetSvcName), ref.Name)
+	expectedPort := gatewayv1.PortNumber(60000)
+	assert.Equal(t, &expectedPort, ref.Port, "should route to vice-proxy port, not file transfers")
 }

@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	netv1 "k8s.io/api/networking/v1"
+	"github.com/cyverse-de/app-exposer/constants"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-// SwapRoute updates the HTTPRoute or Ingress for the given analysis to point
-// at the analysis Service instead of the loading page service. The operation
-// is idempotent — calling it when the route already points at the analysis
+// SwapRoute updates the HTTPRoute for the given analysis to point at the
+// analysis Service instead of the loading page service. The operation is
+// idempotent — calling it when the route already points at the analysis
 // service is a no-op (the same values are written).
 func (o *Operator) SwapRoute(ctx context.Context, analysisID string) error {
 	opts := analysisLabelSelector(analysisID)
@@ -24,36 +24,25 @@ func (o *Operator) SwapRoute(ctx context.Context, analysisID string) error {
 	if len(svcs.Items) == 0 {
 		return fmt.Errorf("no service found for analysis %s", analysisID)
 	}
-	targetSvcName := svcs.Items[0].Name
-	var targetPort int32 = 80
-	if len(svcs.Items[0].Spec.Ports) > 0 {
-		targetPort = svcs.Items[0].Spec.Ports[0].Port
+	svc := svcs.Items[0]
+	targetSvcName := svc.Name
+
+	// Find the vice-proxy port by name rather than assuming port order,
+	// since the service has multiple ports (file transfers and vice-proxy).
+	var targetPort int32
+	for _, p := range svc.Spec.Ports {
+		if p.Name == constants.VICEProxyPortName {
+			targetPort = p.Port
+			break
+		}
+	}
+	if targetPort == 0 {
+		return fmt.Errorf("service %s has no port named %s", targetSvcName, constants.VICEProxyPortName)
 	}
 
 	log.Infof("swapping route for analysis %s to service %s:%d", analysisID, targetSvcName, targetPort)
 
-	// Swap based on routing type to avoid touching resources that don't apply.
-	switch o.routingType {
-	case RoutingGateway:
-		if !o.hasGatewayClient() {
-			return fmt.Errorf("routing type is gateway but no gateway API client is configured")
-		}
-		if err := o.swapHTTPRouteBackend(ctx, opts, targetSvcName, targetPort); err != nil {
-			return err
-		}
-	case RoutingNginx, RoutingTailscale:
-		if err := o.swapIngressBackend(ctx, opts, targetSvcName, targetPort); err != nil {
-			return err
-		}
-	}
-
-	log.Infof("route swap complete for analysis %s", analysisID)
-	return nil
-}
-
-// swapHTTPRouteBackend rewrites all BackendRef entries in HTTPRoutes matching
-// opts to point at svcName:svcPort.
-func (o *Operator) swapHTTPRouteBackend(ctx context.Context, opts metav1.ListOptions, svcName string, svcPort int32) error {
+	// Swap HTTPRoute backend refs to the analysis service.
 	routes, err := o.gatewayClient.HTTPRoutes(o.namespace).List(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("listing HTTPRoutes: %w", err)
@@ -62,8 +51,8 @@ func (o *Operator) swapHTTPRouteBackend(ctx context.Context, opts metav1.ListOpt
 		return fmt.Errorf("no HTTPRoute found matching selector; cannot swap route")
 	}
 
-	port := gatewayv1.PortNumber(svcPort)
-	name := gatewayv1.ObjectName(svcName)
+	port := gatewayv1.PortNumber(targetPort)
+	name := gatewayv1.ObjectName(targetSvcName)
 	for _, route := range routes.Items {
 		for i := range route.Spec.Rules {
 			for j := range route.Spec.Rules[i].BackendRefs {
@@ -75,39 +64,7 @@ func (o *Operator) swapHTTPRouteBackend(ctx context.Context, opts metav1.ListOpt
 			return fmt.Errorf("updating HTTPRoute %s: %w", route.Name, err)
 		}
 	}
-	return nil
-}
 
-// swapIngressBackend rewrites DefaultBackend and all HTTP path backends in
-// Ingresses matching opts to point at svcName:svcPort.
-func (o *Operator) swapIngressBackend(ctx context.Context, opts metav1.ListOptions, svcName string, svcPort int32) error {
-	ings, err := o.clientset.NetworkingV1().Ingresses(o.namespace).List(ctx, opts)
-	if err != nil {
-		return fmt.Errorf("listing Ingresses: %w", err)
-	}
-	if len(ings.Items) == 0 {
-		return fmt.Errorf("no Ingress found matching selector; cannot swap route")
-	}
-
-	for _, ing := range ings.Items {
-		if ing.Spec.DefaultBackend != nil && ing.Spec.DefaultBackend.Service != nil {
-			ing.Spec.DefaultBackend.Service.Name = svcName
-			ing.Spec.DefaultBackend.Service.Port = netv1.ServiceBackendPort{Number: svcPort}
-		}
-		for i := range ing.Spec.Rules {
-			if ing.Spec.Rules[i].HTTP == nil {
-				continue
-			}
-			for j := range ing.Spec.Rules[i].HTTP.Paths {
-				if ing.Spec.Rules[i].HTTP.Paths[j].Backend.Service != nil {
-					ing.Spec.Rules[i].HTTP.Paths[j].Backend.Service.Name = svcName
-					ing.Spec.Rules[i].HTTP.Paths[j].Backend.Service.Port = netv1.ServiceBackendPort{Number: svcPort}
-				}
-			}
-		}
-		if _, err := o.clientset.NetworkingV1().Ingresses(o.namespace).Update(ctx, &ing, metav1.UpdateOptions{}); err != nil {
-			return fmt.Errorf("updating Ingress %s: %w", ing.Name, err)
-		}
-	}
+	log.Infof("route swap complete for analysis %s", analysisID)
 	return nil
 }
