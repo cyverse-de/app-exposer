@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -42,214 +41,6 @@ func makeTestHTTPRoute() *gatewayv1.HTTPRoute {
 				},
 			},
 		},
-	}
-}
-
-func TestTransformRouting(t *testing.T) {
-	tests := []struct {
-		name         string
-		route        *gatewayv1.HTTPRoute
-		routing      RoutingType
-		ingressClass string
-		wantRoute    bool // true if HTTPRoute should be returned
-		wantIngress  bool // true if Ingress should be returned
-	}{
-		{
-			name:         "nil route returns nil for both",
-			route:        nil,
-			routing:      RoutingGateway,
-			ingressClass: "",
-			wantRoute:    false,
-			wantIngress:  false,
-		},
-		{
-			name:         "gateway returns HTTPRoute only",
-			route:        makeTestHTTPRoute(),
-			routing:      RoutingGateway,
-			ingressClass: "",
-			wantRoute:    true,
-			wantIngress:  false,
-		},
-		{
-			name:         "nginx converts to Ingress",
-			route:        makeTestHTTPRoute(),
-			routing:      RoutingNginx,
-			ingressClass: "nginx",
-			wantRoute:    false,
-			wantIngress:  true,
-		},
-		{
-			name:         "tailscale converts to Ingress",
-			route:        makeTestHTTPRoute(),
-			routing:      RoutingTailscale,
-			ingressClass: "tailscale",
-			wantRoute:    false,
-			wantIngress:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			route, ingress := TransformRouting(tt.route, tt.routing, tt.ingressClass)
-
-			if tt.wantRoute {
-				assert.NotNil(t, route)
-			} else {
-				assert.Nil(t, route)
-			}
-
-			if tt.wantIngress {
-				require.NotNil(t, ingress)
-				assert.Equal(t, tt.ingressClass, *ingress.Spec.IngressClassName)
-				// Verify metadata was copied from the HTTPRoute.
-				assert.Equal(t, tt.route.Name, ingress.Name)
-				assert.Equal(t, tt.route.Namespace, ingress.Namespace)
-				assert.Equal(t, tt.route.Labels, ingress.Labels)
-			} else {
-				assert.Nil(t, ingress)
-			}
-		})
-	}
-}
-
-func TestHttpRouteToIngress(t *testing.T) {
-	route := makeTestHTTPRoute()
-	ingress := httpRouteToIngress(route, "nginx")
-
-	// Verify basic metadata.
-	assert.Equal(t, "test-route", ingress.Name)
-	assert.Equal(t, "vice-apps", ingress.Namespace)
-	assert.Equal(t, route.Labels, ingress.Labels)
-
-	// Verify ingress class.
-	require.NotNil(t, ingress.Spec.IngressClassName)
-	assert.Equal(t, "nginx", *ingress.Spec.IngressClassName)
-
-	// Verify default backend.
-	require.NotNil(t, ingress.Spec.DefaultBackend)
-	assert.Equal(t, "test-svc", ingress.Spec.DefaultBackend.Service.Name)
-	assert.Equal(t, int32(8080), ingress.Spec.DefaultBackend.Service.Port.Number)
-
-	// Verify rules match hostnames.
-	require.Len(t, ingress.Spec.Rules, 1)
-	assert.Equal(t, "abc123.vice.example.com", ingress.Spec.Rules[0].Host)
-
-	// Verify conversion annotation.
-	assert.Equal(t, "httproute/test-route", ingress.Annotations["converted-from"])
-}
-
-func TestTransformRoutingTailscaleRemovesNginxAnnotations(t *testing.T) {
-	route := makeTestHTTPRoute()
-
-	_, ingress := TransformRouting(route, RoutingTailscale, "tailscale")
-	require.NotNil(t, ingress)
-
-	// The converted ingress should have no nginx annotations.
-	for key := range ingress.Annotations {
-		assert.False(t, isNginxAnnotation(key),
-			"nginx annotation %q should have been removed", key)
-	}
-}
-
-func TestTransformIngress(t *testing.T) {
-	nginxClass := "nginx"
-	tailscaleClass := "tailscale"
-
-	tests := []struct {
-		name               string
-		ingress            *netv1.Ingress
-		targetRouting      RoutingType
-		targetIngressClass string
-		wantClass          string
-		wantNginxAnnots    bool
-	}{
-		{
-			name:               "nil ingress returns nil",
-			ingress:            nil,
-			targetRouting:      RoutingNginx,
-			targetIngressClass: nginxClass,
-			wantClass:          "",
-		},
-		{
-			name: "nginx to nginx same class is no-op",
-			ingress: &netv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-ingress",
-					Annotations: map[string]string{
-						"nginx.ingress.kubernetes.io/proxy-body-size": "4096m",
-					},
-				},
-				Spec: netv1.IngressSpec{
-					IngressClassName: &nginxClass,
-				},
-			},
-			targetRouting:      RoutingNginx,
-			targetIngressClass: nginxClass,
-			wantClass:          nginxClass,
-			wantNginxAnnots:    true,
-		},
-		{
-			name: "nginx to tailscale removes nginx annotations",
-			ingress: &netv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-ingress",
-					Annotations: map[string]string{
-						"nginx.ingress.kubernetes.io/proxy-body-size": "4096m",
-						"other-annotation":                            "keep-me",
-					},
-				},
-				Spec: netv1.IngressSpec{
-					IngressClassName: &nginxClass,
-				},
-			},
-			targetRouting:      RoutingTailscale,
-			targetIngressClass: tailscaleClass,
-			wantClass:          tailscaleClass,
-			wantNginxAnnots:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := TransformIngress(tt.ingress, tt.targetRouting, tt.targetIngressClass)
-
-			if tt.ingress == nil {
-				assert.Nil(t, result)
-				return
-			}
-
-			assert.NotNil(t, result)
-			assert.Equal(t, tt.wantClass, *result.Spec.IngressClassName)
-
-			if !tt.wantNginxAnnots {
-				for key := range result.Annotations {
-					assert.False(t, isNginxAnnotation(key),
-						"nginx annotation %q should have been removed", key)
-				}
-			}
-
-			if tt.targetRouting == RoutingTailscale && tt.ingress.Annotations["other-annotation"] != "" {
-				assert.Equal(t, "keep-me", result.Annotations["other-annotation"])
-			}
-		})
-	}
-}
-
-func TestIsNginxAnnotation(t *testing.T) {
-	tests := []struct {
-		key  string
-		want bool
-	}{
-		{"nginx.ingress.kubernetes.io/proxy-body-size", true},
-		{"nginx.ingress.kubernetes.io/server-snippets", true},
-		{"other-annotation", false},
-		{"", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.key, func(t *testing.T) {
-			assert.Equal(t, tt.want, isNginxAnnotation(tt.key))
-		})
 	}
 }
 
@@ -456,92 +247,6 @@ func TestTransformGPUVendor(t *testing.T) {
 	}
 }
 
-func TestTransformBackendToLoadingService(t *testing.T) {
-	tests := []struct {
-		name        string
-		route       *gatewayv1.HTTPRoute
-		ingress     *netv1.Ingress
-		serviceName string
-		servicePort int32
-		wantRoute   bool
-		wantIngress bool
-	}{
-		{
-			name:        "HTTPRoute backend is rewritten",
-			route:       makeTestHTTPRoute(),
-			serviceName: "vice-operator-loading",
-			servicePort: 80,
-			wantRoute:   true,
-		},
-		{
-			name: "Ingress backend is rewritten",
-			ingress: &netv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-ing"},
-				Spec: netv1.IngressSpec{
-					DefaultBackend: &netv1.IngressBackend{
-						Service: &netv1.IngressServiceBackend{
-							Name: "analysis-svc",
-							Port: netv1.ServiceBackendPort{Number: 8080},
-						},
-					},
-					Rules: []netv1.IngressRule{
-						{
-							Host: "abc123.vice.example.com",
-							IngressRuleValue: netv1.IngressRuleValue{
-								HTTP: &netv1.HTTPIngressRuleValue{
-									Paths: []netv1.HTTPIngressPath{
-										{
-											Backend: netv1.IngressBackend{
-												Service: &netv1.IngressServiceBackend{
-													Name: "analysis-svc",
-													Port: netv1.ServiceBackendPort{Number: 8080},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			serviceName: "vice-operator-loading",
-			servicePort: 80,
-			wantIngress: true,
-		},
-		{
-			name:        "nil route and nil ingress is no-op",
-			serviceName: "vice-operator-loading",
-			servicePort: 80,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			TransformBackendToLoadingService(tt.route, tt.ingress, tt.serviceName, tt.servicePort)
-
-			if tt.wantRoute {
-				require.NotNil(t, tt.route)
-				ref := tt.route.Spec.Rules[0].BackendRefs[0]
-				assert.Equal(t, gatewayv1.ObjectName(tt.serviceName), ref.Name)
-				assert.Equal(t, gatewayv1.PortNumber(tt.servicePort), *ref.Port)
-			}
-
-			if tt.wantIngress {
-				require.NotNil(t, tt.ingress)
-				assert.Equal(t, tt.serviceName, tt.ingress.Spec.DefaultBackend.Service.Name)
-				assert.Equal(t, tt.servicePort, tt.ingress.Spec.DefaultBackend.Service.Port.Number)
-				for _, rule := range tt.ingress.Spec.Rules {
-					for _, path := range rule.HTTP.Paths {
-						assert.Equal(t, tt.serviceName, path.Backend.Service.Name)
-						assert.Equal(t, tt.servicePort, path.Backend.Service.Port.Number)
-					}
-				}
-			}
-		})
-	}
-}
-
 func TestTransformGPUVendorInitContainers(t *testing.T) {
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: "gpu-init"},
@@ -578,4 +283,182 @@ func TestTransformGPUVendorInitContainers(t *testing.T) {
 	qty, ok = initContainer.Resources.Limits[amdGPUResource]
 	assert.True(t, ok, "init container should have amd.com/gpu in limits")
 	assert.Equal(t, "2", qty.String(), "init container GPU limit quantity should be preserved")
+}
+
+func TestTransformBackendToLoadingService(t *testing.T) {
+	tests := []struct {
+		name        string
+		route       *gatewayv1.HTTPRoute
+		serviceName string
+		servicePort int32
+	}{
+		{
+			name:        "HTTPRoute backend is rewritten",
+			route:       makeTestHTTPRoute(),
+			serviceName: "vice-operator-loading",
+			servicePort: 80,
+		},
+		{
+			name:        "nil route is no-op",
+			route:       nil,
+			serviceName: "vice-operator-loading",
+			servicePort: 80,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			TransformBackendToLoadingService(tt.route, tt.serviceName, tt.servicePort)
+
+			if tt.route != nil {
+				ref := tt.route.Spec.Rules[0].BackendRefs[0]
+				assert.Equal(t, gatewayv1.ObjectName(tt.serviceName), ref.Name)
+				assert.Equal(t, gatewayv1.PortNumber(tt.servicePort), *ref.Port)
+			}
+		})
+	}
+}
+
+func TestTransformHostnames(t *testing.T) {
+	tests := []struct {
+		name           string
+		route          *gatewayv1.HTTPRoute
+		baseDomain     string
+		wantRouteHosts []gatewayv1.Hostname
+	}{
+		{
+			name: "HTTPRoute hostnames rewritten",
+			route: &gatewayv1.HTTPRoute{
+				Spec: gatewayv1.HTTPRouteSpec{
+					Hostnames: []gatewayv1.Hostname{"a1234.cyverse.run"},
+				},
+			},
+			baseDomain:     "localhost",
+			wantRouteHosts: []gatewayv1.Hostname{"a1234.localhost"},
+		},
+		{
+			name:       "nil route does not panic",
+			baseDomain: "localhost",
+		},
+		{
+			name: "empty baseDomain is no-op",
+			route: &gatewayv1.HTTPRoute{
+				Spec: gatewayv1.HTTPRouteSpec{
+					Hostnames: []gatewayv1.Hostname{"a1234.cyverse.run"},
+				},
+			},
+			baseDomain:     "",
+			wantRouteHosts: []gatewayv1.Hostname{"a1234.cyverse.run"},
+		},
+		{
+			name: "hostname with no dot is unchanged",
+			route: &gatewayv1.HTTPRoute{
+				Spec: gatewayv1.HTTPRouteSpec{
+					Hostnames: []gatewayv1.Hostname{"localhost"},
+				},
+			},
+			baseDomain:     "localhost",
+			wantRouteHosts: []gatewayv1.Hostname{"localhost"},
+		},
+		{
+			name: "multiple hostnames all rewritten",
+			route: &gatewayv1.HTTPRoute{
+				Spec: gatewayv1.HTTPRouteSpec{
+					Hostnames: []gatewayv1.Hostname{
+						"abc123.cyverse.run",
+						"def456.cyverse.run",
+					},
+				},
+			},
+			baseDomain: "localhost",
+			wantRouteHosts: []gatewayv1.Hostname{
+				"abc123.localhost",
+				"def456.localhost",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			TransformHostnames(tt.route, tt.baseDomain)
+
+			if tt.route != nil && tt.wantRouteHosts != nil {
+				assert.Equal(t, tt.wantRouteHosts, tt.route.Spec.Hostnames)
+			}
+		})
+	}
+}
+
+func TestTransformGatewayNamespace(t *testing.T) {
+	qaNamespace := gatewayv1.Namespace("qa")
+
+	tests := []struct {
+		name          string
+		route         *gatewayv1.HTTPRoute
+		namespace     string
+		wantNamespace string
+	}{
+		{
+			name: "parentRef namespace rewritten",
+			route: &gatewayv1.HTTPRoute{
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{Namespace: &qaNamespace, Name: "vice"},
+						},
+					},
+				},
+			},
+			namespace:     "vice-apps",
+			wantNamespace: "vice-apps",
+		},
+		{
+			name:      "nil route does not panic",
+			route:     nil,
+			namespace: "vice-apps",
+		},
+		{
+			name: "empty namespace is no-op",
+			route: &gatewayv1.HTTPRoute{
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{Namespace: &qaNamespace, Name: "vice"},
+						},
+					},
+				},
+			},
+			namespace:     "",
+			wantNamespace: "qa",
+		},
+		{
+			name: "multiple parentRefs all rewritten",
+			route: &gatewayv1.HTTPRoute{
+				Spec: gatewayv1.HTTPRouteSpec{
+					CommonRouteSpec: gatewayv1.CommonRouteSpec{
+						ParentRefs: []gatewayv1.ParentReference{
+							{Namespace: &qaNamespace, Name: "vice"},
+							{Namespace: &qaNamespace, Name: "other"},
+						},
+					},
+				},
+			},
+			namespace:     "de",
+			wantNamespace: "de",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			TransformGatewayNamespace(tt.route, tt.namespace)
+
+			if tt.route == nil {
+				return
+			}
+			for _, ref := range tt.route.Spec.ParentRefs {
+				require.NotNil(t, ref.Namespace)
+				assert.Equal(t, tt.wantNamespace, string(*ref.Namespace))
+			}
+		})
+	}
 }

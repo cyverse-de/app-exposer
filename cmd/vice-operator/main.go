@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/cyverse-de/app-exposer/common"
@@ -28,8 +29,6 @@ func main() {
 		kubeconfig          string
 		namespace           string
 		port                int
-		routingType         string
-		ingressClass        string
 		gpuVendorFlag       string
 		maxAnalyses         int
 		nodeLabelSelector   string
@@ -47,13 +46,15 @@ func main() {
 		loadingServiceName  string
 		loadingServicePort  int
 		loadingTimeoutMs    int64
+		loadingPodSelector  string
+		gatewayName         string
+		gatewayClassName    string
+		gatewayEntryPort    int
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
 	flag.StringVar(&namespace, "namespace", "vice-apps", "Namespace for VICE resources")
 	flag.IntVar(&port, "port", 60001, "Listen port")
-	flag.StringVar(&routingType, "routing-type", "gateway", "Routing type: gateway, nginx, or tailscale")
-	flag.StringVar(&ingressClass, "ingress-class", "nginx", "Ingress class name")
 	flag.StringVar(&gpuVendorFlag, "gpu-vendor", "nvidia", "GPU vendor: nvidia or amd")
 	flag.IntVar(&maxAnalyses, "max-analyses", 50, "Max concurrent analyses")
 	flag.StringVar(&nodeLabelSelector, "node-label-selector", "", "Filter schedulable nodes by label")
@@ -71,6 +72,10 @@ func main() {
 	flag.StringVar(&loadingServiceName, "loading-service-name", "vice-operator-loading", "Name of the loading page service")
 	flag.IntVar(&loadingServicePort, "loading-service-port", 80, "Port of the loading page service")
 	flag.Int64Var(&loadingTimeoutMs, "loading-timeout-ms", 600000, "Loading page timeout in milliseconds")
+	flag.StringVar(&loadingPodSelector, "loading-pod-selector", "", "Pod selector label for the loading page service (e.g. app=vice-operator-local); if set, ensures the service exists at startup")
+	flag.StringVar(&gatewayName, "gateway-name", "vice", "Name of the Gateway resource")
+	flag.StringVar(&gatewayClassName, "gateway-class-name", "traefik", "GatewayClass name for the Gateway resource")
+	flag.IntVar(&gatewayEntryPort, "gateway-entrypoint-port", 8000, "Entrypoint port on the Gateway listener (must match the gateway controller's internal port)")
 	flag.Parse()
 
 	// Validate basic auth flags.
@@ -113,6 +118,12 @@ func main() {
 		log.Fatalf("error creating k8s client: %v", err)
 	}
 
+	// Create Gateway API client.
+	gwClient, err := gatewayclient.NewForConfig(config)
+	if err != nil {
+		log.Fatalf("error creating gateway API client: %v", err)
+	}
+
 	// Ensure the cluster config secret exists with the correct VICE_BASE_URL
 	// before starting the operator, so vice-proxy containers can reference it
 	// as env vars via EnvFrom.
@@ -131,9 +142,31 @@ func main() {
 		}
 	}
 
-	rt, err := operator.ParseRoutingType(routingType)
-	if err != nil {
-		log.Fatalf("invalid routing type: %v", err)
+	// Ensure the loading page service exists so HTTPRoutes have a valid backend.
+	if loadingPodSelector != "" {
+		selector, selectorErr := parseSelector(loadingPodSelector)
+		if selectorErr != nil {
+			log.Fatalf("invalid --loading-pod-selector: %v", selectorErr)
+		}
+		loadingSvcCtx, loadingSvcCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer loadingSvcCancel()
+		if err := operator.EnsureLoadingService(loadingSvcCtx, clientset, namespace, loadingServiceName, int32(loadingPort), selector); err != nil {
+			log.Fatalf("failed to ensure loading service: %v", err)
+		}
+	}
+
+	// Ensure the Gateway resource exists so HTTPRoutes can attach to it.
+	gwCtx, gwCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer gwCancel()
+	if err := operator.EnsureGateway(gwCtx, gwClient, namespace, gatewayName, gatewayClassName, int32(gatewayEntryPort)); err != nil {
+		log.Fatalf("failed to ensure gateway: %v", err)
+	}
+
+	// Ensure the CORS middleware exists so HTTPRoutes can reference it.
+	corsCtx, corsCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer corsCancel()
+	if err := operator.EnsureCORSMiddleware(corsCtx, clientset, namespace); err != nil {
+		log.Fatalf("failed to ensure CORS middleware: %v", err)
 	}
 
 	gpuVendor, err := operator.ParseGPUVendor(gpuVendorFlag)
@@ -141,19 +174,14 @@ func main() {
 		log.Fatalf("invalid GPU vendor: %v", err)
 	}
 
-	// Create gateway client when using gateway routing.
-	var gwClient *gatewayclient.GatewayV1Client
-	if rt == operator.RoutingGateway {
-		gwClient, err = gatewayclient.NewForConfig(config)
-		if err != nil {
-			log.Fatalf("error creating gateway API client: %v", err)
-		}
-	}
+	// Extract the base domain from vice-base-url for hostname rewriting
+	// (e.g. "https://localhost" → "localhost").
+	baseDomain := parsedURL.Host
 
 	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
 	imageCache := operator.NewImageCacheManager(clientset, namespace, imagePullSecret)
-	op := operator.NewOperator(clientset, gwClient, namespace, rt, ingressClass, gpuVendor, capacityCalc, imageCache,
-		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs)
+	op := operator.NewOperator(clientset, gwClient, namespace, gpuVendor, capacityCalc, imageCache,
+		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs, baseDomain)
 
 	app := NewApp(op, basicAuth, basicAuthUsername, basicAuthPassword)
 	loadingApp := NewLoadingApp(op)
@@ -161,8 +189,8 @@ func main() {
 	apiAddr := fmt.Sprintf(":%d", port)
 	loadingAddr := fmt.Sprintf(":%d", loadingPort)
 
-	log.Infof("vice-operator listening on %s (loading page on %s, namespace=%s, routing=%s, ingress-class=%s, gpu-vendor=%s, vice-base-url=%s, max-analyses=%d)",
-		apiAddr, loadingAddr, namespace, routingType, ingressClass, gpuVendorFlag, viceBaseURL, maxAnalyses)
+	log.Infof("vice-operator listening on %s (loading page on %s, namespace=%s, gpu-vendor=%s, vice-base-url=%s, max-analyses=%d)",
+		apiAddr, loadingAddr, namespace, gpuVendorFlag, viceBaseURL, maxAnalyses)
 
 	// Start loading page server in a goroutine.
 	go func() {
@@ -177,4 +205,25 @@ func main() {
 		log.Error(err)
 		os.Exit(1)
 	}
+}
+
+// parseSelector parses a comma-separated "key=value,key2=value2" string into
+// a label map suitable for a Service selector.
+func parseSelector(s string) (map[string]string, error) {
+	result := make(map[string]string)
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) != 2 || kv[0] == "" {
+			return nil, fmt.Errorf("invalid selector term %q (expected key=value)", part)
+		}
+		result[kv[0]] = kv[1]
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("selector must contain at least one key=value pair")
+	}
+	return result, nil
 }

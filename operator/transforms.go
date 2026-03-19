@@ -9,8 +9,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -107,220 +105,54 @@ func swapResource(rl apiv1.ResourceList) {
 	}
 }
 
-// RoutingType describes which networking approach the operator's cluster uses.
-type RoutingType string
-
-const (
-	// RoutingGateway applies the HTTPRoute directly via the Gateway API.
-	RoutingGateway RoutingType = "gateway"
-
-	// RoutingNginx converts the HTTPRoute to an nginx Ingress.
-	RoutingNginx RoutingType = "nginx"
-
-	// RoutingTailscale converts the HTTPRoute to a Tailscale Ingress.
-	RoutingTailscale RoutingType = "tailscale"
-)
-
-// ParseRoutingType validates and returns a RoutingType from a string.
-// Returns an error for unrecognized values.
-func ParseRoutingType(s string) (RoutingType, error) {
-	switch RoutingType(s) {
-	case RoutingGateway, RoutingNginx, RoutingTailscale:
-		return RoutingType(s), nil
-	default:
-		return "", fmt.Errorf("unknown routing type %q (valid: gateway, nginx, tailscale)", s)
-	}
-}
-
-// TransformRouting converts the bundle's HTTPRoute into the appropriate
-// networking resource for the operator's cluster. Returns at most one non-nil
-// resource: either an HTTPRoute (for gateway routing) or an Ingress (for
-// nginx/tailscale routing).
-func TransformRouting(
-	route *gatewayv1.HTTPRoute,
-	routing RoutingType,
-	ingressClass string,
-) (*gatewayv1.HTTPRoute, *netv1.Ingress) {
+// TransformBackendToLoadingService rewrites the HTTPRoute backend service
+// references to point at the vice-operator loading page service. Called in
+// HandleLaunch so initial traffic routes to the loading page instead of the
+// (not-yet-ready) analysis.
+func TransformBackendToLoadingService(route *gatewayv1.HTTPRoute, serviceName string, servicePort int32) {
 	if route == nil {
-		return nil, nil
+		return
 	}
-
-	switch routing {
-	case RoutingGateway:
-		return route, nil
-
-	case RoutingNginx:
-		ingress := httpRouteToIngress(route, ingressClass)
-		return nil, ingress
-
-	case RoutingTailscale:
-		ingress := httpRouteToIngress(route, ingressClass)
-		// Remove nginx-specific annotations from the converted ingress.
-		for key := range ingress.Annotations {
-			if isNginxAnnotation(key) {
-				delete(ingress.Annotations, key)
-			}
-		}
-		return nil, ingress
-
-	default:
-		// Unknown routing type: treat as gateway passthrough.
-		return route, nil
-	}
-}
-
-// httpRouteToIngress converts a Gateway API HTTPRoute into a K8s Ingress.
-// It extracts hostnames, backend service references, and ports from the
-// HTTPRoute spec and maps them to Ingress rules and paths.
-func httpRouteToIngress(route *gatewayv1.HTTPRoute, ingressClass string) *netv1.Ingress {
-	pathType := netv1.PathTypePrefix
-
-	var rules []netv1.IngressRule
-	var defaultBackendName string
-	var defaultBackendPort int32
-
-	// Extract backend service info from the first rule's first backend ref.
-	if len(route.Spec.Rules) > 0 && len(route.Spec.Rules[0].BackendRefs) > 0 {
-		ref := route.Spec.Rules[0].BackendRefs[0]
-		defaultBackendName = string(ref.Name)
-		if ref.Port != nil {
-			defaultBackendPort = int32(*ref.Port)
-		}
-	}
-
-	// Create an ingress rule per hostname.
-	for _, hostname := range route.Spec.Hostnames {
-		rules = append(rules, netv1.IngressRule{
-			Host: string(hostname),
-			IngressRuleValue: netv1.IngressRuleValue{
-				HTTP: &netv1.HTTPIngressRuleValue{
-					Paths: []netv1.HTTPIngressPath{
-						{
-							Path:     "/",
-							PathType: &pathType,
-							Backend: netv1.IngressBackend{
-								Service: &netv1.IngressServiceBackend{
-									Name: defaultBackendName,
-									Port: netv1.ServiceBackendPort{
-										Number: defaultBackendPort,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		})
-	}
-
-	// Build a default backend if we have a service name.
-	var defaultBackend *netv1.IngressBackend
-	if defaultBackendName != "" {
-		defaultBackend = &netv1.IngressBackend{
-			Service: &netv1.IngressServiceBackend{
-				Name: defaultBackendName,
-				Port: netv1.ServiceBackendPort{
-					Number: defaultBackendPort,
-				},
-			},
-		}
-	}
-
-	return &netv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      route.Name,
-			Namespace: route.Namespace,
-			Labels:    route.Labels,
-			Annotations: map[string]string{
-				"converted-from": fmt.Sprintf("httproute/%s", route.Name),
-			},
-		},
-		Spec: netv1.IngressSpec{
-			IngressClassName: &ingressClass,
-			DefaultBackend:   defaultBackend,
-			Rules:            rules,
-		},
-	}
-}
-
-// TransformIngress converts the bundle's Ingress to match the operator's local
-// routing configuration. Retained for backward compatibility with bundles that
-// still contain an Ingress instead of an HTTPRoute.
-func TransformIngress(ingress *netv1.Ingress, targetRouting RoutingType, targetIngressClass string) *netv1.Ingress {
-	if ingress == nil {
-		return nil
-	}
-
-	// If the target is the same as what the ingress already has, no changes needed.
-	if ingress.Spec.IngressClassName != nil && *ingress.Spec.IngressClassName == targetIngressClass {
-		return ingress
-	}
-
-	switch targetRouting {
-	case RoutingTailscale:
-		return transformToTailscale(ingress, targetIngressClass)
-	default:
-		// For nginx or any other type, just update the ingress class name.
-		ingress.Spec.IngressClassName = &targetIngressClass
-		return ingress
-	}
-}
-
-// transformToTailscale removes nginx-specific annotations and sets the
-// Tailscale ingress class on the provided Ingress.
-func transformToTailscale(ingress *netv1.Ingress, ingressClass string) *netv1.Ingress {
-	for key := range ingress.Annotations {
-		if isNginxAnnotation(key) {
-			delete(ingress.Annotations, key)
-		}
-	}
-
-	ingress.Spec.IngressClassName = &ingressClass
-
-	return ingress
-}
-
-// TransformBackendToLoadingService rewrites the HTTPRoute and/or Ingress
-// backend service references to point at the vice-operator loading page
-// service. This is called in HandleLaunch so that initial traffic for a new
-// analysis routes to the loading page instead of the (not-yet-ready) analysis.
-func TransformBackendToLoadingService(
-	route *gatewayv1.HTTPRoute,
-	ingress *netv1.Ingress,
-	serviceName string,
-	servicePort int32,
-) {
-	if route != nil {
-		port := gatewayv1.PortNumber(servicePort)
-		name := gatewayv1.ObjectName(serviceName)
-		for i := range route.Spec.Rules {
-			for j := range route.Spec.Rules[i].BackendRefs {
-				route.Spec.Rules[i].BackendRefs[j].Name = name
-				route.Spec.Rules[i].BackendRefs[j].Port = &port
-			}
-		}
-	}
-
-	if ingress != nil {
-		if ingress.Spec.DefaultBackend != nil && ingress.Spec.DefaultBackend.Service != nil {
-			ingress.Spec.DefaultBackend.Service.Name = serviceName
-			ingress.Spec.DefaultBackend.Service.Port = netv1.ServiceBackendPort{Number: servicePort}
-		}
-		for i := range ingress.Spec.Rules {
-			if ingress.Spec.Rules[i].HTTP == nil {
-				continue
-			}
-			for j := range ingress.Spec.Rules[i].HTTP.Paths {
-				if ingress.Spec.Rules[i].HTTP.Paths[j].Backend.Service != nil {
-					ingress.Spec.Rules[i].HTTP.Paths[j].Backend.Service.Name = serviceName
-					ingress.Spec.Rules[i].HTTP.Paths[j].Backend.Service.Port = netv1.ServiceBackendPort{Number: servicePort}
-				}
-			}
+	port := gatewayv1.PortNumber(servicePort)
+	name := gatewayv1.ObjectName(serviceName)
+	for i := range route.Spec.Rules {
+		for j := range route.Spec.Rules[i].BackendRefs {
+			route.Spec.Rules[i].BackendRefs[j].Name = name
+			route.Spec.Rules[i].BackendRefs[j].Port = &port
 		}
 	}
 }
 
-// isNginxAnnotation returns true if the annotation key is nginx-specific.
-func isNginxAnnotation(key string) bool {
-	return strings.HasPrefix(key, "nginx.ingress.kubernetes.io/")
+// TransformHostnames rewrites the domain portion of hostnames in the HTTPRoute
+// to match baseDomain. For example, if baseDomain is "localhost", then
+// "a1234.cyverse.run" becomes "a1234.localhost". No-op if baseDomain is empty.
+func TransformHostnames(route *gatewayv1.HTTPRoute, baseDomain string) {
+	if route == nil || baseDomain == "" {
+		return
+	}
+	for i, h := range route.Spec.Hostnames {
+		route.Spec.Hostnames[i] = gatewayv1.Hostname(rewriteHostname(string(h), baseDomain))
+	}
+}
+
+// rewriteHostname replaces the domain portion of a hostname (everything after
+// the first dot) with newDomain. Hostnames with no dot are returned unchanged.
+func rewriteHostname(hostname, newDomain string) string {
+	dot := strings.IndexByte(hostname, '.')
+	if dot < 0 {
+		return hostname
+	}
+	return hostname[:dot+1] + newDomain
+}
+
+// TransformGatewayNamespace rewrites the parentRef namespace in an HTTPRoute
+// to match the operator's namespace. No-op if namespace is empty or route is nil.
+func TransformGatewayNamespace(route *gatewayv1.HTTPRoute, namespace string) {
+	if route == nil || namespace == "" {
+		return
+	}
+	ns := gatewayv1.Namespace(namespace)
+	for i := range route.Spec.ParentRefs {
+		route.Spec.ParentRefs[i].Namespace = &ns
+	}
 }
