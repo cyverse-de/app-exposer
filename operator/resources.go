@@ -7,7 +7,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -72,17 +71,10 @@ func (o *Operator) applyBundle(ctx context.Context, bundle *operatorclient.Analy
 		}
 	}
 
-	// HTTPRoute (gateway-first)
-	if bundle.HTTPRoute != nil && o.hasGatewayClient() {
+	// HTTPRoute
+	if bundle.HTTPRoute != nil {
 		if err := o.upsertHTTPRoute(ctx, bundle.HTTPRoute); err != nil {
 			return fmt.Errorf("httproute %s: %w", bundle.HTTPRoute.Name, err)
-		}
-	}
-
-	// Ingress (fallback or legacy)
-	if bundle.Ingress != nil {
-		if err := o.upsertIngress(ctx, bundle.Ingress); err != nil {
-			return fmt.Errorf("ingress %s: %w", bundle.Ingress.Name, err)
 		}
 	}
 
@@ -177,22 +169,6 @@ func (o *Operator) upsertService(ctx context.Context, svc *apiv1.Service) error 
 	return err
 }
 
-func (o *Operator) upsertIngress(ctx context.Context, ing *netv1.Ingress) error {
-	client := o.clientset.NetworkingV1().Ingresses(o.namespace)
-	_, err := client.Get(ctx, ing.Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		log.Debugf("creating Ingress %s", ing.Name)
-		_, err = client.Create(ctx, ing, metav1.CreateOptions{})
-		return err
-	}
-	if err != nil {
-		return fmt.Errorf("checking for existing Ingress %s: %w", ing.Name, err)
-	}
-	log.Debugf("updating Ingress %s", ing.Name)
-	_, err = client.Update(ctx, ing, metav1.UpdateOptions{})
-	return err
-}
-
 // upsertHTTPRoute creates or updates a Gateway API HTTPRoute.
 func (o *Operator) upsertHTTPRoute(ctx context.Context, route *gatewayv1.HTTPRoute) error {
 	client := o.gatewayClient.HTTPRoutes(o.namespace)
@@ -227,120 +203,108 @@ func (o *Operator) upsertPDB(ctx context.Context, pdb *policyv1.PodDisruptionBud
 }
 
 // deleteAnalysisResources deletes all K8s resources matching the analysis-id label.
+// All resource types are attempted even if earlier deletions fail, and all errors
+// are collected and returned together. 404 errors on individual deletes are ignored
+// since the operation is idempotent.
 func (o *Operator) deleteAnalysisResources(ctx context.Context, analysisID string) error {
 	log.Infof("deleting resources for analysis %s", analysisID)
 	opts := analysisLabelSelector(analysisID)
 	var errs []error
 
-	// Delete PDB
+	// deleteItem calls deleteFn with the given name and accumulates non-404 errors.
+	deleteItem := func(name string, deleteFn func(string) error) {
+		if err := deleteFn(name); err != nil && !apierrors.IsNotFound(err) {
+			log.Errorf("deleting %s for analysis %s: %v", name, analysisID, err)
+			errs = append(errs, err)
+		}
+	}
+
+	// Delete PodDisruptionBudgets
 	pdbClient := o.clientset.PolicyV1().PodDisruptionBudgets(o.namespace)
-	pdbList, err := pdbClient.List(ctx, opts)
-	if err != nil {
-		return err
-	}
-	for _, pdb := range pdbList.Items {
-		if err := pdbClient.Delete(ctx, pdb.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-			errs = append(errs, err)
+	if pdbList, err := pdbClient.List(ctx, opts); err != nil {
+		errs = append(errs, fmt.Errorf("listing PDBs: %w", err))
+	} else {
+		for _, pdb := range pdbList.Items {
+			deleteItem(pdb.Name, func(name string) error {
+				return pdbClient.Delete(ctx, name, metav1.DeleteOptions{})
+			})
 		}
 	}
 
-	// Delete HTTPRoutes if gateway client is available.
-	if o.hasGatewayClient() {
-		routeClient := o.gatewayClient.HTTPRoutes(o.namespace)
-		routeList, err := routeClient.List(ctx, opts)
-		if err != nil {
-			log.Errorf("error listing HTTPRoutes for deletion: %v", err)
-		} else {
-			for _, route := range routeList.Items {
-				if err := routeClient.Delete(ctx, route.Name, metav1.DeleteOptions{}); err != nil {
-					log.Error(err)
-					errs = append(errs, err)
-				}
-			}
+	// Delete HTTPRoutes
+	routeClient := o.gatewayClient.HTTPRoutes(o.namespace)
+	if routeList, err := routeClient.List(ctx, opts); err != nil {
+		errs = append(errs, fmt.Errorf("listing HTTPRoutes: %w", err))
+	} else {
+		for _, route := range routeList.Items {
+			deleteItem(route.Name, func(name string) error {
+				return routeClient.Delete(ctx, name, metav1.DeleteOptions{})
+			})
 		}
 	}
 
-	// Delete Ingress
-	ingClient := o.clientset.NetworkingV1().Ingresses(o.namespace)
-	ingList, err := ingClient.List(ctx, opts)
-	if err != nil {
-		return err
-	}
-	for _, ing := range ingList.Items {
-		if err := ingClient.Delete(ctx, ing.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-			errs = append(errs, err)
-		}
-	}
-
-	// Delete Service
+	// Delete Services
 	svcClient := o.clientset.CoreV1().Services(o.namespace)
-	svcList, err := svcClient.List(ctx, opts)
-	if err != nil {
-		return err
-	}
-	for _, svc := range svcList.Items {
-		if err := svcClient.Delete(ctx, svc.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-			errs = append(errs, err)
+	if svcList, err := svcClient.List(ctx, opts); err != nil {
+		errs = append(errs, fmt.Errorf("listing Services: %w", err))
+	} else {
+		for _, svc := range svcList.Items {
+			deleteItem(svc.Name, func(name string) error {
+				return svcClient.Delete(ctx, name, metav1.DeleteOptions{})
+			})
 		}
 	}
 
-	// Delete Deployment
+	// Delete Deployments
 	depClient := o.clientset.AppsV1().Deployments(o.namespace)
-	depList, err := depClient.List(ctx, opts)
-	if err != nil {
-		return err
-	}
-	for _, dep := range depList.Items {
-		if err := depClient.Delete(ctx, dep.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-			errs = append(errs, err)
+	if depList, err := depClient.List(ctx, opts); err != nil {
+		errs = append(errs, fmt.Errorf("listing Deployments: %w", err))
+	} else {
+		for _, dep := range depList.Items {
+			deleteItem(dep.Name, func(name string) error {
+				return depClient.Delete(ctx, name, metav1.DeleteOptions{})
+			})
 		}
 	}
 
-	// Delete PVCs (triggers automatic PV cleanup for volumes with Delete reclaim policy).
+	// Delete PVCs — also triggers automatic PV cleanup for Delete reclaim policy volumes.
 	pvcClient := o.clientset.CoreV1().PersistentVolumeClaims(o.namespace)
-	pvcList, err := pvcClient.List(ctx, opts)
-	if err != nil {
-		return err
-	}
-	for _, pvc := range pvcList.Items {
-		if err := pvcClient.Delete(ctx, pvc.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-			errs = append(errs, err)
+	if pvcList, err := pvcClient.List(ctx, opts); err != nil {
+		errs = append(errs, fmt.Errorf("listing PVCs: %w", err))
+	} else {
+		for _, pvc := range pvcList.Items {
+			deleteItem(pvc.Name, func(name string) error {
+				return pvcClient.Delete(ctx, name, metav1.DeleteOptions{})
+			})
 		}
 	}
 
-	// Delete PVs with "Retain" reclaim policy (CSI driver volumes)
+	// Delete PVs with Retain reclaim policy (CSI driver volumes not cleaned up via PVC deletion).
 	pvClient := o.clientset.CoreV1().PersistentVolumes()
-	pvList, err := pvClient.List(ctx, opts)
-	if err != nil {
-		return err
-	}
-	for _, pv := range pvList.Items {
-		if err := pvClient.Delete(ctx, pv.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-			errs = append(errs, err)
+	if pvList, err := pvClient.List(ctx, opts); err != nil {
+		errs = append(errs, fmt.Errorf("listing PVs: %w", err))
+	} else {
+		for _, pv := range pvList.Items {
+			deleteItem(pv.Name, func(name string) error {
+				return pvClient.Delete(ctx, name, metav1.DeleteOptions{})
+			})
 		}
 	}
 
 	// Delete ConfigMaps
 	cmClient := o.clientset.CoreV1().ConfigMaps(o.namespace)
-	cmList, err := cmClient.List(ctx, opts)
-	if err != nil {
-		return err
-	}
-	for _, cm := range cmList.Items {
-		if err := cmClient.Delete(ctx, cm.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-			errs = append(errs, err)
+	if cmList, err := cmClient.List(ctx, opts); err != nil {
+		errs = append(errs, fmt.Errorf("listing ConfigMaps: %w", err))
+	} else {
+		for _, cm := range cmList.Items {
+			deleteItem(cm.Name, func(name string) error {
+				return cmClient.Delete(ctx, name, metav1.DeleteOptions{})
+			})
 		}
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("failed to delete %d resources for analysis %s: %w", len(errs), analysisID, errors.Join(errs...))
+		return fmt.Errorf("failed to delete resources for analysis %s: %w", analysisID, errors.Join(errs...))
 	}
 
 	log.Infof("resources deleted for analysis %s", analysisID)

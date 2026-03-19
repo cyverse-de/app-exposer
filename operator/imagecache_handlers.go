@@ -73,7 +73,7 @@ func (o *Operator) HandleCacheImages(c echo.Context) error {
 //	@Tags			image-cache
 //	@Accept			json
 //	@Produce		json
-//	@Param			request	body		ImageCacheRequest		true	"Images to remove"
+//	@Param			request	body		ImageCacheRequest	true	"Images to remove"
 //	@Success		200		{object}	ImageCacheBulkResponse
 //	@Success		207		{object}	ImageCacheBulkResponse	"Partial success"
 //	@Failure		400		{object}	common.ErrorResponse
