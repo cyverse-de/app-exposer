@@ -145,6 +145,9 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 		TransformBackendToLoadingService(bundle.HTTPRoute, o.loadingServiceName, o.loadingServicePort)
 	}
 
+	// Inject per-analysis vice-proxy args (backend URL, listen addr, analysis ID).
+	TransformViceProxyArgs(bundle.Deployment, bundle.AnalysisID)
+
 	// Rewrite GPU resource names to match the cluster's GPU vendor.
 	TransformGPUVendor(bundle.Deployment, o.gpuVendor)
 
@@ -446,7 +449,7 @@ func (o *Operator) HandleLogs(c echo.Context) error {
 				continue
 			}
 			logBytes, err := io.ReadAll(stream)
-			_ = stream.Close()
+			_ = stream.Close() //nolint:errcheck // best-effort close inside loop; any error is secondary to read error above
 			if err != nil {
 				log.Errorf("error reading logs for %s/%s: %v", pod.Name, container.Name, err)
 				continue

@@ -42,23 +42,27 @@ func buildDockerConfigJSON(server, username, password string) ([]byte, error) {
 }
 
 // EnsureClusterConfigSecret ensures that the named Secret exists in the given
-// namespace with the correct VICE_BASE_URL value. It creates the secret if
-// missing, updates only the VICE_BASE_URL key if it differs, and preserves
-// any other keys already present.
-func EnsureClusterConfigSecret(ctx context.Context, clientset kubernetes.Interface, namespace, secretName, viceBaseURL string) error {
+// namespace with the correct cluster config values. It creates the secret if
+// missing, merges config keys into existing data (overwriting matches,
+// preserving extras), and updates if any values changed.
+func EnsureClusterConfigSecret(ctx context.Context, clientset kubernetes.Interface, namespace, secretName string, config map[string]string) error {
 	client := clientset.CoreV1().Secrets(namespace)
+
+	// Convert config map to byte map for the Secret data.
+	wantData := make(map[string][]byte, len(config))
+	for k, v := range config {
+		wantData[k] = []byte(v)
+	}
 
 	existing, err := client.Get(ctx, secretName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		log.Infof("creating Secret %s with VICE_BASE_URL=%s", secretName, viceBaseURL)
+		log.Infof("creating Secret %s with %d keys", secretName, len(config))
 		_, err = client.Create(ctx, &apiv1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      secretName,
 				Namespace: namespace,
 			},
-			Data: map[string][]byte{
-				"VICE_BASE_URL": []byte(viceBaseURL),
-			},
+			Data: wantData,
 		}, metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("creating Secret %s: %w", secretName, err)
@@ -69,24 +73,26 @@ func EnsureClusterConfigSecret(ctx context.Context, clientset kubernetes.Interfa
 		return fmt.Errorf("checking for existing Secret %s: %w", secretName, err)
 	}
 
-	// Secret exists — check whether VICE_BASE_URL needs updating.
-	current, ok := existing.Data["VICE_BASE_URL"]
-	if ok && string(current) == viceBaseURL {
-		log.Debugf("Secret %s already has correct VICE_BASE_URL", secretName)
-		return nil
-	}
-
-	if ok {
-		log.Infof("updating Secret %s VICE_BASE_URL from %q to %q", secretName, string(current), viceBaseURL)
-	} else {
-		log.Infof("adding missing VICE_BASE_URL key to Secret %s", secretName)
-	}
-
+	// Secret exists — merge config keys into existing data.
 	if existing.Data == nil {
 		existing.Data = make(map[string][]byte)
 	}
-	existing.Data["VICE_BASE_URL"] = []byte(viceBaseURL)
 
+	changed := false
+	for k, v := range wantData {
+		current, ok := existing.Data[k]
+		if !ok || string(current) != string(v) {
+			existing.Data[k] = v
+			changed = true
+		}
+	}
+
+	if !changed {
+		log.Debugf("Secret %s already has correct values for all config keys", secretName)
+		return nil
+	}
+
+	log.Infof("updating Secret %s with new config values", secretName)
 	_, err = client.Update(ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("updating Secret %s: %w", secretName, err)

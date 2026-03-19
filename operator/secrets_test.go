@@ -43,27 +43,41 @@ func TestEnsureClusterConfigSecret(t *testing.T) {
 	const (
 		ns         = "vice-apps"
 		secretName = "cluster-config-secret"
-		url        = "https://cyverse.run"
 	)
+
+	baseConfig := map[string]string{
+		"VICE_BASE_URL": "https://cyverse.run",
+	}
+
+	multiKeyConfig := map[string]string{
+		"VICE_BASE_URL":      "https://cyverse.run",
+		"KEYCLOAK_BASE_URL":  "https://keycloak.example.org/auth",
+		"KEYCLOAK_REALM":     "cyverse",
+		"KEYCLOAK_CLIENT_ID": "vice",
+		"DISABLE_AUTH":       "false",
+	}
 
 	tests := []struct {
 		name      string
 		existing  *apiv1.Secret // nil means no pre-existing secret
-		wantURL   string
+		config    map[string]string
+		wantKeys  map[string]string // keys and values that must be present
 		extraKeys map[string]string // extra keys that should be preserved
 	}{
 		{
 			name:     "creates secret when missing",
 			existing: nil,
-			wantURL:  url,
+			config:   baseConfig,
+			wantKeys: baseConfig,
 		},
 		{
 			name: "no update when value matches",
 			existing: &apiv1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
-				Data:       map[string][]byte{"VICE_BASE_URL": []byte(url)},
+				Data:       map[string][]byte{"VICE_BASE_URL": []byte("https://cyverse.run")},
 			},
-			wantURL: url,
+			config:   baseConfig,
+			wantKeys: baseConfig,
 		},
 		{
 			name: "updates when value differs",
@@ -71,7 +85,8 @@ func TestEnsureClusterConfigSecret(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
 				Data:       map[string][]byte{"VICE_BASE_URL": []byte("https://old.example.com")},
 			},
-			wantURL: url,
+			config:   baseConfig,
+			wantKeys: baseConfig,
 		},
 		{
 			name: "adds key when missing from existing secret",
@@ -79,7 +94,8 @@ func TestEnsureClusterConfigSecret(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
 				Data:       map[string][]byte{"OTHER_KEY": []byte("other-value")},
 			},
-			wantURL:   url,
+			config:    baseConfig,
+			wantKeys:  baseConfig,
 			extraKeys: map[string]string{"OTHER_KEY": "other-value"},
 		},
 		{
@@ -88,7 +104,8 @@ func TestEnsureClusterConfigSecret(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
 				Data:       nil,
 			},
-			wantURL: url,
+			config:   baseConfig,
+			wantKeys: baseConfig,
 		},
 		{
 			name: "preserves extra keys when updating",
@@ -99,8 +116,29 @@ func TestEnsureClusterConfigSecret(t *testing.T) {
 					"EXTRA":         []byte("keep-me"),
 				},
 			},
-			wantURL:   url,
+			config:    baseConfig,
+			wantKeys:  baseConfig,
 			extraKeys: map[string]string{"EXTRA": "keep-me"},
+		},
+		{
+			name:     "creates multi-key secret when missing",
+			existing: nil,
+			config:   multiKeyConfig,
+			wantKeys: multiKeyConfig,
+		},
+		{
+			name: "multi-key update merges correctly",
+			existing: &apiv1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
+				Data: map[string][]byte{
+					"VICE_BASE_URL":     []byte("https://old.example.com"),
+					"KEYCLOAK_BASE_URL": []byte("https://keycloak.example.org/auth"),
+					"CUSTOM":            []byte("preserved"),
+				},
+			},
+			config:    multiKeyConfig,
+			wantKeys:  multiKeyConfig,
+			extraKeys: map[string]string{"CUSTOM": "preserved"},
 		},
 	}
 
@@ -113,13 +151,16 @@ func TestEnsureClusterConfigSecret(t *testing.T) {
 				clientset = fake.NewSimpleClientset()
 			}
 
-			err := EnsureClusterConfigSecret(context.Background(), clientset, ns, secretName, url)
+			err := EnsureClusterConfigSecret(context.Background(), clientset, ns, secretName, tt.config)
 			require.NoError(t, err)
 
-			// Verify the secret has the correct VICE_BASE_URL.
+			// Verify the secret has the correct values.
 			secret, err := clientset.CoreV1().Secrets(ns).Get(context.Background(), secretName, metav1.GetOptions{})
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantURL, string(secret.Data["VICE_BASE_URL"]))
+
+			for k, v := range tt.wantKeys {
+				assert.Equal(t, v, string(secret.Data[k]), "key %q should have correct value", k)
+			}
 
 			// Verify extra keys are preserved.
 			for k, v := range tt.extraKeys {

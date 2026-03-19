@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/constants"
+
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -143,6 +145,40 @@ func rewriteHostname(hostname, newDomain string) string {
 		return hostname
 	}
 	return hostname[:dot+1] + newDomain
+}
+
+// TransformViceProxyArgs injects per-analysis command-line args into the
+// vice-proxy container. The container's Command should already be ["vice-proxy"]
+// from app-exposer; Args appends to the entrypoint. The backend URL is derived
+// from the first port of the analysis container.
+func TransformViceProxyArgs(deployment *appsv1.Deployment, analysisID string) {
+	if deployment == nil {
+		return
+	}
+	for i, c := range deployment.Spec.Template.Spec.Containers {
+		if c.Name != constants.VICEProxyContainerName {
+			continue
+		}
+		backendURL := deriveBackendURL(deployment)
+		deployment.Spec.Template.Spec.Containers[i].Args = []string{
+			"--analysis-id", analysisID,
+			"--backend-url", backendURL,
+			"--ws-backend-url", backendURL,
+			"--listen-addr", fmt.Sprintf("0.0.0.0:%d", constants.VICEProxyPort),
+		}
+		return
+	}
+}
+
+// deriveBackendURL finds the analysis container by name and returns
+// http://localhost:<first-port>. Falls back to http://localhost:60000.
+func deriveBackendURL(deployment *appsv1.Deployment) string {
+	for _, c := range deployment.Spec.Template.Spec.Containers {
+		if c.Name == constants.AnalysisContainerName && len(c.Ports) > 0 {
+			return fmt.Sprintf("http://localhost:%d", c.Ports[0].ContainerPort)
+		}
+	}
+	return "http://localhost:60000"
 }
 
 // TransformGatewayNamespace rewrites the parentRef namespace in an HTTPRoute

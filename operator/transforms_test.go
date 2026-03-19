@@ -389,6 +389,114 @@ func TestTransformHostnames(t *testing.T) {
 	}
 }
 
+func TestTransformViceProxyArgs(t *testing.T) {
+	// makeDeploymentWithContainers builds a deployment with the given containers.
+	makeDeployment := func(containers ...apiv1.Container) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-dep"},
+			Spec: appsv1.DeploymentSpec{
+				Template: apiv1.PodTemplateSpec{
+					Spec: apiv1.PodSpec{
+						Containers: containers,
+					},
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name           string
+		deployment     *appsv1.Deployment
+		analysisID     string
+		wantArgs       []string
+		wantBackendURL string
+	}{
+		{
+			name: "injects args with correct backend URL from analysis container port",
+			deployment: makeDeployment(
+				apiv1.Container{Name: "vice-proxy", Image: "vice-proxy:latest"},
+				apiv1.Container{
+					Name:  "analysis",
+					Image: "jupyter:latest",
+					Ports: []apiv1.ContainerPort{{ContainerPort: 8888}},
+				},
+			),
+			analysisID:     "abc-123",
+			wantArgs:       []string{"--analysis-id", "abc-123", "--backend-url", "http://localhost:8888", "--ws-backend-url", "http://localhost:8888", "--listen-addr", "0.0.0.0:60002"},
+			wantBackendURL: "http://localhost:8888",
+		},
+		{
+			name: "falls back to default backend URL when no analysis port",
+			deployment: makeDeployment(
+				apiv1.Container{Name: "vice-proxy", Image: "vice-proxy:latest"},
+				apiv1.Container{Name: "analysis", Image: "jupyter:latest"},
+			),
+			analysisID:     "def-456",
+			wantArgs:       []string{"--analysis-id", "def-456", "--backend-url", "http://localhost:60000", "--ws-backend-url", "http://localhost:60000", "--listen-addr", "0.0.0.0:60002"},
+			wantBackendURL: "http://localhost:60000",
+		},
+		{
+			name:       "nil deployment does not panic",
+			deployment: nil,
+			analysisID: "abc-123",
+		},
+		{
+			name: "skips input-files container when deriving backend URL",
+			deployment: makeDeployment(
+				apiv1.Container{Name: "vice-proxy", Image: "vice-proxy:latest"},
+				apiv1.Container{
+					Name:  "input-files",
+					Image: "porklock:latest",
+					Ports: []apiv1.ContainerPort{{ContainerPort: 60001}},
+				},
+				apiv1.Container{
+					Name:  "analysis",
+					Image: "rstudio:latest",
+					Ports: []apiv1.ContainerPort{{ContainerPort: 3838}},
+				},
+			),
+			analysisID:     "ghi-789",
+			wantBackendURL: "http://localhost:3838",
+		},
+		{
+			name: "no vice-proxy container is a no-op",
+			deployment: makeDeployment(
+				apiv1.Container{Name: "analysis", Image: "jupyter:latest"},
+			),
+			analysisID: "xyz",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			TransformViceProxyArgs(tt.deployment, tt.analysisID)
+
+			if tt.deployment == nil {
+				return
+			}
+
+			// Find vice-proxy container.
+			var vp *apiv1.Container
+			for i, c := range tt.deployment.Spec.Template.Spec.Containers {
+				if c.Name == "vice-proxy" {
+					vp = &tt.deployment.Spec.Template.Spec.Containers[i]
+					break
+				}
+			}
+
+			if tt.wantArgs != nil {
+				require.NotNil(t, vp, "vice-proxy container should exist")
+				assert.Equal(t, tt.wantArgs, vp.Args)
+			}
+
+			if tt.wantBackendURL != "" && vp != nil {
+				// Verify the backend URL appears in args.
+				assert.Contains(t, vp.Args, tt.wantBackendURL)
+			}
+		})
+	}
+}
+
 func TestTransformGatewayNamespace(t *testing.T) {
 	qaNamespace := gatewayv1.Namespace("qa")
 

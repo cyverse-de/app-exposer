@@ -26,30 +26,37 @@ var log = common.Log
 
 func main() {
 	var (
-		kubeconfig          string
-		namespace           string
-		port                int
-		gpuVendorFlag       string
-		maxAnalyses         int
-		nodeLabelSelector   string
-		logLevel            string
-		basicAuth           bool
-		basicAuthUsername   string
-		basicAuthPassword   string
-		viceBaseURL         string
-		clusterConfigSecret string
-		imagePullSecret     string
-		registryServer      string
-		registryUsername    string
-		registryPassword    string
-		loadingPort         int
-		loadingServiceName  string
-		loadingServicePort  int
-		loadingTimeoutMs    int64
-		loadingPodSelector  string
-		gatewayName         string
-		gatewayClassName    string
-		gatewayEntryPort    int
+		kubeconfig              string
+		namespace               string
+		port                    int
+		gpuVendorFlag           string
+		maxAnalyses             int
+		nodeLabelSelector       string
+		logLevel                string
+		basicAuth               bool
+		basicAuthUsername       string
+		basicAuthPassword       string
+		viceBaseURL             string
+		clusterConfigSecret     string
+		imagePullSecret         string
+		registryServer          string
+		registryUsername        string
+		registryPassword        string
+		loadingPort             int
+		loadingServiceName      string
+		loadingServicePort      int
+		loadingTimeoutMs        int64
+		loadingPodSelector      string
+		gatewayName             string
+		gatewayClassName        string
+		gatewayEntryPort        int
+		keycloakBaseURL         string
+		keycloakRealm           string
+		keycloakClientID        string
+		keycloakClientSecret    string
+		disableViceProxyAuth    bool
+		enableLegacyAuth        bool
+		checkResourceAccessBase string
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -63,7 +70,7 @@ func main() {
 	flag.StringVar(&basicAuthUsername, "basic-auth-username", "", "Basic auth username (required when --basic-auth is set)")
 	flag.StringVar(&basicAuthPassword, "basic-auth-password", "", "Basic auth password (required when --basic-auth is set)")
 	flag.StringVar(&viceBaseURL, "vice-base-url", "https://cyverse.run", "Base URL for VICE, stored in the cluster config secret")
-	flag.StringVar(&clusterConfigSecret, "cluster-config-secret", "cluster-config-secret", "Name of the K8s Secret holding cluster config (e.g. VICE_BASE_URL)")
+	flag.StringVar(&clusterConfigSecret, "cluster-config-secret", "cluster-config-secret", "Name of the K8s Secret holding cluster config")
 	flag.StringVar(&imagePullSecret, "image-pull-secret", "vice-image-pull-secret", "Name of the K8s image pull Secret")
 	flag.StringVar(&registryServer, "registry-server", "", "Docker registry server (e.g. harbor.cyverse.org)")
 	flag.StringVar(&registryUsername, "registry-username", "", "Docker registry username")
@@ -76,6 +83,13 @@ func main() {
 	flag.StringVar(&gatewayName, "gateway-name", "vice", "Name of the Gateway resource")
 	flag.StringVar(&gatewayClassName, "gateway-class-name", "traefik", "GatewayClass name for the Gateway resource")
 	flag.IntVar(&gatewayEntryPort, "gateway-entrypoint-port", 8000, "Entrypoint port on the Gateway listener (must match the gateway controller's internal port)")
+	flag.StringVar(&keycloakBaseURL, "keycloak-base-url", "", "Keycloak base URL for vice-proxy auth")
+	flag.StringVar(&keycloakRealm, "keycloak-realm", "", "Keycloak realm for vice-proxy auth")
+	flag.StringVar(&keycloakClientID, "keycloak-client-id", "", "OIDC client ID for vice-proxy auth")
+	flag.StringVar(&keycloakClientSecret, "keycloak-client-secret", "", "OIDC client secret for vice-proxy auth")
+	flag.BoolVar(&disableViceProxyAuth, "disable-vice-proxy-auth", false, "Disable auth in vice-proxy")
+	flag.BoolVar(&enableLegacyAuth, "enable-legacy-auth", false, "Enable legacy auth in vice-proxy")
+	flag.StringVar(&checkResourceAccessBase, "check-resource-access-base", "", "Legacy auth service URL for vice-proxy")
 	flag.Parse()
 
 	// Validate basic auth flags.
@@ -124,12 +138,37 @@ func main() {
 		log.Fatalf("error creating gateway API client: %v", err)
 	}
 
-	// Ensure the cluster config secret exists with the correct VICE_BASE_URL
+	// Build the cluster config map from flags. Only non-empty values are
+	// included so that empty strings don't override vice-proxy defaults.
+	clusterConfig := map[string]string{"VICE_BASE_URL": viceBaseURL}
+	if keycloakBaseURL != "" {
+		clusterConfig["KEYCLOAK_BASE_URL"] = keycloakBaseURL
+	}
+	if keycloakRealm != "" {
+		clusterConfig["KEYCLOAK_REALM"] = keycloakRealm
+	}
+	if keycloakClientID != "" {
+		clusterConfig["KEYCLOAK_CLIENT_ID"] = keycloakClientID
+	}
+	if keycloakClientSecret != "" {
+		clusterConfig["KEYCLOAK_CLIENT_SECRET"] = keycloakClientSecret
+	}
+	if disableViceProxyAuth {
+		clusterConfig["DISABLE_AUTH"] = "true"
+	}
+	if enableLegacyAuth {
+		clusterConfig["ENABLE_LEGACY_AUTH"] = "true"
+	}
+	if checkResourceAccessBase != "" {
+		clusterConfig["CHECK_RESOURCE_ACCESS_BASE"] = checkResourceAccessBase
+	}
+
+	// Ensure the cluster config secret exists with the correct values
 	// before starting the operator, so vice-proxy containers can reference it
 	// as env vars via EnvFrom.
 	configCtx, configCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer configCancel()
-	if err := operator.EnsureClusterConfigSecret(configCtx, clientset, namespace, clusterConfigSecret, viceBaseURL); err != nil {
+	if err := operator.EnsureClusterConfigSecret(configCtx, clientset, namespace, clusterConfigSecret, clusterConfig); err != nil {
 		log.Fatalf("failed to ensure cluster config secret: %v", err)
 	}
 
