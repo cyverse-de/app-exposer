@@ -58,9 +58,6 @@ type ExposerAppInit struct {
 	batchadapter                  *adapter.JEXAdapter
 	ImagePullSecretName           string
 	LocalStorageClass             string
-	DisableViceProxyAuth          bool
-	EnableLegacyViceProxyAuth     bool
-	CheckResourceAccessURL        string
 	ClusterConfigSecretName       string
 	BypassUsers                   []string
 }
@@ -131,15 +128,8 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		JobStatusURL:                  jobStatusURL,
 		UserSuffix:                    init.UserSuffix,
 		PermissionsURL:                permissionsURL,
-		KeycloakBaseURL:               c.String("keycloak.base"),
-		KeycloakRealm:                 c.String("keycloak.realm"),
-		KeycloakClientID:              c.String("keycloak.client-id"),
-		KeycloakClientSecret:          c.String("keycloak.client-secret"),
 		IRODSZone:                     init.IRODSZone,
 		GatewayProvider:               c.String("vice.gateway_provider"),
-		DisableViceProxyAuth:          init.DisableViceProxyAuth,
-		EnableLegacyViceProxyAuth:     init.EnableLegacyViceProxyAuth,
-		CheckResourceAccessURL:        init.CheckResourceAccessURL,
 		ClusterConfigSecretName:       init.ClusterConfigSecretName,
 		NATSEncodedConn:               conn,
 		LocalStorageClass:             init.LocalStorageClass,
@@ -189,7 +179,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	app.router.HTTPErrorHandler = func(err error, c echo.Context) {
 		code := http.StatusInternalServerError
-		var body interface{}
+		var body any
 
 		switch err := err.(type) {
 		case common.ErrorResponse:

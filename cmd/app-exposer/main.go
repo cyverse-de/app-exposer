@@ -57,7 +57,7 @@ func init() {
 	klogFlags := flag.NewFlagSet("klog", flag.ExitOnError)
 	klog.InitFlags(klogFlags)
 	logtostderr := klogFlags.Lookup("logtostderr")
-	logtostderr.Value.Set("true") // nolint:errcheck
+	logtostderr.Value.Set("true") //nolint:errcheck
 }
 
 func wrapOtelTransport(rt http.RoundTripper) http.RoundTripper {
@@ -113,9 +113,7 @@ func main() {
 		disableViceProxyStorageResourceLimit = flag.Bool("disable-vice-proxy-storage-resource-limit", true, "Disable storage resource limit for the vice proxy.")
 		logLevel                             = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
 		batchExitHandlerImage                = flag.String("batch-exit-handler-image", "harbor.cyverse.org/de/batch-exit-handler:latest", "The image to use for the exitHandler in batch workflows")
-		disableViceProxyAuth                 = flag.Bool("disable-vice-proxy-auth", false, "Disable authentication in the vice-proxy sidecar. When true, allows unauthenticated access to VICE applications.")
-		enableLegacyViceProxyAuth            = flag.Bool("enable-legacy-vice-proxy-auth", false, "Enable legacy per-request permission checks in vice-proxy instead of Keycloak UMA authorization.")
-		clusterConfigSecret                  = flag.String("cluster-config-secret", "", "Name of a Secret to inject as env vars into the vice-proxy container via envFrom. Used to provide VICE_BASE_URL for multi-cluster deployments.")
+		clusterConfigSecret                  = flag.String("cluster-config-secret", "", "Name of a Secret to inject as env vars into the vice-proxy container via envFrom. Used to provide cluster-specific config for multi-cluster deployments.")
 	)
 
 	var tracerCtx, cancel = context.WithCancel(context.Background())
@@ -382,9 +380,6 @@ func main() {
 		batchadapter:                  jexAdapter,
 		ImagePullSecretName:           imagePullSecretName,
 		LocalStorageClass:             *localStorageClass,
-		DisableViceProxyAuth:          *disableViceProxyAuth,
-		EnableLegacyViceProxyAuth:     *enableLegacyViceProxyAuth,
-		CheckResourceAccessURL:        c.String("vice.check-resource-access.url"),
 		ClusterConfigSecretName:       *clusterConfigSecret,
 		BypassUsers:                   bypassUsers,
 	}
