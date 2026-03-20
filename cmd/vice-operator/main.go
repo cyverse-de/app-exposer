@@ -220,7 +220,7 @@ func main() {
 	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
 	imageCache := operator.NewImageCacheManager(clientset, namespace, imagePullSecret)
 	op := operator.NewOperator(clientset, gwClient, namespace, gpuVendor, capacityCalc, imageCache,
-		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs, baseDomain)
+		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs, baseDomain, clusterConfigSecret)
 
 	app := NewApp(op, basicAuth, basicAuthUsername, basicAuthPassword)
 	loadingApp := NewLoadingApp(op)

@@ -67,7 +67,7 @@ func newTestOperator(t *testing.T, maxAnalyses int, vendor ...GPUVendor) (*Opera
 	gwClientset := gatewayfake.NewSimpleClientset()
 	calc := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
 	cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
-	op := NewOperator(clientset, gwClientset.GatewayV1(), "vice-apps", gpuVendor, calc, cache, "vice-operator-loading", 80, 600000, "")
+	op := NewOperator(clientset, gwClientset.GatewayV1(), "vice-apps", gpuVendor, calc, cache, "vice-operator-loading", 80, 600000, "", "cluster-config-secret")
 	return op, clientset, gwClientset
 }
 

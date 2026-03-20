@@ -147,11 +147,12 @@ func rewriteHostname(hostname, newDomain string) string {
 	return hostname[:dot+1] + newDomain
 }
 
-// TransformViceProxyArgs injects per-analysis command-line args into the
-// vice-proxy container. The container's Command should already be ["vice-proxy"]
-// from app-exposer; Args appends to the entrypoint. The backend URL is derived
-// from the first port of the analysis container.
-func TransformViceProxyArgs(deployment *appsv1.Deployment, analysisID string) {
+// TransformViceProxyArgs injects per-analysis command-line args and ensures
+// the cluster-config-secret envFrom is present on the vice-proxy container.
+// The container's Command should already be ["vice-proxy"] from app-exposer;
+// Args appends to the entrypoint. The backend URL is derived from the first
+// port of the analysis container.
+func TransformViceProxyArgs(deployment *appsv1.Deployment, analysisID, clusterConfigSecret string) {
 	if deployment == nil {
 		return
 	}
@@ -166,8 +167,31 @@ func TransformViceProxyArgs(deployment *appsv1.Deployment, analysisID string) {
 			"--ws-backend-url", backendURL,
 			"--listen-addr", fmt.Sprintf("0.0.0.0:%d", constants.VICEProxyPort),
 		}
+
+		// Ensure the cluster config secret is referenced as envFrom so
+		// vice-proxy gets cluster-level env vars (VICE_BASE_URL, Keycloak, etc.).
+		if clusterConfigSecret != "" {
+			ensureEnvFrom(&deployment.Spec.Template.Spec.Containers[i], clusterConfigSecret)
+		}
 		return
 	}
+}
+
+// ensureEnvFrom adds an envFrom secretRef for the given secret name if it
+// isn't already present on the container.
+func ensureEnvFrom(container *apiv1.Container, secretName string) {
+	for _, ref := range container.EnvFrom {
+		if ref.SecretRef != nil && ref.SecretRef.Name == secretName {
+			return // already present
+		}
+	}
+	optional := true
+	container.EnvFrom = append(container.EnvFrom, apiv1.EnvFromSource{
+		SecretRef: &apiv1.SecretEnvSource{
+			LocalObjectReference: apiv1.LocalObjectReference{Name: secretName},
+			Optional:             &optional,
+		},
+	})
 }
 
 // deriveBackendURL finds the analysis container by name and returns

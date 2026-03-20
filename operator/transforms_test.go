@@ -404,12 +404,16 @@ func TestTransformViceProxyArgs(t *testing.T) {
 		}
 	}
 
+	const testSecret = "cluster-config-secret"
+
 	tests := []struct {
 		name           string
 		deployment     *appsv1.Deployment
 		analysisID     string
+		secretName     string
 		wantArgs       []string
 		wantBackendURL string
+		wantEnvFrom    bool // expect envFrom to be added
 	}{
 		{
 			name: "injects args with correct backend URL from analysis container port",
@@ -422,8 +426,10 @@ func TestTransformViceProxyArgs(t *testing.T) {
 				},
 			),
 			analysisID:     "abc-123",
+			secretName:     testSecret,
 			wantArgs:       []string{"--analysis-id", "abc-123", "--backend-url", "http://localhost:8888", "--ws-backend-url", "http://localhost:8888", "--listen-addr", "0.0.0.0:60002"},
 			wantBackendURL: "http://localhost:8888",
+			wantEnvFrom:    true,
 		},
 		{
 			name: "falls back to default backend URL when no analysis port",
@@ -432,13 +438,16 @@ func TestTransformViceProxyArgs(t *testing.T) {
 				apiv1.Container{Name: "analysis", Image: "jupyter:latest"},
 			),
 			analysisID:     "def-456",
+			secretName:     testSecret,
 			wantArgs:       []string{"--analysis-id", "def-456", "--backend-url", "http://localhost:60000", "--ws-backend-url", "http://localhost:60000", "--listen-addr", "0.0.0.0:60002"},
 			wantBackendURL: "http://localhost:60000",
+			wantEnvFrom:    true,
 		},
 		{
 			name:       "nil deployment does not panic",
 			deployment: nil,
 			analysisID: "abc-123",
+			secretName: testSecret,
 		},
 		{
 			name: "skips input-files container when deriving backend URL",
@@ -456,7 +465,9 @@ func TestTransformViceProxyArgs(t *testing.T) {
 				},
 			),
 			analysisID:     "ghi-789",
+			secretName:     testSecret,
 			wantBackendURL: "http://localhost:3838",
+			wantEnvFrom:    true,
 		},
 		{
 			name: "no vice-proxy container is a no-op",
@@ -464,12 +475,53 @@ func TestTransformViceProxyArgs(t *testing.T) {
 				apiv1.Container{Name: "analysis", Image: "jupyter:latest"},
 			),
 			analysisID: "xyz",
+			secretName: testSecret,
+		},
+		{
+			name: "empty secret name skips envFrom",
+			deployment: makeDeployment(
+				apiv1.Container{Name: "vice-proxy", Image: "vice-proxy:latest"},
+				apiv1.Container{
+					Name:  "analysis",
+					Image: "jupyter:latest",
+					Ports: []apiv1.ContainerPort{{ContainerPort: 8888}},
+				},
+			),
+			analysisID: "no-secret",
+			secretName: "",
+			wantArgs:   []string{"--analysis-id", "no-secret", "--backend-url", "http://localhost:8888", "--ws-backend-url", "http://localhost:8888", "--listen-addr", "0.0.0.0:60002"},
+		},
+		{
+			name: "does not duplicate envFrom when already present",
+			deployment: func() *appsv1.Deployment {
+				d := makeDeployment(
+					apiv1.Container{
+						Name:  "vice-proxy",
+						Image: "vice-proxy:latest",
+						EnvFrom: []apiv1.EnvFromSource{
+							{SecretRef: &apiv1.SecretEnvSource{
+								LocalObjectReference: apiv1.LocalObjectReference{Name: testSecret},
+							}},
+						},
+					},
+					apiv1.Container{
+						Name:  "analysis",
+						Image: "jupyter:latest",
+						Ports: []apiv1.ContainerPort{{ContainerPort: 8888}},
+					},
+				)
+				return d
+			}(),
+			analysisID:  "dup-test",
+			secretName:  testSecret,
+			wantArgs:    []string{"--analysis-id", "dup-test", "--backend-url", "http://localhost:8888", "--ws-backend-url", "http://localhost:8888", "--listen-addr", "0.0.0.0:60002"},
+			wantEnvFrom: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			TransformViceProxyArgs(tt.deployment, tt.analysisID)
+			TransformViceProxyArgs(tt.deployment, tt.analysisID, tt.secretName)
 
 			if tt.deployment == nil {
 				return
@@ -492,6 +544,17 @@ func TestTransformViceProxyArgs(t *testing.T) {
 			if tt.wantBackendURL != "" && vp != nil {
 				// Verify the backend URL appears in args.
 				assert.Contains(t, vp.Args, tt.wantBackendURL)
+			}
+
+			if tt.wantEnvFrom && vp != nil {
+				// Verify envFrom contains the secret reference exactly once.
+				count := 0
+				for _, ref := range vp.EnvFrom {
+					if ref.SecretRef != nil && ref.SecretRef.Name == testSecret {
+						count++
+					}
+				}
+				assert.Equal(t, 1, count, "expected exactly one envFrom secretRef for %s", testSecret)
 			}
 		})
 	}

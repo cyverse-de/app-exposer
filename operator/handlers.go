@@ -21,16 +21,17 @@ var log = common.Log.WithFields(logrus.Fields{"package": "operator"})
 
 // Operator holds the state and dependencies for the vice-operator HTTP handlers.
 type Operator struct {
-	clientset          kubernetes.Interface
-	gatewayClient      gatewayclient.GatewayV1Interface
-	namespace          string
-	gpuVendor          GPUVendor
-	capacityCalc       *CapacityCalculator
-	imageCache         *ImageCacheManager
-	loadingServiceName string
-	loadingServicePort int32
-	loadingTimeoutMs   int64
-	baseDomain         string
+	clientset           kubernetes.Interface
+	gatewayClient       gatewayclient.GatewayV1Interface
+	namespace           string
+	gpuVendor           GPUVendor
+	capacityCalc        *CapacityCalculator
+	imageCache          *ImageCacheManager
+	loadingServiceName  string
+	loadingServicePort  int32
+	loadingTimeoutMs    int64
+	baseDomain          string
+	clusterConfigSecret string // Name of the Secret holding cluster config for vice-proxy envFrom.
 }
 
 // NewOperator creates a new Operator. Panics if required dependencies are nil
@@ -46,6 +47,7 @@ func NewOperator(
 	loadingServicePort int32,
 	loadingTimeoutMs int64,
 	baseDomain string,
+	clusterConfigSecret string,
 ) *Operator {
 	if clientset == nil {
 		panic("operator: clientset must not be nil")
@@ -64,16 +66,17 @@ func NewOperator(
 	}
 
 	return &Operator{
-		clientset:          clientset,
-		gatewayClient:      gatewayClient,
-		namespace:          namespace,
-		gpuVendor:          gpuVendor,
-		capacityCalc:       capacityCalc,
-		imageCache:         imageCache,
-		loadingServiceName: loadingServiceName,
-		loadingServicePort: loadingServicePort,
-		loadingTimeoutMs:   loadingTimeoutMs,
-		baseDomain:         baseDomain,
+		clientset:           clientset,
+		gatewayClient:       gatewayClient,
+		namespace:           namespace,
+		gpuVendor:           gpuVendor,
+		capacityCalc:        capacityCalc,
+		imageCache:          imageCache,
+		loadingServiceName:  loadingServiceName,
+		loadingServicePort:  loadingServicePort,
+		loadingTimeoutMs:    loadingTimeoutMs,
+		baseDomain:          baseDomain,
+		clusterConfigSecret: clusterConfigSecret,
 	}
 }
 
@@ -145,8 +148,9 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 		TransformBackendToLoadingService(bundle.HTTPRoute, o.loadingServiceName, o.loadingServicePort)
 	}
 
-	// Inject per-analysis vice-proxy args (backend URL, listen addr, analysis ID).
-	TransformViceProxyArgs(bundle.Deployment, bundle.AnalysisID)
+	// Inject per-analysis vice-proxy args and ensure the cluster config secret
+	// is referenced as envFrom so vice-proxy gets cluster-level env vars.
+	TransformViceProxyArgs(bundle.Deployment, bundle.AnalysisID, o.clusterConfigSecret)
 
 	// Rewrite GPU resource names to match the cluster's GPU vendor.
 	TransformGPUVendor(bundle.Deployment, o.gpuVendor)
