@@ -134,25 +134,17 @@ func main() {
 		log.Fatalf("error creating gateway API client: %v", err)
 	}
 
-	// Build the cluster config map from flags. Only non-empty values are
-	// included so that empty strings don't override vice-proxy defaults.
-	clusterConfig := map[string]string{"VICE_BASE_URL": viceBaseURL}
-	if keycloakBaseURL != "" {
-		clusterConfig["KEYCLOAK_BASE_URL"] = keycloakBaseURL
+	// Build the cluster config map from flags. All keys are always written so
+	// that stale values from a previous run are overwritten. The merge-based
+	// secret update only touches keys present in this map — omitting a key
+	// would leave its old value in the secret.
+	clusterConfig := map[string]string{
+		"VICE_BASE_URL":        viceBaseURL,
+		"KEYCLOAK_BASE_URL":    keycloakBaseURL,
+		"KEYCLOAK_REALM":       keycloakRealm,
+		"KEYCLOAK_CLIENT_ID":   keycloakClientID,
+		"KEYCLOAK_CLIENT_SECRET": keycloakClientSecret,
 	}
-	if keycloakRealm != "" {
-		clusterConfig["KEYCLOAK_REALM"] = keycloakRealm
-	}
-	if keycloakClientID != "" {
-		clusterConfig["KEYCLOAK_CLIENT_ID"] = keycloakClientID
-	}
-	if keycloakClientSecret != "" {
-		clusterConfig["KEYCLOAK_CLIENT_SECRET"] = keycloakClientSecret
-	}
-	// Always write DISABLE_AUTH so that a previous "true" value is overwritten
-	// when the operator restarts without the flag. The merge-based secret update
-	// only overwrites keys that are present in the config map — omitting the key
-	// would leave a stale "true" in the secret.
 	if disableViceProxyAuth {
 		clusterConfig["DISABLE_AUTH"] = "true"
 	} else {
