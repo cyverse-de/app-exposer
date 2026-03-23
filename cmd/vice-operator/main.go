@@ -149,8 +149,14 @@ func main() {
 	if keycloakClientSecret != "" {
 		clusterConfig["KEYCLOAK_CLIENT_SECRET"] = keycloakClientSecret
 	}
+	// Always write DISABLE_AUTH so that a previous "true" value is overwritten
+	// when the operator restarts without the flag. The merge-based secret update
+	// only overwrites keys that are present in the config map — omitting the key
+	// would leave a stale "true" in the secret.
 	if disableViceProxyAuth {
 		clusterConfig["DISABLE_AUTH"] = "true"
+	} else {
+		clusterConfig["DISABLE_AUTH"] = "false"
 	}
 
 	// Ensure the cluster config secret exists with the correct values
