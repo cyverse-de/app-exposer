@@ -64,6 +64,7 @@ func NewApp(op *operator.Operator, basicAuth bool, username, password string) *A
 	analyses.GET("/pods", op.HandlePods)
 	analyses.GET("/logs", op.HandleLogs)
 	analyses.POST("/swap-route", op.HandleSwapRoute)
+	analyses.GET("/permissions", op.HandleGetPermissions)
 	analyses.PUT("/permissions", op.HandleUpdatePermissions)
 
 	// Image cache routes.

@@ -228,6 +228,56 @@ const docTemplateoperator = `{
             }
         },
         "/analyses/{analysis-id}/permissions": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Returns the allowed-users list from the permissions ConfigMap\nfor the given analysis.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analyses"
+                ],
+                "summary": "Get analysis permissions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/operator.PermissionsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
             "put": {
                 "security": [
                     {
@@ -1063,6 +1113,17 @@ const docTemplateoperator = `{
                 },
                 "podName": {
                     "type": "string"
+                }
+            }
+        },
+        "operator.PermissionsResponse": {
+            "type": "object",
+            "properties": {
+                "allowedUsers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

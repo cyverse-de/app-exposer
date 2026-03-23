@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -475,9 +476,73 @@ func (o *Operator) HandleLogs(c echo.Context) error {
 	return c.JSON(http.StatusOK, entries)
 }
 
+// PermissionsResponse is the response body for HandleGetPermissions.
+type PermissionsResponse struct {
+	AllowedUsers []string `json:"allowedUsers"`
+}
+
 // UpdatePermissionsRequest is the request body for HandleUpdatePermissions.
 type UpdatePermissionsRequest struct {
 	AllowedUsers []string `json:"allowedUsers"`
+}
+
+// findPermissionsConfigMap locates the permissions ConfigMap for an analysis
+// by its analysis-id label and permissions- name prefix.
+func (o *Operator) findPermissionsConfigMap(ctx context.Context, analysisID string) (*apiv1.ConfigMap, error) {
+	opts := analysisLabelSelector(analysisID)
+	cmList, err := o.clientset.CoreV1().ConfigMaps(o.namespace).List(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	prefix := constants.PermissionsConfigMapPrefix + "-"
+	for i := range cmList.Items {
+		if strings.HasPrefix(cmList.Items[i].Name, prefix) {
+			return &cmList.Items[i], nil
+		}
+	}
+	return nil, nil
+}
+
+// HandleGetPermissions returns the list of users allowed to access an analysis.
+//
+//	@Summary		Get analysis permissions
+//	@Description	Returns the allowed-users list from the permissions ConfigMap
+//	@Description	for the given analysis.
+//	@Tags			analyses
+//	@Produce		json
+//	@Param			analysis-id	path		string	true	"The analysis ID"
+//	@Success		200			{object}	PermissionsResponse
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		404			{object}	common.ErrorResponse
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/permissions [get]
+func (o *Operator) HandleGetPermissions(c echo.Context) error {
+	ctx := c.Request().Context()
+	analysisID := c.Param("analysis-id")
+	if analysisID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	}
+
+	permsCM, err := o.findPermissionsConfigMap(ctx, analysisID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if permsCM == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "permissions configmap not found for analysis "+analysisID)
+	}
+
+	// Parse the allowed-users file: one username per line, skip blanks.
+	var users []string
+	for _, line := range strings.Split(permsCM.Data[constants.PermissionsFileName], "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			users = append(users, line)
+		}
+	}
+
+	return c.JSON(http.StatusOK, PermissionsResponse{AllowedUsers: users})
 }
 
 // HandleUpdatePermissions rewrites the permissions ConfigMap for an analysis
@@ -489,7 +554,7 @@ type UpdatePermissionsRequest struct {
 //	@Tags			analyses
 //	@Accept			json
 //	@Param			analysis-id	path	string						true	"The analysis ID"
-//	@Param			request		body	UpdatePermissionsRequest		true	"The new allowed users list"
+//	@Param			request		body	UpdatePermissionsRequest	true	"The new allowed users list"
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		404	{object}	common.ErrorResponse
@@ -515,23 +580,10 @@ func (o *Operator) HandleUpdatePermissions(c echo.Context) error {
 
 	log.Infof("updating permissions for analysis %s (%d users)", analysisID, len(req.AllowedUsers))
 
-	// Find the permissions ConfigMap by label.
-	opts := analysisLabelSelector(analysisID)
-	cmList, err := o.clientset.CoreV1().ConfigMaps(o.namespace).List(ctx, opts)
+	permsCM, err := o.findPermissionsConfigMap(ctx, analysisID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-
-	// Look for the ConfigMap with the permissions- prefix.
-	var permsCM *apiv1.ConfigMap
-	prefix := constants.PermissionsConfigMapPrefix + "-"
-	for i := range cmList.Items {
-		if strings.HasPrefix(cmList.Items[i].Name, prefix) {
-			permsCM = &cmList.Items[i]
-			break
-		}
-	}
-
 	if permsCM == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "permissions configmap not found for analysis "+analysisID)
 	}

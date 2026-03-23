@@ -211,6 +211,13 @@ definitions:
       podName:
         type: string
     type: object
+  operator.PermissionsResponse:
+    properties:
+      allowedUsers:
+        items:
+          type: string
+        type: array
+    type: object
   operator.PodInfo:
     properties:
       name:
@@ -10995,6 +11002,40 @@ paths:
       tags:
       - analyses
   /analyses/{analysis-id}/permissions:
+    get:
+      description: |-
+        Returns the allowed-users list from the permissions ConfigMap
+        for the given analysis.
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/operator.PermissionsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - BasicAuth: []
+      summary: Get analysis permissions
+      tags:
+      - analyses
     put:
       consumes:
       - application/json
