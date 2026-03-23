@@ -322,11 +322,6 @@ definitions:
         description: bytes
         type: integer
     type: object
-  operatorclient.LogoutResponse:
-    properties:
-      redirect_url:
-        type: string
-    type: object
   operatorclient.LogoutUserRequest:
     properties:
       username:
@@ -11010,48 +11005,6 @@ paths:
       summary: List active sessions for an analysis
       tags:
       - analyses
-  /analyses/{analysis-id}/backchannel-logout:
-    post:
-      consumes:
-      - application/x-www-form-urlencoded
-      description: |-
-        Forwards a Keycloak logout_token to the vice-proxy sidecar,
-        invalidating the session identified in the token. This is called
-        automatically by Keycloak when a user logs out from another
-        application in the same SSO realm — callers should not invoke
-        this directly. Use POST /logout-user to kick a specific user,
-        or POST /logout to initiate a browser-facing logout flow.
-      parameters:
-      - description: The analysis ID
-        in: path
-        name: analysis-id
-        required: true
-        type: string
-      - description: The Keycloak logout token
-        in: formData
-        name: logout_token
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "502":
-          description: Bad Gateway
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
-      summary: Back-channel logout (Keycloak-initiated, by session token)
-      tags:
-      - analyses
   /analyses/{analysis-id}/download-input-files:
     post:
       description: |-
@@ -11075,45 +11028,6 @@ paths:
       summary: Download input files
       tags:
       - transfers
-  /analyses/{analysis-id}/logout:
-    post:
-      description: |-
-        Clears the user's vice-proxy session cookie and returns the
-        Keycloak logout redirect URL. The caller (typically a browser
-        or UI) should redirect the user to this URL to complete the
-        SSO logout. Affects only the session associated with the
-        request's cookie — use POST /logout-user to target a specific
-        user by username without needing their cookie.
-      parameters:
-      - description: The analysis ID
-        in: path
-        name: analysis-id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/operatorclient.LogoutResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "502":
-          description: Bad Gateway
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
-      summary: Browser-facing logout (returns Keycloak redirect URL)
-      tags:
-      - analyses
   /analyses/{analysis-id}/logout-user:
     post:
       consumes:

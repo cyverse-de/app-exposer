@@ -189,62 +189,6 @@
                 }
             }
         },
-        "/analyses/{analysis-id}/backchannel-logout": {
-            "post": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
-                "description": "Forwards a Keycloak logout_token to the vice-proxy sidecar,\ninvalidating the session identified in the token. This is called\nautomatically by Keycloak when a user logs out from another\napplication in the same SSO realm — callers should not invoke\nthis directly. Use POST /logout-user to kick a specific user,\nor POST /logout to initiate a browser-facing logout flow.",
-                "consumes": [
-                    "application/x-www-form-urlencoded"
-                ],
-                "tags": [
-                    "analyses"
-                ],
-                "summary": "Back-channel logout (Keycloak-initiated, by session token)",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "The analysis ID",
-                        "name": "analysis-id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "The Keycloak logout token",
-                        "name": "logout_token",
-                        "in": "formData",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    },
-                    "502": {
-                        "description": "Bad Gateway",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/analyses/{analysis-id}/download-input-files": {
             "post": {
                 "security": [
@@ -272,58 +216,6 @@
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/analyses/{analysis-id}/logout": {
-            "post": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
-                "description": "Clears the user's vice-proxy session cookie and returns the\nKeycloak logout redirect URL. The caller (typically a browser\nor UI) should redirect the user to this URL to complete the\nSSO logout. Affects only the session associated with the\nrequest's cookie — use POST /logout-user to target a specific\nuser by username without needing their cookie.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "analyses"
-                ],
-                "summary": "Browser-facing logout (returns Keycloak redirect URL)",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "The analysis ID",
-                        "name": "analysis-id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/operatorclient.LogoutResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    },
-                    "502": {
-                        "description": "Bad Gateway",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
@@ -1499,14 +1391,6 @@
                 "usedMemory": {
                     "description": "bytes",
                     "type": "integer"
-                }
-            }
-        },
-        "operatorclient.LogoutResponse": {
-            "type": "object",
-            "properties": {
-                "redirect_url": {
-                    "type": "string"
                 }
             }
         },
