@@ -4,16 +4,16 @@ package operatordocs
 import "github.com/swaggo/swag"
 
 const docTemplateoperator = `{
-    "schemes": {{ marshal .Schemes }},
+    "schemes": [{ marshal .Schemes }],
     "swagger": "2.0",
     "info": {
-        "description": "{{escape .Description}}",
-        "title": "{{.Title}}",
+        "description": "[{escape .Description}]",
+        "title": "[{.Title}]",
         "contact": {},
-        "version": "{{.Version}}"
+        "version": "[{.Version}]"
     },
-    "host": "{{.Host}}",
-    "basePath": "{{.BasePath}}",
+    "host": "[{.Host}]",
+    "basePath": "[{.BasePath}]",
     "paths": {
         "/analyses": {
             "get": {
@@ -144,6 +144,114 @@ const docTemplateoperator = `{
                 }
             }
         },
+        "/analyses/{analysis-id}/active-sessions": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Returns the list of currently active user sessions from the\nvice-proxy sidecar for the given analysis.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analyses"
+                ],
+                "summary": "Get active sessions for an analysis",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/operatorclient.ActiveSessionsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analyses/{analysis-id}/backchannel-logout": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Forwards a Keycloak logout_token to the vice-proxy sidecar\nfor the given analysis, invalidating the user's session.",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "analyses"
+                ],
+                "summary": "Forward back-channel logout to vice-proxy",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "The Keycloak logout token",
+                        "name": "logout_token",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/analyses/{analysis-id}/download-input-files": {
             "post": {
                 "security": [
@@ -171,6 +279,122 @@ const docTemplateoperator = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analyses/{analysis-id}/logout": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Forwards a logout request to the vice-proxy sidecar for the\ngiven analysis. Returns the Keycloak logout redirect URL.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analyses"
+                ],
+                "summary": "Forward logout to vice-proxy",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/operatorclient.LogoutResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analyses/{analysis-id}/logout-user": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Invalidates all active sessions for the given username in the\nvice-proxy sidecar for the given analysis.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analyses"
+                ],
+                "summary": "Log out a user from an analysis",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The user to log out",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/operatorclient.LogoutUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/operatorclient.LogoutUserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
@@ -1192,6 +1416,28 @@ const docTemplateoperator = `{
                 }
             }
         },
+        "operatorclient.ActiveSession": {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "operatorclient.ActiveSessionsResponse": {
+            "type": "object",
+            "properties": {
+                "sessions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operatorclient.ActiveSession"
+                    }
+                }
+            }
+        },
         "operatorclient.AnalysisBundle": {
             "type": "object",
             "properties": {
@@ -1259,6 +1505,30 @@ const docTemplateoperator = `{
                 },
                 "usedMemory": {
                     "description": "bytes",
+                    "type": "integer"
+                }
+            }
+        },
+        "operatorclient.LogoutResponse": {
+            "type": "object",
+            "properties": {
+                "redirect_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "operatorclient.LogoutUserRequest": {
+            "type": "object",
+            "properties": {
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "operatorclient.LogoutUserResponse": {
+            "type": "object",
+            "properties": {
+                "sessions_invalidated": {
                     "type": "integer"
                 }
             }
@@ -9006,15 +9276,15 @@ const docTemplateoperator = `{
 // SwaggerInfooperator holds exported Swagger Info so clients can modify it
 var SwaggerInfooperator = &swag.Spec{
 	Version:          "1.0",
-	Host:             "localhost:60001",
+	Host:             "",
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "vice-operator",
 	Description:      "The vice-operator API for managing VICE analyses on remote clusters.",
 	InfoInstanceName: "operator",
 	SwaggerTemplate:  docTemplateoperator,
-	LeftDelim:        "{{",
-	RightDelim:       "}}",
+	LeftDelim:        "[{",
+	RightDelim:       "}]",
 }
 
 func init() {

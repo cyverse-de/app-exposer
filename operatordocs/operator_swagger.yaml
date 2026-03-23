@@ -260,6 +260,20 @@ definitions:
           type: string
         type: array
     type: object
+  operatorclient.ActiveSession:
+    properties:
+      session_id:
+        type: string
+      username:
+        type: string
+    type: object
+  operatorclient.ActiveSessionsResponse:
+    properties:
+      sessions:
+        items:
+          $ref: '#/definitions/operatorclient.ActiveSession'
+        type: array
+    type: object
   operatorclient.AnalysisBundle:
     properties:
       analysisID:
@@ -306,6 +320,21 @@ definitions:
         type: integer
       usedMemory:
         description: bytes
+        type: integer
+    type: object
+  operatorclient.LogoutResponse:
+    properties:
+      redirect_url:
+        type: string
+    type: object
+  operatorclient.LogoutUserRequest:
+    properties:
+      username:
+        type: string
+    type: object
+  operatorclient.LogoutUserResponse:
+    properties:
+      sessions_invalidated:
         type: integer
     type: object
   reporting.ConfigMapInfo:
@@ -10853,7 +10882,6 @@ definitions:
           +optional
         type: string
     type: object
-host: localhost:60001
 info:
   contact: {}
   description: The vice-operator API for managing VICE analyses on remote clusters.
@@ -10945,6 +10973,79 @@ paths:
       summary: Exit (delete) a VICE analysis
       tags:
       - analyses
+  /analyses/{analysis-id}/active-sessions:
+    get:
+      description: |-
+        Returns the list of currently active user sessions from the
+        vice-proxy sidecar for the given analysis.
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/operatorclient.ActiveSessionsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - BasicAuth: []
+      summary: Get active sessions for an analysis
+      tags:
+      - analyses
+  /analyses/{analysis-id}/backchannel-logout:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: |-
+        Forwards a Keycloak logout_token to the vice-proxy sidecar
+        for the given analysis, invalidating the user's session.
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      - description: The Keycloak logout token
+        in: formData
+        name: logout_token
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - BasicAuth: []
+      summary: Forward back-channel logout to vice-proxy
+      tags:
+      - analyses
   /analyses/{analysis-id}/download-input-files:
     post:
       description: |-
@@ -10968,6 +11069,84 @@ paths:
       summary: Download input files
       tags:
       - transfers
+  /analyses/{analysis-id}/logout:
+    post:
+      description: |-
+        Forwards a logout request to the vice-proxy sidecar for the
+        given analysis. Returns the Keycloak logout redirect URL.
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/operatorclient.LogoutResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - BasicAuth: []
+      summary: Forward logout to vice-proxy
+      tags:
+      - analyses
+  /analyses/{analysis-id}/logout-user:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Invalidates all active sessions for the given username in the
+        vice-proxy sidecar for the given analysis.
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      - description: The user to log out
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/operatorclient.LogoutUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/operatorclient.LogoutUserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - BasicAuth: []
+      summary: Log out a user from an analysis
+      tags:
+      - analyses
   /analyses/{analysis-id}/logs:
     get:
       description: |-
