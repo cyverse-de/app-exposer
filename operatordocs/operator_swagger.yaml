@@ -246,6 +246,13 @@ definitions:
       ready:
         type: boolean
     type: object
+  operator.UpdatePermissionsRequest:
+    properties:
+      allowedUsers:
+        items:
+          type: string
+        type: array
+    type: object
   operatorclient.AnalysisBundle:
     properties:
       analysisID:
@@ -10987,6 +10994,45 @@ paths:
       summary: Get analysis logs
       tags:
       - analyses
+  /analyses/{analysis-id}/permissions:
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Replaces the allowed-users list in the permissions ConfigMap
+        for the given analysis. The full list must be provided (not incremental).
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      - description: The new allowed users list
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/operator.UpdatePermissionsRequest'
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - BasicAuth: []
+      summary: Update analysis permissions
+      tags:
+      - analyses
   /analyses/{analysis-id}/pods:
     get:
       description: |-
@@ -11317,6 +11363,42 @@ paths:
       security:
       - BasicAuth: []
       summary: Get cached image status
+      tags:
+      - image-cache
+  /image-cache/refresh:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Restarts cache DaemonSet pods to force a fresh pull of images
+        that may have been updated under the same tag. The DaemonSet
+        init container uses PullAlways, so the restart causes containerd
+        to fetch the latest manifest.
+      parameters:
+      - description: Images to refresh
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/operator.ImageCacheRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: All images refreshed
+          schema:
+            $ref: '#/definitions/operator.ImageCacheBulkResponse'
+        "207":
+          description: Partial success
+          schema:
+            $ref: '#/definitions/operator.ImageCacheBulkResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - BasicAuth: []
+      summary: Refresh cached images
       tags:
       - image-cache
 securityDefinitions:

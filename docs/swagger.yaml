@@ -210,6 +210,13 @@ definitions:
       ready:
         type: boolean
     type: object
+  httphandlers.UpdatePermissionsRequest:
+    properties:
+      allowedUsers:
+        items:
+          type: string
+        type: array
+    type: object
   httphandlers.VICELogEntry:
     properties:
       lines:
@@ -11567,6 +11574,42 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Return the logs for a running analysis
+  /vice/{analysis-id}/permissions:
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Pushes an updated list of allowed users to the operator's
+        permissions ConfigMap for the given analysis.
+      operationId: update-permissions
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      - description: The new allowed users list
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httphandlers.UpdatePermissionsRequest'
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Update VICE analysis permissions
   /vice/{analysis-id}/pods:
     get:
       description: |-

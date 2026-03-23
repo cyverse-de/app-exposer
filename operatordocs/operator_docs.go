@@ -227,6 +227,64 @@ const docTemplateoperator = `{
                 }
             }
         },
+        "/analyses/{analysis-id}/permissions": {
+            "put": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Replaces the allowed-users list in the permissions ConfigMap\nfor the given analysis. The full list must be provided (not incremental).",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analyses"
+                ],
+                "summary": "Update analysis permissions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The new allowed users list",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/operator.UpdatePermissionsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/analyses/{analysis-id}/pods": {
             "get": {
                 "security": [
@@ -636,6 +694,57 @@ const docTemplateoperator = `{
                 }
             }
         },
+        "/image-cache/refresh": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Restarts cache DaemonSet pods to force a fresh pull of images\nthat may have been updated under the same tag. The DaemonSet\ninit container uses PullAlways, so the restart causes containerd\nto fetch the latest manifest.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "image-cache"
+                ],
+                "summary": "Refresh cached images",
+                "parameters": [
+                    {
+                        "description": "Images to refresh",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/operator.ImageCacheRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "All images refreshed",
+                        "schema": {
+                            "$ref": "#/definitions/operator.ImageCacheBulkResponse"
+                        }
+                    },
+                    "207": {
+                        "description": "Partial success",
+                        "schema": {
+                            "$ref": "#/definitions/operator.ImageCacheBulkResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/image-cache/{id}": {
             "get": {
                 "security": [
@@ -1008,6 +1117,17 @@ const docTemplateoperator = `{
             "properties": {
                 "ready": {
                     "type": "boolean"
+                }
+            }
+        },
+        "operator.UpdatePermissionsRequest": {
+            "type": "object",
+            "properties": {
+                "allowedUsers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

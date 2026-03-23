@@ -1052,6 +1052,57 @@ const docTemplate = `{
                 }
             }
         },
+        "/vice/{analysis-id}/permissions": {
+            "put": {
+                "description": "Pushes an updated list of allowed users to the operator's\npermissions ConfigMap for the given analysis.",
+                "consumes": [
+                    "application/json"
+                ],
+                "summary": "Update VICE analysis permissions",
+                "operationId": "update-permissions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The new allowed users list",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.UpdatePermissionsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/{analysis-id}/pods": {
             "get": {
                 "description": "Lists the k8s pods associated with the provided external-id. For now\njust returns pod info in the format ` + "`" + `{\"pods\" : [{}]}` + "`" + `",
@@ -1774,6 +1825,17 @@ const docTemplate = `{
                 },
                 "ready": {
                     "type": "boolean"
+                }
+            }
+        },
+        "httphandlers.UpdatePermissionsRequest": {
+            "type": "object",
+            "properties": {
+                "allowedUsers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

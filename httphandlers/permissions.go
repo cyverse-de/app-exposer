@@ -20,7 +20,7 @@ type UpdatePermissionsRequest struct {
 //	@Description	permissions ConfigMap for the given analysis.
 //	@Accept			json
 //	@Param			analysis-id	path	string						true	"The analysis ID"
-//	@Param			request		body	UpdatePermissionsRequest		true	"The new allowed users list"
+//	@Param			request		body	UpdatePermissionsRequest	true	"The new allowed users list"
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		404	{object}	common.ErrorResponse
