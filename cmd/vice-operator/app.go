@@ -19,7 +19,6 @@ type App struct {
 //	@title						vice-operator
 //	@version					1.0
 //	@description				The vice-operator API for managing VICE analyses on remote clusters.
-//	@host						localhost:60001
 //	@BasePath					/
 //	@securityDefinitions.basic	BasicAuth
 
@@ -66,6 +65,10 @@ func NewApp(op *operator.Operator, basicAuth bool, username, password string) *A
 	analyses.POST("/swap-route", op.HandleSwapRoute)
 	analyses.GET("/permissions", op.HandleGetPermissions)
 	analyses.PUT("/permissions", op.HandleUpdatePermissions)
+	analyses.POST("/backchannel-logout", op.HandleBackChannelLogout)
+	analyses.POST("/logout", op.HandleLogout)
+	analyses.GET("/active-sessions", op.HandleGetActiveSessions)
+	analyses.POST("/logout-user", op.HandleLogoutUser)
 
 	// Image cache routes.
 	api.PUT("/image-cache", op.HandleCacheImages)

@@ -21,7 +21,7 @@ RUN go build -ldflags='-w -s' -o vice-operator cmd/vice-operator/*.go
 
 # Generate swagger documentation for both binaries (matches Justfile)
 RUN swag init --parseDependency -g app.go -d cmd/app-exposer/,httphandlers/,common/,incluster/
-RUN swag init --parseDependency -g app.go -d cmd/vice-operator/,operator/,operatorclient/,common/ -o operatordocs/ --instanceName operator
+RUN swag init --parseDependency -g app.go -d cmd/vice-operator/,operator/,operatorclient/,common/ -o operatordocs/ --instanceName operator --td '[{,}]'
 
 ### Final stage - minimal runtime image
 FROM gcr.io/distroless/static-debian12:nonroot

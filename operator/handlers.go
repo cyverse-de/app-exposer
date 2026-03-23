@@ -1,10 +1,15 @@
 package operator
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
@@ -19,6 +24,21 @@ import (
 	"k8s.io/client-go/kubernetes"
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
+
+// logoutHTTPClient is used for forwarding logout requests to vice-proxy
+// sidecars. Short timeout avoids blocking the caller if vice-proxy is down.
+var logoutHTTPClient = &http.Client{Timeout: 5 * time.Second}
+
+// noRedirectHTTPClient is like logoutHTTPClient but does not follow redirects.
+// Used for vice-proxy endpoints where a redirect indicates an auth wall rather
+// than a valid response — following it would return an HTML login page instead
+// of a useful error.
+var noRedirectHTTPClient = &http.Client{
+	Timeout: 5 * time.Second,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
 
 var log = common.Log.WithFields(logrus.Fields{"package": "operator"})
 
@@ -600,6 +620,290 @@ func (o *Operator) HandleUpdatePermissions(c echo.Context) error {
 
 	log.Infof("permissions updated for analysis %s", analysisID)
 	return c.NoContent(http.StatusOK)
+}
+
+// viceProxyURL builds the in-cluster URL for a vice-proxy sidecar endpoint.
+func (o *Operator) viceProxyURL(svcName, path string) string {
+	u := url.URL{
+		Scheme: "http",
+		Host:   fmt.Sprintf("%s.%s:%d", svcName, o.namespace, constants.VICEProxyServicePort),
+		Path:   path,
+	}
+	return u.String()
+}
+
+// findAnalysisService returns the first Service matching the analysis-id label.
+func (o *Operator) findAnalysisService(ctx context.Context, analysisID string) (*apiv1.Service, error) {
+	opts := analysisLabelSelector(analysisID)
+	svcList, err := o.clientset.CoreV1().Services(o.namespace).List(ctx, opts)
+	if err != nil {
+		return nil, fmt.Errorf("listing services for analysis %s: %w", analysisID, err)
+	}
+	if len(svcList.Items) == 0 {
+		return nil, nil
+	}
+	return &svcList.Items[0], nil
+}
+
+// HandleBackChannelLogout forwards a Keycloak back-channel logout token to the
+// vice-proxy sidecar for the given analysis.
+//
+//	@Summary		Forward back-channel logout to vice-proxy
+//	@Description	Forwards a Keycloak logout_token to the vice-proxy sidecar
+//	@Description	for the given analysis, invalidating the user's session.
+//	@Tags			analyses
+//	@Accept			application/x-www-form-urlencoded
+//	@Param			analysis-id		path		string	true	"The analysis ID"
+//	@Param			logout_token	formData	string	true	"The Keycloak logout token"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		404	{object}	common.ErrorResponse
+//	@Failure		502	{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/backchannel-logout [post]
+func (o *Operator) HandleBackChannelLogout(c echo.Context) error {
+	ctx := c.Request().Context()
+	analysisID := c.Param("analysis-id")
+	if analysisID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	}
+
+	logoutToken := c.FormValue("logout_token")
+	if logoutToken == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "logout_token is required")
+	}
+
+	svc, err := o.findAnalysisService(ctx, analysisID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if svc == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "no service found for analysis "+analysisID)
+	}
+
+	// Forward the logout token to the vice-proxy sidecar.
+	proxyURL := o.viceProxyURL(svc.Name, "/backchannel-logout")
+	log.Infof("forwarding back-channel logout to %s for analysis %s", proxyURL, analysisID)
+
+	formBody := strings.NewReader(url.Values{"logout_token": {logoutToken}}.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, proxyURL, formBody)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("creating backchannel-logout request: %v", err))
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := logoutHTTPClient.Do(req)
+	if err != nil {
+		log.Errorf("back-channel logout request to vice-proxy failed for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to reach vice-proxy: %v", err))
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		log.Errorf("vice-proxy returned %d for back-channel logout on analysis %s: %s", resp.StatusCode, analysisID, string(body))
+		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("vice-proxy returned %d", resp.StatusCode))
+	}
+
+	log.Infof("back-channel logout forwarded for analysis %s", analysisID)
+	return c.NoContent(http.StatusOK)
+}
+
+// HandleLogout forwards a logout request to the vice-proxy sidecar for the
+// given analysis. Vice-proxy returns a redirect to Keycloak's logout page;
+// this handler captures the redirect URL and returns it in JSON instead of
+// following it (the operator is a backend, not a browser).
+//
+//	@Summary		Forward logout to vice-proxy
+//	@Description	Forwards a logout request to the vice-proxy sidecar for the
+//	@Description	given analysis. Returns the Keycloak logout redirect URL.
+//	@Tags			analyses
+//	@Produce		json
+//	@Param			analysis-id	path	string	true	"The analysis ID"
+//	@Success		200	{object}	operatorclient.LogoutResponse
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		404	{object}	common.ErrorResponse
+//	@Failure		502	{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/logout [post]
+func (o *Operator) HandleLogout(c echo.Context) error {
+	ctx := c.Request().Context()
+	analysisID := c.Param("analysis-id")
+	if analysisID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	}
+
+	svc, err := o.findAnalysisService(ctx, analysisID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if svc == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "no service found for analysis "+analysisID)
+	}
+
+	proxyURL := o.viceProxyURL(svc.Name, "/logout")
+	log.Infof("forwarding logout to %s for analysis %s", proxyURL, analysisID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, proxyURL, nil)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("creating logout request: %v", err))
+	}
+
+	// Use the no-redirect client so we can capture the Keycloak logout URL
+	// and return it to the caller instead of following the redirect.
+	resp, err := noRedirectHTTPClient.Do(req)
+	if err != nil {
+		log.Errorf("logout request to vice-proxy failed for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to reach vice-proxy: %v", err))
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Vice-proxy returns a 307 redirect to the Keycloak logout URL.
+	redirectURL := resp.Header.Get("Location")
+	if redirectURL == "" {
+		// Non-redirect response — forward the status as-is.
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		log.Errorf("vice-proxy returned %d with no redirect for logout on analysis %s: %s", resp.StatusCode, analysisID, string(body))
+		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("vice-proxy returned %d with no redirect", resp.StatusCode))
+	}
+
+	log.Infof("logout forwarded for analysis %s, redirect: %s", analysisID, redirectURL)
+	return c.JSON(http.StatusOK, operatorclient.LogoutResponse{RedirectURL: redirectURL})
+}
+
+// HandleGetActiveSessions returns the list of active user sessions for an
+// analysis by forwarding the request to the vice-proxy sidecar.
+//
+//	@Summary		Get active sessions for an analysis
+//	@Description	Returns the list of currently active user sessions from the
+//	@Description	vice-proxy sidecar for the given analysis.
+//	@Tags			analyses
+//	@Produce		json
+//	@Param			analysis-id	path		string	true	"The analysis ID"
+//	@Success		200			{object}	operatorclient.ActiveSessionsResponse
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		404			{object}	common.ErrorResponse
+//	@Failure		502			{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/active-sessions [get]
+func (o *Operator) HandleGetActiveSessions(c echo.Context) error {
+	ctx := c.Request().Context()
+	analysisID := c.Param("analysis-id")
+	if analysisID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	}
+
+	svc, err := o.findAnalysisService(ctx, analysisID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if svc == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "no service found for analysis "+analysisID)
+	}
+
+	proxyURL := o.viceProxyURL(svc.Name, "/active-sessions")
+	log.Infof("fetching active sessions from %s for analysis %s", proxyURL, analysisID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, proxyURL, nil)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("creating active-sessions request: %v", err))
+	}
+
+	resp, err := noRedirectHTTPClient.Do(req)
+	if err != nil {
+		log.Errorf("active-sessions request to vice-proxy failed for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to reach vice-proxy: %v", err))
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("reading vice-proxy response: %v", err))
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Errorf("vice-proxy returned %d for active-sessions on analysis %s: %s", resp.StatusCode, analysisID, string(body))
+		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("vice-proxy returned %d", resp.StatusCode))
+	}
+
+	// Pass through the JSON response from vice-proxy.
+	return c.JSONBlob(http.StatusOK, body)
+}
+
+// HandleLogoutUser invalidates all sessions for a specific user in an analysis
+// by forwarding the request to the vice-proxy sidecar.
+//
+//	@Summary		Log out a user from an analysis
+//	@Description	Invalidates all active sessions for the given username in the
+//	@Description	vice-proxy sidecar for the given analysis.
+//	@Tags			analyses
+//	@Accept			json
+//	@Produce		json
+//	@Param			analysis-id	path		string							true	"The analysis ID"
+//	@Param			request		body		operatorclient.LogoutUserRequest	true	"The user to log out"
+//	@Success		200			{object}	operatorclient.LogoutUserResponse
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		404			{object}	common.ErrorResponse
+//	@Failure		502			{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/logout-user [post]
+func (o *Operator) HandleLogoutUser(c echo.Context) error {
+	ctx := c.Request().Context()
+	analysisID := c.Param("analysis-id")
+	if analysisID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	}
+
+	var req operatorclient.LogoutUserRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	if req.Username == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "username is required")
+	}
+
+	svc, err := o.findAnalysisService(ctx, analysisID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if svc == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "no service found for analysis "+analysisID)
+	}
+
+	// Forward the logout-user request to the vice-proxy sidecar.
+	proxyURL := o.viceProxyURL(svc.Name, "/logout-user")
+	log.Infof("forwarding logout-user to %s for analysis %s (user %s)", proxyURL, analysisID, req.Username)
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("marshalling request: %v", err))
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, proxyURL, bytes.NewReader(reqBody))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("creating logout-user request: %v", err))
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := noRedirectHTTPClient.Do(httpReq)
+	if err != nil {
+		log.Errorf("logout-user request to vice-proxy failed for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to reach vice-proxy: %v", err))
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("reading vice-proxy response: %v", err))
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Errorf("vice-proxy returned %d for logout-user on analysis %s: %s", resp.StatusCode, analysisID, string(body))
+		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("vice-proxy returned %d", resp.StatusCode))
+	}
+
+	log.Infof("logout-user forwarded for analysis %s (user %s)", analysisID, req.Username)
+	return c.JSONBlob(http.StatusOK, body)
 }
 
 // HandleSwapRoute manually triggers the route swap for an analysis, pointing

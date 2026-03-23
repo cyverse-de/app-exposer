@@ -56,6 +56,32 @@ func (b *AnalysisBundle) Validate() error {
 	return nil
 }
 
+// LogoutResponse holds the Keycloak logout redirect URL returned by vice-proxy.
+type LogoutResponse struct {
+	RedirectURL string `json:"redirect_url"`
+}
+
+// ActiveSession describes a single active user session in a VICE analysis.
+type ActiveSession struct {
+	SessionID string `json:"session_id"`
+	Username  string `json:"username"`
+}
+
+// ActiveSessionsResponse is returned by the active-sessions endpoint.
+type ActiveSessionsResponse struct {
+	Sessions []ActiveSession `json:"sessions"`
+}
+
+// LogoutUserRequest is the request body for the logout-user endpoint.
+type LogoutUserRequest struct {
+	Username string `json:"username"`
+}
+
+// LogoutUserResponse is returned by the logout-user endpoint.
+type LogoutUserResponse struct {
+	SessionsInvalidated int `json:"sessions_invalidated"`
+}
+
 // OperatorConfig holds the configuration for a single vice-operator instance.
 // Operators are listed in priority order; the scheduler tries them sequentially.
 // Username and Password are optional; when set, the client sends basic auth

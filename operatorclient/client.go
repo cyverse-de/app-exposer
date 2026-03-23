@@ -246,6 +246,122 @@ func (c *Client) UpdatePermissions(ctx context.Context, analysisID string, users
 	return nil
 }
 
+// BackChannelLogout forwards a Keycloak back-channel logout token to the
+// operator, which relays it to the vice-proxy sidecar for the given analysis.
+func (c *Client) BackChannelLogout(ctx context.Context, analysisID, logoutToken string) error {
+	reqURL := c.analysisURL(analysisID, "backchannel-logout")
+
+	log.Infof("operator %s: POST %s (analysis %s, backchannel-logout)", c.name, reqURL, analysisID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL,
+		bytes.NewReader([]byte(url.Values{"logout_token": {logoutToken}}.Encode())))
+	if err != nil {
+		return fmt.Errorf("creating backchannel-logout request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	c.setAuth(req)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		log.Errorf("operator %s: backchannel-logout request failed for analysis %s: %v", c.name, analysisID, err)
+		return fmt.Errorf("sending backchannel-logout request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		respBody, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		log.Errorf("operator %s: backchannel-logout returned %d for analysis %s: %s", c.name, resp.StatusCode, analysisID, string(respBody))
+		return fmt.Errorf("backchannel-logout returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	log.Infof("operator %s: backchannel-logout forwarded for analysis %s", c.name, analysisID)
+	return nil
+}
+
+// Logout forwards a logout request to the operator, which relays it to the
+// vice-proxy sidecar. Returns the Keycloak logout redirect URL.
+func (c *Client) Logout(ctx context.Context, analysisID string) (*LogoutResponse, error) {
+	reqURL := c.analysisURL(analysisID, "logout")
+
+	log.Infof("operator %s: POST %s (analysis %s, logout)", c.name, reqURL, analysisID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating logout request: %w", err)
+	}
+	c.setAuth(req)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		log.Errorf("operator %s: logout request failed for analysis %s: %v", c.name, analysisID, err)
+		return nil, fmt.Errorf("sending logout request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		respBody, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		log.Errorf("operator %s: logout returned %d for analysis %s: %s", c.name, resp.StatusCode, analysisID, string(respBody))
+		return nil, fmt.Errorf("logout returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var result LogoutResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding logout response: %w", err)
+	}
+
+	log.Infof("operator %s: logout forwarded for analysis %s", c.name, analysisID)
+	return &result, nil
+}
+
+// ActiveSessions returns the list of currently active user sessions for an analysis.
+func (c *Client) ActiveSessions(ctx context.Context, analysisID string) (*ActiveSessionsResponse, error) {
+	raw, err := c.getAnalysisJSON(ctx, analysisID, "active-sessions")
+	if err != nil {
+		return nil, err
+	}
+
+	var resp ActiveSessionsResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("decoding active-sessions response: %w", err)
+	}
+	return &resp, nil
+}
+
+// LogoutUser invalidates all sessions for the given username in an analysis.
+func (c *Client) LogoutUser(ctx context.Context, analysisID, username string) error {
+	reqURL := c.analysisURL(analysisID, "logout-user")
+
+	log.Infof("operator %s: POST %s (analysis %s, logout-user %s)", c.name, reqURL, analysisID, username)
+
+	body, err := json.Marshal(LogoutUserRequest{Username: username})
+	if err != nil {
+		return fmt.Errorf("marshalling logout-user request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("creating logout-user request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setAuth(req)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		log.Errorf("operator %s: logout-user request failed for analysis %s: %v", c.name, analysisID, err)
+		return fmt.Errorf("sending logout-user request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		respBody, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		log.Errorf("operator %s: logout-user returned %d for analysis %s: %s", c.name, resp.StatusCode, analysisID, string(respBody))
+		return fmt.Errorf("logout-user returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	log.Infof("operator %s: logout-user succeeded for analysis %s (user %s)", c.name, analysisID, username)
+	return nil
+}
+
 // Listing returns full resource info for all running VICE analyses from
 // this operator's cluster.
 func (c *Client) Listing(ctx context.Context) (*reporting.ResourceInfo, error) {

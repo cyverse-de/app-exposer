@@ -53,7 +53,7 @@ fmt-operator-docs:
     swag fmt -g app.go -d cmd/vice-operator/,operator/,operatorclient/,common/
 
 operator-docs: fmt-operator-docs
-    swag init --parseDependency -g app.go -d cmd/vice-operator/,operator/,operatorclient/,common/ -o operatordocs/ --instanceName operator
+    swag init --parseDependency -g app.go -d cmd/vice-operator/,operator/,operatorclient/,common/ -o operatordocs/ --instanceName operator --td '[{,}]'
 
 clean:
     #!/usr/bin/env bash
