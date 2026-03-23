@@ -25,14 +25,8 @@ import (
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
-// logoutHTTPClient is used for forwarding logout requests to vice-proxy
-// sidecars. Short timeout avoids blocking the caller if vice-proxy is down.
-var logoutHTTPClient = &http.Client{Timeout: 5 * time.Second}
-
-// noRedirectHTTPClient is like logoutHTTPClient but does not follow redirects.
-// Used for vice-proxy endpoints where a redirect indicates an auth wall rather
-// than a valid response — following it would return an HTML login page instead
-// of a useful error.
+// noRedirectHTTPClient is used for vice-proxy requests where a redirect
+// indicates an auth wall rather than a valid response.
 var noRedirectHTTPClient = &http.Client{
 	Timeout: 5 * time.Second,
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -643,140 +637,6 @@ func (o *Operator) findAnalysisService(ctx context.Context, analysisID string) (
 		return nil, nil
 	}
 	return &svcList.Items[0], nil
-}
-
-// HandleBackChannelLogout forwards a Keycloak back-channel logout token to the
-// vice-proxy sidecar for the given analysis.
-//
-//	@Summary		Back-channel logout (Keycloak-initiated, by session token)
-//	@Description	Forwards a Keycloak logout_token to the vice-proxy sidecar,
-//	@Description	invalidating the session identified in the token. This is called
-//	@Description	automatically by Keycloak when a user logs out from another
-//	@Description	application in the same SSO realm — callers should not invoke
-//	@Description	this directly. Use POST /logout-user to kick a specific user,
-//	@Description	or POST /logout to initiate a browser-facing logout flow.
-//	@Tags			analyses
-//	@Accept			application/x-www-form-urlencoded
-//	@Param			analysis-id		path		string	true	"The analysis ID"
-//	@Param			logout_token	formData	string	true	"The Keycloak logout token"
-//	@Success		200
-//	@Failure		400	{object}	common.ErrorResponse
-//	@Failure		404	{object}	common.ErrorResponse
-//	@Failure		502	{object}	common.ErrorResponse
-//	@Security		BasicAuth
-//	@Router			/analyses/{analysis-id}/backchannel-logout [post]
-func (o *Operator) HandleBackChannelLogout(c echo.Context) error {
-	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
-	}
-
-	logoutToken := c.FormValue("logout_token")
-	if logoutToken == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "logout_token is required")
-	}
-
-	svc, err := o.findAnalysisService(ctx, analysisID)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	if svc == nil {
-		return echo.NewHTTPError(http.StatusNotFound, "no service found for analysis "+analysisID)
-	}
-
-	// Forward the logout token to the vice-proxy sidecar.
-	proxyURL := o.viceProxyURL(svc.Name, "/backchannel-logout")
-	log.Infof("forwarding back-channel logout to %s for analysis %s", proxyURL, analysisID)
-
-	formBody := strings.NewReader(url.Values{"logout_token": {logoutToken}}.Encode())
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, proxyURL, formBody)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("creating backchannel-logout request: %v", err))
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := logoutHTTPClient.Do(req)
-	if err != nil {
-		log.Errorf("back-channel logout request to vice-proxy failed for analysis %s: %v", analysisID, err)
-		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to reach vice-proxy: %v", err))
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
-		log.Errorf("vice-proxy returned %d for back-channel logout on analysis %s: %s", resp.StatusCode, analysisID, string(body))
-		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("vice-proxy returned %d", resp.StatusCode))
-	}
-
-	log.Infof("back-channel logout forwarded for analysis %s", analysisID)
-	return c.NoContent(http.StatusOK)
-}
-
-// HandleLogout forwards a logout request to the vice-proxy sidecar for the
-// given analysis. Vice-proxy returns a redirect to Keycloak's logout page;
-// this handler captures the redirect URL and returns it in JSON instead of
-// following it (the operator is a backend, not a browser).
-//
-//	@Summary		Browser-facing logout (returns Keycloak redirect URL)
-//	@Description	Clears the user's vice-proxy session cookie and returns the
-//	@Description	Keycloak logout redirect URL. The caller (typically a browser
-//	@Description	or UI) should redirect the user to this URL to complete the
-//	@Description	SSO logout. Affects only the session associated with the
-//	@Description	request's cookie — use POST /logout-user to target a specific
-//	@Description	user by username without needing their cookie.
-//	@Tags			analyses
-//	@Produce		json
-//	@Param			analysis-id	path	string	true	"The analysis ID"
-//	@Success		200	{object}	operatorclient.LogoutResponse
-//	@Failure		400	{object}	common.ErrorResponse
-//	@Failure		404	{object}	common.ErrorResponse
-//	@Failure		502	{object}	common.ErrorResponse
-//	@Security		BasicAuth
-//	@Router			/analyses/{analysis-id}/logout [post]
-func (o *Operator) HandleLogout(c echo.Context) error {
-	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
-	}
-
-	svc, err := o.findAnalysisService(ctx, analysisID)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	if svc == nil {
-		return echo.NewHTTPError(http.StatusNotFound, "no service found for analysis "+analysisID)
-	}
-
-	proxyURL := o.viceProxyURL(svc.Name, "/logout")
-	log.Infof("forwarding logout to %s for analysis %s", proxyURL, analysisID)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, proxyURL, nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("creating logout request: %v", err))
-	}
-
-	// Use the no-redirect client so we can capture the Keycloak logout URL
-	// and return it to the caller instead of following the redirect.
-	resp, err := noRedirectHTTPClient.Do(req)
-	if err != nil {
-		log.Errorf("logout request to vice-proxy failed for analysis %s: %v", analysisID, err)
-		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to reach vice-proxy: %v", err))
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Vice-proxy returns a 307 redirect to the Keycloak logout URL.
-	redirectURL := resp.Header.Get("Location")
-	if redirectURL == "" {
-		// Non-redirect response — forward the status as-is.
-		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
-		log.Errorf("vice-proxy returned %d with no redirect for logout on analysis %s: %s", resp.StatusCode, analysisID, string(body))
-		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("vice-proxy returned %d with no redirect", resp.StatusCode))
-	}
-
-	log.Infof("logout forwarded for analysis %s, redirect: %s", analysisID, redirectURL)
-	return c.JSON(http.StatusOK, operatorclient.LogoutResponse{RedirectURL: redirectURL})
 }
 
 // HandleGetActiveSessions returns the list of active user sessions for an

@@ -65,8 +65,6 @@ func NewApp(op *operator.Operator, basicAuth bool, username, password string) *A
 	analyses.POST("/swap-route", op.HandleSwapRoute)
 	analyses.GET("/permissions", op.HandleGetPermissions)
 	analyses.PUT("/permissions", op.HandleUpdatePermissions)
-	analyses.POST("/backchannel-logout", op.HandleBackChannelLogout)
-	analyses.POST("/logout", op.HandleLogout)
 	analyses.GET("/active-sessions", op.HandleGetActiveSessions)
 	analyses.POST("/logout-user", op.HandleLogoutUser)
 

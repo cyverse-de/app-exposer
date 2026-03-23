@@ -29,18 +29,16 @@ type HTTPHandlers struct {
 	apps         *apps.Apps
 	clientset    kubernetes.Interface
 	batchadapter *adapter.JEXAdapter
-	jwksCache    *JWKSCache
 	scheduler    *operatorclient.Scheduler
 }
 
 // New creates an HTTPHandlers with the provided dependencies injected.
-func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface, batchadapter *adapter.JEXAdapter, jwksCache *JWKSCache) *HTTPHandlers {
+func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface, batchadapter *adapter.JEXAdapter) *HTTPHandlers {
 	return &HTTPHandlers{
 		incluster:    incluster,
 		apps:         apps,
 		clientset:    clientset,
 		batchadapter: batchadapter,
-		jwksCache:    jwksCache,
 	}
 }
 

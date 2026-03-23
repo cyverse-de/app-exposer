@@ -56,11 +56,6 @@ func (b *AnalysisBundle) Validate() error {
 	return nil
 }
 
-// LogoutResponse holds the Keycloak logout redirect URL returned by vice-proxy.
-type LogoutResponse struct {
-	RedirectURL string `json:"redirect_url"`
-}
-
 // ActiveSession describes a single active user session in a VICE analysis.
 type ActiveSession struct {
 	SessionID string `json:"session_id"`

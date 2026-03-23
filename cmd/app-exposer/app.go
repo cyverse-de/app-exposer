@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -139,12 +138,6 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, init.GatewayClient, apps)
 
-	// Create JWKS cache for logout token validation
-	jwksURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/certs",
-		c.String("keycloak.base"),
-		c.String("keycloak.realm"))
-	jwksCache := httphandlers.NewJWKSCache(jwksURL)
-
 	app := &ExposerApp{
 		outcluster: outcluster.New(init.ClientSet, init.GatewayClient, deNamespace, init.Namespace, init.ViceDomain),
 		incluster:  incluster,
@@ -152,7 +145,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		clientset:  init.ClientSet,
 		router:     echo.New(),
 		db:         init.db,
-		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter, jwksCache),
+		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter),
 	}
 
 	// Configure operator scheduler if operators are defined in config.
@@ -210,9 +203,6 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	batchGroup.POST("/", app.handlers.BatchLaunchHandler)
 	batchGroup.POST("/cleanup", app.handlers.BatchStopByUUID)
 	batchGroup.DELETE("/stop/:id", app.handlers.BatchStopHandler)
-
-	// Back-channel logout endpoint (at root level for Keycloak compatibility)
-	app.router.POST("/backchannel-logout", app.handlers.HandleBackChannelLogout)
 
 	vice := app.router.Group("/vice")
 	vice.Use(middleware.Logger())
