@@ -210,6 +210,42 @@ func (c *Client) postAnalysisAction(ctx context.Context, analysisID, action stri
 	return nil
 }
 
+// UpdatePermissions pushes a new allowed-users list to the operator's
+// permissions ConfigMap for the given analysis.
+func (c *Client) UpdatePermissions(ctx context.Context, analysisID string, users []string) error {
+	reqURL := c.analysisURL(analysisID, "permissions")
+
+	log.Infof("operator %s: PUT %s (analysis %s, %d users)", c.name, reqURL, analysisID, len(users))
+
+	body, err := json.Marshal(map[string][]string{"allowedUsers": users})
+	if err != nil {
+		return fmt.Errorf("marshalling permissions request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("creating permissions request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setAuth(req)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		log.Errorf("operator %s: permissions request failed for analysis %s: %v", c.name, analysisID, err)
+		return fmt.Errorf("sending permissions request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		respBody, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		log.Errorf("operator %s: permissions returned %d for analysis %s: %s", c.name, resp.StatusCode, analysisID, string(respBody))
+		return fmt.Errorf("permissions returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	log.Infof("operator %s: permissions updated for analysis %s", c.name, analysisID)
+	return nil
+}
+
 // Listing returns full resource info for all running VICE analyses from
 // this operator's cluster.
 func (c *Client) Listing(ctx context.Context) (*reporting.ResourceInfo, error) {

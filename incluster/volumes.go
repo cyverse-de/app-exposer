@@ -425,6 +425,21 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 		},
 	)
 
+	// Permissions ConfigMap volume — mounted into vice-proxy so it can
+	// authorize users by reading the allowed-users file.
+	output = append(output,
+		apiv1.Volume{
+			Name: constants.PermissionsVolumeName,
+			VolumeSource: apiv1.VolumeSource{
+				ConfigMap: &apiv1.ConfigMapVolumeSource{
+					LocalObjectReference: apiv1.LocalObjectReference{
+						Name: permissionsConfigMapName(job),
+					},
+				},
+			},
+		},
+	)
+
 	shmSize := resourcing.SharedMemoryAmount(job)
 	if shmSize != nil {
 		output = append(output,

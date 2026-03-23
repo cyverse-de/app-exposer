@@ -3,8 +3,10 @@ package operator
 import (
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/labstack/echo/v4"
@@ -147,6 +149,10 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 		TransformGatewayNamespace(bundle.HTTPRoute, o.namespace)
 		TransformBackendToLoadingService(bundle.HTTPRoute, o.loadingServiceName, o.loadingServicePort)
 	}
+
+	// Ensure the permissions ConfigMap exists in the bundle (handles bundles
+	// created before the permissions feature was added).
+	EnsurePermissionsConfigMap(&bundle)
 
 	// Inject per-analysis vice-proxy args and ensure the cluster config secret
 	// is referenced as envFrom so vice-proxy gets cluster-level env vars.
@@ -467,6 +473,81 @@ func (o *Operator) HandleLogs(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, entries)
+}
+
+// UpdatePermissionsRequest is the request body for HandleUpdatePermissions.
+type UpdatePermissionsRequest struct {
+	AllowedUsers []string `json:"allowedUsers"`
+}
+
+// HandleUpdatePermissions rewrites the permissions ConfigMap for an analysis
+// with a new list of allowed users.
+//
+//	@Summary		Update analysis permissions
+//	@Description	Replaces the allowed-users list in the permissions ConfigMap
+//	@Description	for the given analysis. The full list must be provided (not incremental).
+//	@Tags			analyses
+//	@Accept			json
+//	@Param			analysis-id	path	string						true	"The analysis ID"
+//	@Param			request		body	UpdatePermissionsRequest		true	"The new allowed users list"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		404	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/analyses/{analysis-id}/permissions [put]
+func (o *Operator) HandleUpdatePermissions(c echo.Context) error {
+	ctx := c.Request().Context()
+	analysisID := c.Param("analysis-id")
+	if analysisID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	}
+
+	var req UpdatePermissionsRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// Guard against accidentally clearing all access to the analysis.
+	if len(req.AllowedUsers) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "allowedUsers must not be empty")
+	}
+
+	log.Infof("updating permissions for analysis %s (%d users)", analysisID, len(req.AllowedUsers))
+
+	// Find the permissions ConfigMap by label.
+	opts := analysisLabelSelector(analysisID)
+	cmList, err := o.clientset.CoreV1().ConfigMaps(o.namespace).List(ctx, opts)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	// Look for the ConfigMap with the permissions- prefix.
+	var permsCM *apiv1.ConfigMap
+	prefix := constants.PermissionsConfigMapPrefix + "-"
+	for i := range cmList.Items {
+		if strings.HasPrefix(cmList.Items[i].Name, prefix) {
+			permsCM = &cmList.Items[i]
+			break
+		}
+	}
+
+	if permsCM == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "permissions configmap not found for analysis "+analysisID)
+	}
+
+	// Build the new allowed-users content (one username per line, trailing newline).
+	if permsCM.Data == nil {
+		permsCM.Data = make(map[string]string)
+	}
+	permsCM.Data[constants.PermissionsFileName] = strings.Join(req.AllowedUsers, "\n") + "\n"
+
+	if _, err := o.clientset.CoreV1().ConfigMaps(o.namespace).Update(ctx, permsCM, metav1.UpdateOptions{}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	log.Infof("permissions updated for analysis %s", analysisID)
+	return c.NoContent(http.StatusOK)
 }
 
 // HandleSwapRoute manually triggers the route swap for an analysis, pointing

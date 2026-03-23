@@ -3,6 +3,7 @@ package operator
 import (
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -407,13 +408,14 @@ func TestTransformViceProxyArgs(t *testing.T) {
 	const testSecret = "cluster-config-secret"
 
 	tests := []struct {
-		name           string
-		deployment     *appsv1.Deployment
-		analysisID     string
-		secretName     string
-		wantArgs       []string
-		wantBackendURL string
-		wantEnvFrom    bool // expect envFrom to be added
+		name              string
+		deployment        *appsv1.Deployment
+		analysisID        string
+		secretName        string
+		wantArgs          []string
+		wantBackendURL    string
+		wantEnvFrom       bool // expect envFrom to be added
+		wantPermissionsVM bool // expect permissions volume mount to be added
 	}{
 		{
 			name: "injects args with correct backend URL from analysis container port",
@@ -425,11 +427,12 @@ func TestTransformViceProxyArgs(t *testing.T) {
 					Ports: []apiv1.ContainerPort{{ContainerPort: 8888}},
 				},
 			),
-			analysisID:     "abc-123",
-			secretName:     testSecret,
-			wantArgs:       []string{"--analysis-id", "abc-123", "--backend-url", "http://localhost:8888", "--ws-backend-url", "http://localhost:8888", "--listen-addr", "0.0.0.0:60002"},
-			wantBackendURL: "http://localhost:8888",
-			wantEnvFrom:    true,
+			analysisID:        "abc-123",
+			secretName:        testSecret,
+			wantArgs:          []string{"--analysis-id", "abc-123", "--backend-url", "http://localhost:8888", "--ws-backend-url", "http://localhost:8888", "--listen-addr", "0.0.0.0:60002"},
+			wantBackendURL:    "http://localhost:8888",
+			wantEnvFrom:       true,
+			wantPermissionsVM: true,
 		},
 		{
 			name: "falls back to default backend URL when no analysis port",
@@ -437,11 +440,12 @@ func TestTransformViceProxyArgs(t *testing.T) {
 				apiv1.Container{Name: "vice-proxy", Image: "vice-proxy:latest"},
 				apiv1.Container{Name: "analysis", Image: "jupyter:latest"},
 			),
-			analysisID:     "def-456",
-			secretName:     testSecret,
-			wantArgs:       []string{"--analysis-id", "def-456", "--backend-url", "http://localhost:60000", "--ws-backend-url", "http://localhost:60000", "--listen-addr", "0.0.0.0:60002"},
-			wantBackendURL: "http://localhost:60000",
-			wantEnvFrom:    true,
+			analysisID:        "def-456",
+			secretName:        testSecret,
+			wantArgs:          []string{"--analysis-id", "def-456", "--backend-url", "http://localhost:60000", "--ws-backend-url", "http://localhost:60000", "--listen-addr", "0.0.0.0:60002"},
+			wantBackendURL:    "http://localhost:60000",
+			wantEnvFrom:       true,
+			wantPermissionsVM: true,
 		},
 		{
 			name:       "nil deployment does not panic",
@@ -464,10 +468,11 @@ func TestTransformViceProxyArgs(t *testing.T) {
 					Ports: []apiv1.ContainerPort{{ContainerPort: 3838}},
 				},
 			),
-			analysisID:     "ghi-789",
-			secretName:     testSecret,
-			wantBackendURL: "http://localhost:3838",
-			wantEnvFrom:    true,
+			analysisID:        "ghi-789",
+			secretName:        testSecret,
+			wantBackendURL:    "http://localhost:3838",
+			wantEnvFrom:       true,
+			wantPermissionsVM: true,
 		},
 		{
 			name: "no vice-proxy container is a no-op",
@@ -487,9 +492,10 @@ func TestTransformViceProxyArgs(t *testing.T) {
 					Ports: []apiv1.ContainerPort{{ContainerPort: 8888}},
 				},
 			),
-			analysisID: "no-secret",
-			secretName: "",
-			wantArgs:   []string{"--analysis-id", "no-secret", "--backend-url", "http://localhost:8888", "--ws-backend-url", "http://localhost:8888", "--listen-addr", "0.0.0.0:60002"},
+			analysisID:        "no-secret",
+			secretName:        "",
+			wantArgs:          []string{"--analysis-id", "no-secret", "--backend-url", "http://localhost:8888", "--ws-backend-url", "http://localhost:8888", "--listen-addr", "0.0.0.0:60002"},
+			wantPermissionsVM: true,
 		},
 		{
 			name: "does not duplicate envFrom when already present",
@@ -512,10 +518,39 @@ func TestTransformViceProxyArgs(t *testing.T) {
 				)
 				return d
 			}(),
-			analysisID:  "dup-test",
-			secretName:  testSecret,
-			wantArgs:    []string{"--analysis-id", "dup-test", "--backend-url", "http://localhost:8888", "--ws-backend-url", "http://localhost:8888", "--listen-addr", "0.0.0.0:60002"},
-			wantEnvFrom: true,
+			analysisID:        "dup-test",
+			secretName:        testSecret,
+			wantArgs:          []string{"--analysis-id", "dup-test", "--backend-url", "http://localhost:8888", "--ws-backend-url", "http://localhost:8888", "--listen-addr", "0.0.0.0:60002"},
+			wantEnvFrom:       true,
+			wantPermissionsVM: true,
+		},
+		{
+			name: "does not duplicate permissions mount when already present",
+			deployment: func() *appsv1.Deployment {
+				return makeDeployment(
+					apiv1.Container{
+						Name:  "vice-proxy",
+						Image: "vice-proxy:latest",
+						VolumeMounts: []apiv1.VolumeMount{
+							{
+								Name:      constants.PermissionsVolumeName,
+								MountPath: constants.PermissionsMountPath,
+								ReadOnly:  true,
+							},
+						},
+					},
+					apiv1.Container{
+						Name:  "analysis",
+						Image: "jupyter:latest",
+						Ports: []apiv1.ContainerPort{{ContainerPort: 8888}},
+					},
+				)
+			}(),
+			analysisID:        "perm-dup",
+			secretName:        testSecret,
+			wantArgs:          []string{"--analysis-id", "perm-dup", "--backend-url", "http://localhost:8888", "--ws-backend-url", "http://localhost:8888", "--listen-addr", "0.0.0.0:60002"},
+			wantEnvFrom:       true,
+			wantPermissionsVM: true,
 		},
 	}
 
@@ -555,6 +590,17 @@ func TestTransformViceProxyArgs(t *testing.T) {
 					}
 				}
 				assert.Equal(t, 1, count, "expected exactly one envFrom secretRef for %s", testSecret)
+			}
+
+			if tt.wantPermissionsVM && vp != nil {
+				// Verify the permissions volume mount was added exactly once.
+				count := 0
+				for _, vm := range vp.VolumeMounts {
+					if vm.Name == constants.PermissionsVolumeName {
+						count++
+					}
+				}
+				assert.Equal(t, 1, count, "expected exactly one permissions VolumeMount")
 			}
 		})
 	}

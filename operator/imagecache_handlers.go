@@ -83,6 +83,28 @@ func (o *Operator) HandleRemoveCachedImages(c echo.Context) error {
 	return o.bulkImageOp(c, o.imageCache.RemoveCachedImage)
 }
 
+// HandleRefreshCachedImages forces cache DaemonSets to re-pull images by
+// restarting their pods. Use this when a new image has been pushed under
+// the same tag.
+//
+//	@Summary		Refresh cached images
+//	@Description	Restarts cache DaemonSet pods to force a fresh pull of images
+//	@Description	that may have been updated under the same tag. The DaemonSet
+//	@Description	init container uses PullAlways, so the restart causes containerd
+//	@Description	to fetch the latest manifest.
+//	@Tags			image-cache
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		ImageCacheRequest		true	"Images to refresh"
+//	@Success		200		{object}	ImageCacheBulkResponse	"All images refreshed"
+//	@Success		207		{object}	ImageCacheBulkResponse	"Partial success"
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/image-cache/refresh [post]
+func (o *Operator) HandleRefreshCachedImages(c echo.Context) error {
+	return o.bulkImageOp(c, o.imageCache.RefreshCachedImage)
+}
+
 // HandleListCachedImages returns the status of all cached images.
 //
 //	@Summary		List cached images

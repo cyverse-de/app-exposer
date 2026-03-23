@@ -51,6 +51,36 @@ func (i *Incluster) excludesConfigMap(ctx context.Context, job *model.Job) (*api
 	}, nil
 }
 
+// permissionsConfigMapName returns the name of the ConfigMap containing
+// the list of users allowed to access the VICE analysis.
+func permissionsConfigMapName(job *model.Job) string {
+	return fmt.Sprintf("%s-%s", constants.PermissionsConfigMapPrefix, job.InvocationID)
+}
+
+// permissionsConfigMap returns the ConfigMap containing the initial permissions
+// for the VICE analysis. At launch time, this is just the owner. Updates are
+// pushed via the permissions update endpoint when the analysis is shared.
+func (i *Incluster) permissionsConfigMap(ctx context.Context, job *model.Job) (*apiv1.ConfigMap, error) {
+	labels, err := i.jobInfo.JobLabels(ctx, job)
+	if err != nil {
+		return nil, err
+	}
+
+	// The owner is always the first entry. The user suffix is appended
+	// to match the format stored in Keycloak JWT preferred_username.
+	owner := job.Submitter + constants.UserSuffix
+
+	return &apiv1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   permissionsConfigMapName(job),
+			Labels: labels,
+		},
+		Data: map[string]string{
+			constants.PermissionsFileName: owner + "\n",
+		},
+	}, nil
+}
+
 // inputPathListConfigMapName returns the name of the ConfigMap containing
 // the list of paths that should be downloaded from iRODS by porklock
 // as input files for the VICE analysis.

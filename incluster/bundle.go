@@ -22,6 +22,13 @@ func (i *Incluster) BuildAnalysisBundle(ctx context.Context, job *model.Job, ana
 	}
 	bundle.ConfigMaps = append(bundle.ConfigMaps, excludesCM)
 
+	// Build the permissions ConfigMap (owner-only at launch time).
+	permsCM, err := i.permissionsConfigMap(ctx, job)
+	if err != nil {
+		return nil, err
+	}
+	bundle.ConfigMaps = append(bundle.ConfigMaps, permsCM)
+
 	// Build the input path list ConfigMap (present when there are inputs without tickets).
 	inputCM, err := i.inputPathListConfigMap(ctx, job)
 	if err != nil {

@@ -26,37 +26,35 @@ var log = common.Log
 
 func main() {
 	var (
-		kubeconfig              string
-		namespace               string
-		port                    int
-		gpuVendorFlag           string
-		maxAnalyses             int
-		nodeLabelSelector       string
-		logLevel                string
-		basicAuth               bool
-		basicAuthUsername       string
-		basicAuthPassword       string
-		viceBaseURL             string
-		clusterConfigSecret     string
-		imagePullSecret         string
-		registryServer          string
-		registryUsername        string
-		registryPassword        string
-		loadingPort             int
-		loadingServiceName      string
-		loadingServicePort      int
-		loadingTimeoutMs        int64
-		loadingPodSelector      string
-		gatewayName             string
-		gatewayClassName        string
-		gatewayEntryPort        int
-		keycloakBaseURL         string
-		keycloakRealm           string
-		keycloakClientID        string
-		keycloakClientSecret    string
-		disableViceProxyAuth    bool
-		enableLegacyAuth        bool
-		checkResourceAccessBase string
+		kubeconfig           string
+		namespace            string
+		port                 int
+		gpuVendorFlag        string
+		maxAnalyses          int
+		nodeLabelSelector    string
+		logLevel             string
+		basicAuth            bool
+		basicAuthUsername    string
+		basicAuthPassword    string
+		viceBaseURL          string
+		clusterConfigSecret  string
+		imagePullSecret      string
+		registryServer       string
+		registryUsername     string
+		registryPassword     string
+		loadingPort          int
+		loadingServiceName   string
+		loadingServicePort   int
+		loadingTimeoutMs     int64
+		loadingPodSelector   string
+		gatewayName          string
+		gatewayClassName     string
+		gatewayEntryPort     int
+		keycloakBaseURL      string
+		keycloakRealm        string
+		keycloakClientID     string
+		keycloakClientSecret string
+		disableViceProxyAuth bool
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -88,8 +86,6 @@ func main() {
 	flag.StringVar(&keycloakClientID, "keycloak-client-id", "", "OIDC client ID for vice-proxy auth")
 	flag.StringVar(&keycloakClientSecret, "keycloak-client-secret", "", "OIDC client secret for vice-proxy auth")
 	flag.BoolVar(&disableViceProxyAuth, "disable-vice-proxy-auth", false, "Disable auth in vice-proxy")
-	flag.BoolVar(&enableLegacyAuth, "enable-legacy-auth", false, "Enable legacy auth in vice-proxy")
-	flag.StringVar(&checkResourceAccessBase, "check-resource-access-base", "", "Legacy auth service URL for vice-proxy")
 	flag.Parse()
 
 	// Validate basic auth flags.
@@ -155,12 +151,6 @@ func main() {
 	}
 	if disableViceProxyAuth {
 		clusterConfig["DISABLE_AUTH"] = "true"
-	}
-	if enableLegacyAuth {
-		clusterConfig["ENABLE_LEGACY_AUTH"] = "true"
-	}
-	if checkResourceAccessBase != "" {
-		clusterConfig["CHECK_RESOURCE_ACCESS_BASE"] = checkResourceAccessBase
 	}
 
 	// Ensure the cluster config secret exists with the correct values

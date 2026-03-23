@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
@@ -287,6 +288,43 @@ func (m *ImageCacheManager) EnsureImageCached(ctx context.Context, image string)
 	if err != nil {
 		return fmt.Errorf("updating image cache DaemonSet %s: %w", dsName, err)
 	}
+	return nil
+}
+
+// RefreshCachedImage forces the cache DaemonSet for the given image to re-pull
+// by deleting its pods. The DaemonSet controller recreates them, and the init
+// container's PullAlways policy causes containerd to fetch the latest manifest.
+// This is needed when a new image is pushed under the same tag.
+func (m *ImageCacheManager) RefreshCachedImage(ctx context.Context, image string) error {
+	if err := validateImageRef(image); err != nil {
+		return err
+	}
+
+	slug := slugifyImage(image)
+	dsName := dsNamePrefix + slug
+	client := m.clientset.AppsV1().DaemonSets(m.namespace)
+
+	ds, err := client.Get(ctx, dsName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return fmt.Errorf("no cache DaemonSet found for image %q", image)
+	}
+	if err != nil {
+		return fmt.Errorf("getting cache DaemonSet %s: %w", dsName, err)
+	}
+
+	// Restart the DaemonSet by adding/updating a restart annotation on the
+	// pod template. This triggers a rolling update of all pods, which forces
+	// containerd to re-pull the image due to PullAlways on the init container.
+	if ds.Spec.Template.Annotations == nil {
+		ds.Spec.Template.Annotations = make(map[string]string)
+	}
+	ds.Spec.Template.Annotations["de.cyverse.org/restartedAt"] = metav1.Now().UTC().Format(time.RFC3339)
+
+	if _, err := client.Update(ctx, ds, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("restarting cache DaemonSet %s: %w", dsName, err)
+	}
+
+	log.Infof("refreshed image cache DaemonSet %s for %s", dsName, image)
 	return nil
 }
 

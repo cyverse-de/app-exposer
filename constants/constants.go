@@ -40,6 +40,11 @@ const (
 	ExcludesFileName   = "excludes-file"
 	ExcludesVolumeName = "excludes-file"
 
+	PermissionsConfigMapPrefix = "permissions"
+	PermissionsVolumeName      = "vice-permissions"
+	PermissionsMountPath       = "/etc/vice-permissions"
+	PermissionsFileName        = "allowed-users"
+
 	InputPathListMountPath  = "/input-paths"
 	InputPathListFileName   = "input-path-list"
 	InputPathListVolumeName = "input-path-list"

@@ -261,6 +261,13 @@ func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 				Protocol:      apiv1.Protocol("TCP"),
 			},
 		},
+		VolumeMounts: []apiv1.VolumeMount{
+			{
+				Name:      constants.PermissionsVolumeName,
+				MountPath: constants.PermissionsMountPath,
+				ReadOnly:  true,
+			},
+		},
 		SecurityContext: &apiv1.SecurityContext{
 			RunAsUser:  constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
 			RunAsGroup: constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),

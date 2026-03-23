@@ -8,9 +8,11 @@ import (
 	"strings"
 
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -147,8 +149,9 @@ func rewriteHostname(hostname, newDomain string) string {
 	return hostname[:dot+1] + newDomain
 }
 
-// TransformViceProxyArgs injects per-analysis command-line args and ensures
-// the cluster-config-secret envFrom is present on the vice-proxy container.
+// TransformViceProxyArgs injects per-analysis command-line args, ensures the
+// cluster-config-secret envFrom is present, and ensures the permissions volume
+// mount exists on the vice-proxy container.
 // The container's Command should already be ["vice-proxy"] from app-exposer;
 // Args appends to the entrypoint. The backend URL is derived from the first
 // port of the analysis container.
@@ -173,8 +176,89 @@ func TransformViceProxyArgs(deployment *appsv1.Deployment, analysisID, clusterCo
 		if clusterConfigSecret != "" {
 			ensureEnvFrom(&deployment.Spec.Template.Spec.Containers[i], clusterConfigSecret)
 		}
+
+		// Ensure the permissions volume and mount are present so vice-proxy
+		// can read the allowed-users file from the ConfigMap. The volume
+		// must exist in the pod spec for the mount to be valid.
+		ensurePermissionsVolume(deployment)
+		ensurePermissionsVolumeMount(&deployment.Spec.Template.Spec.Containers[i])
 		return
 	}
+}
+
+// EnsurePermissionsConfigMap adds a permissions ConfigMap to the bundle if one
+// isn't already present. This handles bundles created before app-exposer added
+// the permissions ConfigMap at build time. The ConfigMap is seeded with the
+// owner username from the deployment's "username" label.
+func EnsurePermissionsConfigMap(bundle *operatorclient.AnalysisBundle) {
+	if bundle == nil || bundle.Deployment == nil {
+		return
+	}
+
+	prefix := constants.PermissionsConfigMapPrefix + "-"
+	for _, cm := range bundle.ConfigMaps {
+		if cm != nil && strings.HasPrefix(cm.Name, prefix) {
+			return // already present
+		}
+	}
+
+	// Derive the owner from the deployment labels.
+	owner := bundle.Deployment.Labels["username"]
+	if owner != "" {
+		owner += constants.UserSuffix
+	}
+
+	cmName := fmt.Sprintf("%s-%s", constants.PermissionsConfigMapPrefix, bundle.Deployment.Name)
+	cm := &apiv1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   cmName,
+			Labels: bundle.Deployment.Labels,
+		},
+		Data: map[string]string{
+			constants.PermissionsFileName: owner + "\n",
+		},
+	}
+	bundle.ConfigMaps = append(bundle.ConfigMaps, cm)
+}
+
+// ensurePermissionsVolume adds the permissions ConfigMap volume to the pod
+// spec if it isn't already present. The ConfigMap name is derived from the
+// deployment name (which is the invocation ID). This handles bundles that
+// were created before the permissions volume was added at the app-exposer level.
+func ensurePermissionsVolume(deployment *appsv1.Deployment) {
+	volumes := deployment.Spec.Template.Spec.Volumes
+	for _, v := range volumes {
+		if v.Name == constants.PermissionsVolumeName {
+			return // already present
+		}
+	}
+	cmName := fmt.Sprintf("%s-%s", constants.PermissionsConfigMapPrefix, deployment.Name)
+	deployment.Spec.Template.Spec.Volumes = append(volumes, apiv1.Volume{
+		Name: constants.PermissionsVolumeName,
+		VolumeSource: apiv1.VolumeSource{
+			ConfigMap: &apiv1.ConfigMapVolumeSource{
+				LocalObjectReference: apiv1.LocalObjectReference{
+					Name: cmName,
+				},
+			},
+		},
+	})
+}
+
+// ensurePermissionsVolumeMount adds the permissions volume mount to the
+// container if it isn't already present. This handles bundles created before
+// the mount was added at the app-exposer level.
+func ensurePermissionsVolumeMount(container *apiv1.Container) {
+	for _, vm := range container.VolumeMounts {
+		if vm.Name == constants.PermissionsVolumeName {
+			return // already present
+		}
+	}
+	container.VolumeMounts = append(container.VolumeMounts, apiv1.VolumeMount{
+		Name:      constants.PermissionsVolumeName,
+		MountPath: constants.PermissionsMountPath,
+		ReadOnly:  true,
+	})
 }
 
 // ensureEnvFrom adds an envFrom secretRef for the given secret name if it

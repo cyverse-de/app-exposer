@@ -229,6 +229,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	vice.GET("/:analysis-id/logs", app.handlers.LogsHandler)
 	vice.POST("/:analysis-id/time-limit", app.handlers.TimeLimitUpdateHandler)
 	vice.GET("/:analysis-id/time-limit", app.handlers.GetTimeLimitHandler)
+	vice.PUT("/:analysis-id/permissions", app.handlers.UpdatePermissionsHandler)
 	vice.GET("/:host/url-ready", app.handlers.URLReadyHandler)
 	vice.GET("/:host/description", app.handlers.DescribeAnalysisHandler)
 
