@@ -292,9 +292,9 @@ func (m *ImageCacheManager) EnsureImageCached(ctx context.Context, image string)
 }
 
 // RefreshCachedImage forces the cache DaemonSet for the given image to re-pull
-// by deleting its pods. The DaemonSet controller recreates them, and the init
-// container's PullAlways policy causes containerd to fetch the latest manifest.
-// This is needed when a new image is pushed under the same tag.
+// by updating a restart annotation on the pod template, which triggers a rolling
+// update. The init container's PullAlways policy causes containerd to fetch the
+// latest manifest. This is needed when a new image is pushed under the same tag.
 func (m *ImageCacheManager) RefreshCachedImage(ctx context.Context, image string) error {
 	if err := validateImageRef(image); err != nil {
 		return err
