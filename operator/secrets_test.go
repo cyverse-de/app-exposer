@@ -58,11 +58,11 @@ func TestEnsureClusterConfigSecret(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		existing  *apiv1.Secret // nil means no pre-existing secret
-		config    map[string]string
-		wantKeys  map[string]string // keys and values that must be present
-		extraKeys map[string]string // extra keys that should be preserved
+		name       string
+		existing   *apiv1.Secret // nil means no pre-existing secret
+		config     map[string]string
+		wantKeys   map[string]string // keys and values that must be present
+		absentKeys []string          // keys that must NOT be present (pruned)
 	}{
 		{
 			name:     "creates secret when missing",
@@ -89,14 +89,14 @@ func TestEnsureClusterConfigSecret(t *testing.T) {
 			wantKeys: baseConfig,
 		},
 		{
-			name: "adds key when missing from existing secret",
+			name: "prunes stale keys from existing secret",
 			existing: &apiv1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
 				Data:       map[string][]byte{"OTHER_KEY": []byte("other-value")},
 			},
-			config:    baseConfig,
-			wantKeys:  baseConfig,
-			extraKeys: map[string]string{"OTHER_KEY": "other-value"},
+			config:     baseConfig,
+			wantKeys:   baseConfig,
+			absentKeys: []string{"OTHER_KEY"},
 		},
 		{
 			name: "handles existing secret with nil Data map",
@@ -108,17 +108,17 @@ func TestEnsureClusterConfigSecret(t *testing.T) {
 			wantKeys: baseConfig,
 		},
 		{
-			name: "preserves extra keys when updating",
+			name: "prunes extra keys when updating values",
 			existing: &apiv1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
 				Data: map[string][]byte{
 					"VICE_BASE_URL": []byte("https://old.example.com"),
-					"EXTRA":         []byte("keep-me"),
+					"EXTRA":         []byte("stale"),
 				},
 			},
-			config:    baseConfig,
-			wantKeys:  baseConfig,
-			extraKeys: map[string]string{"EXTRA": "keep-me"},
+			config:     baseConfig,
+			wantKeys:   baseConfig,
+			absentKeys: []string{"EXTRA"},
 		},
 		{
 			name:     "creates multi-key secret when missing",
@@ -127,18 +127,18 @@ func TestEnsureClusterConfigSecret(t *testing.T) {
 			wantKeys: multiKeyConfig,
 		},
 		{
-			name: "multi-key update merges correctly",
+			name: "multi-key update replaces data exactly",
 			existing: &apiv1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
 				Data: map[string][]byte{
 					"VICE_BASE_URL":     []byte("https://old.example.com"),
 					"KEYCLOAK_BASE_URL": []byte("https://keycloak.example.org/auth"),
-					"CUSTOM":            []byte("preserved"),
+					"CUSTOM":            []byte("stale"),
 				},
 			},
-			config:    multiKeyConfig,
-			wantKeys:  multiKeyConfig,
-			extraKeys: map[string]string{"CUSTOM": "preserved"},
+			config:     multiKeyConfig,
+			wantKeys:   multiKeyConfig,
+			absentKeys: []string{"CUSTOM"},
 		},
 	}
 
@@ -162,9 +162,10 @@ func TestEnsureClusterConfigSecret(t *testing.T) {
 				assert.Equal(t, v, string(secret.Data[k]), "key %q should have correct value", k)
 			}
 
-			// Verify extra keys are preserved.
-			for k, v := range tt.extraKeys {
-				assert.Equal(t, v, string(secret.Data[k]), "extra key %q should be preserved", k)
+			// Verify stale keys were pruned.
+			for _, k := range tt.absentKeys {
+				_, present := secret.Data[k]
+				assert.False(t, present, "stale key %q should have been pruned", k)
 			}
 		})
 	}

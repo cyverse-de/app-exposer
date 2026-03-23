@@ -282,13 +282,16 @@ func ensureEnvFrom(container *apiv1.Container, secretName string) {
 }
 
 // deriveBackendURL finds the analysis container by name and returns
-// http://localhost:<first-port>. Falls back to http://localhost:60000.
+// http://localhost:<first-port>. Falls back to http://localhost:60000
+// with a warning log so the misconfiguration is visible.
 func deriveBackendURL(deployment *appsv1.Deployment) string {
 	for _, c := range deployment.Spec.Template.Spec.Containers {
 		if c.Name == constants.AnalysisContainerName && len(c.Ports) > 0 {
 			return fmt.Sprintf("http://localhost:%d", c.Ports[0].ContainerPort)
 		}
 	}
+	log.Warnf("deployment %s: analysis container %q not found or has no ports; falling back to localhost:60000",
+		deployment.Name, constants.AnalysisContainerName)
 	return "http://localhost:60000"
 }
 

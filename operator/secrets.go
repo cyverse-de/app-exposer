@@ -73,17 +73,27 @@ func EnsureClusterConfigSecret(ctx context.Context, clientset kubernetes.Interfa
 		return fmt.Errorf("checking for existing Secret %s: %w", secretName, err)
 	}
 
-	// Secret exists — merge config keys into existing data.
-	if existing.Data == nil {
-		existing.Data = make(map[string][]byte)
-	}
-
+	// Secret exists — replace data with exactly the desired keys. Stale keys
+	// from previous operator versions are pruned so they don't persist as
+	// phantom env vars in vice-proxy containers (mounted via envFrom).
 	changed := false
+
+	// Check for keys to add or update.
 	for k, v := range wantData {
 		current, ok := existing.Data[k]
 		if !ok || string(current) != string(v) {
-			existing.Data[k] = v
 			changed = true
+			break
+		}
+	}
+
+	// Check for stale keys to remove.
+	if !changed {
+		for k := range existing.Data {
+			if _, ok := wantData[k]; !ok {
+				changed = true
+				break
+			}
 		}
 	}
 
@@ -91,6 +101,9 @@ func EnsureClusterConfigSecret(ctx context.Context, clientset kubernetes.Interfa
 		log.Debugf("Secret %s already has correct values for all config keys", secretName)
 		return nil
 	}
+
+	// Replace the entire data map so stale keys are removed.
+	existing.Data = wantData
 
 	log.Infof("updating Secret %s with new config values", secretName)
 	_, err = client.Update(ctx, existing, metav1.UpdateOptions{})
