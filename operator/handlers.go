@@ -648,9 +648,13 @@ func (o *Operator) findAnalysisService(ctx context.Context, analysisID string) (
 // HandleBackChannelLogout forwards a Keycloak back-channel logout token to the
 // vice-proxy sidecar for the given analysis.
 //
-//	@Summary		Forward back-channel logout to vice-proxy
-//	@Description	Forwards a Keycloak logout_token to the vice-proxy sidecar
-//	@Description	for the given analysis, invalidating the user's session.
+//	@Summary		Back-channel logout (Keycloak-initiated, by session token)
+//	@Description	Forwards a Keycloak logout_token to the vice-proxy sidecar,
+//	@Description	invalidating the session identified in the token. This is called
+//	@Description	automatically by Keycloak when a user logs out from another
+//	@Description	application in the same SSO realm — callers should not invoke
+//	@Description	this directly. Use POST /logout-user to kick a specific user,
+//	@Description	or POST /logout to initiate a browser-facing logout flow.
 //	@Tags			analyses
 //	@Accept			application/x-www-form-urlencoded
 //	@Param			analysis-id		path		string	true	"The analysis ID"
@@ -714,9 +718,13 @@ func (o *Operator) HandleBackChannelLogout(c echo.Context) error {
 // this handler captures the redirect URL and returns it in JSON instead of
 // following it (the operator is a backend, not a browser).
 //
-//	@Summary		Forward logout to vice-proxy
-//	@Description	Forwards a logout request to the vice-proxy sidecar for the
-//	@Description	given analysis. Returns the Keycloak logout redirect URL.
+//	@Summary		Browser-facing logout (returns Keycloak redirect URL)
+//	@Description	Clears the user's vice-proxy session cookie and returns the
+//	@Description	Keycloak logout redirect URL. The caller (typically a browser
+//	@Description	or UI) should redirect the user to this URL to complete the
+//	@Description	SSO logout. Affects only the session associated with the
+//	@Description	request's cookie — use POST /logout-user to target a specific
+//	@Description	user by username without needing their cookie.
 //	@Tags			analyses
 //	@Produce		json
 //	@Param			analysis-id	path	string	true	"The analysis ID"
@@ -774,9 +782,11 @@ func (o *Operator) HandleLogout(c echo.Context) error {
 // HandleGetActiveSessions returns the list of active user sessions for an
 // analysis by forwarding the request to the vice-proxy sidecar.
 //
-//	@Summary		Get active sessions for an analysis
-//	@Description	Returns the list of currently active user sessions from the
-//	@Description	vice-proxy sidecar for the given analysis.
+//	@Summary		List active sessions for an analysis
+//	@Description	Returns the list of currently authenticated user sessions from
+//	@Description	the vice-proxy sidecar. Each entry includes the session ID and
+//	@Description	username. Use this to see who is logged in before calling
+//	@Description	POST /logout-user to remove a specific user.
 //	@Tags			analyses
 //	@Produce		json
 //	@Param			analysis-id	path		string	true	"The analysis ID"
@@ -833,9 +843,13 @@ func (o *Operator) HandleGetActiveSessions(c echo.Context) error {
 // HandleLogoutUser invalidates all sessions for a specific user in an analysis
 // by forwarding the request to the vice-proxy sidecar.
 //
-//	@Summary		Log out a user from an analysis
+//	@Summary		Admin logout (by username, no cookie needed)
 //	@Description	Invalidates all active sessions for the given username in the
-//	@Description	vice-proxy sidecar for the given analysis.
+//	@Description	vice-proxy sidecar. Use this to kick a specific user out of an
+//	@Description	analysis without needing their browser cookie or a Keycloak
+//	@Description	logout token. Does not trigger Keycloak SSO logout — the user
+//	@Description	remains logged in to other applications in the realm. Use
+//	@Description	GET /active-sessions first to see who is currently logged in.
 //	@Tags			analyses
 //	@Accept			json
 //	@Produce		json

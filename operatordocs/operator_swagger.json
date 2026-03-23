@@ -144,14 +144,14 @@
                         "BasicAuth": []
                     }
                 ],
-                "description": "Returns the list of currently active user sessions from the\nvice-proxy sidecar for the given analysis.",
+                "description": "Returns the list of currently authenticated user sessions from\nthe vice-proxy sidecar. Each entry includes the session ID and\nusername. Use this to see who is logged in before calling\nPOST /logout-user to remove a specific user.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "analyses"
                 ],
-                "summary": "Get active sessions for an analysis",
+                "summary": "List active sessions for an analysis",
                 "parameters": [
                     {
                         "type": "string",
@@ -196,14 +196,14 @@
                         "BasicAuth": []
                     }
                 ],
-                "description": "Forwards a Keycloak logout_token to the vice-proxy sidecar\nfor the given analysis, invalidating the user's session.",
+                "description": "Forwards a Keycloak logout_token to the vice-proxy sidecar,\ninvalidating the session identified in the token. This is called\nautomatically by Keycloak when a user logs out from another\napplication in the same SSO realm — callers should not invoke\nthis directly. Use POST /logout-user to kick a specific user,\nor POST /logout to initiate a browser-facing logout flow.",
                 "consumes": [
                     "application/x-www-form-urlencoded"
                 ],
                 "tags": [
                     "analyses"
                 ],
-                "summary": "Forward back-channel logout to vice-proxy",
+                "summary": "Back-channel logout (Keycloak-initiated, by session token)",
                 "parameters": [
                     {
                         "type": "string",
@@ -286,14 +286,14 @@
                         "BasicAuth": []
                     }
                 ],
-                "description": "Forwards a logout request to the vice-proxy sidecar for the\ngiven analysis. Returns the Keycloak logout redirect URL.",
+                "description": "Clears the user's vice-proxy session cookie and returns the\nKeycloak logout redirect URL. The caller (typically a browser\nor UI) should redirect the user to this URL to complete the\nSSO logout. Affects only the session associated with the\nrequest's cookie — use POST /logout-user to target a specific\nuser by username without needing their cookie.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "analyses"
                 ],
-                "summary": "Forward logout to vice-proxy",
+                "summary": "Browser-facing logout (returns Keycloak redirect URL)",
                 "parameters": [
                     {
                         "type": "string",
@@ -338,7 +338,7 @@
                         "BasicAuth": []
                     }
                 ],
-                "description": "Invalidates all active sessions for the given username in the\nvice-proxy sidecar for the given analysis.",
+                "description": "Invalidates all active sessions for the given username in the\nvice-proxy sidecar. Use this to kick a specific user out of an\nanalysis without needing their browser cookie or a Keycloak\nlogout token. Does not trigger Keycloak SSO logout — the user\nremains logged in to other applications in the realm. Use\nGET /active-sessions first to see who is currently logged in.",
                 "consumes": [
                     "application/json"
                 ],
@@ -348,7 +348,7 @@
                 "tags": [
                     "analyses"
                 ],
-                "summary": "Log out a user from an analysis",
+                "summary": "Admin logout (by username, no cookie needed)",
                 "parameters": [
                     {
                         "type": "string",

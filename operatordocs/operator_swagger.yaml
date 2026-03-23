@@ -10976,8 +10976,10 @@ paths:
   /analyses/{analysis-id}/active-sessions:
     get:
       description: |-
-        Returns the list of currently active user sessions from the
-        vice-proxy sidecar for the given analysis.
+        Returns the list of currently authenticated user sessions from
+        the vice-proxy sidecar. Each entry includes the session ID and
+        username. Use this to see who is logged in before calling
+        POST /logout-user to remove a specific user.
       parameters:
       - description: The analysis ID
         in: path
@@ -11005,7 +11007,7 @@ paths:
             $ref: '#/definitions/common.ErrorResponse'
       security:
       - BasicAuth: []
-      summary: Get active sessions for an analysis
+      summary: List active sessions for an analysis
       tags:
       - analyses
   /analyses/{analysis-id}/backchannel-logout:
@@ -11013,8 +11015,12 @@ paths:
       consumes:
       - application/x-www-form-urlencoded
       description: |-
-        Forwards a Keycloak logout_token to the vice-proxy sidecar
-        for the given analysis, invalidating the user's session.
+        Forwards a Keycloak logout_token to the vice-proxy sidecar,
+        invalidating the session identified in the token. This is called
+        automatically by Keycloak when a user logs out from another
+        application in the same SSO realm — callers should not invoke
+        this directly. Use POST /logout-user to kick a specific user,
+        or POST /logout to initiate a browser-facing logout flow.
       parameters:
       - description: The analysis ID
         in: path
@@ -11043,7 +11049,7 @@ paths:
             $ref: '#/definitions/common.ErrorResponse'
       security:
       - BasicAuth: []
-      summary: Forward back-channel logout to vice-proxy
+      summary: Back-channel logout (Keycloak-initiated, by session token)
       tags:
       - analyses
   /analyses/{analysis-id}/download-input-files:
@@ -11072,8 +11078,12 @@ paths:
   /analyses/{analysis-id}/logout:
     post:
       description: |-
-        Forwards a logout request to the vice-proxy sidecar for the
-        given analysis. Returns the Keycloak logout redirect URL.
+        Clears the user's vice-proxy session cookie and returns the
+        Keycloak logout redirect URL. The caller (typically a browser
+        or UI) should redirect the user to this URL to complete the
+        SSO logout. Affects only the session associated with the
+        request's cookie — use POST /logout-user to target a specific
+        user by username without needing their cookie.
       parameters:
       - description: The analysis ID
         in: path
@@ -11101,7 +11111,7 @@ paths:
             $ref: '#/definitions/common.ErrorResponse'
       security:
       - BasicAuth: []
-      summary: Forward logout to vice-proxy
+      summary: Browser-facing logout (returns Keycloak redirect URL)
       tags:
       - analyses
   /analyses/{analysis-id}/logout-user:
@@ -11110,7 +11120,11 @@ paths:
       - application/json
       description: |-
         Invalidates all active sessions for the given username in the
-        vice-proxy sidecar for the given analysis.
+        vice-proxy sidecar. Use this to kick a specific user out of an
+        analysis without needing their browser cookie or a Keycloak
+        logout token. Does not trigger Keycloak SSO logout — the user
+        remains logged in to other applications in the realm. Use
+        GET /active-sessions first to see who is currently logged in.
       parameters:
       - description: The analysis ID
         in: path
@@ -11144,7 +11158,7 @@ paths:
             $ref: '#/definitions/common.ErrorResponse'
       security:
       - BasicAuth: []
-      summary: Log out a user from an analysis
+      summary: Admin logout (by username, no cookie needed)
       tags:
       - analyses
   /analyses/{analysis-id}/logs:
