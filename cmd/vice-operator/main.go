@@ -139,16 +139,22 @@ func main() {
 	// secret update only touches keys present in this map — omitting a key
 	// would leave its old value in the secret.
 	clusterConfig := map[string]string{
-		"VICE_BASE_URL":        viceBaseURL,
-		"KEYCLOAK_BASE_URL":    keycloakBaseURL,
-		"KEYCLOAK_REALM":       keycloakRealm,
-		"KEYCLOAK_CLIENT_ID":   keycloakClientID,
+		"VICE_BASE_URL":          viceBaseURL,
+		"KEYCLOAK_BASE_URL":      keycloakBaseURL,
+		"KEYCLOAK_REALM":         keycloakRealm,
+		"KEYCLOAK_CLIENT_ID":     keycloakClientID,
 		"KEYCLOAK_CLIENT_SECRET": keycloakClientSecret,
 	}
 	if disableViceProxyAuth {
 		clusterConfig["DISABLE_AUTH"] = "true"
 	} else {
 		clusterConfig["DISABLE_AUTH"] = "false"
+
+		// Warn early if auth is enabled but Keycloak settings are missing,
+		// since vice-proxy pods will crash-loop with a fatal validation error.
+		if keycloakBaseURL == "" || keycloakRealm == "" || keycloakClientID == "" || keycloakClientSecret == "" {
+			log.Warn("auth is enabled (--disable-vice-proxy-auth not set) but one or more Keycloak flags are empty; vice-proxy pods will fail to start")
+		}
 	}
 
 	// Ensure the cluster config secret exists with the correct values
