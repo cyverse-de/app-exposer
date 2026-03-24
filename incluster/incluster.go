@@ -46,9 +46,6 @@ type Init struct {
 	ViceProxyImage                string
 	FrontendBaseURL               string
 	ViceDomain                    string
-	ViceDefaultBackendService     string
-	ViceDefaultBackendServicePort int
-	IngressClass                  string
 	VICEBackendNamespace          string
 	AppsServiceBaseURL            string
 	ViceNamespace                 string

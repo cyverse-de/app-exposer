@@ -19,8 +19,6 @@ func baseInit() *Init {
 		ViceProxyImage:                "harbor.cyverse.org/de/vice-proxy",
 		FrontendBaseURL:               "https://de.example.org",
 		ViceDomain:                    "cyverse.run",
-		ViceDefaultBackendService:     "vice-default-backend",
-		ViceDefaultBackendServicePort: 80,
 		VICEBackendNamespace:          "prod",
 		AppsServiceBaseURL:            "http://apps.prod",
 		ViceNamespace:                 "vice-apps",

@@ -713,7 +713,7 @@ func (o *Operator) HandleGetActiveSessions(c echo.Context) error {
 //	@Tags			analyses
 //	@Accept			json
 //	@Produce		json
-//	@Param			analysis-id	path		string							true	"The analysis ID"
+//	@Param			analysis-id	path		string								true	"The analysis ID"
 //	@Param			request		body		operatorclient.LogoutUserRequest	true	"The user to log out"
 //	@Success		200			{object}	operatorclient.LogoutUserResponse
 //	@Failure		400			{object}	common.ErrorResponse

@@ -89,9 +89,6 @@ func main() {
 		transferWorkingDir                   = flag.String("transfer-working-dir", "/de-app-work", "The working directory within the file transfer image.")
 		transferLogLevel                     = flag.String("transfer-log-level", "debug", "The log level of the output of the file transfer tool.")
 		statusSenderImage                    = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
-		ingressClass                         = flag.String("ingress-class", "nginx", "(optional) The ingress class to use for operator fallback")
-		viceDefaultBackendService            = flag.String("vice-default-backend", "vice-default-backend", "The name of the service to use as the default backend for VICE ingresses")
-		viceDefaultBackendServicePort        = flag.Int("vice-default-backend-port", 80, "The port for the default backend for VICE ingresses")
 		userSuffix                           = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
 		defaultMillicores                    = flag.Float64("default-millicores", 4000.0, "The default number of millicores reserved for an analysis.")
 		argoWorkflowNS                       = flag.String("workflow-namespace", "argo", "The namespace Argo Workflows run in.")
@@ -365,23 +362,20 @@ func main() {
 	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer, clientset)
 
 	exposerInit := &ExposerAppInit{
-		Namespace:                     *namespace,
-		ViceNamespace:                 *viceNamespace,
-		ViceProxyImage:                proxyImage,
-		ViceDomain:                    c.String("vice.domain"),
-		ViceDefaultBackendService:     *viceDefaultBackendService,
-		ViceDefaultBackendServicePort: *viceDefaultBackendServicePort,
-		db:                            dbconn,
-		UserSuffix:                    *userSuffix,
-		IRODSZone:                     zone,
-		IngressClass:                  *ingressClass,
-		ClientSet:                     clientset,
-		GatewayClient:                 gatewayClient,
-		batchadapter:                  jexAdapter,
-		ImagePullSecretName:           imagePullSecretName,
-		LocalStorageClass:             *localStorageClass,
-		ClusterConfigSecretName:       *clusterConfigSecret,
-		BypassUsers:                   bypassUsers,
+		Namespace:               *namespace,
+		ViceNamespace:           *viceNamespace,
+		ViceProxyImage:          proxyImage,
+		ViceDomain:              c.String("vice.domain"),
+		db:                      dbconn,
+		UserSuffix:              *userSuffix,
+		IRODSZone:               zone,
+		ClientSet:               clientset,
+		GatewayClient:           gatewayClient,
+		batchadapter:            jexAdapter,
+		ImagePullSecretName:     imagePullSecretName,
+		LocalStorageClass:       *localStorageClass,
+		ClusterConfigSecretName: *clusterConfigSecret,
+		BypassUsers:             bypassUsers,
 	}
 
 	// app is the base app-exposer functionality.
