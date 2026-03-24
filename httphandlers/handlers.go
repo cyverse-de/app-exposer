@@ -117,11 +117,11 @@ func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisI
 
 	ch := make(chan result, len(clients))
 
+	// wg.Go (Go 1.25+) handles Add/Done internally. Range variables are
+	// per-iteration in Go 1.22+ so no parameter capture is needed.
 	var wg sync.WaitGroup
 	for _, c := range clients {
-		wg.Add(1)
-		go func(c *operatorclient.Client) {
-			defer wg.Done()
+		wg.Go(func() {
 			found, err := c.HasAnalysis(searchCtx, analysisID)
 			if err != nil {
 				log.Debugf("search: operator %s error for analysis %s: %v", c.Name(), analysisID, err)
@@ -129,7 +129,7 @@ func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisI
 				return
 			}
 			ch <- result{client: c, found: found}
-		}(c)
+		})
 	}
 
 	// Close the channel once all goroutines finish to avoid leaks.
@@ -146,6 +146,46 @@ func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisI
 	}
 
 	return nil
+}
+
+// operatorAction is a function that performs an operation on an operator client
+// for a given analysis. Used by routeOperatorAction and routeAdminOperatorAction
+// to eliminate boilerplate in handlers that resolve an ID and forward to an operator.
+type operatorAction func(ctx context.Context, client *operatorclient.Client, analysisID string) error
+
+// routeOperatorAction resolves an external ID to an analysis ID, finds the
+// operator running it, and invokes fn. Intended for user-facing handlers that
+// receive an external ID via path param "id".
+func (h *HTTPHandlers) routeOperatorAction(c echo.Context, fn operatorAction) error {
+	ctx := c.Request().Context()
+	externalID := c.Param("id")
+
+	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	client := h.operatorClientForAnalysis(ctx, analysisID)
+	if client == nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "no operator found for analysis")
+	}
+
+	return fn(ctx, client, analysisID)
+}
+
+// routeAdminOperatorAction finds the operator running the analysis identified
+// by the "analysis-id" path param and invokes fn. Intended for admin handlers
+// that receive an analysis ID directly.
+func (h *HTTPHandlers) routeAdminOperatorAction(c echo.Context, fn operatorAction) error {
+	ctx := c.Request().Context()
+	analysisID := c.Param("analysis-id")
+
+	client := h.operatorClientForAnalysis(ctx, analysisID)
+	if client == nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "no operator found for analysis")
+	}
+
+	return fn(ctx, client, analysisID)
 }
 
 // ExternalIDResp is the response body for the AdminGetExternalIDHandler endpoint.

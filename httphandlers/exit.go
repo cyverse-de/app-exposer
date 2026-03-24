@@ -1,9 +1,11 @@
 package httphandlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/labstack/echo/v4"
 )
 
@@ -23,22 +25,10 @@ import (
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/{id}/exit [post]
 func (h *HTTPHandlers) ExitHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	externalID := c.Param("id")
-
-	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	}
-
-	log.Infof("routing exit for analysis %s (external ID %s) to operator", analysisID, externalID)
-
-	client := h.operatorClientForAnalysis(ctx, analysisID)
-	if client == nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "no operator found for analysis")
-	}
-
-	return client.Exit(ctx, analysisID)
+	return h.routeOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+		log.Infof("routing exit for analysis %s to operator %s", analysisID, client.Name())
+		return client.Exit(ctx, analysisID)
+	})
 }
 
 // AdminExitHandler terminates a VICE analysis using the analysis ID directly,
@@ -55,17 +45,10 @@ func (h *HTTPHandlers) ExitHandler(c echo.Context) error {
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/admin/analyses/{analysis-id}/exit [post]
 func (h *HTTPHandlers) AdminExitHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-
-	log.Infof("routing admin exit for analysis %s to operator", analysisID)
-
-	client := h.operatorClientForAnalysis(ctx, analysisID)
-	if client == nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "no operator found for analysis")
-	}
-
-	return client.Exit(ctx, analysisID)
+	return h.routeAdminOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+		log.Infof("routing admin exit for analysis %s to operator %s", analysisID, client.Name())
+		return client.Exit(ctx, analysisID)
+	})
 }
 
 // SaveAndExitHandler routes a save-and-exit request to the appropriate operator,
@@ -83,22 +66,10 @@ func (h *HTTPHandlers) AdminExitHandler(c echo.Context) error {
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/{id}/save-and-exit [post]
 func (h *HTTPHandlers) SaveAndExitHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	externalID := c.Param("id")
-
-	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	}
-
-	log.Infof("routing save-and-exit for analysis %s (external ID %s) to operator", analysisID, externalID)
-
-	client := h.operatorClientForAnalysis(ctx, analysisID)
-	if client == nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "no operator found for analysis")
-	}
-
-	return client.SaveAndExit(ctx, analysisID)
+	return h.routeOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+		log.Infof("routing save-and-exit for analysis %s to operator %s", analysisID, client.Name())
+		return client.SaveAndExit(ctx, analysisID)
+	})
 }
 
 // AdminSaveAndExitHandler routes an admin save-and-exit request using the analysis ID directly,
@@ -116,17 +87,10 @@ func (h *HTTPHandlers) SaveAndExitHandler(c echo.Context) error {
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/admin/analyses/{analysis-id}/save-and-exit [post]
 func (h *HTTPHandlers) AdminSaveAndExitHandler(c echo.Context) error {
-	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-
-	log.Infof("routing admin save-and-exit for analysis %s to operator", analysisID)
-
-	client := h.operatorClientForAnalysis(ctx, analysisID)
-	if client == nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "no operator found for analysis")
-	}
-
-	return client.SaveAndExit(ctx, analysisID)
+	return h.routeAdminOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+		log.Infof("routing admin save-and-exit for analysis %s to operator %s", analysisID, client.Name())
+		return client.SaveAndExit(ctx, analysisID)
+	})
 }
 
 // TerminateAllResponse contains the results of terminating all running analyses.

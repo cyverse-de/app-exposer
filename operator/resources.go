@@ -5,13 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	appsv1 "k8s.io/api/apps/v1"
-	apiv1 "k8s.io/api/core/v1"
-	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/cyverse-de/app-exposer/operatorclient"
 )
@@ -22,184 +18,89 @@ func analysisLabelSelector(analysisID string) metav1.ListOptions {
 	return metav1.ListOptions{LabelSelector: set.AsSelector().String()}
 }
 
+// k8sResource abstracts the Get/Create/Update operations shared by all K8s
+// resource clients, allowing a single generic upsert implementation.
+type k8sResource[T any] interface {
+	Get(ctx context.Context, name string, opts metav1.GetOptions) (T, error)
+	Create(ctx context.Context, obj T, opts metav1.CreateOptions) (T, error)
+	Update(ctx context.Context, obj T, opts metav1.UpdateOptions) (T, error)
+}
+
+// upsert creates or updates a K8s resource. If the resource doesn't exist it
+// is created; otherwise it is updated. The kind string is used only for logging.
+func upsert[T any](ctx context.Context, client k8sResource[T], kind, name string, obj T) error {
+	_, err := client.Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		log.Debugf("creating %s %s", kind, name)
+		_, err = client.Create(ctx, obj, metav1.CreateOptions{})
+		return err
+	}
+	if err != nil {
+		return fmt.Errorf("checking for existing %s %s: %w", kind, name, err)
+	}
+	log.Debugf("updating %s %s", kind, name)
+	_, err = client.Update(ctx, obj, metav1.UpdateOptions{})
+	return err
+}
+
 // applyBundle creates or updates all K8s resources in the bundle.
 func (o *Operator) applyBundle(ctx context.Context, bundle *operatorclient.AnalysisBundle) error {
 	log.Infof("applying bundle for analysis %s (%d configmaps, %d pvs, %d pvcs)",
 		bundle.AnalysisID, len(bundle.ConfigMaps), len(bundle.PersistentVolumes), len(bundle.PersistentVolumeClaims))
 
-	// ConfigMaps
 	for _, cm := range bundle.ConfigMaps {
 		if cm == nil {
 			continue
 		}
-		if err := o.upsertConfigMap(ctx, cm); err != nil {
+		if err := upsert(ctx, o.clientset.CoreV1().ConfigMaps(o.namespace), "ConfigMap", cm.Name, cm); err != nil {
 			return fmt.Errorf("configmap %s: %w", cm.Name, err)
 		}
 	}
 
-	// PersistentVolumes (cluster-scoped)
 	for _, pv := range bundle.PersistentVolumes {
 		if pv == nil {
 			continue
 		}
-		if err := o.upsertPersistentVolume(ctx, pv); err != nil {
+		if err := upsert(ctx, o.clientset.CoreV1().PersistentVolumes(), "PersistentVolume", pv.Name, pv); err != nil {
 			return fmt.Errorf("pv %s: %w", pv.Name, err)
 		}
 	}
 
-	// PersistentVolumeClaims
 	for _, pvc := range bundle.PersistentVolumeClaims {
 		if pvc == nil {
 			continue
 		}
-		if err := o.upsertPersistentVolumeClaim(ctx, pvc); err != nil {
+		if err := upsert(ctx, o.clientset.CoreV1().PersistentVolumeClaims(o.namespace), "PersistentVolumeClaim", pvc.Name, pvc); err != nil {
 			return fmt.Errorf("pvc %s: %w", pvc.Name, err)
 		}
 	}
 
-	// Deployment
 	if bundle.Deployment != nil {
-		if err := o.upsertDeployment(ctx, bundle.Deployment); err != nil {
+		if err := upsert(ctx, o.clientset.AppsV1().Deployments(o.namespace), "Deployment", bundle.Deployment.Name, bundle.Deployment); err != nil {
 			return fmt.Errorf("deployment %s: %w", bundle.Deployment.Name, err)
 		}
 	}
 
-	// Service
 	if bundle.Service != nil {
-		if err := o.upsertService(ctx, bundle.Service); err != nil {
+		if err := upsert(ctx, o.clientset.CoreV1().Services(o.namespace), "Service", bundle.Service.Name, bundle.Service); err != nil {
 			return fmt.Errorf("service %s: %w", bundle.Service.Name, err)
 		}
 	}
 
-	// HTTPRoute
 	if bundle.HTTPRoute != nil {
-		if err := o.upsertHTTPRoute(ctx, bundle.HTTPRoute); err != nil {
+		if err := upsert(ctx, o.gatewayClient.HTTPRoutes(o.namespace), "HTTPRoute", bundle.HTTPRoute.Name, bundle.HTTPRoute); err != nil {
 			return fmt.Errorf("httproute %s: %w", bundle.HTTPRoute.Name, err)
 		}
 	}
 
-	// PodDisruptionBudget
 	if bundle.PodDisruptionBudget != nil {
-		if err := o.upsertPDB(ctx, bundle.PodDisruptionBudget); err != nil {
+		if err := upsert(ctx, o.clientset.PolicyV1().PodDisruptionBudgets(o.namespace), "PodDisruptionBudget", bundle.PodDisruptionBudget.Name, bundle.PodDisruptionBudget); err != nil {
 			return fmt.Errorf("pdb %s: %w", bundle.PodDisruptionBudget.Name, err)
 		}
 	}
 
 	log.Infof("bundle applied for analysis %s", bundle.AnalysisID)
 	return nil
-}
-
-func (o *Operator) upsertConfigMap(ctx context.Context, cm *apiv1.ConfigMap) error {
-	client := o.clientset.CoreV1().ConfigMaps(o.namespace)
-	_, err := client.Get(ctx, cm.Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		log.Debugf("creating ConfigMap %s", cm.Name)
-		_, err = client.Create(ctx, cm, metav1.CreateOptions{})
-		return err
-	}
-	if err != nil {
-		return fmt.Errorf("checking for existing ConfigMap %s: %w", cm.Name, err)
-	}
-	log.Debugf("updating ConfigMap %s", cm.Name)
-	_, err = client.Update(ctx, cm, metav1.UpdateOptions{})
-	return err
-}
-
-func (o *Operator) upsertPersistentVolume(ctx context.Context, pv *apiv1.PersistentVolume) error {
-	client := o.clientset.CoreV1().PersistentVolumes()
-	_, err := client.Get(ctx, pv.Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		log.Debugf("creating PersistentVolume %s", pv.Name)
-		_, err = client.Create(ctx, pv, metav1.CreateOptions{})
-		return err
-	}
-	if err != nil {
-		return fmt.Errorf("checking for existing PersistentVolume %s: %w", pv.Name, err)
-	}
-	log.Debugf("updating PersistentVolume %s", pv.Name)
-	_, err = client.Update(ctx, pv, metav1.UpdateOptions{})
-	return err
-}
-
-func (o *Operator) upsertPersistentVolumeClaim(ctx context.Context, pvc *apiv1.PersistentVolumeClaim) error {
-	client := o.clientset.CoreV1().PersistentVolumeClaims(o.namespace)
-	_, err := client.Get(ctx, pvc.Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		log.Debugf("creating PersistentVolumeClaim %s", pvc.Name)
-		_, err = client.Create(ctx, pvc, metav1.CreateOptions{})
-		return err
-	}
-	if err != nil {
-		return fmt.Errorf("checking for existing PersistentVolumeClaim %s: %w", pvc.Name, err)
-	}
-	log.Debugf("updating PersistentVolumeClaim %s", pvc.Name)
-	_, err = client.Update(ctx, pvc, metav1.UpdateOptions{})
-	return err
-}
-
-func (o *Operator) upsertDeployment(ctx context.Context, dep *appsv1.Deployment) error {
-	client := o.clientset.AppsV1().Deployments(o.namespace)
-	_, err := client.Get(ctx, dep.Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		log.Debugf("creating Deployment %s", dep.Name)
-		_, err = client.Create(ctx, dep, metav1.CreateOptions{})
-		return err
-	}
-	if err != nil {
-		return fmt.Errorf("checking for existing Deployment %s: %w", dep.Name, err)
-	}
-	log.Debugf("updating Deployment %s", dep.Name)
-	_, err = client.Update(ctx, dep, metav1.UpdateOptions{})
-	return err
-}
-
-func (o *Operator) upsertService(ctx context.Context, svc *apiv1.Service) error {
-	client := o.clientset.CoreV1().Services(o.namespace)
-	_, err := client.Get(ctx, svc.Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		log.Debugf("creating Service %s", svc.Name)
-		_, err = client.Create(ctx, svc, metav1.CreateOptions{})
-		return err
-	}
-	if err != nil {
-		return fmt.Errorf("checking for existing Service %s: %w", svc.Name, err)
-	}
-	log.Debugf("updating Service %s", svc.Name)
-	_, err = client.Update(ctx, svc, metav1.UpdateOptions{})
-	return err
-}
-
-// upsertHTTPRoute creates or updates a Gateway API HTTPRoute.
-func (o *Operator) upsertHTTPRoute(ctx context.Context, route *gatewayv1.HTTPRoute) error {
-	client := o.gatewayClient.HTTPRoutes(o.namespace)
-	_, err := client.Get(ctx, route.Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		log.Debugf("creating HTTPRoute %s", route.Name)
-		_, err = client.Create(ctx, route, metav1.CreateOptions{})
-		return err
-	}
-	if err != nil {
-		return fmt.Errorf("checking for existing HTTPRoute %s: %w", route.Name, err)
-	}
-	log.Debugf("updating HTTPRoute %s", route.Name)
-	_, err = client.Update(ctx, route, metav1.UpdateOptions{})
-	return err
-}
-
-func (o *Operator) upsertPDB(ctx context.Context, pdb *policyv1.PodDisruptionBudget) error {
-	client := o.clientset.PolicyV1().PodDisruptionBudgets(o.namespace)
-	_, err := client.Get(ctx, pdb.Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		log.Debugf("creating PodDisruptionBudget %s", pdb.Name)
-		_, err = client.Create(ctx, pdb, metav1.CreateOptions{})
-		return err
-	}
-	if err != nil {
-		return fmt.Errorf("checking for existing PodDisruptionBudget %s: %w", pdb.Name, err)
-	}
-	log.Debugf("updating PodDisruptionBudget %s", pdb.Name)
-	_, err = client.Update(ctx, pdb, metav1.UpdateOptions{})
-	return err
 }
 
 // deleteAnalysisResources deletes all K8s resources matching the analysis-id label.
