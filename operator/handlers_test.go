@@ -119,6 +119,20 @@ func TestHandleLaunch(t *testing.T) {
 			name: "launch at capacity returns 409",
 			bundle: operatorclient.AnalysisBundle{
 				AnalysisID: "test-analysis-2",
+				Deployment: &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "dep-2", Labels: map[string]string{"analysis-id": "test-analysis-2"}},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test2"}},
+						Template: apiv1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test2"}},
+							Spec:       apiv1.PodSpec{Containers: []apiv1.Container{{Name: "c", Image: "img"}}},
+						},
+					},
+				},
+				Service: &apiv1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "svc-2", Labels: map[string]string{"analysis-id": "test-analysis-2"}},
+					Spec:       apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 80}}},
+				},
 			},
 			maxSlots: 1,
 			setup: func(t *testing.T, cs *fake.Clientset) {

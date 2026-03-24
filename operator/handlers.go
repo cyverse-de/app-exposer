@@ -147,8 +147,8 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	if bundle.AnalysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysisID is required")
+	if err := bundle.Validate(); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	if cap.AvailableSlots <= 0 {
