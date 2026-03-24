@@ -48,7 +48,7 @@ func (i *Incluster) GetAccessURL(ctx context.Context, externalID string) (string
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode < 200 || resp.StatusCode > 399 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return "", fmt.Errorf("vice-proxy at %s returned status %d", endpoint, resp.StatusCode)
 	}
 

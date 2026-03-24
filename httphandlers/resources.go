@@ -400,6 +400,7 @@ func (h *HTTPHandlers) AdminOperatorListingHandler(c echo.Context) error {
 		merged.ConfigMaps = append(merged.ConfigMaps, r.info.ConfigMaps...)
 		merged.Services = append(merged.Services, r.info.Services...)
 		merged.Ingresses = append(merged.Ingresses, r.info.Ingresses...)
+		merged.Routes = append(merged.Routes, r.info.Routes...)
 	}
 
 	reporting.SortByCreationTime(merged)

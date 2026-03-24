@@ -1,6 +1,7 @@
 package httphandlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -167,6 +168,57 @@ type URLReadyResponse struct {
 	AccessURL string `json:"access_url,omitempty"`
 }
 
+// checkURLReady verifies K8s resource readiness (service + deployment replicas)
+// and probes the access URL via vice-proxy. Returns a URLReadyResponse with
+// Ready=true only when all checks pass. externalID is the external-id label
+// value used to locate resources.
+func (h *HTTPHandlers) checkURLReady(ctx context.Context, externalID string) (URLReadyResponse, error) {
+	listoptions := metav1.ListOptions{
+		LabelSelector: labels.Set{"external-id": externalID}.AsSelector().String(),
+	}
+
+	// Check service existence.
+	svclist, err := h.clientset.CoreV1().Services(h.incluster.ViceNamespace).List(ctx, listoptions)
+	if err != nil {
+		return URLReadyResponse{}, err
+	}
+	serviceExists := len(svclist.Items) > 0
+
+	// Check whether any deployment has ready replicas.
+	deplist, err := h.clientset.AppsV1().Deployments(h.incluster.ViceNamespace).List(ctx, listoptions)
+	if err != nil {
+		return URLReadyResponse{}, err
+	}
+	var podReady bool
+	for _, dep := range deplist.Items {
+		if dep.Status.ReadyReplicas > 0 {
+			podReady = true
+			break
+		}
+	}
+
+	// Route existence is implied by the caller resolving the host to an external ID.
+	data := URLReadyResponse{Ready: false}
+	if !serviceExists || !podReady {
+		return data, nil
+	}
+
+	accessURL, err := h.incluster.GetAccessURL(ctx, externalID)
+	if err != nil {
+		log.Debugf("vice-proxy not reachable for %s: %v", externalID, err)
+		return data, nil
+	}
+
+	if err := h.incluster.CheckAccessURL(ctx, accessURL); err != nil {
+		log.Debugf("access URL not live for %s: %v", externalID, err)
+		return data, nil
+	}
+
+	data.Ready = true
+	data.AccessURL = accessURL
+	return data, nil
+}
+
 // URLReadyHandler checks whether the VICE analysis for the given subdomain is
 // accessible, verifying user permissions before performing the check.
 //
@@ -211,33 +263,6 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 		return err
 	}
 
-	listoptions := metav1.ListOptions{
-		LabelSelector: labels.Set{"external-id": id}.AsSelector().String(),
-	}
-
-	// Check service existence.
-	svclist, err := h.clientset.CoreV1().Services(h.incluster.ViceNamespace).List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-	serviceExists := len(svclist.Items) > 0
-
-	// Check whether any deployment has ready replicas.
-	deplist, err := h.clientset.AppsV1().Deployments(h.incluster.ViceNamespace).List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-	var podReady bool
-	for _, dep := range deplist.Items {
-		if dep.Status.ReadyReplicas > 0 {
-			podReady = true
-			break
-		}
-	}
-
-	// Route existence is implied by GetIDFromHost succeeding above.
-	resourcesReady := serviceExists && podReady
-
 	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, id)
 	if err != nil {
 		return err
@@ -257,23 +282,9 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("user %s cannot access analysis %s", user, analysisID))
 	}
 
-	data := URLReadyResponse{Ready: false}
-
-	// Only proceed with vice-proxy and public URL checks if k8s resources are ready.
-	if resourcesReady {
-		accessURL, err := h.incluster.GetAccessURL(ctx, id)
-		if err != nil {
-			log.Debugf("vice-proxy not reachable for %s: %v", id, err)
-			return c.JSON(http.StatusOK, data)
-		}
-
-		if err := h.incluster.CheckAccessURL(ctx, accessURL); err != nil {
-			log.Debugf("access URL not live for %s: %v", id, err)
-			return c.JSON(http.StatusOK, data)
-		}
-
-		data.Ready = true
-		data.AccessURL = accessURL
+	data, err := h.checkURLReady(ctx, id)
+	if err != nil {
+		return err
 	}
 
 	return c.JSON(http.StatusOK, data)
@@ -305,49 +316,9 @@ func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
 	}
 
-	listoptions := metav1.ListOptions{
-		LabelSelector: labels.Set{"external-id": id}.AsSelector().String(),
-	}
-
-	// Check service existence.
-	svclist, err := h.clientset.CoreV1().Services(h.incluster.ViceNamespace).List(ctx, listoptions)
+	data, err := h.checkURLReady(ctx, id)
 	if err != nil {
 		return err
-	}
-	serviceExists := len(svclist.Items) > 0
-
-	// Check whether any deployment has ready replicas.
-	deplist, err := h.clientset.AppsV1().Deployments(h.incluster.ViceNamespace).List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-	var podReady bool
-	for _, dep := range deplist.Items {
-		if dep.Status.ReadyReplicas > 0 {
-			podReady = true
-			break
-		}
-	}
-
-	// Route existence is implied by GetIDFromHost succeeding above.
-	resourcesReady := serviceExists && podReady
-	data := URLReadyResponse{Ready: false}
-
-	// Only proceed with vice-proxy and public URL checks if k8s resources are ready.
-	if resourcesReady {
-		accessURL, err := h.incluster.GetAccessURL(ctx, id)
-		if err != nil {
-			log.Debugf("vice-proxy not reachable for %s: %v", id, err)
-			return c.JSON(http.StatusOK, data)
-		}
-
-		if err := h.incluster.CheckAccessURL(ctx, accessURL); err != nil {
-			log.Debugf("access URL not live for %s: %v", id, err)
-			return c.JSON(http.StatusOK, data)
-		}
-
-		data.Ready = true
-		data.AccessURL = accessURL
 	}
 
 	return c.JSON(http.StatusOK, data)
