@@ -135,6 +135,7 @@ func (o *Operator) HandleListCachedImages(c echo.Context) error {
 //	@Produce		json
 //	@Param			id	path		string	true	"Image cache slug ID"
 //	@Success		200	{object}	ImageCacheStatus
+//	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		404	{object}	common.ErrorResponse
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Security		BasicAuth
@@ -166,6 +167,7 @@ func (o *Operator) HandleGetCachedImage(c echo.Context) error {
 //	@Tags			image-cache
 //	@Param			id	path	string	true	"Image cache slug ID"
 //	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Security		BasicAuth
 //	@Router			/image-cache/{id} [delete]

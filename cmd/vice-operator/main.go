@@ -135,9 +135,9 @@ func main() {
 	}
 
 	// Build the cluster config map from flags. All keys are always written so
-	// that stale values from a previous run are overwritten. The merge-based
-	// secret update only touches keys present in this map — omitting a key
-	// would leave its old value in the secret.
+	// that stale values from a previous run are overwritten. The secret update
+	// replaces the entire data map — omitting a key here removes it from the
+	// secret.
 	clusterConfig := map[string]string{
 		"VICE_BASE_URL":          viceBaseURL,
 		"KEYCLOAK_BASE_URL":      keycloakBaseURL,

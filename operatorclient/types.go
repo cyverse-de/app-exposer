@@ -16,8 +16,8 @@ import (
 // analysis. App-exposer assembles this using its existing builder functions
 // and sends it to an operator, which applies the resources to its local cluster.
 // HTTPRoute is the canonical networking resource (Gateway API); Ingress is
-// retained for backward compatibility with operators that don't yet support
-// the Gateway API.
+// included in the wire format for potential future use but is not currently
+// processed by the operator.
 type AnalysisBundle struct {
 	AnalysisID             string                         `json:"analysisID"`
 	Deployment             *appsv1.Deployment             `json:"deployment"`

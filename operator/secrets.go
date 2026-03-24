@@ -43,8 +43,8 @@ func buildDockerConfigJSON(server, username, password string) ([]byte, error) {
 
 // EnsureClusterConfigSecret ensures that the named Secret exists in the given
 // namespace with the correct cluster config values. It creates the secret if
-// missing, merges config keys into existing data (overwriting matches,
-// preserving extras), and updates if any values changed.
+// missing, replaces data with exactly the desired keys (pruning stale keys),
+// and updates if any values changed.
 func EnsureClusterConfigSecret(ctx context.Context, clientset kubernetes.Interface, namespace, secretName string, config map[string]string) error {
 	client := clientset.CoreV1().Secrets(namespace)
 
