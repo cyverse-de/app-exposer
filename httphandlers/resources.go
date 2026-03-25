@@ -390,9 +390,16 @@ func (h *HTTPHandlers) AdminOperatorListingHandler(c echo.Context) error {
 	}
 	wg.Wait()
 
+	type operatorError struct {
+		Operator string `json:"operator"`
+		Error    string `json:"error"`
+	}
+	var errs []operatorError
+
 	for _, r := range results {
 		if r.err != nil {
 			log.Errorf("error listing analyses from operator %s: %v", r.name, r.err)
+			errs = append(errs, operatorError{Operator: r.name, Error: r.err.Error()})
 			continue
 		}
 		merged.Deployments = append(merged.Deployments, r.info.Deployments...)
@@ -405,7 +412,17 @@ func (h *HTTPHandlers) AdminOperatorListingHandler(c echo.Context) error {
 
 	reporting.SortByCreationTime(merged)
 
-	return c.JSON(http.StatusOK, merged)
+	// Include operator errors in the response so clients know which
+	// operators were unreachable and that results may be partial.
+	resp := struct {
+		reporting.ResourceInfo
+		Errors []operatorError `json:"errors,omitempty"`
+	}{
+		ResourceInfo: *merged,
+		Errors:       errs,
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 // ListPodsResponse is the response body for the pods listing endpoint.
