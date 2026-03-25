@@ -31,16 +31,28 @@ type Client struct {
 	password string
 }
 
-// NewClient creates a new operator Client from an OperatorConfig.
+// NewClient creates a new operator Client from an OperatorConfig. When
+// cfg.Insecure is true, TLS certificate verification is skipped — use only
+// for development/testing with self-signed certs.
 func NewClient(cfg OperatorConfig) (*Client, error) {
 	u, err := url.Parse(cfg.URL)
 	if err != nil {
 		return nil, fmt.Errorf("parsing operator URL %q: %w", cfg.URL, err)
 	}
+
+	var transport = http.DefaultTransport
+	if cfg.Insecure {
+		// Clone DefaultTransport to preserve connection pooling, timeouts, and
+		// proxy settings — only override the TLS verification.
+		dt := http.DefaultTransport.(*http.Transport).Clone()
+		dt.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec // intentional for dev/testing
+		transport = dt
+	}
+
 	return &Client{
 		name:     cfg.Name,
 		baseURL:  u,
-		http:     &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		http:     &http.Client{Transport: otelhttp.NewTransport(transport)},
 		username: cfg.Username,
 		password: cfg.Password,
 	}, nil

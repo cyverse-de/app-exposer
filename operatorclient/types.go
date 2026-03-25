@@ -86,4 +86,5 @@ type OperatorConfig struct {
 	URL      string `json:"url"      koanf:"url"`
 	Username string `json:"username" koanf:"username"`
 	Password string `json:"password" koanf:"password"`
+	Insecure bool   `json:"insecure" koanf:"insecure"`
 }
