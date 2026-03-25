@@ -146,7 +146,7 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("transfer request returned %d", resp.StatusCode)
 	}
 
