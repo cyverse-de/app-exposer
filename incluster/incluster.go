@@ -31,9 +31,10 @@ import (
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
+const otelName = "github.com/cyverse-de/app-exposer/incluster"
+
 var log = common.Log
 var httpClient = http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
-var otelName = "github.com/cyverse-de/app-exposer/incluster"
 
 // Init contains configuration for configuring an *Incluster.
 type Init struct {
