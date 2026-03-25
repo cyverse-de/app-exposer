@@ -350,7 +350,7 @@ func (h *HTTPHandlers) AdminFilterableResourcesHandler(c echo.Context) error {
 
 // AdminOperatorListingHandler returns an aggregated listing of all running VICE
 // analyses across all configured operators. Returns full resource info
-// (deployments, pods, configmaps, services, ingresses) merged from all
+// (deployments, pods, configmaps, services, routes) merged from all
 // clusters. Partial results are returned if some operators are unreachable.
 //
 //	@ID				admin-operator-listing

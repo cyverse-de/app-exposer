@@ -221,8 +221,8 @@ func rewriteHostname(hostname, newDomain string) string {
 // cluster-config-secret envFrom is present, and ensures the permissions volume
 // mount exists on the vice-proxy container.
 // The container's Command should already be ["vice-proxy"] from app-exposer;
-// Args appends to the entrypoint. The backend URL is derived from the first
-// port of the analysis container.
+// Args is replaced with operator-specific flags. The backend URL is derived
+// from the first port of the analysis container.
 func TransformViceProxyArgs(deployment *appsv1.Deployment, analysisID, clusterConfigSecret string) {
 	if deployment == nil {
 		return

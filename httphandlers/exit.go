@@ -38,7 +38,7 @@ func (h *HTTPHandlers) ExitHandler(c echo.Context) error {
 //	@Summary		Terminates a VICE analysis
 //	@Description	Terminates the VICE analysis based on the analysisID and
 //	@Description	and should not require any user information to be provided. Otherwise, the
-//	@Description	documentation for VICEExit applies here as well.
+//	@Description	documentation for ExitHandler applies here as well.
 //	@Param			analysis-id	path	string	true	"The analysis ID of the VICE analysis"
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
