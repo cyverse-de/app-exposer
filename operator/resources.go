@@ -27,20 +27,29 @@ type k8sResource[T any] interface {
 }
 
 // upsert creates or updates a K8s resource. If the resource doesn't exist it
-// is created; otherwise it is updated. The kind string is used only for logging.
-func upsert[T any](ctx context.Context, client k8sResource[T], kind, name string, obj T) error {
-	_, err := client.Get(ctx, name, metav1.GetOptions{})
+// is created; otherwise it is updated. On update, the ResourceVersion from the
+// existing object is copied to obj for optimistic concurrency control (the K8s
+// API server requires it). The kind string is used only for logging.
+func upsert[T metav1.Object](ctx context.Context, client k8sResource[T], kind, name string, obj T) error {
+	existing, err := client.Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		log.Debugf("creating %s %s", kind, name)
-		_, err = client.Create(ctx, obj, metav1.CreateOptions{})
-		return err
+		if _, err = client.Create(ctx, obj, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("creating %s %s: %w", kind, name, err)
+		}
+		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("checking for existing %s %s: %w", kind, name, err)
 	}
+	// Copy ResourceVersion for optimistic concurrency — the API server
+	// requires it on updates to detect conflicts.
+	obj.SetResourceVersion(existing.GetResourceVersion())
 	log.Debugf("updating %s %s", kind, name)
-	_, err = client.Update(ctx, obj, metav1.UpdateOptions{})
-	return err
+	if _, err = client.Update(ctx, obj, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("updating %s %s: %w", kind, name, err)
+	}
+	return nil
 }
 
 // applyBundle creates or updates all K8s resources in the bundle.

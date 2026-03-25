@@ -15,6 +15,11 @@ import (
 // fileTransfersPort is the port used by the file-transfer sidecar container.
 const fileTransfersPort = int32(60001)
 
+// transferHTTPClient is used for requests to the file-transfer sidecar.
+// It has a per-request timeout to prevent goroutines from blocking forever
+// if the sidecar hangs or the connection stalls.
+var transferHTTPClient = &http.Client{Timeout: 30 * time.Second}
+
 // HandleSaveAndExit triggers the file transfer sidecar to upload outputs,
 // then deletes all analysis resources.
 //
@@ -145,7 +150,7 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 	if err != nil {
 		return fmt.Errorf("creating transfer request: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := transferHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("requesting transfer: %w", err)
 	}
@@ -194,7 +199,7 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 		if err != nil {
 			return fmt.Errorf("creating status request: %w", err)
 		}
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := transferHTTPClient.Do(req)
 		if err != nil {
 			return fmt.Errorf("polling transfer status: %w", err)
 		}
