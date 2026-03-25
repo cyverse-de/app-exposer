@@ -52,22 +52,49 @@ func ParseGPUVendor(s string) (GPUVendor, error) {
 // TransformGPUVendor rewrites GPU-specific resource names in all containers
 // (including init containers) and node affinity keys to match the target vendor.
 // Bundles arrive with NVIDIA references; when vendor is AMD, those are rewritten
-// to the AMD equivalents. Modifies the deployment in place.
+// to the AMD equivalents. For all vendors, GPU requests are equalized to match
+// limits since K8s requires requests == limits for extended resources (GPUs
+// cannot be overcommitted). Modifies the deployment in place.
 func TransformGPUVendor(deployment *appsv1.Deployment, vendor GPUVendor) {
-	if deployment == nil || vendor == GPUVendorNvidia {
+	if deployment == nil {
 		return
 	}
 
-	// Rewrite container resource requests and limits.
-	for i := range deployment.Spec.Template.Spec.Containers {
-		renameGPUResource(&deployment.Spec.Template.Spec.Containers[i].Resources)
-	}
-	for i := range deployment.Spec.Template.Spec.InitContainers {
-		renameGPUResource(&deployment.Spec.Template.Spec.InitContainers[i].Resources)
+	gpuKey := nvidiaGPUResource
+
+	// AMD clusters need NVIDIA resource names and affinity keys rewritten.
+	if vendor == GPUVendorAMD {
+		gpuKey = amdGPUResource
+
+		forEachContainerResources(deployment, func(res *apiv1.ResourceRequirements) {
+			renameGPUResource(res)
+		})
+
+		rewriteNodeAffinityKeys(deployment.Spec.Template.Spec.Affinity)
 	}
 
-	// Rewrite node affinity keys in both required and preferred terms.
-	affinity := deployment.Spec.Template.Spec.Affinity
+	// K8s requires requests == limits for extended resources like GPUs
+	// because they are discrete devices that cannot be overcommitted.
+	// See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#extended-resources
+	forEachContainerResources(deployment, func(res *apiv1.ResourceRequirements) {
+		equalizeGPUResources(res, gpuKey)
+	})
+}
+
+// forEachContainerResources calls fn on the ResourceRequirements of every
+// container and init container in the deployment.
+func forEachContainerResources(deployment *appsv1.Deployment, fn func(*apiv1.ResourceRequirements)) {
+	for i := range deployment.Spec.Template.Spec.Containers {
+		fn(&deployment.Spec.Template.Spec.Containers[i].Resources)
+	}
+	for i := range deployment.Spec.Template.Spec.InitContainers {
+		fn(&deployment.Spec.Template.Spec.InitContainers[i].Resources)
+	}
+}
+
+// rewriteNodeAffinityKeys rewrites NVIDIA affinity keys to AMD equivalents
+// in both required and preferred node affinity terms.
+func rewriteNodeAffinityKeys(affinity *apiv1.Affinity) {
 	if affinity == nil || affinity.NodeAffinity == nil {
 		return
 	}
@@ -96,6 +123,47 @@ func rewriteMatchExpressions(exprs []apiv1.NodeSelectorRequirement) {
 func renameGPUResource(res *apiv1.ResourceRequirements) {
 	swapResource(res.Requests)
 	swapResource(res.Limits)
+}
+
+// equalizeGPUResources ensures GPU requests == limits for the given resource
+// key. Kubernetes requires requests to equal limits for extended resources
+// (like GPUs) because they are discrete devices that cannot be overcommitted.
+// If the analysis definition has mismatched values (e.g. requests=1, limits=2),
+// both are set to the lower of the two, since the request represents the
+// actual number of GPUs needed.
+//
+// See:
+//   - https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#extended-resources
+//   - https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/#using-device-plugins
+func equalizeGPUResources(res *apiv1.ResourceRequirements, gpuKey apiv1.ResourceName) {
+	limQty, hasLim := res.Limits[gpuKey]
+	reqQty, hasReq := res.Requests[gpuKey]
+
+	switch {
+	case hasLim && hasReq && !limQty.Equal(reqQty):
+		// Both set but mismatched — use the lower value since the request
+		// reflects the actual number of GPUs needed.
+		minQty := reqQty.DeepCopy()
+		if limQty.Cmp(reqQty) < 0 {
+			minQty = limQty.DeepCopy()
+		}
+		res.Requests[gpuKey] = minQty
+		res.Limits[gpuKey] = minQty
+
+	case hasLim && !hasReq:
+		// Only limits set — copy to requests so K8s accepts the pod.
+		if res.Requests == nil {
+			res.Requests = make(apiv1.ResourceList)
+		}
+		res.Requests[gpuKey] = limQty.DeepCopy()
+
+	case hasReq && !hasLim:
+		// Only requests set — copy to limits so K8s accepts the pod.
+		if res.Limits == nil {
+			res.Limits = make(apiv1.ResourceList)
+		}
+		res.Limits[gpuKey] = reqQty.DeepCopy()
+	}
 }
 
 // swapResource moves a resource quantity from the NVIDIA key to the AMD key.

@@ -206,7 +206,6 @@ func TestTransformGPUVendor(t *testing.T) {
 
 			containers := tt.deployment.Spec.Template.Spec.Containers
 			if tt.wantGPUResource != "" {
-				// Check resource was renamed and quantity preserved.
 				reqs := containers[0].Resources.Requests
 				qty, ok := reqs[tt.wantGPUResource]
 				assert.True(t, ok, "expected resource %s in requests", tt.wantGPUResource)
@@ -244,6 +243,141 @@ func TestTransformGPUVendor(t *testing.T) {
 					assert.Equal(t, "4Gi", containers[0].Resources.Requests.Memory().String())
 				}
 			}
+		})
+	}
+}
+
+// TestEqualizeGPUResources verifies that mismatched GPU requests/limits are
+// equalized to the lower value for both NVIDIA and AMD vendors.
+func TestEqualizeGPUResources(t *testing.T) {
+	tests := []struct {
+		name     string
+		vendor   GPUVendor
+		gpuKey   apiv1.ResourceName
+		reqQty   string
+		limQty   string
+		wantBoth string // both requests and limits should equal this
+	}{
+		{
+			name:     "nvidia: equalized to lower (requests < limits)",
+			vendor:   GPUVendorNvidia,
+			gpuKey:   nvidiaGPUResource,
+			reqQty:   "1",
+			limQty:   "2",
+			wantBoth: "1",
+		},
+		{
+			name:     "nvidia: equalized to lower (limits < requests)",
+			vendor:   GPUVendorNvidia,
+			gpuKey:   nvidiaGPUResource,
+			reqQty:   "3",
+			limQty:   "1",
+			wantBoth: "1",
+		},
+		{
+			name:     "amd: equalized to lower (requests < limits)",
+			vendor:   GPUVendorAMD,
+			gpuKey:   amdGPUResource,
+			reqQty:   "1",
+			limQty:   "2",
+			wantBoth: "1",
+		},
+		{
+			name:     "nvidia: already equal is no-op",
+			vendor:   GPUVendorNvidia,
+			gpuKey:   nvidiaGPUResource,
+			reqQty:   "2",
+			limQty:   "2",
+			wantBoth: "2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build a deployment with NVIDIA GPU resources (the source format).
+			// TransformGPUVendor renames to AMD before equalizing when needed.
+			srcKey := nvidiaGPUResource
+			dep := &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Template: apiv1.PodTemplateSpec{
+						Spec: apiv1.PodSpec{
+							Containers: []apiv1.Container{
+								{
+									Name:  "c",
+									Image: "img",
+									Resources: apiv1.ResourceRequirements{
+										Requests: apiv1.ResourceList{srcKey: resource.MustParse(tt.reqQty)},
+										Limits:   apiv1.ResourceList{srcKey: resource.MustParse(tt.limQty)},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			TransformGPUVendor(dep, tt.vendor)
+
+			res := dep.Spec.Template.Spec.Containers[0].Resources
+			reqQty := res.Requests[tt.gpuKey]
+			limQty := res.Limits[tt.gpuKey]
+			assert.Equal(t, tt.wantBoth, reqQty.String(),
+				"GPU requests should be equalized to the lower value")
+			assert.Equal(t, tt.wantBoth, limQty.String(),
+				"GPU limits should be equalized to the lower value")
+		})
+	}
+}
+
+func TestEqualizeGPUResourcesAsymmetric(t *testing.T) {
+	tests := []struct {
+		name     string
+		requests apiv1.ResourceList // nil means not set
+		limits   apiv1.ResourceList // nil means not set
+		wantQty  string
+	}{
+		{
+			name:     "only limits set — copies to requests",
+			requests: nil,
+			limits:   apiv1.ResourceList{nvidiaGPUResource: resource.MustParse("2")},
+			wantQty:  "2",
+		},
+		{
+			name:     "only requests set — copies to limits",
+			requests: apiv1.ResourceList{nvidiaGPUResource: resource.MustParse("1")},
+			limits:   nil,
+			wantQty:  "1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dep := &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Template: apiv1.PodTemplateSpec{
+						Spec: apiv1.PodSpec{
+							Containers: []apiv1.Container{
+								{
+									Name:  "c",
+									Image: "img",
+									Resources: apiv1.ResourceRequirements{
+										Requests: tt.requests,
+										Limits:   tt.limits,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			TransformGPUVendor(dep, GPUVendorNvidia)
+
+			res := dep.Spec.Template.Spec.Containers[0].Resources
+			reqQty := res.Requests[nvidiaGPUResource]
+			limQty := res.Limits[nvidiaGPUResource]
+			assert.Equal(t, tt.wantQty, reqQty.String(), "requests should be set")
+			assert.Equal(t, tt.wantQty, limQty.String(), "limits should be set")
 		})
 	}
 }
