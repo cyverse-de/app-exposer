@@ -942,6 +942,12 @@ const docTemplateoperator = `{
                             "$ref": "#/definitions/operator.ImageCacheStatus"
                         }
                     },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -979,6 +985,12 @@ const docTemplateoperator = `{
                 "responses": {
                     "200": {
                         "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
                     },
                     "500": {
                         "description": "Internal Server Error",
