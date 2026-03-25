@@ -46,7 +46,7 @@ func main() {
 		loadingServiceName   string
 		loadingServicePort   int
 		loadingTimeoutMs     int64
-		loadingPodSelector   string
+		operatorPodSelector  string
 		gatewayName          string
 		gatewayClassName     string
 		gatewayEntryPort     int
@@ -55,6 +55,8 @@ func main() {
 		keycloakClientID     string
 		keycloakClientSecret string
 		disableViceProxyAuth bool
+		apiSubdomain         string
+		apiServiceName       string
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -77,7 +79,7 @@ func main() {
 	flag.StringVar(&loadingServiceName, "loading-service-name", "vice-operator-loading", "Name of the loading page service")
 	flag.IntVar(&loadingServicePort, "loading-service-port", 80, "Port of the loading page service")
 	flag.Int64Var(&loadingTimeoutMs, "loading-timeout-ms", 600000, "Loading page timeout in milliseconds")
-	flag.StringVar(&loadingPodSelector, "loading-pod-selector", "", "Pod selector label for the loading page service (e.g. app=vice-operator-local); if set, ensures the service exists at startup")
+	flag.StringVar(&operatorPodSelector, "operator-pod-selector", "", "Pod selector for vice-operator services (e.g. app=vice-operator-local); if set, ensures API and loading services exist at startup")
 	flag.StringVar(&gatewayName, "gateway-name", "vice", "Name of the Gateway resource")
 	flag.StringVar(&gatewayClassName, "gateway-class-name", "traefik", "GatewayClass name for the Gateway resource")
 	flag.IntVar(&gatewayEntryPort, "gateway-entrypoint-port", 8000, "Entrypoint port on the Gateway listener (must match the gateway controller's internal port)")
@@ -86,6 +88,8 @@ func main() {
 	flag.StringVar(&keycloakClientID, "keycloak-client-id", "", "OIDC client ID for vice-proxy auth")
 	flag.StringVar(&keycloakClientSecret, "keycloak-client-secret", "", "OIDC client secret for vice-proxy auth")
 	flag.BoolVar(&disableViceProxyAuth, "disable-vice-proxy-auth", false, "Disable auth in vice-proxy")
+	flag.StringVar(&apiSubdomain, "api-subdomain", "vice-api", "Subdomain prefix for the vice-operator API HTTPRoute; combined with --vice-base-url host to form the full hostname")
+	flag.StringVar(&apiServiceName, "api-service-name", "vice-operator", "K8s Service name for the vice-operator API HTTPRoute backend")
 	flag.Parse()
 
 	// Validate basic auth flags.
@@ -157,50 +161,55 @@ func main() {
 		}
 	}
 
-	// Ensure the cluster config secret exists with the correct values
-	// before starting the operator, so vice-proxy containers can reference it
+	// Ensure cluster config secret so vice-proxy containers can reference it
 	// as env vars via EnvFrom.
-	configCtx, configCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer configCancel()
-	if err := operator.EnsureClusterConfigSecret(configCtx, clientset, namespace, clusterConfigSecret, clusterConfig); err != nil {
-		log.Fatalf("failed to ensure cluster config secret: %v", err)
-	}
+	mustEnsure("cluster config secret", func(ctx context.Context) error {
+		return operator.EnsureClusterConfigSecret(ctx, clientset, namespace, clusterConfigSecret, clusterConfig)
+	})
 
-	// Ensure the image pull secret exists so pods can pull from private registries.
+	// Ensure the image pull secret so pods can pull from private registries.
 	if registryServer != "" {
-		pullCtx, pullCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer pullCancel()
-		if err := operator.EnsureImagePullSecret(pullCtx, clientset, namespace, imagePullSecret, registryServer, registryUsername, registryPassword); err != nil {
-			log.Fatalf("failed to ensure image pull secret: %v", err)
-		}
+		mustEnsure("image pull secret", func(ctx context.Context) error {
+			return operator.EnsureImagePullSecret(ctx, clientset, namespace, imagePullSecret, registryServer, registryUsername, registryPassword)
+		})
 	}
 
-	// Ensure the loading page service exists so HTTPRoutes have a valid backend.
-	if loadingPodSelector != "" {
-		selector, selectorErr := parseSelector(loadingPodSelector)
+	// Ensure the operator's K8s Services and API HTTPRoute exist so traffic
+	// can reach the operator through the Gateway.
+	if operatorPodSelector != "" {
+		selector, selectorErr := parseSelector(operatorPodSelector)
 		if selectorErr != nil {
-			log.Fatalf("invalid --loading-pod-selector: %v", selectorErr)
+			log.Fatalf("invalid --operator-pod-selector: %v", selectorErr)
 		}
-		loadingSvcCtx, loadingSvcCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer loadingSvcCancel()
-		if err := operator.EnsureLoadingService(loadingSvcCtx, clientset, namespace, loadingServiceName, int32(loadingPort), selector); err != nil {
-			log.Fatalf("failed to ensure loading service: %v", err)
-		}
+
+		// Loading page service: exposes loadingServicePort, routes to the
+		// container's loadingPort (the port the loading server actually binds).
+		mustEnsure("loading service", func(ctx context.Context) error {
+			return operator.EnsureService(ctx, clientset, namespace, loadingServiceName, int32(loadingServicePort), int32(loadingPort), selector)
+		})
+
+		// API service (port → port, same as the operator's listen port).
+		mustEnsure("API service", func(ctx context.Context) error {
+			return operator.EnsureService(ctx, clientset, namespace, apiServiceName, int32(port), int32(port), selector)
+		})
+
+		// API HTTPRoute: makes the vice-operator API accessible through
+		// the Gateway (e.g. for HAProxy / tailscale serve).
+		apiHostname := fmt.Sprintf("%s.%s", apiSubdomain, parsedURL.Hostname())
+		mustEnsure("API HTTPRoute", func(ctx context.Context) error {
+			return operator.EnsureAPIRoute(ctx, gwClient, namespace, gatewayName, apiHostname, apiServiceName, int32(port))
+		})
 	}
 
 	// Ensure the Gateway resource exists so HTTPRoutes can attach to it.
-	gwCtx, gwCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer gwCancel()
-	if err := operator.EnsureGateway(gwCtx, gwClient, namespace, gatewayName, gatewayClassName, int32(gatewayEntryPort)); err != nil {
-		log.Fatalf("failed to ensure gateway: %v", err)
-	}
+	mustEnsure("gateway", func(ctx context.Context) error {
+		return operator.EnsureGateway(ctx, gwClient, namespace, gatewayName, gatewayClassName, int32(gatewayEntryPort))
+	})
 
 	// Ensure the CORS middleware exists so HTTPRoutes can reference it.
-	corsCtx, corsCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer corsCancel()
-	if err := operator.EnsureCORSMiddleware(corsCtx, clientset, namespace); err != nil {
-		log.Fatalf("failed to ensure CORS middleware: %v", err)
-	}
+	mustEnsure("CORS middleware", func(ctx context.Context) error {
+		return operator.EnsureCORSMiddleware(ctx, clientset, namespace)
+	})
 
 	gpuVendor, err := operator.ParseGPUVendor(gpuVendorFlag)
 	if err != nil {
@@ -208,8 +217,9 @@ func main() {
 	}
 
 	// Extract the base domain from vice-base-url for hostname rewriting
-	// (e.g. "https://localhost" → "localhost").
-	baseDomain := parsedURL.Host
+	// (e.g. "https://localhost" → "localhost"). Use Hostname() to strip any
+	// port, since HTTPRoute hostnames should not include ports.
+	baseDomain := parsedURL.Hostname()
 
 	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
 	imageCache := operator.NewImageCacheManager(clientset, namespace, imagePullSecret)
@@ -237,6 +247,17 @@ func main() {
 	if err := app.Start(apiAddr); err != nil {
 		log.Error(err)
 		os.Exit(1)
+	}
+}
+
+// mustEnsure runs fn with a 30-second timeout and fatally exits on error.
+// This eliminates the repetitive context-create / defer-cancel / log.Fatalf
+// boilerplate for each startup ensure call.
+func mustEnsure(resource string, fn func(ctx context.Context) error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := fn(ctx); err != nil {
+		log.Fatalf("failed to ensure %s: %v", resource, err)
 	}
 }
 

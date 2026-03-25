@@ -11,15 +11,16 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// EnsureLoadingService ensures the loading page Service exists in the given
-// namespace, creating it if missing. The service maps port 80 to the
-// vice-operator's loading page container port. It selects pods using the
-// provided podSelector labels.
-func EnsureLoadingService(
+// EnsureService ensures a ClusterIP Service exists in the given namespace,
+// creating it if missing. If the service already exists, it is left unchanged.
+// The service exposes servicePort and routes traffic to targetPort on pods
+// matching podSelector.
+func EnsureService(
 	ctx context.Context,
 	clientset kubernetes.Interface,
 	namespace string,
 	serviceName string,
+	servicePort int32,
 	targetPort int32,
 	podSelector map[string]string,
 ) error {
@@ -27,14 +28,14 @@ func EnsureLoadingService(
 
 	_, err := client.Get(ctx, serviceName, metav1.GetOptions{})
 	if err == nil {
-		log.Debugf("loading service %s already exists", serviceName)
+		log.Debugf("Service %s already exists", serviceName)
 		return nil
 	}
 	if !apierrors.IsNotFound(err) {
 		return fmt.Errorf("checking for existing Service %s: %w", serviceName, err)
 	}
 
-	log.Infof("creating loading page Service %s (targetPort=%d)", serviceName, targetPort)
+	log.Infof("creating Service %s (port=%d, targetPort=%d)", serviceName, servicePort, targetPort)
 	_, err = client.Create(ctx, &apiv1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
@@ -45,7 +46,7 @@ func EnsureLoadingService(
 			Ports: []apiv1.ServicePort{
 				{
 					Name:       "http",
-					Port:       80,
+					Port:       servicePort,
 					TargetPort: intstr.FromInt32(targetPort),
 				},
 			},
