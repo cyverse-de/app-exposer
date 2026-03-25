@@ -124,7 +124,7 @@ func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisI
 		wg.Go(func() {
 			found, err := c.HasAnalysis(searchCtx, analysisID)
 			if err != nil {
-				log.Debugf("search: operator %s error for analysis %s: %v", c.Name(), analysisID, err)
+				log.Warnf("search: operator %s error for analysis %s: %v", c.Name(), analysisID, err)
 				ch <- result{client: c, found: false}
 				return
 			}

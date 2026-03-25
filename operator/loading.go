@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -13,6 +14,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
+
+// errAnalysisNotFound is returned by resolveSubdomain when no deployment
+// matches the subdomain. Callers use this to distinguish "not found" (404)
+// from infrastructure errors (500).
+var errAnalysisNotFound = errors.New("analysis not found")
 
 //go:embed templates/loading.html
 var loadingTemplateFS embed.FS
@@ -176,7 +182,11 @@ func (o *Operator) HandleLoadingPage(c echo.Context) error {
 
 	analysisID, appName, err := o.resolveSubdomain(ctx, host)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Analysis not found.")
+		if errors.Is(err, errAnalysisNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "Analysis not found.")
+		}
+		log.Errorf("resolveSubdomain failed for host %q: %v", host, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to look up analysis.")
 	}
 
 	data := loadingPageData{
@@ -203,7 +213,11 @@ func (o *Operator) HandleLoadingStatus(c echo.Context) error {
 
 	analysisID, _, err := o.resolveSubdomain(ctx, host)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Analysis not found.")
+		if errors.Is(err, errAnalysisNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "Analysis not found.")
+		}
+		log.Errorf("resolveSubdomain failed for host %q: %v", host, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to look up analysis.")
 	}
 
 	opts := analysisLabelSelector(analysisID)
@@ -211,7 +225,8 @@ func (o *Operator) HandleLoadingStatus(c echo.Context) error {
 	// Check deployment readiness.
 	deps, err := o.clientset.AppsV1().Deployments(o.namespace).List(ctx, opts)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		log.Errorf("listing deployments for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to check analysis status")
 	}
 	depReady := false
 	for _, d := range deps.Items {
@@ -224,14 +239,16 @@ func (o *Operator) HandleLoadingStatus(c echo.Context) error {
 	// Check service existence.
 	svcs, err := o.clientset.CoreV1().Services(o.namespace).List(ctx, opts)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		log.Errorf("listing services for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to check analysis status")
 	}
 	svcExists := len(svcs.Items) > 0
 
 	// Get pods.
 	podList, err := o.clientset.CoreV1().Pods(o.namespace).List(ctx, opts)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		log.Errorf("listing pods for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to check analysis status")
 	}
 
 	stage, errMsg := computeStage(podList.Items, depReady, svcExists)
@@ -282,7 +299,7 @@ func (o *Operator) resolveSubdomain(ctx context.Context, host string) (string, s
 		return "", "", fmt.Errorf("listing deployments for subdomain %s: %w", subdomain, err)
 	}
 	if len(deps.Items) == 0 {
-		return "", "", fmt.Errorf("no deployment found for subdomain %s", subdomain)
+		return "", "", fmt.Errorf("%w: no deployment for subdomain %s", errAnalysisNotFound, subdomain)
 	}
 
 	dep := deps.Items[0]

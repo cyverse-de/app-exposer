@@ -157,14 +157,14 @@ func (c *Client) Exit(ctx context.Context, analysisID string) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u.String(), nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("creating exit request for analysis %s: %w", analysisID, err)
 	}
 	c.setAuth(req)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
 		log.Errorf("operator %s: exit request failed for analysis %s: %v", c.name, analysisID, err)
-		return err
+		return fmt.Errorf("sending exit request for analysis %s: %w", analysisID, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -201,14 +201,14 @@ func (c *Client) postAnalysisAction(ctx context.Context, analysisID, action stri
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("creating %s request for analysis %s: %w", action, analysisID, err)
 	}
 	c.setAuth(req)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
 		log.Errorf("operator %s: %s request failed for analysis %s: %v", c.name, action, analysisID, err)
-		return err
+		return fmt.Errorf("sending %s request for analysis %s: %w", action, analysisID, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -386,20 +386,20 @@ func (c *Client) getAnalysisJSON(ctx context.Context, analysisID, subpath string
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating %s request for analysis %s: %w", subpath, analysisID, err)
 	}
 	c.setAuth(req)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
 		log.Errorf("operator %s: %s request failed for analysis %s: %v", c.name, subpath, analysisID, err)
-		return nil, err
+		return nil, fmt.Errorf("sending %s request for analysis %s: %w", subpath, analysisID, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading %s response for analysis %s: %w", subpath, analysisID, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		log.Errorf("operator %s: %s returned %d for analysis %s: %s", c.name, subpath, resp.StatusCode, analysisID, string(body))

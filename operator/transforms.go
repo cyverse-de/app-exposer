@@ -252,6 +252,8 @@ func TransformViceProxyArgs(deployment *appsv1.Deployment, analysisID, clusterCo
 		ensurePermissionsVolumeMount(&deployment.Spec.Template.Spec.Containers[i])
 		return
 	}
+	log.Warnf("deployment %s: no container named %q found; vice-proxy args not injected",
+		deployment.Name, constants.VICEProxyContainerName)
 }
 
 // EnsurePermissionsConfigMap adds a permissions ConfigMap to the bundle if one
