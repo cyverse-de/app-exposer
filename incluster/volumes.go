@@ -207,8 +207,10 @@ func (i *Incluster) getPersistentVolumes(ctx context.Context, job *model.Job) ([
 							"client":              "irodsfuse",
 							"path_mapping_json":   string(dataPathMappingsJSONBytes),
 							"no_permission_check": "true",
-							// use proxy access
-							"clientUser": job.Submitter,
+							// use proxy access — iRODS expects the short username
+							// without the domain suffix (e.g. "wregglej" not
+							// "wregglej@iplantcollaborative.org").
+							"clientUser": strings.SplitN(job.Submitter, "@", 2)[0],
 							"uid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
 							"gid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
 						},

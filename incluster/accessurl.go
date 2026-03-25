@@ -79,7 +79,7 @@ func (i *Incluster) CheckAccessURL(ctx context.Context, accessURL string) error 
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode < 200 || resp.StatusCode > 399 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("access URL %s returned status %d", accessURL, resp.StatusCode)
 	}
 
