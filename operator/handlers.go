@@ -36,6 +36,15 @@ var noRedirectHTTPClient = &http.Client{
 
 var log = common.Log.WithFields(logrus.Fields{"package": "operator"})
 
+// requiredParam extracts a path parameter and returns 400 if it's empty.
+func requiredParam(c echo.Context, name string) (string, error) {
+	v := c.Param(name)
+	if v == "" {
+		return "", echo.NewHTTPError(http.StatusBadRequest, name+" is required")
+	}
+	return v, nil
+}
+
 // Operator holds the state and dependencies for the vice-operator HTTP handlers.
 type Operator struct {
 	clientset           kubernetes.Interface
@@ -201,9 +210,9 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 //	@Router			/analyses/{analysis-id} [delete]
 func (o *Operator) HandleExit(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	analysisID, err := requiredParam(c, "analysis-id")
+	if err != nil {
+		return err
 	}
 
 	log.Infof("exiting analysis %s", analysisID)
@@ -255,9 +264,9 @@ type PodInfo struct {
 //	@Router			/analyses/{analysis-id}/status [get]
 func (o *Operator) HandleStatus(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	analysisID, err := requiredParam(c, "analysis-id")
+	if err != nil {
+		return err
 	}
 	log.Debugf("status check for analysis %s", analysisID)
 
@@ -336,9 +345,9 @@ type URLReadyResponse struct {
 //	@Router			/analyses/{analysis-id}/url-ready [get]
 func (o *Operator) HandleURLReady(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	analysisID, err := requiredParam(c, "analysis-id")
+	if err != nil {
+		return err
 	}
 	log.Debugf("url-ready check for analysis %s", analysisID)
 
@@ -391,9 +400,9 @@ func (o *Operator) HandleURLReady(c echo.Context) error {
 //	@Router			/analyses/{analysis-id}/pods [get]
 func (o *Operator) HandlePods(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	analysisID, err := requiredParam(c, "analysis-id")
+	if err != nil {
+		return err
 	}
 	log.Debugf("pods check for analysis %s", analysisID)
 
@@ -447,9 +456,9 @@ type LogEntry struct {
 //	@Router			/analyses/{analysis-id}/logs [get]
 func (o *Operator) HandleLogs(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	analysisID, err := requiredParam(c, "analysis-id")
+	if err != nil {
+		return err
 	}
 	log.Debugf("logs request for analysis %s", analysisID)
 
@@ -535,9 +544,9 @@ func (o *Operator) findPermissionsConfigMap(ctx context.Context, analysisID stri
 //	@Router			/analyses/{analysis-id}/permissions [get]
 func (o *Operator) HandleGetPermissions(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	analysisID, err := requiredParam(c, "analysis-id")
+	if err != nil {
+		return err
 	}
 
 	permsCM, err := o.findPermissionsConfigMap(ctx, analysisID)
@@ -578,9 +587,9 @@ func (o *Operator) HandleGetPermissions(c echo.Context) error {
 //	@Router			/analyses/{analysis-id}/permissions [put]
 func (o *Operator) HandleUpdatePermissions(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	analysisID, err := requiredParam(c, "analysis-id")
+	if err != nil {
+		return err
 	}
 
 	var req UpdatePermissionsRequest
@@ -659,9 +668,9 @@ func (o *Operator) findAnalysisService(ctx context.Context, analysisID string) (
 //	@Router			/analyses/{analysis-id}/active-sessions [get]
 func (o *Operator) HandleGetActiveSessions(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	analysisID, err := requiredParam(c, "analysis-id")
+	if err != nil {
+		return err
 	}
 
 	svc, err := o.findAnalysisService(ctx, analysisID)
@@ -724,9 +733,9 @@ func (o *Operator) HandleGetActiveSessions(c echo.Context) error {
 //	@Router			/analyses/{analysis-id}/logout-user [post]
 func (o *Operator) HandleLogoutUser(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	analysisID, err := requiredParam(c, "analysis-id")
+	if err != nil {
+		return err
 	}
 
 	var req operatorclient.LogoutUserRequest
@@ -796,9 +805,9 @@ func (o *Operator) HandleLogoutUser(c echo.Context) error {
 //	@Router			/analyses/{analysis-id}/swap-route [post]
 func (o *Operator) HandleSwapRoute(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	analysisID, err := requiredParam(c, "analysis-id")
+	if err != nil {
+		return err
 	}
 
 	log.Infof("manual route swap requested for analysis %s", analysisID)

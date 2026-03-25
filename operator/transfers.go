@@ -33,9 +33,9 @@ var transferHTTPClient = &http.Client{Timeout: 30 * time.Second}
 //	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/save-and-exit [post]
 func (o *Operator) HandleSaveAndExit(c echo.Context) error {
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	analysisID, err := requiredParam(c, "analysis-id")
+	if err != nil {
+		return err
 	}
 
 	log.Infof("save-and-exit requested for analysis %s", analysisID)
@@ -74,23 +74,7 @@ func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 //	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/download-input-files [post]
 func (o *Operator) HandleDownloadInputFiles(c echo.Context) error {
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
-	}
-
-	log.Infof("download-input-files requested for analysis %s", analysisID)
-
-	// Use a fresh context: the HTTP request context cancels when this handler returns.
-	go func() {
-		if err := o.triggerFileTransfer(context.Background(), analysisID, "/download"); err != nil {
-			log.Errorf("download failed for %s: %v", analysisID, err)
-		} else {
-			log.Infof("download succeeded for analysis %s", analysisID)
-		}
-	}()
-
-	return c.NoContent(http.StatusOK)
+	return o.handleAsyncTransfer(c, "download-input-files", "/download")
 }
 
 // HandleSaveOutputFiles triggers the file-transfer sidecar to upload
@@ -106,19 +90,25 @@ func (o *Operator) HandleDownloadInputFiles(c echo.Context) error {
 //	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/save-output-files [post]
 func (o *Operator) HandleSaveOutputFiles(c echo.Context) error {
-	analysisID := c.Param("analysis-id")
-	if analysisID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	return o.handleAsyncTransfer(c, "save-output-files", "/upload")
+}
+
+// handleAsyncTransfer validates the analysis-id param, starts a file transfer
+// in a background goroutine, and returns 200 immediately. The caller (user)
+// does not block on the transfer.
+func (o *Operator) handleAsyncTransfer(c echo.Context, action, transferPath string) error {
+	analysisID, err := requiredParam(c, "analysis-id")
+	if err != nil {
+		return err
 	}
 
-	log.Infof("save-output-files requested for analysis %s", analysisID)
+	log.Infof("%s requested for analysis %s", action, analysisID)
 
-	// Use a fresh context: the HTTP request context cancels when this handler returns.
 	go func() {
-		if err := o.triggerFileTransfer(context.Background(), analysisID, "/upload"); err != nil {
-			log.Errorf("upload failed for %s: %v", analysisID, err)
+		if err := o.triggerFileTransfer(context.Background(), analysisID, transferPath); err != nil {
+			log.Errorf("%s failed for %s: %v", action, analysisID, err)
 		} else {
-			log.Infof("upload succeeded for analysis %s", analysisID)
+			log.Infof("%s succeeded for analysis %s", action, analysisID)
 		}
 	}()
 
