@@ -7,7 +7,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -15,15 +14,12 @@ import (
 // AnalysisBundle contains all pre-built K8s resource objects for a VICE
 // analysis. App-exposer assembles this using its existing builder functions
 // and sends it to an operator, which applies the resources to its local cluster.
-// HTTPRoute is the canonical networking resource (Gateway API); Ingress is
-// included in the wire format for potential future use but is not currently
-// processed by the operator.
+// HTTPRoute is the canonical networking resource (Gateway API).
 type AnalysisBundle struct {
 	AnalysisID             string                         `json:"analysisID"`
 	Deployment             *appsv1.Deployment             `json:"deployment"`
 	Service                *apiv1.Service                 `json:"service"`
 	HTTPRoute              *gatewayv1.HTTPRoute           `json:"httpRoute"`
-	Ingress                *netv1.Ingress                 `json:"ingress,omitempty"`
 	ConfigMaps             []*apiv1.ConfigMap             `json:"configMaps"`
 	PersistentVolumes      []*apiv1.PersistentVolume      `json:"persistentVolumes"`
 	PersistentVolumeClaims []*apiv1.PersistentVolumeClaim `json:"persistentVolumeClaims"`
