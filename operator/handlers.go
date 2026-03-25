@@ -18,6 +18,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 
+	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -358,13 +359,7 @@ func (o *Operator) HandleURLReady(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	podReady := false
-	for _, d := range deps.Items {
-		if d.Status.ReadyReplicas > 0 {
-			podReady = true
-			break
-		}
-	}
+	podReady := hasReadyDeployment(deps.Items)
 
 	// Check service exists.
 	svcs, err := o.clientset.CoreV1().Services(o.namespace).List(ctx, opts)
@@ -424,6 +419,17 @@ func (o *Operator) HandlePods(c echo.Context) error {
 	return c.JSON(http.StatusOK, podInfos)
 }
 
+// hasReadyDeployment returns true if any deployment in the list has at least
+// one ready replica.
+func hasReadyDeployment(deps []appsv1.Deployment) bool {
+	for _, d := range deps {
+		if d.Status.ReadyReplicas > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // isPodReady returns true if the pod has a PodReady condition set to True.
 func isPodReady(p apiv1.Pod) bool {
 	for _, cond := range p.Status.Conditions {
@@ -434,11 +440,13 @@ func isPodReady(p apiv1.Pod) bool {
 	return false
 }
 
-// LogEntry holds a single container's log output.
+// LogEntry holds a single container's log output. If log retrieval failed,
+// Error is set and Log is empty.
 type LogEntry struct {
 	PodName       string `json:"podName"`
 	ContainerName string `json:"containerName"`
 	Log           string `json:"log"`
+	Error         string `json:"error,omitempty"`
 }
 
 // HandleLogs returns container logs for an analysis's pods.
@@ -481,12 +489,20 @@ func (o *Operator) HandleLogs(c echo.Context) error {
 			stream, err := logReq.Stream(ctx)
 			if err != nil {
 				log.Errorf("error getting logs for %s/%s: %v", pod.Name, container.Name, err)
+				entries = append(entries, LogEntry{
+					PodName: pod.Name, ContainerName: container.Name,
+					Error: fmt.Sprintf("failed to stream logs: %v", err),
+				})
 				continue
 			}
 			logBytes, err := io.ReadAll(stream)
 			_ = stream.Close() //nolint:errcheck // best-effort close inside loop; any error is secondary to read error above
 			if err != nil {
 				log.Errorf("error reading logs for %s/%s: %v", pod.Name, container.Name, err)
+				entries = append(entries, LogEntry{
+					PodName: pod.Name, ContainerName: container.Name,
+					Error: fmt.Sprintf("failed to read logs: %v", err),
+				})
 				continue
 			}
 			entries = append(entries, LogEntry{
@@ -637,6 +653,49 @@ func (o *Operator) viceProxyURL(svcName, path string) string {
 }
 
 // findAnalysisService returns the first Service matching the analysis-id label.
+// forwardToViceProxy finds the analysis service, builds a vice-proxy URL,
+// makes the HTTP request, and returns the response body. Returns an echo
+// HTTPError on failure so handlers can return it directly.
+func (o *Operator) forwardToViceProxy(ctx context.Context, analysisID, method, path string, reqBody io.Reader) ([]byte, error) {
+	svc, err := o.findAnalysisService(ctx, analysisID)
+	if err != nil {
+		return nil, echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if svc == nil {
+		return nil, echo.NewHTTPError(http.StatusNotFound, "no service found for analysis "+analysisID)
+	}
+
+	proxyURL := o.viceProxyURL(svc.Name, path)
+	log.Infof("forwarding %s %s for analysis %s", method, path, analysisID)
+
+	req, err := http.NewRequestWithContext(ctx, method, proxyURL, reqBody)
+	if err != nil {
+		return nil, echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("creating proxy request: %v", err))
+	}
+	if reqBody != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := noRedirectHTTPClient.Do(req)
+	if err != nil {
+		log.Errorf("%s request to vice-proxy failed for analysis %s: %v", path, analysisID, err)
+		return nil, echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to reach vice-proxy: %v", err))
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("reading vice-proxy response: %v", err))
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Errorf("vice-proxy returned %d for %s on analysis %s: %s", resp.StatusCode, path, analysisID, string(body))
+		return nil, echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("vice-proxy returned %d", resp.StatusCode))
+	}
+
+	return body, nil
+}
+
 func (o *Operator) findAnalysisService(ctx context.Context, analysisID string) (*apiv1.Service, error) {
 	opts := analysisLabelSelector(analysisID)
 	svcList, err := o.clientset.CoreV1().Services(o.namespace).List(ctx, opts)
@@ -667,46 +726,15 @@ func (o *Operator) findAnalysisService(ctx context.Context, analysisID string) (
 //	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/active-sessions [get]
 func (o *Operator) HandleGetActiveSessions(c echo.Context) error {
-	ctx := c.Request().Context()
 	analysisID, err := requiredParam(c, "analysis-id")
 	if err != nil {
 		return err
 	}
 
-	svc, err := o.findAnalysisService(ctx, analysisID)
+	body, err := o.forwardToViceProxy(c.Request().Context(), analysisID, http.MethodGet, "/active-sessions", nil)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return err
 	}
-	if svc == nil {
-		return echo.NewHTTPError(http.StatusNotFound, "no service found for analysis "+analysisID)
-	}
-
-	proxyURL := o.viceProxyURL(svc.Name, "/active-sessions")
-	log.Infof("fetching active sessions from %s for analysis %s", proxyURL, analysisID)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, proxyURL, nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("creating active-sessions request: %v", err))
-	}
-
-	resp, err := noRedirectHTTPClient.Do(req)
-	if err != nil {
-		log.Errorf("active-sessions request to vice-proxy failed for analysis %s: %v", analysisID, err)
-		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to reach vice-proxy: %v", err))
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("reading vice-proxy response: %v", err))
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Errorf("vice-proxy returned %d for active-sessions on analysis %s: %s", resp.StatusCode, analysisID, string(body))
-		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("vice-proxy returned %d", resp.StatusCode))
-	}
-
-	// Pass through the JSON response from vice-proxy.
 	return c.JSONBlob(http.StatusOK, body)
 }
 
@@ -732,7 +760,6 @@ func (o *Operator) HandleGetActiveSessions(c echo.Context) error {
 //	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/logout-user [post]
 func (o *Operator) HandleLogoutUser(c echo.Context) error {
-	ctx := c.Request().Context()
 	analysisID, err := requiredParam(c, "analysis-id")
 	if err != nil {
 		return err
@@ -746,44 +773,14 @@ func (o *Operator) HandleLogoutUser(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "username is required")
 	}
 
-	svc, err := o.findAnalysisService(ctx, analysisID)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	if svc == nil {
-		return echo.NewHTTPError(http.StatusNotFound, "no service found for analysis "+analysisID)
-	}
-
-	// Forward the logout-user request to the vice-proxy sidecar.
-	proxyURL := o.viceProxyURL(svc.Name, "/logout-user")
-	log.Infof("forwarding logout-user to %s for analysis %s (user %s)", proxyURL, analysisID, req.Username)
-
 	reqBody, err := json.Marshal(req)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("marshalling request: %v", err))
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, proxyURL, bytes.NewReader(reqBody))
+	body, err := o.forwardToViceProxy(c.Request().Context(), analysisID, http.MethodPost, "/logout-user", bytes.NewReader(reqBody))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("creating logout-user request: %v", err))
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := noRedirectHTTPClient.Do(httpReq)
-	if err != nil {
-		log.Errorf("logout-user request to vice-proxy failed for analysis %s: %v", analysisID, err)
-		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to reach vice-proxy: %v", err))
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("reading vice-proxy response: %v", err))
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Errorf("vice-proxy returned %d for logout-user on analysis %s: %s", resp.StatusCode, analysisID, string(body))
-		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("vice-proxy returned %d", resp.StatusCode))
+		return err
 	}
 
 	log.Infof("logout-user forwarded for analysis %s (user %s)", analysisID, req.Username)

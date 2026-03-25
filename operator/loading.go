@@ -228,13 +228,7 @@ func (o *Operator) HandleLoadingStatus(c echo.Context) error {
 		log.Errorf("listing deployments for analysis %s: %v", analysisID, err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to check analysis status")
 	}
-	depReady := false
-	for _, d := range deps.Items {
-		if d.Status.ReadyReplicas > 0 {
-			depReady = true
-			break
-		}
-	}
+	depReady := hasReadyDeployment(deps.Items)
 
 	// Check service existence.
 	svcs, err := o.clientset.CoreV1().Services(o.namespace).List(ctx, opts)
