@@ -1,9 +1,14 @@
 package operator
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -337,4 +342,60 @@ func TestGetCachedImageStatus(t *testing.T) {
 	// Non-existent slug returns error.
 	_, err = mgr.GetCachedImageStatus(context.Background(), "nonexistent")
 	assert.Error(t, err)
+}
+
+func TestHandleCacheImages(t *testing.T) {
+	op, _, _ := newTestOperator(t, 10)
+
+	tests := []struct {
+		name       string
+		body       ImageCacheRequest
+		wantStatus int
+	}{
+		{
+			name:       "successful cache returns 200",
+			body:       ImageCacheRequest{Images: []string{"nginx:latest"}},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "empty list returns 400",
+			body:       ImageCacheRequest{Images: []string{}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "partial failure returns 207",
+			body:       ImageCacheRequest{Images: []string{"nginx:latest", "bad image!!!"}},
+			wantStatus: http.StatusMultiStatus,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, _ := json.Marshal(tt.body)
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodPut, "/image-cache", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			err := op.HandleCacheImages(c)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStatus, rec.Code)
+		})
+	}
+}
+
+func TestHandleGetCachedImageNotFound(t *testing.T) {
+	op, _, _ := newTestOperator(t, 10)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("nonexistent-slug")
+
+	err := op.HandleGetCachedImage(c)
+	require.NoError(t, err) // handler writes response directly
+	assert.Equal(t, http.StatusNotFound, rec.Code)
 }

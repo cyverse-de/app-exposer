@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -809,6 +810,83 @@ func TestTransformGatewayNamespace(t *testing.T) {
 			for _, ref := range tt.route.Spec.ParentRefs {
 				require.NotNil(t, ref.Namespace)
 				assert.Equal(t, tt.wantNamespace, string(*ref.Namespace))
+			}
+		})
+	}
+}
+
+func TestEnsurePermissionsConfigMap(t *testing.T) {
+	makeBundle := func(username string, existingCM bool) *operatorclient.AnalysisBundle {
+		b := &operatorclient.AnalysisBundle{
+			AnalysisID: "test-analysis",
+			Deployment: &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-dep",
+					Labels: map[string]string{"analysis-id": "test-analysis"},
+				},
+			},
+		}
+		if username != "" {
+			b.Deployment.Labels["username"] = username
+		}
+		if existingCM {
+			b.ConfigMaps = append(b.ConfigMaps, &apiv1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "permissions-test-dep"},
+			})
+		}
+		return b
+	}
+
+	tests := []struct {
+		name      string
+		bundle    *operatorclient.AnalysisBundle
+		wantCMs   int
+		wantOwner string
+	}{
+		{
+			name:      "creates permissions ConfigMap with owner",
+			bundle:    makeBundle("testuser", false),
+			wantCMs:   1,
+			wantOwner: "testuser" + constants.UserSuffix,
+		},
+		{
+			name:    "no-op when permissions ConfigMap already exists",
+			bundle:  makeBundle("testuser", true),
+			wantCMs: 1,
+		},
+		{
+			name:    "skips when username label is missing",
+			bundle:  makeBundle("", false),
+			wantCMs: 0,
+		},
+		{
+			name:    "nil bundle does not panic",
+			bundle:  nil,
+			wantCMs: 0,
+		},
+		{
+			name: "nil deployment does not panic",
+			bundle: &operatorclient.AnalysisBundle{
+				AnalysisID: "test",
+			},
+			wantCMs: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			EnsurePermissionsConfigMap(tt.bundle)
+
+			if tt.bundle == nil {
+				return
+			}
+
+			assert.Len(t, tt.bundle.ConfigMaps, tt.wantCMs)
+
+			if tt.wantOwner != "" {
+				require.Len(t, tt.bundle.ConfigMaps, 1)
+				cm := tt.bundle.ConfigMaps[0]
+				assert.Contains(t, cm.Data[constants.PermissionsFileName], tt.wantOwner)
 			}
 		})
 	}

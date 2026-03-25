@@ -381,3 +381,286 @@ func TestHandleURLReady(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, resp.Ready)
 }
+
+func TestHandleStatus(t *testing.T) {
+	analysisID := "status-test-1"
+	labels := map[string]string{"analysis-id": analysisID}
+
+	op, clientset, gwClientset := newTestOperator(t, 10)
+	ctx := context.Background()
+
+	// Create resources for the analysis.
+	_, err := clientset.AppsV1().Deployments("vice-apps").Create(ctx, &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "dep-1", Labels: labels},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
+			Template: apiv1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+				Spec:       apiv1.PodSpec{Containers: []apiv1.Container{{Name: "c", Image: "img"}}},
+			},
+		},
+		Status: appsv1.DeploymentStatus{ReadyReplicas: 1},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	_, err = clientset.CoreV1().Pods("vice-apps").Create(ctx, &apiv1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod-1", Labels: labels},
+		Status:     apiv1.PodStatus{Phase: apiv1.PodRunning},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	_, err = clientset.CoreV1().Services("vice-apps").Create(ctx, &apiv1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "svc-1", Labels: labels},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	_, err = gwClientset.GatewayV1().HTTPRoutes("vice-apps").Create(ctx, &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "route-1", Namespace: "vice-apps", Labels: labels},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Call HandleStatus.
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("analysis-id")
+	c.SetParamValues(analysisID)
+
+	err = op.HandleStatus(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp StatusResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, analysisID, resp.AnalysisID)
+	assert.Len(t, resp.Deployments, 1)
+	assert.Len(t, resp.Pods, 1)
+	assert.Len(t, resp.Services, 1)
+	assert.Len(t, resp.Routes, 1)
+}
+
+func TestHandleGetPermissions(t *testing.T) {
+	analysisID := "perms-test-1"
+	labels := map[string]string{"analysis-id": analysisID}
+
+	op, clientset, _ := newTestOperator(t, 10)
+	ctx := context.Background()
+
+	// Create a permissions ConfigMap.
+	_, err := clientset.CoreV1().ConfigMaps("vice-apps").Create(ctx, &apiv1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "permissions-" + analysisID,
+			Labels: labels,
+		},
+		Data: map[string]string{
+			"allowed-users": "user1@example.org\nuser2@example.org\n",
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Call HandleGetPermissions.
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("analysis-id")
+	c.SetParamValues(analysisID)
+
+	err = op.HandleGetPermissions(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp PermissionsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, []string{"user1@example.org", "user2@example.org"}, resp.AllowedUsers)
+}
+
+func TestHandleGetPermissionsNotFound(t *testing.T) {
+	op, _, _ := newTestOperator(t, 10)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("analysis-id")
+	c.SetParamValues("nonexistent")
+
+	err := op.HandleGetPermissions(c)
+	require.Error(t, err)
+	he, ok := err.(*echo.HTTPError)
+	require.True(t, ok)
+	assert.Equal(t, http.StatusNotFound, he.Code)
+}
+
+func TestHandleUpdatePermissions(t *testing.T) {
+	analysisID := "perms-update-1"
+	labels := map[string]string{"analysis-id": analysisID}
+
+	op, clientset, _ := newTestOperator(t, 10)
+	ctx := context.Background()
+
+	// Create existing permissions ConfigMap.
+	_, err := clientset.CoreV1().ConfigMaps("vice-apps").Create(ctx, &apiv1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "permissions-" + analysisID,
+			Labels: labels,
+		},
+		Data: map[string]string{"allowed-users": "old-user\n"},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Call HandleUpdatePermissions with new users.
+	body, _ := json.Marshal(UpdatePermissionsRequest{AllowedUsers: []string{"new-user1", "new-user2"}})
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("analysis-id")
+	c.SetParamValues(analysisID)
+
+	err = op.HandleUpdatePermissions(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Verify the ConfigMap was updated.
+	cm, err := clientset.CoreV1().ConfigMaps("vice-apps").Get(ctx, "permissions-"+analysisID, metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, "new-user1\nnew-user2\n", cm.Data["allowed-users"])
+}
+
+func TestHandleUpdatePermissionsEmptyUsers(t *testing.T) {
+	op, _, _ := newTestOperator(t, 10)
+
+	body, _ := json.Marshal(UpdatePermissionsRequest{AllowedUsers: []string{}})
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("analysis-id")
+	c.SetParamValues("any-id")
+
+	err := op.HandleUpdatePermissions(c)
+	require.Error(t, err)
+	he, ok := err.(*echo.HTTPError)
+	require.True(t, ok)
+	assert.Equal(t, http.StatusBadRequest, he.Code)
+}
+
+func TestHandleLaunchFullBundle(t *testing.T) {
+	op, clientset, gwClientset := newTestOperator(t, 10)
+
+	analysisID := "full-bundle-test"
+	labels := map[string]string{"analysis-id": analysisID, "app-type": "interactive", "username": "testuser"}
+	port := gatewayv1.PortNumber(60000)
+
+	bundle := operatorclient.AnalysisBundle{
+		AnalysisID: analysisID,
+		Deployment: &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "dep", Labels: labels},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
+				Template: apiv1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+					Spec:       apiv1.PodSpec{Containers: []apiv1.Container{{Name: "c", Image: "img"}}},
+				},
+			},
+		},
+		Service: &apiv1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "svc", Labels: labels},
+			Spec:       apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 80}}},
+		},
+		HTTPRoute: &gatewayv1.HTTPRoute{
+			ObjectMeta: metav1.ObjectMeta{Name: "route", Namespace: "vice-apps", Labels: labels},
+			Spec: gatewayv1.HTTPRouteSpec{
+				Hostnames: []gatewayv1.Hostname{"test.cyverse.run"},
+				Rules: []gatewayv1.HTTPRouteRule{{
+					BackendRefs: []gatewayv1.HTTPBackendRef{{
+						BackendRef: gatewayv1.BackendRef{
+							BackendObjectReference: gatewayv1.BackendObjectReference{
+								Name: "svc",
+								Port: &port,
+							},
+						},
+					}},
+				}},
+			},
+		},
+		ConfigMaps: []*apiv1.ConfigMap{
+			{ObjectMeta: metav1.ObjectMeta{Name: "cm-1", Labels: labels}},
+		},
+		PersistentVolumeClaims: []*apiv1.PersistentVolumeClaim{
+			{ObjectMeta: metav1.ObjectMeta{Name: "pvc-1", Labels: labels}},
+		},
+	}
+
+	body, err := json.Marshal(bundle)
+	require.NoError(t, err)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/analyses", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err = op.HandleLaunch(c)
+	if err != nil {
+		he, ok := err.(*echo.HTTPError)
+		require.True(t, ok, "expected HTTPError, got %T: %v", err, err)
+		require.Fail(t, "launch failed", "status=%d message=%v", he.Code, he.Message)
+	}
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	ctx := context.Background()
+
+	// Verify all resource types were created.
+	_, err = clientset.AppsV1().Deployments("vice-apps").Get(ctx, "dep", metav1.GetOptions{})
+	assert.NoError(t, err, "deployment should exist")
+
+	_, err = clientset.CoreV1().Services("vice-apps").Get(ctx, "svc", metav1.GetOptions{})
+	assert.NoError(t, err, "service should exist")
+
+	_, err = gwClientset.GatewayV1().HTTPRoutes("vice-apps").Get(ctx, "route", metav1.GetOptions{})
+	assert.NoError(t, err, "httproute should exist")
+
+	_, err = clientset.CoreV1().ConfigMaps("vice-apps").Get(ctx, "cm-1", metav1.GetOptions{})
+	assert.NoError(t, err, "configmap should exist")
+
+	_, err = clientset.CoreV1().PersistentVolumeClaims("vice-apps").Get(ctx, "pvc-1", metav1.GetOptions{})
+	assert.NoError(t, err, "pvc should exist")
+}
+
+func TestAnalysisBundleValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		bundle  operatorclient.AnalysisBundle
+		wantErr bool
+	}{
+		{
+			name: "valid bundle",
+			bundle: operatorclient.AnalysisBundle{
+				AnalysisID: "test",
+				Deployment: &appsv1.Deployment{},
+				Service:    &apiv1.Service{},
+			},
+			wantErr: false,
+		},
+		{name: "missing analysis ID", bundle: operatorclient.AnalysisBundle{Deployment: &appsv1.Deployment{}, Service: &apiv1.Service{}}, wantErr: true},
+		{name: "missing deployment", bundle: operatorclient.AnalysisBundle{AnalysisID: "test", Service: &apiv1.Service{}}, wantErr: true},
+		{name: "missing service", bundle: operatorclient.AnalysisBundle{AnalysisID: "test", Deployment: &appsv1.Deployment{}}, wantErr: true},
+		{name: "empty bundle", bundle: operatorclient.AnalysisBundle{}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.bundle.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
