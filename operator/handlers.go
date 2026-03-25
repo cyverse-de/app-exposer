@@ -136,12 +136,8 @@ func (o *Operator) HandleCapacity(c echo.Context) error {
 func (o *Operator) HandleLaunch(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	// Check capacity first.
-	cap, err := o.capacityCalc.Calculate(ctx)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
+	// Bind and validate first (cheap) before the capacity check (expensive
+	// K8s API call) so malformed requests are rejected without wasted work.
 	var bundle operatorclient.AnalysisBundle
 	if err := c.Bind(&bundle); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
@@ -149,6 +145,11 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 
 	if err := bundle.Validate(); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	cap, err := o.capacityCalc.Calculate(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	if cap.AvailableSlots <= 0 {
