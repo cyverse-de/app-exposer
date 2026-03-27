@@ -1236,6 +1236,9 @@ const docTemplateoperator = `{
                 "containerName": {
                     "type": "string"
                 },
+                "error": {
+                    "type": "string"
+                },
                 "log": {
                     "type": "string"
                 },
@@ -1359,9 +1362,6 @@ const docTemplateoperator = `{
                 },
                 "httpRoute": {
                     "$ref": "#/definitions/v1.HTTPRoute"
-                },
-                "ingress": {
-                    "$ref": "#/definitions/v1.Ingress"
                 },
                 "persistentVolumeClaims": {
                     "type": "array",
@@ -4844,43 +4844,6 @@ const docTemplateoperator = `{
                 }
             }
         },
-        "v1.Ingress": {
-            "type": "object",
-            "properties": {
-                "apiVersion": {
-                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
-                    "type": "string"
-                },
-                "kind": {
-                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ObjectMeta"
-                        }
-                    ]
-                },
-                "spec": {
-                    "description": "spec is the desired state of the Ingress.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.IngressSpec"
-                        }
-                    ]
-                },
-                "status": {
-                    "description": "status is the current state of the Ingress.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.IngressStatus"
-                        }
-                    ]
-                }
-            }
-        },
         "v1.IngressBackend": {
             "type": "object",
             "properties": {
@@ -4897,59 +4860,6 @@ const docTemplateoperator = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/v1.IngressServiceBackend"
-                        }
-                    ]
-                }
-            }
-        },
-        "v1.IngressLoadBalancerIngress": {
-            "type": "object",
-            "properties": {
-                "hostname": {
-                    "description": "hostname is set for load-balancer ingress points that are DNS based.\n+optional",
-                    "type": "string"
-                },
-                "ip": {
-                    "description": "ip is set for load-balancer ingress points that are IP based.\n+optional",
-                    "type": "string"
-                },
-                "ports": {
-                    "description": "ports provides information about the ports exposed by this LoadBalancer.\n+listType=atomic\n+optional",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.IngressPortStatus"
-                    }
-                }
-            }
-        },
-        "v1.IngressLoadBalancerStatus": {
-            "type": "object",
-            "properties": {
-                "ingress": {
-                    "description": "ingress is a list containing ingress points for the load-balancer.\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.IngressLoadBalancerIngress"
-                    }
-                }
-            }
-        },
-        "v1.IngressPortStatus": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "description": "error is to record the problem with the service port\nThe format of the error shall comply with the following rules:\n- built-in error values shall be specified in this file and those shall use\n  CamelCase names\n- cloud provider specific error values must have names that comply with the\n  format foo.example.com/CamelCase.\n---\nThe regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)\n+optional\n+kubebuilder:validation:Required\n+kubebuilder:validation:Pattern=` + "`" + `^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$` + "`" + `\n+kubebuilder:validation:MaxLength=316",
-                    "type": "string"
-                },
-                "port": {
-                    "description": "port is the port number of the ingress port.",
-                    "type": "integer"
-                },
-                "protocol": {
-                    "description": "protocol is the protocol of the ingress port.\nThe supported values are: \"TCP\", \"UDP\", \"SCTP\"",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.Protocol"
                         }
                     ]
                 }
@@ -4986,66 +4896,6 @@ const docTemplateoperator = `{
                             "$ref": "#/definitions/v1.ServiceBackendPort"
                         }
                     ]
-                }
-            }
-        },
-        "v1.IngressSpec": {
-            "type": "object",
-            "properties": {
-                "defaultBackend": {
-                    "description": "defaultBackend is the backend that should handle requests that don't\nmatch any rule. If Rules are not specified, DefaultBackend must be specified.\nIf DefaultBackend is not set, the handling of requests that do not match any\nof the rules will be up to the Ingress controller.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.IngressBackend"
-                        }
-                    ]
-                },
-                "ingressClassName": {
-                    "description": "ingressClassName is the name of an IngressClass cluster resource. Ingress\ncontroller implementations use this field to know whether they should be\nserving this Ingress resource, by a transitive connection\n(controller -\u003e IngressClass -\u003e Ingress resource). Although the\n` + "`" + `kubernetes.io/ingress.class` + "`" + ` annotation (simple constant name) was never\nformally defined, it was widely supported by Ingress controllers to create\na direct binding between Ingress controller and Ingress resources. Newly\ncreated Ingress resources should prefer using the field. However, even\nthough the annotation is officially deprecated, for backwards compatibility\nreasons, ingress controllers should still honor that annotation if present.\n+optional",
-                    "type": "string"
-                },
-                "rules": {
-                    "description": "rules is a list of host rules used to configure the Ingress. If unspecified,\nor no rule matches, all traffic is sent to the default backend.\n+listType=atomic\n+optional",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.IngressRule"
-                    }
-                },
-                "tls": {
-                    "description": "tls represents the TLS configuration. Currently the Ingress only supports a\nsingle TLS port, 443. If multiple members of this list specify different hosts,\nthey will be multiplexed on the same port according to the hostname specified\nthrough the SNI TLS extension, if the ingress controller fulfilling the\ningress supports SNI.\n+listType=atomic\n+optional",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.IngressTLS"
-                    }
-                }
-            }
-        },
-        "v1.IngressStatus": {
-            "type": "object",
-            "properties": {
-                "loadBalancer": {
-                    "description": "loadBalancer contains the current status of the load-balancer.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.IngressLoadBalancerStatus"
-                        }
-                    ]
-                }
-            }
-        },
-        "v1.IngressTLS": {
-            "type": "object",
-            "properties": {
-                "hosts": {
-                    "description": "hosts is a list of hosts included in the TLS certificate. The values in\nthis list must match the name/s used in the tlsSecret. Defaults to the\nwildcard host setting for the loadbalancer controller fulfilling this\nIngress, if left unspecified.\n+listType=atomic\n+optional",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "secretName": {
-                    "description": "secretName is the name of the secret used to terminate TLS traffic on\nport 443. Field is left optional to allow TLS routing based on SNI\nhostname alone. If the SNI host in a listener conflicts with the \"Host\"\nheader field used by an IngressRule, the SNI host is used for termination\nand value of the \"Host\" header is used for routing.\n+optional",
-                    "type": "string"
                 }
             }
         },

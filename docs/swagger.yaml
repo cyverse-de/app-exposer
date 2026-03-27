@@ -875,8 +875,6 @@ definitions:
         $ref: '#/definitions/v1.Deployment'
       httpRoute:
         $ref: '#/definitions/v1.HTTPRoute'
-      ingress:
-        $ref: '#/definitions/v1.Ingress'
       persistentVolumeClaims:
         items:
           $ref: '#/definitions/v1.PersistentVolumeClaim'
@@ -5864,47 +5862,6 @@ definitions:
           +optional
         type: string
     type: object
-  v1.Ingress:
-    properties:
-      apiVersion:
-        description: |-
-          APIVersion defines the versioned schema of this representation of an object.
-          Servers should convert recognized schemas to the latest internal value, and
-          may reject unrecognized values.
-          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
-          +optional
-        type: string
-      kind:
-        description: |-
-          Kind is a string value representing the REST resource this object represents.
-          Servers may infer this from the endpoint the client submits requests to.
-          Cannot be updated.
-          In CamelCase.
-          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
-          +optional
-        type: string
-      metadata:
-        allOf:
-        - $ref: '#/definitions/v1.ObjectMeta'
-        description: |-
-          Standard object's metadata.
-          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
-          +optional
-      spec:
-        allOf:
-        - $ref: '#/definitions/v1.IngressSpec'
-        description: |-
-          spec is the desired state of the Ingress.
-          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
-          +optional
-      status:
-        allOf:
-        - $ref: '#/definitions/v1.IngressStatus'
-        description: |-
-          status is the current state of the Ingress.
-          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
-          +optional
-    type: object
   v1.IngressBackend:
     properties:
       resource:
@@ -5923,65 +5880,6 @@ definitions:
           service references a service as a backend.
           This is a mutually exclusive setting with "Resource".
           +optional
-    type: object
-  v1.IngressLoadBalancerIngress:
-    properties:
-      hostname:
-        description: |-
-          hostname is set for load-balancer ingress points that are DNS based.
-          +optional
-        type: string
-      ip:
-        description: |-
-          ip is set for load-balancer ingress points that are IP based.
-          +optional
-        type: string
-      ports:
-        description: |-
-          ports provides information about the ports exposed by this LoadBalancer.
-          +listType=atomic
-          +optional
-        items:
-          $ref: '#/definitions/v1.IngressPortStatus'
-        type: array
-    type: object
-  v1.IngressLoadBalancerStatus:
-    properties:
-      ingress:
-        description: |-
-          ingress is a list containing ingress points for the load-balancer.
-          +optional
-          +listType=atomic
-        items:
-          $ref: '#/definitions/v1.IngressLoadBalancerIngress'
-        type: array
-    type: object
-  v1.IngressPortStatus:
-    properties:
-      error:
-        description: |-
-          error is to record the problem with the service port
-          The format of the error shall comply with the following rules:
-          - built-in error values shall be specified in this file and those shall use
-            CamelCase names
-          - cloud provider specific error values must have names that comply with the
-            format foo.example.com/CamelCase.
-          ---
-          The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
-          +optional
-          +kubebuilder:validation:Required
-          +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$`
-          +kubebuilder:validation:MaxLength=316
-        type: string
-      port:
-        description: port is the port number of the ingress port.
-        type: integer
-      protocol:
-        allOf:
-        - $ref: '#/definitions/v1.Protocol'
-        description: |-
-          protocol is the protocol of the ingress port.
-          The supported values are: "TCP", "UDP", "SCTP"
     type: object
   v1.IngressRule:
     properties:
@@ -6024,85 +5922,6 @@ definitions:
         description: |-
           port of the referenced service. A port name or port number
           is required for a IngressServiceBackend.
-    type: object
-  v1.IngressSpec:
-    properties:
-      defaultBackend:
-        allOf:
-        - $ref: '#/definitions/v1.IngressBackend'
-        description: |-
-          defaultBackend is the backend that should handle requests that don't
-          match any rule. If Rules are not specified, DefaultBackend must be specified.
-          If DefaultBackend is not set, the handling of requests that do not match any
-          of the rules will be up to the Ingress controller.
-          +optional
-      ingressClassName:
-        description: |-
-          ingressClassName is the name of an IngressClass cluster resource. Ingress
-          controller implementations use this field to know whether they should be
-          serving this Ingress resource, by a transitive connection
-          (controller -> IngressClass -> Ingress resource). Although the
-          `kubernetes.io/ingress.class` annotation (simple constant name) was never
-          formally defined, it was widely supported by Ingress controllers to create
-          a direct binding between Ingress controller and Ingress resources. Newly
-          created Ingress resources should prefer using the field. However, even
-          though the annotation is officially deprecated, for backwards compatibility
-          reasons, ingress controllers should still honor that annotation if present.
-          +optional
-        type: string
-      rules:
-        description: |-
-          rules is a list of host rules used to configure the Ingress. If unspecified,
-          or no rule matches, all traffic is sent to the default backend.
-          +listType=atomic
-          +optional
-        items:
-          $ref: '#/definitions/v1.IngressRule'
-        type: array
-      tls:
-        description: |-
-          tls represents the TLS configuration. Currently the Ingress only supports a
-          single TLS port, 443. If multiple members of this list specify different hosts,
-          they will be multiplexed on the same port according to the hostname specified
-          through the SNI TLS extension, if the ingress controller fulfilling the
-          ingress supports SNI.
-          +listType=atomic
-          +optional
-        items:
-          $ref: '#/definitions/v1.IngressTLS'
-        type: array
-    type: object
-  v1.IngressStatus:
-    properties:
-      loadBalancer:
-        allOf:
-        - $ref: '#/definitions/v1.IngressLoadBalancerStatus'
-        description: |-
-          loadBalancer contains the current status of the load-balancer.
-          +optional
-    type: object
-  v1.IngressTLS:
-    properties:
-      hosts:
-        description: |-
-          hosts is a list of hosts included in the TLS certificate. The values in
-          this list must match the name/s used in the tlsSecret. Defaults to the
-          wildcard host setting for the loadbalancer controller fulfilling this
-          Ingress, if left unspecified.
-          +listType=atomic
-          +optional
-        items:
-          type: string
-        type: array
-      secretName:
-        description: |-
-          secretName is the name of the secret used to terminate TLS traffic on
-          port 443. Field is left optional to allow TLS routing based on SNI
-          hostname alone. If the SNI host in a listener conflicts with the "Host"
-          header field used by an IngressRule, the SNI host is used for termination
-          and value of the "Host" header is used for routing.
-          +optional
-        type: string
     type: object
   v1.KeyToPath:
     properties:
@@ -11999,7 +11818,7 @@ paths:
       description: |-
         Terminates the VICE analysis based on the analysisID and
         and should not require any user information to be provided. Otherwise, the
-        documentation for VICEExit applies here as well.
+        documentation for ExitHandler applies here as well.
       operationId: admin-exit
       parameters:
       - description: The analysis ID of the VICE analysis
