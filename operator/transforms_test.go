@@ -850,6 +850,12 @@ func TestEnsurePermissionsConfigMap(t *testing.T) {
 			wantOwner: "testuser" + constants.UserSuffix,
 		},
 		{
+			name:      "does not double-append suffix when username already has it",
+			bundle:    makeBundle("testuser"+constants.UserSuffix, false),
+			wantCMs:   1,
+			wantOwner: "testuser" + constants.UserSuffix,
+		},
+		{
 			name:    "no-op when permissions ConfigMap already exists",
 			bundle:  makeBundle("testuser", true),
 			wantCMs: 1,

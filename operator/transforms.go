@@ -274,12 +274,16 @@ func EnsurePermissionsConfigMap(bundle *operatorclient.AnalysisBundle) {
 
 	// Derive the owner from the deployment labels. If the label is missing,
 	// skip creating the ConfigMap to avoid locking everyone out of the analysis.
+	// The label may arrive unsanitized (with @) or sanitized (with -); only
+	// append the suffix if it's not already present.
 	owner := bundle.Deployment.Labels["username"]
 	if owner == "" {
 		log.Warnf("deployment %s missing username label; skipping permissions ConfigMap creation", bundle.Deployment.Name)
 		return
 	}
-	owner += constants.UserSuffix
+	if !strings.HasSuffix(owner, constants.UserSuffix) {
+		owner += constants.UserSuffix
+	}
 
 	cmName := fmt.Sprintf("%s-%s", constants.PermissionsConfigMapPrefix, bundle.Deployment.Name)
 	cm := &apiv1.ConfigMap{
