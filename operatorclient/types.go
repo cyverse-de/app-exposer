@@ -7,6 +7,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -24,6 +25,7 @@ type AnalysisBundle struct {
 	PersistentVolumes      []*apiv1.PersistentVolume      `json:"persistentVolumes"`
 	PersistentVolumeClaims []*apiv1.PersistentVolumeClaim `json:"persistentVolumeClaims"`
 	PodDisruptionBudget    *policyv1.PodDisruptionBudget  `json:"podDisruptionBudget"`
+	NetworkPolicy          *netv1.NetworkPolicy           `json:"networkPolicy,omitempty"`
 }
 
 // CapacityResponse describes the current resource capacity and usage

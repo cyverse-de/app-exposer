@@ -108,6 +108,13 @@ func (o *Operator) applyBundle(ctx context.Context, bundle *operatorclient.Analy
 		}
 	}
 
+	if bundle.NetworkPolicy != nil {
+		bundle.NetworkPolicy.Namespace = o.namespace
+		if err := upsert(ctx, o.clientset.NetworkingV1().NetworkPolicies(o.namespace), "NetworkPolicy", bundle.NetworkPolicy.Name, bundle.NetworkPolicy); err != nil {
+			return fmt.Errorf("networkpolicy %s: %w", bundle.NetworkPolicy.Name, err)
+		}
+	}
+
 	log.Infof("bundle applied for analysis %s", bundle.AnalysisID)
 	return nil
 }
@@ -209,6 +216,18 @@ func (o *Operator) deleteAnalysisResources(ctx context.Context, analysisID strin
 		for _, cm := range cmList.Items {
 			deleteItem(cm.Name, func(name string) error {
 				return cmClient.Delete(ctx, name, metav1.DeleteOptions{})
+			})
+		}
+	}
+
+	// Delete per-analysis NetworkPolicies (ingress policies).
+	npClient := o.clientset.NetworkingV1().NetworkPolicies(o.namespace)
+	if npList, err := npClient.List(ctx, opts); err != nil {
+		errs = append(errs, fmt.Errorf("listing NetworkPolicies: %w", err))
+	} else {
+		for _, np := range npList.Items {
+			deleteItem(np.Name, func(name string) error {
+				return npClient.Delete(ctx, name, metav1.DeleteOptions{})
 			})
 		}
 	}

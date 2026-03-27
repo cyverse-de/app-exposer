@@ -57,7 +57,11 @@ func main() {
 		disableViceProxyAuth bool
 		apiSubdomain         string
 		apiServiceName       string
+		serviceCIDR          string
 	)
+
+	var blockedCIDRs stringSliceFlag
+	var egressPodExceptions stringSliceFlag
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
 	flag.StringVar(&namespace, "namespace", "vice-apps", "Namespace for VICE resources")
@@ -90,6 +94,9 @@ func main() {
 	flag.BoolVar(&disableViceProxyAuth, "disable-vice-proxy-auth", false, "Disable auth in vice-proxy")
 	flag.StringVar(&apiSubdomain, "api-subdomain", "vice-api", "Subdomain prefix for the vice-operator API HTTPRoute; combined with --vice-base-url host to form the full hostname")
 	flag.StringVar(&apiServiceName, "api-service-name", "vice-operator", "K8s Service name for the vice-operator API HTTPRoute backend")
+	flag.StringVar(&serviceCIDR, "service-cidr", "", "Cluster service CIDR to block in egress (auto-detected from kubernetes API server if empty)")
+	flag.Var(&blockedCIDRs, "blocked-cidr", "Additional CIDRs to block in egress (repeatable)")
+	flag.Var(&egressPodExceptions, "egress-pod-exception", "Pod selector label (key=value) to allow egress to (repeatable)")
 	flag.Parse()
 
 	// Validate basic auth flags.
@@ -211,6 +218,30 @@ func main() {
 		return operator.EnsureCORSMiddleware(ctx, clientset, namespace)
 	})
 
+	// Ensure egress network policies for the namespace.
+	if serviceCIDR == "" {
+		detected, detectErr := operator.DetectServiceCIDR(context.Background(), clientset)
+		if detectErr != nil {
+			log.Fatalf("failed to auto-detect service CIDR (set --service-cidr manually): %v", detectErr)
+		}
+		serviceCIDR = detected
+		log.Infof("auto-detected service CIDR: %s", serviceCIDR)
+	}
+
+	// Parse pod exception labels (key=value strings) into label maps.
+	var podExceptions []map[string]string
+	for _, exc := range egressPodExceptions {
+		kv := strings.SplitN(exc, "=", 2)
+		if len(kv) != 2 || kv[0] == "" {
+			log.Fatalf("invalid --egress-pod-exception %q (expected key=value)", exc)
+		}
+		podExceptions = append(podExceptions, map[string]string{kv[0]: kv[1]})
+	}
+
+	mustEnsure("egress network policies", func(ctx context.Context) error {
+		return operator.EnsureEgressPolicies(ctx, clientset, namespace, serviceCIDR, []string(blockedCIDRs), podExceptions)
+	})
+
 	gpuVendor, err := operator.ParseGPUVendor(gpuVendorFlag)
 	if err != nil {
 		log.Fatalf("invalid GPU vendor: %v", err)
@@ -280,4 +311,13 @@ func parseSelector(s string) (map[string]string, error) {
 		return nil, fmt.Errorf("selector must contain at least one key=value pair")
 	}
 	return result, nil
+}
+
+// stringSliceFlag implements flag.Value for repeatable string flags.
+type stringSliceFlag []string
+
+func (s *stringSliceFlag) String() string { return strings.Join(*s, ",") }
+func (s *stringSliceFlag) Set(val string) error {
+	*s = append(*s, val)
+	return nil
 }
