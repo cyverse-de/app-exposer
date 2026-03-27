@@ -6,3 +6,6 @@ swagger-ui/
 docs/swagger.json
 local-config/
 build.json
+local-configs/
+local-test-config.yml
+k8s/vice-operator-local.*

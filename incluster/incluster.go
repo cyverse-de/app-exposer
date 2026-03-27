@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/cockroachdb/apd"
@@ -30,9 +31,10 @@ import (
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
+const otelName = "github.com/cyverse-de/app-exposer/incluster"
+
 var log = common.Log
 var httpClient = http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
-var otelName = "github.com/cyverse-de/app-exposer/incluster"
 
 // Init contains configuration for configuring an *Incluster.
 type Init struct {
@@ -45,22 +47,16 @@ type Init struct {
 	ViceProxyImage                string
 	FrontendBaseURL               string
 	ViceDomain                    string
-	GetAnalysisIDService          string
-	CheckResourceAccessService    string
 	VICEBackendNamespace          string
 	AppsServiceBaseURL            string
 	ViceNamespace                 string
 	JobStatusURL                  string
 	UserSuffix                    string
 	PermissionsURL                string
-	KeycloakBaseURL               string
-	KeycloakRealm                 string
-	KeycloakClientID              string
-	KeycloakClientSecret          string
 	IRODSZone                     string
 	GatewayProvider               string
 	LocalStorageClass             string
-	DisableViceProxyAuth          bool
+	ClusterConfigSecretName       string
 	NATSEncodedConn               *nats.EncodedConn
 	BypassUsers                   []string
 	TimeLimitExtensionSeconds     int64
@@ -96,7 +92,11 @@ func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, gatewayClient 
 }
 
 // getRoutesClient returns the HTTPRoutes client for the VICE namespace.
+// Returns nil when the Gateway API client is not configured.
 func (i *Incluster) getRoutesClient() gatewayclient.HTTPRouteInterface {
+	if i.gatewayClient == nil {
+		return nil
+	}
 	return i.gatewayClient.HTTPRoutes(i.ViceNamespace)
 }
 
@@ -156,9 +156,8 @@ func (i *Incluster) UpsertInputPathListConfigMap(ctx context.Context, job *model
 	return nil
 }
 
-// UpsertDeployment uses the Job passed in to assemble a Deployment for the
-// VICE analysis. If then uses the k8s API to create the Deployment if it does
-// not already exist or to update it if it does.
+// UpsertDeployment creates or updates the given Deployment and its associated
+// resources (PVs, PVCs, PDB, Service, HTTPRoute) for the VICE analysis.
 func (i *Incluster) UpsertDeployment(ctx context.Context, deployment *appsv1.Deployment, job *model.Job) error {
 	var err error
 	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
@@ -272,6 +271,8 @@ func (i *Incluster) UpsertDeployment(ctx context.Context, deployment *appsv1.Dep
 	return nil
 }
 
+// GetMillicoresFromDeployment extracts the CPU limit from the analysis
+// container in the given Deployment and converts it to millicores.
 func GetMillicoresFromDeployment(deployment *appsv1.Deployment) (*apd.Decimal, error) {
 	var (
 		analysisContainer *apiv1.Container
@@ -314,6 +315,8 @@ func GetMillicoresFromDeployment(deployment *appsv1.Deployment) (*apd.Decimal, e
 	return millicores, nil
 }
 
+// DoExit deletes all K8s resources (PDB, HTTPRoute, service, deployment,
+// PVCs, PVs, and ConfigMaps) associated with the given external ID.
 func (i *Incluster) DoExit(ctx context.Context, externalID string) error {
 	set := labels.Set(map[string]string{
 		"external-id": externalID,
@@ -439,12 +442,10 @@ func (i *Incluster) GetIDFromHost(ctx context.Context, host string) (string, err
 		return "", err
 	}
 
-	// Find the route with matching the given host name.
+	// Find the route matching the given host name.
 	for _, route := range routeList.Items {
-		for _, hostname := range route.Spec.Hostnames {
-			if hostname == gatewayv1.Hostname(hostFQDN) {
-				return route.Name, nil
-			}
+		if slices.Contains(route.Spec.Hostnames, gatewayv1.Hostname(hostFQDN)) {
+			return route.Name, nil
 		}
 	}
 
@@ -477,10 +478,14 @@ const getUserIDSQL = `
 	 WHERE username = $1
 `
 
+// TimeLimit holds the epoch timestamp (as a string) for when a VICE analysis
+// will reach its planned end date.
 type TimeLimit struct {
 	TimeLimit string `json:"time_limit"`
 }
 
+// GetTimeLimit returns the planned end date (as a Unix epoch string) for the
+// analysis with the given ID, run by the given user.
 func (i *Incluster) GetTimeLimit(ctx context.Context, userID, id string) (*TimeLimit, error) {
 	var err error
 
@@ -499,6 +504,8 @@ func (i *Incluster) GetTimeLimit(ctx context.Context, userID, id string) (*TimeL
 	return retval, nil
 }
 
+// UpdateTimeLimit extends the planned end date for the given analysis by the
+// configured time limit extension duration and returns the new epoch value.
 func (i *Incluster) UpdateTimeLimit(ctx context.Context, user, id string) (*TimeLimit, error) {
 	var (
 		err    error
@@ -531,14 +538,12 @@ func (i *Incluster) UpdateTimeLimit(ctx context.Context, user, id string) (*Time
 // isUserInBypassWhitelist checks if the given username is in the resource tracking bypass whitelist.
 func (i *Incluster) isUserInBypassWhitelist(username string) bool {
 	normalizedUser := common.FixUsername(username, i.UserSuffix)
-	for _, allowedUser := range i.BypassUsers {
-		if normalizedUser == allowedUser {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(i.BypassUsers, normalizedUser)
 }
 
+// ValidateJob checks that the analysis does not exceed quota limits,
+// bypassing the check for users in the configured bypass whitelist.
+// Returns an HTTP status code and error when validation fails.
 func (i *Incluster) ValidateJob(ctx context.Context, job *model.Job) (int, error) {
 	if i.isUserInBypassWhitelist(job.Submitter) {
 		log.Infof("Resource tracking disabled for user %s (in bypass whitelist), skipping validation for job %s", job.Submitter, job.InvocationID)

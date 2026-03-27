@@ -207,8 +207,10 @@ func (i *Incluster) getPersistentVolumes(ctx context.Context, job *model.Job) ([
 							"client":              "irodsfuse",
 							"path_mapping_json":   string(dataPathMappingsJSONBytes),
 							"no_permission_check": "true",
-							// use proxy access
-							"clientUser": job.Submitter,
+							// use proxy access — iRODS expects the short username
+							// without the domain suffix (e.g. "wregglej" not
+							// "wregglej@iplantcollaborative.org").
+							"clientUser": strings.SplitN(job.Submitter, "@", 2)[0],
 							"uid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
 							"gid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
 						},
@@ -389,16 +391,17 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 	// 	},
 	// )
 
-	if i.UseCSIDriver {
-		volumeSources, err := i.getPersistentVolumeSources(job)
-		if err != nil {
-			log.Warn(err)
-		} else {
-			for _, volumeSource := range volumeSources {
-				output = append(output, *volumeSource)
-			}
-		}
+	// Always add persistent volume sources (includes working-dir volume, and CSI data volume when enabled)
+	volumeSources, err := i.getPersistentVolumeSources(job)
+	if err != nil {
+		log.Warn(err)
 	} else {
+		for _, volumeSource := range volumeSources {
+			output = append(output, *volumeSource)
+		}
+	}
+
+	if !i.UseCSIDriver {
 		output = append(output,
 			apiv1.Volume{
 				Name: constants.PorklockConfigVolumeName,
@@ -418,6 +421,21 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 				ConfigMap: &apiv1.ConfigMapVolumeSource{
 					LocalObjectReference: apiv1.LocalObjectReference{
 						Name: excludesConfigMapName(job),
+					},
+				},
+			},
+		},
+	)
+
+	// Permissions ConfigMap volume — mounted into vice-proxy so it can
+	// authorize users by reading the allowed-users file.
+	output = append(output,
+		apiv1.Volume{
+			Name: constants.PermissionsVolumeName,
+			VolumeSource: apiv1.VolumeSource{
+				ConfigMap: &apiv1.ConfigMapVolumeSource{
+					LocalObjectReference: apiv1.LocalObjectReference{
+						Name: permissionsConfigMapName(job),
 					},
 				},
 			},

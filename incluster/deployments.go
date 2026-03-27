@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"strconv"
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
@@ -16,9 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
-
-// One gibibyte.
-//const gibibyte = 1024 * 1024 * 1024
 
 // analysisPorts returns a list of container ports needed by the VICE analysis.
 func analysisPorts(step *model.Step) []apiv1.ContainerPort {
@@ -35,40 +31,11 @@ func analysisPorts(step *model.Step) []apiv1.ContainerPort {
 	return ports
 }
 
-func (i *Incluster) getFrontendURL(job *model.Job) *url.URL {
-	// This should be parsed in main(), so we shouldn't worry about it here.
-	frontURL, _ := url.Parse(i.FrontendBaseURL)
-	frontURL.Host = fmt.Sprintf("%s.%s", common.Subdomain(job.UserID, job.InvocationID), frontURL.Host)
-	return frontURL
-}
-
-func (i *Incluster) viceProxyCommand(job *model.Job) []string {
-	frontURL := i.getFrontendURL(job)
-	backendURL := fmt.Sprintf("http://localhost:%s", strconv.Itoa(job.Steps[0].Component.Container.Ports[0].ContainerPort))
-
-	// websocketURL := fmt.Sprintf("ws://localhost:%s", strconv.Itoa(job.Steps[0].Component.Container.Ports[0].ContainerPort))
-
-	output := []string{
-		"vice-proxy",
-		"--listen-addr", fmt.Sprintf("0.0.0.0:%d", constants.VICEProxyPort),
-		"--backend-url", backendURL,
-		"--ws-backend-url", backendURL,
-		"--frontend-url", frontURL.String(),
-		"--external-id", job.InvocationID,
-		"--get-analysis-id-base", fmt.Sprintf("http://%s.%s", i.GetAnalysisIDService, i.VICEBackendNamespace),
-		"--check-resource-access-base", fmt.Sprintf("http://%s.%s", i.CheckResourceAccessService, i.VICEBackendNamespace),
-		"--keycloak-base-url", i.KeycloakBaseURL,
-		"--keycloak-realm", i.KeycloakRealm,
-		"--keycloak-client-id", i.KeycloakClientID,
-		"--keycloak-client-secret", i.KeycloakClientSecret,
-	}
-
-	// Conditionally add --disable-auth flag when authentication is disabled
-	if i.DisableViceProxyAuth {
-		output = append(output, "--disable-auth")
-	}
-
-	return output
+// viceProxyCommand returns the entrypoint for the vice-proxy container.
+// All cluster-specific config is read from env vars (via cluster-config-secret),
+// and per-analysis args are injected by the vice-operator transform.
+func (i *Incluster) viceProxyCommand() []string {
+	return []string{"vice-proxy"}
 }
 
 // inputStagingContainer returns the init container to be used for staging input files. This init container
@@ -198,11 +165,21 @@ func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 		)
 	}
 
+	// Build the analysis frontend URL from the base URL and subdomain.
+	// FrontendBaseURL is validated at startup in main(), so parse errors here
+	// indicate a programming error rather than bad user input.
+	frontURL, err := url.Parse(i.FrontendBaseURL)
+	if err != nil {
+		log.Warnf("failed to parse FrontendBaseURL %q: %v", i.FrontendBaseURL, err)
+		frontURL = &url.URL{}
+	}
+	frontURL.Host = fmt.Sprintf("%s.%s", common.Subdomain(job.UserID, job.InvocationID), frontURL.Host)
+
 	analysisEnvironment = append(
 		analysisEnvironment,
 		apiv1.EnvVar{
 			Name:  "REDIRECT_URL",
-			Value: i.getFrontendURL(job).String(),
+			Value: frontURL.String(),
 		},
 		apiv1.EnvVar{
 			Name:  "IPLANT_USER",
@@ -231,19 +208,6 @@ func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 		SecurityContext: &apiv1.SecurityContext{
 			RunAsUser:  constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
 			RunAsGroup: constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
-			// Capabilities: &apiv1.Capabilities{
-			// 	Drop: []apiv1.Capability{
-			// 		"SETPCAP",
-			// 		"AUDIT_WRITE",
-			// 		"KILL",
-			// 		//"SETGID",
-			// 		//"SETUID",
-			// 		"SYS_CHROOT",
-			// 		"SETFCAP",
-			// 		"FSETID",
-			// 		//"MKNOD",
-			// 	},
-			// },
 		},
 		ReadinessProbe: &apiv1.Probe{
 			InitialDelaySeconds: 0,
@@ -285,16 +249,23 @@ func (i *Incluster) defineAnalysisContainer(job *model.Job) apiv1.Container {
 func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 	output := []apiv1.Container{}
 
-	output = append(output, apiv1.Container{
+	viceProxyContainer := apiv1.Container{
 		Name:            constants.VICEProxyContainerName,
 		Image:           i.ViceProxyImage,
-		Command:         i.viceProxyCommand(job),
+		Command:         i.viceProxyCommand(),
 		ImagePullPolicy: apiv1.PullPolicy(apiv1.PullAlways),
 		Ports: []apiv1.ContainerPort{
 			{
 				Name:          constants.VICEProxyPortName,
 				ContainerPort: constants.VICEProxyPort,
 				Protocol:      apiv1.Protocol("TCP"),
+			},
+		},
+		VolumeMounts: []apiv1.VolumeMount{
+			{
+				Name:      constants.PermissionsVolumeName,
+				MountPath: constants.PermissionsMountPath,
+				ReadOnly:  true,
 			},
 		},
 		SecurityContext: &apiv1.SecurityContext{
@@ -325,7 +296,26 @@ func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 				},
 			},
 		},
-	})
+	}
+
+	// Inject cluster config Secret as env vars if configured. The Secret
+	// provides VICE_BASE_URL so vice-proxy can derive its frontend URL at
+	// runtime, which is essential for multi-cluster deployments via Liqo.
+	if i.ClusterConfigSecretName != "" {
+		optional := true
+		viceProxyContainer.EnvFrom = []apiv1.EnvFromSource{
+			{
+				SecretRef: &apiv1.SecretEnvSource{
+					LocalObjectReference: apiv1.LocalObjectReference{
+						Name: i.ClusterConfigSecretName,
+					},
+					Optional: &optional,
+				},
+			},
+		}
+	}
+
+	output = append(output, viceProxyContainer)
 
 	if !i.UseCSIDriver {
 		output = append(output, apiv1.Container{

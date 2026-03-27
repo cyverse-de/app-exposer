@@ -40,6 +40,11 @@ const (
 	ExcludesFileName   = "excludes-file"
 	ExcludesVolumeName = "excludes-file"
 
+	PermissionsConfigMapPrefix = "permissions"
+	PermissionsVolumeName      = "vice-permissions"
+	PermissionsMountPath       = "/etc/vice-permissions"
+	PermissionsFileName        = "allowed-users"
+
 	InputPathListMountPath  = "/input-paths"
 	InputPathListFileName   = "input-path-list"
 	InputPathListVolumeName = "input-path-list"
@@ -96,5 +101,10 @@ const (
 	Executable AnalysisKind = "executable"
 )
 
+// Int32Ptr returns a pointer to the given int32 value. Useful when a K8s
+// struct field requires a *int32 (e.g. Deployment.Spec.Replicas).
 func Int32Ptr(i int32) *int32 { return &i }
+
+// Int64Ptr returns a pointer to the given int64 value. Useful when a K8s
+// struct field requires a *int64 (e.g. SecurityContext.RunAsUser).
 func Int64Ptr(i int64) *int64 { return &i }

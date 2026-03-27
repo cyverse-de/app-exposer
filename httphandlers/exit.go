@@ -5,150 +5,95 @@ import (
 	"net/http"
 
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/labstack/echo/v4"
-	"github.com/pkg/errors"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 )
 
-// @ID				exit
-// @Summary		Terminates a VICE analysis
-// @Description	Terminates the VICE analysis deployment and cleans up
-// @Description	resources asscociated with it. Does not save outputs first. Uses
-// @Description	the external-id label to find all of the objects in the configured
-// @Description	namespace associated with the job. Deletes the following objects:
-// @Description	HTTP routes, services, deployments, and configmaps.
-// @Param			id	path	string	true	"The external ID of the VICE analysis"
-// @Success		200
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/{id}/exit [post]
+// ExitHandler terminates a VICE analysis by routing through the appropriate operator.
+// It converts an external ID to an analysis ID and delegates cleanup to the operator.
+//
+//	@ID				exit
+//	@Summary		Terminates a VICE analysis
+//	@Description	Terminates the VICE analysis deployment and cleans up
+//	@Description	resources associated with it. Does not save outputs first. Uses
+//	@Description	the external-id label to find all of the objects in the configured
+//	@Description	namespace associated with the job. Deletes the following objects:
+//	@Description	HTTP routes, services, deployments, and configmaps.
+//	@Param			id	path	string	true	"The external ID of the VICE analysis"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/{id}/exit [post]
 func (h *HTTPHandlers) ExitHandler(c echo.Context) error {
-	return h.incluster.DoExit(c.Request().Context(), c.Param("id"))
+	return h.routeOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+		log.Infof("routing exit for analysis %s to operator %s", analysisID, client.Name())
+		return client.Exit(ctx, analysisID)
+	})
 }
 
-// @ID				admin-exit
-// @Summary		Terminates a VICE analysis
-// @Description	Terminates the VICE analysis based on the analysisID and
-// @Description	and should not require any user information to be provided. Otherwise, the
-// @Description	documentation for VICEExit applies here as well.
-// @Param			analysis-id	path	string	true	"The external ID of the VICE analysis"
-// @Success		200
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/admin/analyses/{analysis-id}/exit [post]
+// AdminExitHandler terminates a VICE analysis using the analysis ID directly,
+// without requiring external ID conversion. Intended for administrative operations.
+//
+//	@ID				admin-exit
+//	@Summary		Terminates a VICE analysis
+//	@Description	Terminates the VICE analysis based on the analysisID and
+//	@Description	and should not require any user information to be provided. Otherwise, the
+//	@Description	documentation for ExitHandler applies here as well.
+//	@Param			analysis-id	path	string	true	"The analysis ID of the VICE analysis"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/admin/analyses/{analysis-id}/exit [post]
 func (h *HTTPHandlers) AdminExitHandler(c echo.Context) error {
-	var err error
-	ctx := c.Request().Context()
-
-	analysisID := c.Param("analysis-id")
-
-	externalID, err := h.incluster.GetExternalIDByAnalysisID(ctx, analysisID)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	}
-
-	return h.incluster.DoExit(ctx, externalID)
+	return h.routeAdminOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+		log.Infof("routing admin exit for analysis %s to operator %s", analysisID, client.Name())
+		return client.Exit(ctx, analysisID)
+	})
 }
 
-// @ID				save-and-exit
-// @Summary		Save files and terminate VICE analysis
-// @Description	Handles requests to save the output files in iRODS and then exit.
-// @Description	The exit portion will only occur if the save operation succeeds. The operation is
-// @Description	performed inside of a goroutine so that the caller isn't waiting for hours/days for
-// @Description	output file transfers to complete.
-// @Param			id	path	string	true	"external ID of the analysis"
-// @Success		200
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/{id}/save-and-exit [post]
+// SaveAndExitHandler routes a save-and-exit request to the appropriate operator,
+// which saves output files before terminating the analysis.
+//
+//	@ID				save-and-exit
+//	@Summary		Save files and terminate VICE analysis
+//	@Description	Handles requests to save the output files in iRODS and then exit.
+//	@Description	The exit portion will only occur if the save operation succeeds. The operation is
+//	@Description	performed inside of a goroutine so that the caller isn't waiting for hours/days for
+//	@Description	output file transfers to complete.
+//	@Param			id	path	string	true	"external ID of the analysis"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/{id}/save-and-exit [post]
 func (h *HTTPHandlers) SaveAndExitHandler(c echo.Context) error {
-	log.Info("save and exit called")
-
-	// Since file transfers can take a while, we should do this asynchronously by default.
-	go func(ctx context.Context, c echo.Context) {
-		var err error
-		separatedSpanContext := trace.SpanContextFromContext(ctx)
-		outerCtx := trace.ContextWithSpanContext(context.Background(), separatedSpanContext)
-		ctx, span := otel.Tracer(otelName).Start(outerCtx, "SaveAndExitHandler goroutine")
-		defer span.End()
-
-		externalID := c.Param("id")
-
-		log.Infof("calling doFileTransfer for %s", externalID)
-
-		// Trigger a blocking output file transfer request.
-		if err = h.incluster.DoFileTransfer(ctx, externalID, constants.UploadBasePath, constants.UploadKind, false); err != nil {
-			log.Error(errors.Wrap(err, "error doing file transfer")) // Log but don't exit. Possible to cancel a job that hasn't started yet
-		}
-
-		log.Infof("calling VICEExit for %s", externalID)
-
-		if err = h.incluster.DoExit(ctx, externalID); err != nil {
-			log.Error(errors.Wrapf(err, "error triggering analysis exit for %s", externalID))
-		}
-
-		log.Infof("after VICEExit for %s", externalID)
-	}(c.Request().Context(), c)
-
-	log.Info("leaving save and exit")
-
-	return c.NoContent(http.StatusOK)
+	return h.routeOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+		log.Infof("routing save-and-exit for analysis %s to operator %s", analysisID, client.Name())
+		return client.SaveAndExit(ctx, analysisID)
+	})
 }
 
-// @ID				admin-save-and-exit
-// @Summary		Admin endpoint to trigger output file transfer and analysis exit
-// @Description	Handles requests to save the output files in iRODS and
-// @Description	then exit. This version of the call operates based on the analysis ID and does
-// @Description	not require user information to be required by the caller. Otherwise, the docs
-// @Description	for the VICESaveAndExit function apply here as well.
-// @Param			analysis-id	path	string	true	"Analysis ID"
-// @Success		200
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/admin/analyses/{}/save-and-exit [post]
+// AdminSaveAndExitHandler routes an admin save-and-exit request using the analysis ID directly,
+// without requiring external ID conversion. Intended for administrative operations.
+//
+//	@ID				admin-save-and-exit
+//	@Summary		Admin endpoint to trigger output file transfer and analysis exit
+//	@Description	Handles requests to save the output files in iRODS and
+//	@Description	then exit. This version of the call operates based on the analysis ID and does
+//	@Description	not require user information to be required by the caller. Otherwise, the docs
+//	@Description	for the VICESaveAndExit function apply here as well.
+//	@Param			analysis-id	path	string	true	"Analysis ID"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/admin/analyses/{analysis-id}/save-and-exit [post]
 func (h *HTTPHandlers) AdminSaveAndExitHandler(c echo.Context) error {
-	log.Info("admin save and exit called")
-
-	// Since file transfers can take a while, we should do this asynchronously by default.
-	go func(ctx context.Context, c echo.Context) {
-		var (
-			err        error
-			externalID string
-		)
-
-		separatedSpanContext := trace.SpanContextFromContext(ctx)
-		outerCtx := trace.ContextWithSpanContext(context.Background(), separatedSpanContext)
-		ctx, span := otel.Tracer(otelName).Start(outerCtx, "AdminSaveAndExitHandler goroutine")
-		defer span.End()
-
-		log.Debug("calling doFileTransfer")
-
-		analysisID := c.Param("analysis-id")
-
-		if externalID, err = h.incluster.GetExternalIDByAnalysisID(ctx, analysisID); err != nil {
-			log.Error(err)
-			return
-		}
-
-		// Trigger a blocking output file transfer request.
-		if err = h.incluster.DoFileTransfer(ctx, externalID, constants.UploadBasePath, constants.UploadKind, false); err != nil {
-			log.Error(errors.Wrap(err, "error doing file transfer")) // Log but don't exit. Possible to cancel a job that hasn't started yet
-		}
-
-		log.Debug("calling VICEExit")
-
-		if err = h.incluster.DoExit(ctx, externalID); err != nil {
-			log.Error(err)
-		}
-
-		log.Debug("after VICEExit")
-	}(c.Request().Context(), c)
-
-	log.Info("admin leaving save and exit")
-	return c.NoContent(http.StatusOK)
+	return h.routeAdminOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+		log.Infof("routing admin save-and-exit for analysis %s to operator %s", analysisID, client.Name())
+		return client.SaveAndExit(ctx, analysisID)
+	})
 }
 
+// TerminateAllResponse contains the results of terminating all running analyses.
 type TerminateAllResponse struct {
 	VICE        []string `json:"vice"`
 	Batch       []string `json:"batch"`
@@ -156,15 +101,19 @@ type TerminateAllResponse struct {
 	FailedBatch []string `json:"failed_batch"`
 }
 
-// @ID				terminate-all-analyses
-// @Summary		Terminates all analyses
-// @Description	Terminates all analyses marked as running in the DE database.
-// @Description	Does not check for analyses in the cluster but not marked as running in the database.
-// @Description	Terminates both VICE and batch analyses.
-// @Success		200	{object}	TerminateAllResponse
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/admin/terminate-all [post]
+// TerminateAllAnalysesHandler terminates all running analyses (both VICE and batch).
+// It queries the database for running analyses, routes each through its appropriate handler,
+// and returns a summary of succeeded and failed terminations.
+//
+//	@ID				terminate-all-analyses
+//	@Summary		Terminates all analyses
+//	@Description	Terminates all analyses marked as running in the DE database.
+//	@Description	Does not check for analyses in the cluster but not marked as running in the database.
+//	@Description	Terminates both VICE and batch analyses.
+//	@Success		200	{object}	TerminateAllResponse
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/admin/terminate-all [post]
 func (h *HTTPHandlers) TerminateAllAnalysesHandler(c echo.Context) error {
 	var (
 		terminatedVICE  []string
@@ -189,13 +138,27 @@ func (h *HTTPHandlers) TerminateAllAnalysesHandler(c echo.Context) error {
 
 	for _, id := range interactiveIDs {
 		log.Infof("stopping VICE analysis %s", id)
-		if err = h.incluster.DoExit(ctx, id); err != nil {
+
+		analysisID, lookupErr := h.apps.GetAnalysisIDByExternalID(ctx, id)
+		if lookupErr != nil {
+			log.Errorf("failed to look up analysis ID for external ID %s: %v", id, lookupErr)
+			failedVICE = append(failedVICE, id)
+			continue
+		}
+
+		client := h.operatorClientForAnalysis(ctx, analysisID)
+		if client == nil {
+			log.Errorf("no operator found for analysis %s (external ID %s)", analysisID, id)
+			failedVICE = append(failedVICE, id)
+			continue
+		}
+
+		if err = client.Exit(ctx, analysisID); err != nil {
 			log.Error(err)
 			failedVICE = append(failedVICE, id)
 			continue
 		}
 		terminatedVICE = append(terminatedVICE, id)
-		log.Debugf("done stopping VICE analysis %s", id)
 	}
 
 	for _, id := range batchIDs {

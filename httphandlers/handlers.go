@@ -1,14 +1,17 @@
 package httphandlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/cyverse-de/app-exposer/adapter"
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/model/v10"
 	"github.com/labstack/echo/v4"
 	"k8s.io/client-go/kubernetes"
@@ -16,28 +19,176 @@ import (
 
 var log = common.Log
 
-var otelName = "github.com/cyverse-de/app-exposer/handlers"
-
+// AnalysisLaunch is an alias for model.Analysis used as the HTTP request body
+// for launching a VICE analysis.
 type AnalysisLaunch model.Analysis
 
+// HTTPHandlers holds the dependencies for all app-exposer HTTP handlers.
 type HTTPHandlers struct {
-	incluster *incluster.Incluster
-	apps      *apps.Apps
-	clientset kubernetes.Interface
-	//db           *db.Database
+	incluster    *incluster.Incluster
+	apps         *apps.Apps
+	clientset    kubernetes.Interface
 	batchadapter *adapter.JEXAdapter
+	scheduler    *operatorclient.Scheduler
 }
 
+// New creates an HTTPHandlers with the provided dependencies injected.
 func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface, batchadapter *adapter.JEXAdapter) *HTTPHandlers {
 	return &HTTPHandlers{
-		incluster,
-		apps,
-		clientset,
-		//db,
-		batchadapter,
+		incluster:    incluster,
+		apps:         apps,
+		clientset:    clientset,
+		batchadapter: batchadapter,
 	}
 }
 
+// SetScheduler configures the operator scheduler for multi-cluster routing.
+// When set, launches and lifecycle operations are routed to remote operators.
+func (h *HTTPHandlers) SetScheduler(s *operatorclient.Scheduler) {
+	h.scheduler = s
+}
+
+// operatorClientForAnalysis looks up which operator is running an analysis
+// and returns the corresponding client. Uses a three-step strategy:
+//  1. Fast path: check the DB for a recorded operator name.
+//  2. Search path: if no name is recorded or the named operator isn't found,
+//     search all operators in parallel via HasAnalysis.
+//  3. Return nil only if no operator has the analysis.
+//
+// Callers must treat a nil return as a fatal condition.
+func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID string) *operatorclient.Client {
+	if h.scheduler == nil {
+		log.Errorf("no scheduler configured, cannot find operator for analysis %s", analysisID)
+		return nil
+	}
+
+	// Fast path: check the DB for a recorded operator name.
+	operatorName, err := h.apps.GetOperatorName(ctx, analysisID)
+	if err != nil {
+		log.Errorf("error looking up operator for analysis %s: %v", analysisID, err)
+		// Fall through to search path.
+	}
+
+	if operatorName != "" {
+		client := h.scheduler.ClientByName(operatorName)
+		if client != nil {
+			log.Debugf("analysis %s routed to operator %q (fast path)", analysisID, operatorName)
+			return client
+		}
+		log.Warnf("operator %q not found in scheduler for analysis %s, searching all operators", operatorName, analysisID)
+	} else {
+		log.Debugf("no operator name recorded for analysis %s, searching all operators", analysisID)
+	}
+
+	// Search path: ask every operator in parallel whether it has this analysis.
+	client := h.searchOperatorsForAnalysis(ctx, analysisID)
+	if client == nil {
+		log.Warnf("no operator has analysis %s", analysisID)
+		return nil
+	}
+
+	// Update the DB so future lookups use the fast path.
+	if err := h.apps.SetOperatorName(ctx, analysisID, client.Name()); err != nil {
+		log.Errorf("failed to record operator %q for analysis %s: %v", client.Name(), analysisID, err)
+	}
+
+	log.Infof("analysis %s found on operator %q (search path)", analysisID, client.Name())
+	return client
+}
+
+// searchOperatorsForAnalysis queries all configured operators in parallel to
+// find which one is running the given analysis. Returns the first operator
+// that reports having the analysis, or nil if none do.
+func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisID string) *operatorclient.Client {
+	type result struct {
+		client *operatorclient.Client
+		found  bool
+	}
+
+	clients := h.scheduler.Clients()
+	if len(clients) == 0 {
+		return nil
+	}
+
+	// Use a cancellable child context so we can stop remaining searches
+	// once we find the analysis.
+	searchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	ch := make(chan result, len(clients))
+
+	// wg.Go (Go 1.25+) handles Add/Done internally. Range variables are
+	// per-iteration in Go 1.22+ so no parameter capture is needed.
+	var wg sync.WaitGroup
+	for _, c := range clients {
+		wg.Go(func() {
+			found, err := c.HasAnalysis(searchCtx, analysisID)
+			if err != nil {
+				log.Warnf("search: operator %s error for analysis %s: %v", c.Name(), analysisID, err)
+				ch <- result{client: c, found: false}
+				return
+			}
+			ch <- result{client: c, found: found}
+		})
+	}
+
+	// Close the channel once all goroutines finish to avoid leaks.
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.found {
+			cancel() // Signal remaining goroutines to stop.
+			return r.client
+		}
+	}
+
+	return nil
+}
+
+// operatorAction is a function that performs an operation on an operator client
+// for a given analysis. Used by routeOperatorAction and routeAdminOperatorAction
+// to eliminate boilerplate in handlers that resolve an ID and forward to an operator.
+type operatorAction func(ctx context.Context, client *operatorclient.Client, analysisID string) error
+
+// routeOperatorAction resolves an external ID to an analysis ID, finds the
+// operator running it, and invokes fn. Intended for user-facing handlers that
+// receive an external ID via path param "id".
+func (h *HTTPHandlers) routeOperatorAction(c echo.Context, fn operatorAction) error {
+	ctx := c.Request().Context()
+	externalID := c.Param("id")
+
+	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	client := h.operatorClientForAnalysis(ctx, analysisID)
+	if client == nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "no operator found for analysis")
+	}
+
+	return fn(ctx, client, analysisID)
+}
+
+// routeAdminOperatorAction finds the operator running the analysis identified
+// by the "analysis-id" path param and invokes fn. Intended for admin handlers
+// that receive an analysis ID directly.
+func (h *HTTPHandlers) routeAdminOperatorAction(c echo.Context, fn operatorAction) error {
+	ctx := c.Request().Context()
+	analysisID := c.Param("analysis-id")
+
+	client := h.operatorClientForAnalysis(ctx, analysisID)
+	if client == nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "no operator found for analysis")
+	}
+
+	return fn(ctx, client, analysisID)
+}
+
+// ExternalIDResp is the response body for the AdminGetExternalIDHandler endpoint.
 type ExternalIDResp struct {
 	ExternalID string `json:"external_id" example:"bb52aefb-e021-4ece-89e5-fd73ce30643c"`
 }
@@ -56,30 +207,19 @@ type ExternalIDResp struct {
 //	@Failure		400			{object}	common.ErrorResponse	"id parameter is empty"
 //	@Router			/vice/admin/analyses/{analysis-id}/external-id [get]
 func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
-	var (
-		err        error
-		analysisID string
-		externalID string
-	)
-
 	ctx := c.Request().Context()
 
-	// analysisID is required
-	analysisID = c.Param("analysis-id")
+	analysisID := c.Param("analysis-id")
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}
 
-	externalID, err = h.incluster.GetExternalIDByAnalysisID(ctx, analysisID)
+	externalID, err := h.incluster.GetExternalIDByAnalysisID(ctx, analysisID)
 	if err != nil {
 		return err
 	}
 
-	retval := ExternalIDResp{
-		ExternalID: externalID,
-	}
-
-	return c.JSON(http.StatusOK, retval)
+	return c.JSON(http.StatusOK, ExternalIDResp{ExternalID: externalID})
 }
 
 // ApplyAsyncLabelsHandler is the http handler for triggering the application
@@ -101,7 +241,7 @@ func (h *HTTPHandlers) ApplyAsyncLabelsHandler(c echo.Context) error {
 		var errMsg strings.Builder
 		for _, err := range errs {
 			log.Error(err)
-			fmt.Fprintf(&errMsg, "%s\n", err.Error())
+			_, _ = fmt.Fprintf(&errMsg, "%s\n", err.Error())
 		}
 
 		return c.String(http.StatusInternalServerError, errMsg.String())
@@ -109,6 +249,8 @@ func (h *HTTPHandlers) ApplyAsyncLabelsHandler(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
+// AsyncData contains metadata that is computed asynchronously after job launch:
+// the analysis ID, the routing subdomain, and the user's login IP.
 type AsyncData struct {
 	AnalysisID string `json:"analysisID"`
 	Subdomain  string `json:"subdomain"`
