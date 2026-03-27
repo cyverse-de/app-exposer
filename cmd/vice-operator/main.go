@@ -7,6 +7,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -58,10 +59,9 @@ func main() {
 		apiSubdomain         string
 		apiServiceName       string
 		serviceCIDR          string
+		blockedCIDRs         stringSliceFlag
+		egressPodExceptions  stringSliceFlag
 	)
-
-	var blockedCIDRs stringSliceFlag
-	var egressPodExceptions stringSliceFlag
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
 	flag.StringVar(&namespace, "namespace", "vice-apps", "Namespace for VICE resources")
@@ -226,20 +226,31 @@ func main() {
 		}
 		serviceCIDR = detected
 		log.Infof("auto-detected service CIDR: %s", serviceCIDR)
+		log.Warnf("auto-detected CIDR uses a /8 prefix; use --service-cidr for a narrower range if needed")
+	}
+
+	// Validate all CIDRs before creating network policies.
+	if _, _, cidrErr := net.ParseCIDR(serviceCIDR); cidrErr != nil {
+		log.Fatalf("invalid service CIDR %q: %v", serviceCIDR, cidrErr)
+	}
+	for _, cidr := range blockedCIDRs {
+		if _, _, cidrErr := net.ParseCIDR(cidr); cidrErr != nil {
+			log.Fatalf("invalid --blocked-cidr %q: %v", cidr, cidrErr)
+		}
 	}
 
 	// Parse pod exception labels (key=value strings) into label maps.
 	var podExceptions []map[string]string
 	for _, exc := range egressPodExceptions {
-		kv := strings.SplitN(exc, "=", 2)
-		if len(kv) != 2 || kv[0] == "" {
-			log.Fatalf("invalid --egress-pod-exception %q (expected key=value)", exc)
+		labels, excErr := parseSelector(exc)
+		if excErr != nil {
+			log.Fatalf("invalid --egress-pod-exception %q: %v", exc, excErr)
 		}
-		podExceptions = append(podExceptions, map[string]string{kv[0]: kv[1]})
+		podExceptions = append(podExceptions, labels)
 	}
 
 	mustEnsure("egress network policies", func(ctx context.Context) error {
-		return operator.EnsureEgressPolicies(ctx, clientset, namespace, serviceCIDR, []string(blockedCIDRs), podExceptions)
+		return operator.EnsureEgressPolicies(ctx, clientset, namespace, serviceCIDR, blockedCIDRs, podExceptions)
 	})
 
 	gpuVendor, err := operator.ParseGPUVendor(gpuVendorFlag)

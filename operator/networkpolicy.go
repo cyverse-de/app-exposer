@@ -2,11 +2,13 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"maps"
 	"strings"
 
-	netv1 "k8s.io/api/networking/v1"
 	apiv1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
@@ -14,9 +16,11 @@ import (
 	"github.com/cyverse-de/app-exposer/operatorclient"
 )
 
-// DetectServiceCIDR auto-detects the cluster service CIDR by reading the
-// kubernetes API server's ClusterIP and deriving a /8 range from its first
-// octet (e.g. 10.42.0.1 → 10.0.0.0/8).
+// DetectServiceCIDR approximates the cluster service CIDR by deriving a broad
+// /8 range from the kubernetes API server ClusterIP's first octet (e.g.
+// 10.42.0.1 → 10.0.0.0/8). This is intentionally conservative to ensure all
+// service IPs are blocked. Use --service-cidr for a precise CIDR if the /8
+// blocks legitimate traffic (e.g. pod or node IPs in the same range).
 func DetectServiceCIDR(ctx context.Context, clientset kubernetes.Interface) (string, error) {
 	svc, err := clientset.CoreV1().Services("default").Get(ctx, "kubernetes", metav1.GetOptions{})
 	if err != nil {
@@ -25,7 +29,7 @@ func DetectServiceCIDR(ctx context.Context, clientset kubernetes.Interface) (str
 
 	ip := svc.Spec.ClusterIP
 	if ip == "" || ip == "None" {
-		return "", fmt.Errorf("kubernetes service has no ClusterIP")
+		return "", errors.New("kubernetes service has no ClusterIP")
 	}
 
 	// Extract first octet for /8 range.
@@ -37,15 +41,17 @@ func DetectServiceCIDR(ctx context.Context, clientset kubernetes.Interface) (str
 	return cidr, nil
 }
 
-// EnsureEgressPolicies creates or updates the namespace-wide egress network
-// policies. It manages three policies:
+// EnsureEgressPolicies creates or updates the namespace-wide network policies.
+// It manages four policies (applied in safe order — allow before deny):
 //
-//  1. vice-default-deny-egress — blocks all egress except DNS (port 53)
-//  2. vice-egress-allow — allows external internet (minus blocked CIDRs)
+//  1. vice-egress-allow — allows external internet (minus blocked CIDRs)
 //     plus explicit pod selector exceptions for services that analysis pods
 //     need to reach
-//  3. vice-operator-egress — allows unrestricted egress for vice-operator
+//  2. vice-operator-egress — allows unrestricted egress for vice-operator
 //     pods (trusted operator needs to reach analysis pods, K8s API, etc.)
+//  3. vice-default-deny-egress — blocks all egress except DNS (port 53)
+//  4. vice-default-deny-ingress — blocks all ingress (per-analysis ingress
+//     policies from TransformAddIngressPolicy add specific exceptions)
 func EnsureEgressPolicies(
 	ctx context.Context,
 	clientset kubernetes.Interface,
@@ -56,7 +62,81 @@ func EnsureEgressPolicies(
 ) error {
 	npClient := clientset.NetworkingV1().NetworkPolicies(namespace)
 
-	// Policy 1: default deny egress (DNS only).
+	// Apply allow policies before the deny policy. If the deny policy were
+	// applied first and the allow policies failed, the namespace would be
+	// left with deny-all egress and no exceptions — breaking all running
+	// analyses until the operator successfully restarts.
+
+	// Allow external egress + pod exceptions.
+	exceptCIDRs := append([]string{serviceCIDR}, blockedCIDRs...)
+
+	allowEgress := []netv1.NetworkPolicyEgressRule{
+		{
+			To: []netv1.NetworkPolicyPeer{
+				{
+					IPBlock: &netv1.IPBlock{
+						CIDR:   "0.0.0.0/0",
+						Except: exceptCIDRs,
+					},
+				},
+			},
+		},
+	}
+
+	// Add pod selector exceptions from flags. NamespaceSelector: {} means
+	// "any namespace", which is needed for cross-namespace pod matching.
+	for _, matchLabels := range podExceptions {
+		allowEgress = append(allowEgress, netv1.NetworkPolicyEgressRule{
+			To: []netv1.NetworkPolicyPeer{
+				{
+					NamespaceSelector: &metav1.LabelSelector{},
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: matchLabels,
+					},
+				},
+			},
+		})
+	}
+
+	allowPolicy := &netv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "vice-egress-allow",
+			Namespace: namespace,
+		},
+		Spec: netv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeEgress},
+			Egress:      allowEgress,
+		},
+	}
+
+	if err := upsert(ctx, npClient, "NetworkPolicy", allowPolicy.Name, allowPolicy); err != nil {
+		return fmt.Errorf("allow egress policy: %w", err)
+	}
+
+	// Unrestricted egress for vice-operator pods (trusted operator).
+	operatorPolicy := &netv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "vice-operator-egress",
+			Namespace: namespace,
+		},
+		Spec: netv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "vice-operator"},
+			},
+			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeEgress},
+			Egress: []netv1.NetworkPolicyEgressRule{
+				{}, // allow all egress
+			},
+		},
+	}
+
+	if err := upsert(ctx, npClient, "NetworkPolicy", operatorPolicy.Name, operatorPolicy); err != nil {
+		return fmt.Errorf("operator egress policy: %w", err)
+	}
+
+	// Default deny egress (DNS only) — applied last so the allow policies
+	// are already in place before traffic is restricted.
 	dnsPort := intstr.FromInt32(53)
 	denyPolicy := &netv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -81,72 +161,23 @@ func EnsureEgressPolicies(
 		return fmt.Errorf("deny egress policy: %w", err)
 	}
 
-	// Policy 2: allow external egress + pod exceptions.
-	exceptCIDRs := []string{serviceCIDR}
-	exceptCIDRs = append(exceptCIDRs, blockedCIDRs...)
-
-	allowEgress := []netv1.NetworkPolicyEgressRule{
-		{
-			To: []netv1.NetworkPolicyPeer{
-				{
-					IPBlock: &netv1.IPBlock{
-						CIDR:   "0.0.0.0/0",
-						Except: exceptCIDRs,
-					},
-				},
-			},
-		},
-	}
-
-	// Add pod selector exceptions from flags.
-	for _, labels := range podExceptions {
-		allowEgress = append(allowEgress, netv1.NetworkPolicyEgressRule{
-			To: []netv1.NetworkPolicyPeer{
-				{
-					NamespaceSelector: &metav1.LabelSelector{},
-					PodSelector: &metav1.LabelSelector{
-						MatchLabels: labels,
-					},
-				},
-			},
-		})
-	}
-
-	allowPolicy := &netv1.NetworkPolicy{
+	// Default deny ingress — without this, Kubernetes allows all ingress by
+	// default, making per-analysis ingress policies (from TransformAddIngressPolicy)
+	// a no-op. With this in place, analysis pods only accept ingress from
+	// sources explicitly allowed by per-analysis policies.
+	denyIngressPolicy := &netv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "vice-egress-allow",
+			Name:      "vice-default-deny-ingress",
 			Namespace: namespace,
 		},
 		Spec: netv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{},
-			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeEgress},
-			Egress:      allowEgress,
+			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeIngress},
 		},
 	}
 
-	if err := upsert(ctx, npClient, "NetworkPolicy", allowPolicy.Name, allowPolicy); err != nil {
-		return fmt.Errorf("allow egress policy: %w", err)
-	}
-
-	// Policy 3: unrestricted egress for vice-operator pods.
-	operatorPolicy := &netv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "vice-operator-egress",
-			Namespace: namespace,
-		},
-		Spec: netv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "vice-operator"},
-			},
-			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeEgress},
-			Egress: []netv1.NetworkPolicyEgressRule{
-				{}, // allow all egress
-			},
-		},
-	}
-
-	if err := upsert(ctx, npClient, "NetworkPolicy", operatorPolicy.Name, operatorPolicy); err != nil {
-		return fmt.Errorf("operator egress policy: %w", err)
+	if err := upsert(ctx, npClient, "NetworkPolicy", denyIngressPolicy.Name, denyIngressPolicy); err != nil {
+		return fmt.Errorf("deny ingress policy: %w", err)
 	}
 
 	return nil
@@ -156,21 +187,20 @@ func EnsureEgressPolicies(
 // the bundle that allows vice-operator pods to reach the analysis pod's
 // vice-proxy sidecar. The policy is labeled with analysis-id so it's
 // cleaned up by deleteAnalysisResources when the analysis exits.
-func TransformAddIngressPolicy(bundle *operatorclient.AnalysisBundle) {
+// Returns an error if the deployment is missing the analysis-id label,
+// since without the ingress policy vice-operator cannot reach the analysis.
+func TransformAddIngressPolicy(bundle *operatorclient.AnalysisBundle) error {
 	if bundle == nil || bundle.Deployment == nil {
-		return
+		return fmt.Errorf("bundle or deployment is nil, cannot create ingress policy")
 	}
 
 	analysisID := bundle.Deployment.Labels["analysis-id"]
 	if analysisID == "" {
-		return
+		return fmt.Errorf("deployment %s missing analysis-id label, cannot create ingress policy", bundle.Deployment.Name)
 	}
 
 	// Copy labels from the deployment for consistent cleanup.
-	labels := make(map[string]string)
-	for k, v := range bundle.Deployment.Labels {
-		labels[k] = v
-	}
+	labels := maps.Clone(bundle.Deployment.Labels)
 
 	externalID := bundle.Deployment.Name
 	bundle.NetworkPolicy = &netv1.NetworkPolicy{
@@ -200,6 +230,7 @@ func TransformAddIngressPolicy(bundle *operatorclient.AnalysisBundle) {
 			},
 		},
 	}
+	return nil
 }
 
 // protocolPtr returns a pointer to a Protocol value.

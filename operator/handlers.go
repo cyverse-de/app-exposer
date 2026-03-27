@@ -179,7 +179,9 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 	TransformGPUVendor(bundle.Deployment, o.gpuVendor)
 
 	// Add per-analysis ingress policy so vice-operator can reach vice-proxy.
-	TransformAddIngressPolicy(&bundle)
+	if err := TransformAddIngressPolicy(&bundle); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
 
 	// Apply all resources via upsert pattern.
 	if err := o.applyBundle(ctx, &bundle); err != nil {
