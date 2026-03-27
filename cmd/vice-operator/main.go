@@ -63,7 +63,7 @@ func main() {
 	flag.StringVar(&namespace, "namespace", "vice-apps", "Namespace for VICE resources")
 	flag.IntVar(&port, "port", 60001, "Listen port")
 	flag.StringVar(&gpuVendorFlag, "gpu-vendor", "nvidia", "GPU vendor: nvidia or amd")
-	flag.IntVar(&maxAnalyses, "max-analyses", 50, "Max concurrent analyses")
+	flag.IntVar(&maxAnalyses, "max-analyses", 50, "Max concurrent analyses (0 disables the limit for autoscaling clusters)")
 	flag.StringVar(&nodeLabelSelector, "node-label-selector", "", "Filter schedulable nodes by label")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level")
 	flag.BoolVar(&basicAuth, "basic-auth", false, "Enable basic auth for the API")

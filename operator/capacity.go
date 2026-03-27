@@ -33,10 +33,6 @@ func NewCapacityCalculator(
 	if namespace == "" {
 		panic("capacity: namespace must not be empty")
 	}
-	if maxAnalyses <= 0 {
-		panic("capacity: maxAnalyses must be positive")
-	}
-
 	return &CapacityCalculator{
 		clientset:         clientset,
 		namespace:         namespace,
@@ -100,9 +96,14 @@ func (cc *CapacityCalculator) Calculate(ctx context.Context) (*operatorclient.Ca
 		}
 	}
 
-	available := cc.maxAnalyses - runningAnalyses
-	if available < 0 {
-		available = 0
+	// When maxAnalyses is 0, the limit is disabled (e.g. for autoscaling
+	// clusters). AvailableSlots=-1 signals "unlimited" to the scheduler.
+	available := -1
+	if cc.maxAnalyses > 0 {
+		available = cc.maxAnalyses - runningAnalyses
+		if available < 0 {
+			available = 0
+		}
 	}
 
 	return &operatorclient.CapacityResponse{

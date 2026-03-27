@@ -176,3 +176,27 @@ func makeVICEDeployment(name, cpu, memory string) appsv1.Deployment {
 		},
 	}
 }
+
+func TestCapacityCalculatorUnlimited(t *testing.T) {
+	cs := fake.NewSimpleClientset(
+		&apiv1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "node1"},
+			Status: apiv1.NodeStatus{
+				Allocatable: apiv1.ResourceList{
+					apiv1.ResourceCPU:    resource.MustParse("4"),
+					apiv1.ResourceMemory: resource.MustParse("8Gi"),
+				},
+			},
+		},
+	)
+
+	// maxAnalyses=0 means unlimited.
+	calc := NewCapacityCalculator(cs, "vice-apps", 0, "")
+	cap, err := calc.Calculate(context.Background())
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, cap.MaxAnalyses)
+	assert.Equal(t, 0, cap.RunningAnalyses)
+	assert.Equal(t, -1, cap.AvailableSlots, "unlimited mode should report -1 available slots")
+	assert.Greater(t, cap.AllocatableCPU, int64(0), "should still report allocatable CPU")
+}
