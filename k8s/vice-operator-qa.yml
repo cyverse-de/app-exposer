@@ -15,20 +15,41 @@ spec:
         app: vice-operator
     spec:
       serviceAccountName: vice-operator
+      tolerations:
+        - key: "gpu"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "analysis"
+          operator: "Exists"
       containers:
         - name: vice-operator
-          image: harbor.cyverse.org/de/app-exposer:qa
+          image: harbor.cyverse.org/de/app-exposer:test
           imagePullPolicy: Always
           command: ["/vice-operator"]
           args:
             - "--namespace=vice-apps"
-            - "--port=60001"
-            - "--routing-type=nginx"
-            - "--ingress-class=nginx"
-            - "--max-analyses=100"
+            - "--port=10000"
+            - "--max-analyses=0"
+            - "--gpu-vendor=nvidia"
+            - "--vice-base-url=https://cyverse.run:4545"
+            - "--registry-server=harbor.cyverse.org"
+            - "--registry-username=robot$de-jobs"
+            - "--registry-password=BGi26jMOhI9TppGqXO6bcRe0G9TXabdH"
+            - "--operator-pod-selector=app=vice-operator"
+            - "--api-service-name=vice-operator-qa"
+            - "--basic-auth"
+            - "--basic-auth-username=test-username-qa"
+            - "--basic-auth-password=test-password-qa"
+            - "--keycloak-base-url=https://kc.cyverse.org/auth"
+            - "--keycloak-client-id=vice-qa"
+            - "--keycloak-client-secret=6b2016ea-b776-4743-ab02-2ab92519d0f3"
+            - "--keycloak-realm=CyVerseTest"
           ports:
-            - containerPort: 60001
+            - containerPort: 10000
               name: http
+            - containerPort: 8080
+              name: loading
           livenessProbe:
             httpGet:
               path: /
@@ -48,19 +69,6 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: vice-operator
-  namespace: vice-apps
-spec:
-  selector:
-    app: vice-operator
-  ports:
-    - port: 60001
-      targetPort: http
-      name: http
 ---
 apiVersion: v1
 kind: ServiceAccount
