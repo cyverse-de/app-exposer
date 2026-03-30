@@ -2,6 +2,7 @@ package jobinfo
 
 import (
 	"context"
+	"errors"
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
@@ -21,6 +22,10 @@ type DefaultJobInfo struct {
 
 // JobLabels returns the set of labels to use for all Kubernetes resources associated with the given job.
 func (j *DefaultJobInfo) JobLabels(ctx context.Context, job *model.Job) (map[string]string, error) {
+	if job.Name == "" {
+		return nil, errors.New("job name must not be empty")
+	}
+
 	name := []rune(job.Name)
 	stringmax := min(len(name), 63)
 
@@ -45,5 +50,5 @@ func (j *DefaultJobInfo) JobLabels(ctx context.Context, job *model.Job) (map[str
 
 // NewJobInfo returns an implementation of JobInfo for the given Apps instance.
 func NewJobInfo(apps *apps.Apps) JobInfo {
-	return JobInfo(&DefaultJobInfo{Apps: apps})
+	return &DefaultJobInfo{Apps: apps}
 }
