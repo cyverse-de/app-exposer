@@ -98,7 +98,7 @@ func main() {
 	flag.StringVar(&serviceCIDR, "service-cidr", "", "Cluster service CIDR to block in egress (auto-detected from kubernetes API server if empty)")
 	flag.Var(&blockedCIDRs, "blocked-cidr", "Additional CIDRs to block in egress (repeatable)")
 	flag.Var(&egressPodExceptions, "egress-pod-exception", "Pod selector label (key=value) to allow egress to (repeatable)")
-	flag.Var(&ingressPodExceptions, "ingress-pod-exception", "Cross-namespace ingress source as namespace-label=val,pod-label=val (repeatable). First label selects namespace, rest select pods.")
+	flag.Var(&ingressPodExceptions, "ingress-pod-exception", "Cross-namespace ingress source as kubernetes.io/metadata.name=<ns>,pod-label=val (repeatable). The kubernetes.io/metadata.name pair selects the namespace; remaining pairs select pods.")
 	flag.Parse()
 
 	// Validate basic auth flags.
@@ -252,36 +252,40 @@ func main() {
 	}
 
 	// Parse ingress pod exceptions. Each value is a comma-separated list of
-	// key=value pairs. The first pair is the namespace selector label, the
-	// rest are pod selector labels.
+	// key=value pairs. The kubernetes.io/metadata.name pair identifies the
+	// source namespace; remaining pairs select pods within it.
+	const nsLabelKey = "kubernetes.io/metadata.name"
 	var ingressExceptions []operator.IngressException
 	for _, exc := range ingressPodExceptions {
 		labels, excErr := parseSelector(exc)
 		if excErr != nil {
 			log.Fatalf("invalid --ingress-pod-exception %q: %v", exc, excErr)
 		}
-		// Split into namespace labels and pod labels. Keys containing
-		// "kubernetes.io/metadata.name" are namespace labels; the rest are pod labels.
-		nsLabels := make(map[string]string)
-		podLabels := make(map[string]string)
-		for k, v := range labels {
-			if k == "kubernetes.io/metadata.name" {
-				nsLabels[k] = v
-			} else {
-				podLabels[k] = v
-			}
+
+		// Extract the required namespace label; all remaining labels are
+		// pod selectors.
+		nsName, ok := labels[nsLabelKey]
+		if !ok {
+			log.Fatalf("--ingress-pod-exception %q must include %s=<namespace> to identify the source namespace", exc, nsLabelKey)
 		}
-		if len(nsLabels) == 0 {
-			log.Fatalf("--ingress-pod-exception %q must include kubernetes.io/metadata.name=<namespace> to identify the source namespace", exc)
+		delete(labels, nsLabelKey)
+
+		if len(labels) == 0 {
+			log.Warnf("--ingress-pod-exception %q has no pod labels; allows ALL pods in namespace %q to reach VICE pods", exc, nsName)
 		}
+
 		ingressExceptions = append(ingressExceptions, operator.IngressException{
-			NamespaceLabels: nsLabels,
-			PodLabels:       podLabels,
+			NamespaceLabels: map[string]string{nsLabelKey: nsName},
+			PodLabels:       labels,
 		})
 	}
 
+	if len(ingressExceptions) == 0 {
+		log.Warn("no --ingress-pod-exception flags provided; ingress policy will only allow vice-operator — external traffic (e.g. Traefik) will be blocked")
+	}
+
 	mustEnsure("network policies", func(ctx context.Context) error {
-		return operator.EnsureEgressPolicies(ctx, clientset, namespace, serviceCIDR, blockedCIDRs, podExceptions, ingressExceptions)
+		return operator.EnsureNetworkPolicies(ctx, clientset, namespace, serviceCIDR, blockedCIDRs, podExceptions, ingressExceptions)
 	})
 
 	gpuVendor, err := operator.ParseGPUVendor(gpuVendorFlag)
@@ -338,14 +342,14 @@ func mustEnsure(resource string, fn func(ctx context.Context) error) {
 // a label map suitable for a Service selector.
 func parseSelector(s string) (map[string]string, error) {
 	result := make(map[string]string)
-	for _, part := range strings.Split(s, ",") {
+	for part := range strings.SplitSeq(s, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
 		kv := strings.SplitN(part, "=", 2)
-		if len(kv) != 2 || kv[0] == "" {
-			return nil, fmt.Errorf("invalid selector term %q (expected key=value)", part)
+		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
+			return nil, fmt.Errorf("invalid selector term %q (expected key=value with non-empty key and value)", part)
 		}
 		result[kv[0]] = kv[1]
 	}

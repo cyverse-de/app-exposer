@@ -46,7 +46,7 @@ type IngressException struct {
 	PodLabels       map[string]string
 }
 
-// EnsureEgressPolicies creates or updates the namespace-wide network policies.
+// EnsureNetworkPolicies creates or updates the namespace-wide network policies.
 // It manages four policies (applied in safe order — allow before deny):
 //
 //  1. vice-egress-allow — allows external internet (minus blocked CIDRs)
@@ -58,7 +58,7 @@ type IngressException struct {
 //  4. vice-default-deny-ingress — blocks all ingress except from
 //     vice-operator (same namespace) and configured ingress exceptions
 //     (e.g. Traefik from another namespace)
-func EnsureEgressPolicies(
+func EnsureNetworkPolicies(
 	ctx context.Context,
 	clientset kubernetes.Interface,
 	namespace string,
@@ -186,6 +186,8 @@ func EnsureEgressPolicies(
 	}
 
 	// Add cross-namespace ingress exceptions (e.g. Traefik).
+	// When exc.PodLabels is empty the PodSelector matches all pods in the
+	// selected namespace, which is intentional for namespace-wide exceptions.
 	for _, exc := range ingressExceptions {
 		ingressRules = append(ingressRules, netv1.NetworkPolicyIngressRule{
 			From: []netv1.NetworkPolicyPeer{
