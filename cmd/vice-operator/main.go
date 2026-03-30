@@ -58,10 +58,10 @@ func main() {
 		disableViceProxyAuth bool
 		apiSubdomain         string
 		apiServiceName       string
-		serviceCIDR             string
-		blockedCIDRs            stringSliceFlag
-		egressPodExceptions     stringSliceFlag
-		ingressPodExceptions    stringSliceFlag
+		serviceCIDR          string
+		blockedCIDRs         stringSliceFlag
+		egressPodExceptions  stringSliceFlag
+		ingressPodExceptions stringSliceFlag
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
