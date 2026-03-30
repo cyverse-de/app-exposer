@@ -22,13 +22,7 @@ type DefaultJobInfo struct {
 // JobLabels returns the set of labels to use for all Kubernetes resources associated with the given job.
 func (j *DefaultJobInfo) JobLabels(ctx context.Context, job *model.Job) (map[string]string, error) {
 	name := []rune(job.Name)
-
-	var stringmax int
-	if len(name) >= 63 {
-		stringmax = 62
-	} else {
-		stringmax = len(name) - 1
-	}
+	stringmax := min(len(name), 63)
 
 	ipAddr, err := j.Apps.GetUserIP(ctx, job.UserID)
 	if err != nil {
