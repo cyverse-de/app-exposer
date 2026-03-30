@@ -58,9 +58,10 @@ func main() {
 		disableViceProxyAuth bool
 		apiSubdomain         string
 		apiServiceName       string
-		serviceCIDR          string
-		blockedCIDRs         stringSliceFlag
-		egressPodExceptions  stringSliceFlag
+		serviceCIDR             string
+		blockedCIDRs            stringSliceFlag
+		egressPodExceptions     stringSliceFlag
+		ingressPodExceptions    stringSliceFlag
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -97,6 +98,7 @@ func main() {
 	flag.StringVar(&serviceCIDR, "service-cidr", "", "Cluster service CIDR to block in egress (auto-detected from kubernetes API server if empty)")
 	flag.Var(&blockedCIDRs, "blocked-cidr", "Additional CIDRs to block in egress (repeatable)")
 	flag.Var(&egressPodExceptions, "egress-pod-exception", "Pod selector label (key=value) to allow egress to (repeatable)")
+	flag.Var(&ingressPodExceptions, "ingress-pod-exception", "Cross-namespace ingress source as namespace-label=val,pod-label=val (repeatable). First label selects namespace, rest select pods.")
 	flag.Parse()
 
 	// Validate basic auth flags.
@@ -239,7 +241,7 @@ func main() {
 		}
 	}
 
-	// Parse pod exception labels (key=value strings) into label maps.
+	// Parse egress pod exception labels (key=value strings) into label maps.
 	var podExceptions []map[string]string
 	for _, exc := range egressPodExceptions {
 		labels, excErr := parseSelector(exc)
@@ -249,8 +251,37 @@ func main() {
 		podExceptions = append(podExceptions, labels)
 	}
 
-	mustEnsure("egress network policies", func(ctx context.Context) error {
-		return operator.EnsureEgressPolicies(ctx, clientset, namespace, serviceCIDR, blockedCIDRs, podExceptions)
+	// Parse ingress pod exceptions. Each value is a comma-separated list of
+	// key=value pairs. The first pair is the namespace selector label, the
+	// rest are pod selector labels.
+	var ingressExceptions []operator.IngressException
+	for _, exc := range ingressPodExceptions {
+		labels, excErr := parseSelector(exc)
+		if excErr != nil {
+			log.Fatalf("invalid --ingress-pod-exception %q: %v", exc, excErr)
+		}
+		// Split into namespace labels and pod labels. Keys containing
+		// "kubernetes.io/metadata.name" are namespace labels; the rest are pod labels.
+		nsLabels := make(map[string]string)
+		podLabels := make(map[string]string)
+		for k, v := range labels {
+			if k == "kubernetes.io/metadata.name" {
+				nsLabels[k] = v
+			} else {
+				podLabels[k] = v
+			}
+		}
+		if len(nsLabels) == 0 {
+			log.Fatalf("--ingress-pod-exception %q must include kubernetes.io/metadata.name=<namespace> to identify the source namespace", exc)
+		}
+		ingressExceptions = append(ingressExceptions, operator.IngressException{
+			NamespaceLabels: nsLabels,
+			PodLabels:       podLabels,
+		})
+	}
+
+	mustEnsure("network policies", func(ctx context.Context) error {
+		return operator.EnsureEgressPolicies(ctx, clientset, namespace, serviceCIDR, blockedCIDRs, podExceptions, ingressExceptions)
 	})
 
 	gpuVendor, err := operator.ParseGPUVendor(gpuVendorFlag)

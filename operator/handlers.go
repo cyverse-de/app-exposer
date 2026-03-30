@@ -178,11 +178,6 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 	// Rewrite GPU resource names to match the cluster's GPU vendor.
 	TransformGPUVendor(bundle.Deployment, o.gpuVendor)
 
-	// Add per-analysis ingress policy so vice-operator can reach vice-proxy.
-	if err := TransformAddIngressPolicy(&bundle); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
 	// Apply all resources via upsert pattern.
 	if err := o.applyBundle(ctx, &bundle); err != nil {
 		log.Errorf("launch failed for analysis %s: %v", bundle.AnalysisID, err)
