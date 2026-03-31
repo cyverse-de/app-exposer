@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -333,4 +334,67 @@ func (o *Operator) HandleListing(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, result)
+}
+
+// RegenerateResponse summarizes the results of a network policy regeneration.
+type RegenerateResponse struct {
+	Updated int      `json:"updated"`
+	Errors  []string `json:"errors,omitempty"`
+}
+
+// HandleRegenerateNetworkPolicies rebuilds and upserts per-analysis egress
+// NetworkPolicies for all running analyses using the operator's current
+// configuration. This allows admins to roll out config changes (blocked CIDRs,
+// Keycloak IPs, internet access setting, etc.) to already-running analyses
+// without restarting them.
+//
+//	@Summary		Regenerate per-analysis network policies
+//	@Description	Rebuilds egress NetworkPolicies for all running analyses to
+//	@Description	match the operator's current configuration.
+//	@Tags			network-policies
+//	@Produce		json
+//	@Success		200	{object}	RegenerateResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Security		BasicAuth
+//	@Router			/regenerate-network-policies [post]
+func (o *Operator) HandleRegenerateNetworkPolicies(c echo.Context) error {
+	ctx := c.Request().Context()
+	log.Info("regenerating per-analysis network policies")
+
+	// List all VICE deployments to discover running analyses and their labels.
+	viceSelector := labels.Set{"app-type": "interactive"}.AsSelector().String()
+	deps, err := o.clientset.AppsV1().Deployments(o.namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: viceSelector,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	npClient := o.clientset.NetworkingV1().NetworkPolicies(o.namespace)
+	var updated int
+	var errs []string
+
+	for _, dep := range deps.Items {
+		analysisID := dep.Labels["analysis-id"]
+		if analysisID == "" {
+			log.Warnf("deployment %s has no analysis-id label, skipping", dep.Name)
+			continue
+		}
+
+		bundleLabels := dep.Spec.Template.Labels
+		np := buildAnalysisEgressPolicy(analysisID, o.namespace, bundleLabels, o.egressConfig)
+		if err := upsert(ctx, npClient, "NetworkPolicy", np.Name, np); err != nil {
+			log.Errorf("regenerating egress policy for analysis %s: %v", analysisID, err)
+			errs = append(errs, fmt.Sprintf("analysis %s: %v", analysisID, err))
+			continue
+		}
+		updated++
+		log.Debugf("regenerated egress policy for analysis %s", analysisID)
+	}
+
+	log.Infof("network policy regeneration complete: %d updated, %d errors", updated, len(errs))
+	return c.JSON(http.StatusOK, RegenerateResponse{
+		Updated: updated,
+		Errors:  errs,
+	})
 }

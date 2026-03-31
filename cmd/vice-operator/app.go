@@ -68,6 +68,9 @@ func NewApp(op *operator.Operator, basicAuth bool, username, password string) *A
 	analyses.GET("/active-sessions", op.HandleGetActiveSessions)
 	analyses.POST("/logout-user", op.HandleLogoutUser)
 
+	// Admin operations.
+	api.POST("/regenerate-network-policies", op.HandleRegenerateNetworkPolicies)
+
 	// Image cache routes.
 	api.PUT("/image-cache", op.HandleCacheImages)
 	api.POST("/image-cache/refresh", op.HandleRefreshCachedImages)

@@ -62,6 +62,7 @@ func main() {
 		blockedCIDRs          stringSliceFlag
 		egressPodExceptions   stringSliceFlag
 		egressHostExceptions  stringSliceFlag
+		egressCIDRExceptions  stringSliceFlag
 		ingressPodExceptions  stringSliceFlag
 		disableInternetAccess bool
 	)
@@ -101,6 +102,7 @@ func main() {
 	flag.Var(&blockedCIDRs, "blocked-cidr", "Additional CIDRs to block in egress (repeatable)")
 	flag.Var(&egressPodExceptions, "egress-pod-exception", "Pod selector label (key=value) to allow egress to (repeatable)")
 	flag.Var(&egressHostExceptions, "egress-host-exception", "Hostname or IP that analyses should be able to reach; resolved to IPs at startup (repeatable)")
+	flag.Var(&egressCIDRExceptions, "egress-cidr-exception", "CIDR (e.g. 10.0.0.0/8) that analyses should be able to reach (repeatable)")
 	flag.Var(&ingressPodExceptions, "ingress-pod-exception", "Cross-namespace ingress source as kubernetes.io/metadata.name=<ns>,pod-label=val (repeatable). The kubernetes.io/metadata.name pair selects the namespace; remaining pairs select pods.")
 	flag.BoolVar(&disableInternetAccess, "disable-internet-access", false, "Block analysis pods from reaching the public internet; only DNS, explicit host/CIDR exceptions, and pod exceptions are allowed")
 	flag.Parse()
@@ -320,6 +322,14 @@ func main() {
 		}
 		allowedCIDRs = append(allowedCIDRs, cidrs...)
 		log.Infof("allowing egress to %s: %v", host, cidrs)
+	}
+
+	for _, cidr := range egressCIDRExceptions {
+		if _, _, cidrErr := net.ParseCIDR(cidr); cidrErr != nil {
+			log.Fatalf("invalid --egress-cidr-exception %q: %v", cidr, cidrErr)
+		}
+		allowedCIDRs = append(allowedCIDRs, cidr)
+		log.Infof("allowing egress to CIDR %s", cidr)
 	}
 
 	egressConfig := operator.NetworkPolicyConfig{

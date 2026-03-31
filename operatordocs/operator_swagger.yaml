@@ -229,6 +229,15 @@ definitions:
       ready:
         type: boolean
     type: object
+  operator.RegenerateResponse:
+    properties:
+      errors:
+        items:
+          type: string
+        type: array
+      updated:
+        type: integer
+    type: object
   operator.StatusResponse:
     properties:
       analysisID:
@@ -11378,6 +11387,27 @@ paths:
       summary: Refresh cached images
       tags:
       - image-cache
+  /regenerate-network-policies:
+    post:
+      description: |-
+        Rebuilds egress NetworkPolicies for all running analyses to
+        match the operator's current configuration.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/operator.RegenerateResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - BasicAuth: []
+      summary: Regenerate per-analysis network policies
+      tags:
+      - network-policies
 securityDefinitions:
   BasicAuth:
     type: basic

@@ -1000,6 +1000,37 @@ const docTemplateoperator = `{
                     }
                 }
             }
+        },
+        "/regenerate-network-policies": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "description": "Rebuilds egress NetworkPolicies for all running analyses to\nmatch the operator's current configuration.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "network-policies"
+                ],
+                "summary": "Regenerate per-analysis network policies",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/operator.RegenerateResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1269,6 +1300,20 @@ const docTemplateoperator = `{
                 },
                 "ready": {
                     "type": "boolean"
+                }
+            }
+        },
+        "operator.RegenerateResponse": {
+            "type": "object",
+            "properties": {
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "updated": {
+                    "type": "integer"
                 }
             }
         },
