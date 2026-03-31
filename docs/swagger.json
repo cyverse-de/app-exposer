@@ -2731,9 +2731,6 @@
                 "httpRoute": {
                     "$ref": "#/definitions/v1.HTTPRoute"
                 },
-                "networkPolicy": {
-                    "$ref": "#/definitions/v1.NetworkPolicy"
-                },
                 "persistentVolumeClaims": {
                     "type": "array",
                     "items": {
@@ -6014,22 +6011,6 @@
                 }
             }
         },
-        "v1.IPBlock": {
-            "type": "object",
-            "properties": {
-                "cidr": {
-                    "description": "cidr is a string representing the IPBlock\nValid examples are \"192.168.1.0/24\" or \"2001:db8::/64\"",
-                    "type": "string"
-                },
-                "except": {
-                    "description": "except is a slice of CIDRs that should not be included within an IPBlock\nValid examples are \"192.168.1.0/24\" or \"2001:db8::/64\"\nExcept values will be rejected if they are outside the cidr range\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
         "v1.IPFamily": {
             "type": "string",
             "enum": [
@@ -6561,161 +6542,6 @@
                 "server": {
                     "description": "server is the hostname or IP address of the NFS server.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#nfs",
                     "type": "string"
-                }
-            }
-        },
-        "v1.NetworkPolicy": {
-            "type": "object",
-            "properties": {
-                "apiVersion": {
-                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
-                    "type": "string"
-                },
-                "kind": {
-                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ObjectMeta"
-                        }
-                    ]
-                },
-                "spec": {
-                    "description": "spec represents the specification of the desired behavior for this NetworkPolicy.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.NetworkPolicySpec"
-                        }
-                    ]
-                }
-            }
-        },
-        "v1.NetworkPolicyEgressRule": {
-            "type": "object",
-            "properties": {
-                "ports": {
-                    "description": "ports is a list of destination ports for outgoing traffic.\nEach item in this list is combined using a logical OR. If this field is\nempty or missing, this rule matches all ports (traffic not restricted by port).\nIf this field is present and contains at least one item, then this rule allows\ntraffic only if the traffic matches at least one port in the list.\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.NetworkPolicyPort"
-                    }
-                },
-                "to": {
-                    "description": "to is a list of destinations for outgoing traffic of pods selected for this rule.\nItems in this list are combined using a logical OR operation. If this field is\nempty or missing, this rule matches all destinations (traffic not restricted by\ndestination). If this field is present and contains at least one item, this rule\nallows traffic only if the traffic matches at least one item in the to list.\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.NetworkPolicyPeer"
-                    }
-                }
-            }
-        },
-        "v1.NetworkPolicyIngressRule": {
-            "type": "object",
-            "properties": {
-                "from": {
-                    "description": "from is a list of sources which should be able to access the pods selected for this rule.\nItems in this list are combined using a logical OR operation. If this field is\nempty or missing, this rule matches all sources (traffic not restricted by\nsource). If this field is present and contains at least one item, this rule\nallows traffic only if the traffic matches at least one item in the from list.\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.NetworkPolicyPeer"
-                    }
-                },
-                "ports": {
-                    "description": "ports is a list of ports which should be made accessible on the pods selected for\nthis rule. Each item in this list is combined using a logical OR. If this field is\nempty or missing, this rule matches all ports (traffic not restricted by port).\nIf this field is present and contains at least one item, then this rule allows\ntraffic only if the traffic matches at least one port in the list.\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.NetworkPolicyPort"
-                    }
-                }
-            }
-        },
-        "v1.NetworkPolicyPeer": {
-            "type": "object",
-            "properties": {
-                "ipBlock": {
-                    "description": "ipBlock defines policy on a particular IPBlock. If this field is set then\nneither of the other fields can be.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.IPBlock"
-                        }
-                    ]
-                },
-                "namespaceSelector": {
-                    "description": "namespaceSelector selects namespaces using cluster-scoped labels. This field follows\nstandard label selector semantics; if present but empty, it selects all namespaces.\n\nIf podSelector is also set, then the NetworkPolicyPeer as a whole selects\nthe pods matching podSelector in the namespaces selected by namespaceSelector.\nOtherwise it selects all pods in the namespaces selected by namespaceSelector.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.LabelSelector"
-                        }
-                    ]
-                },
-                "podSelector": {
-                    "description": "podSelector is a label selector which selects pods. This field follows standard label\nselector semantics; if present but empty, it selects all pods.\n\nIf namespaceSelector is also set, then the NetworkPolicyPeer as a whole selects\nthe pods matching podSelector in the Namespaces selected by NamespaceSelector.\nOtherwise it selects the pods matching podSelector in the policy's own namespace.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.LabelSelector"
-                        }
-                    ]
-                }
-            }
-        },
-        "v1.NetworkPolicyPort": {
-            "type": "object",
-            "properties": {
-                "endPort": {
-                    "description": "endPort indicates that the range of ports from port to endPort if set, inclusive,\nshould be allowed by the policy. This field cannot be defined if the port field\nis not defined or if the port field is defined as a named (string) port.\nThe endPort must be equal or greater than port.\n+optional",
-                    "type": "integer"
-                },
-                "port": {
-                    "description": "port represents the port on the given protocol. This can either be a numerical or named\nport on a pod. If this field is not provided, this matches all port names and\nnumbers.\nIf present, only traffic on the specified protocol AND port will be matched.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/intstr.IntOrString"
-                        }
-                    ]
-                },
-                "protocol": {
-                    "description": "protocol represents the protocol (TCP, UDP, or SCTP) which traffic must match.\nIf not specified, this field defaults to TCP.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.Protocol"
-                        }
-                    ]
-                }
-            }
-        },
-        "v1.NetworkPolicySpec": {
-            "type": "object",
-            "properties": {
-                "egress": {
-                    "description": "egress is a list of egress rules to be applied to the selected pods. Outgoing traffic\nis allowed if there are no NetworkPolicies selecting the pod (and cluster policy\notherwise allows the traffic), OR if the traffic matches at least one egress rule\nacross all of the NetworkPolicy objects whose podSelector matches the pod. If\nthis field is empty then this NetworkPolicy limits all outgoing traffic (and serves\nsolely to ensure that the pods it selects are isolated by default).\nThis field is beta-level in 1.8\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.NetworkPolicyEgressRule"
-                    }
-                },
-                "ingress": {
-                    "description": "ingress is a list of ingress rules to be applied to the selected pods.\nTraffic is allowed to a pod if there are no NetworkPolicies selecting the pod\n(and cluster policy otherwise allows the traffic), OR if the traffic source is\nthe pod's local node, OR if the traffic matches at least one ingress rule\nacross all of the NetworkPolicy objects whose podSelector matches the pod. If\nthis field is empty then this NetworkPolicy does not allow any traffic (and serves\nsolely to ensure that the pods it selects are isolated by default)\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.NetworkPolicyIngressRule"
-                    }
-                },
-                "podSelector": {
-                    "description": "podSelector selects the pods to which this NetworkPolicy object applies.\nThe array of rules is applied to any pods selected by this field. An empty\nselector matches all pods in the policy's namespace.\nMultiple network policies can select the same set of pods. In this case,\nthe ingress rules for each are combined additively.\nThis field is optional. If it is not specified, it defaults to an empty selector.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.LabelSelector"
-                        }
-                    ]
-                },
-                "policyTypes": {
-                    "description": "policyTypes is a list of rule types that the NetworkPolicy relates to.\nValid options are [\"Ingress\"], [\"Egress\"], or [\"Ingress\", \"Egress\"].\nIf this field is not specified, it will default based on the existence of ingress or egress rules;\npolicies that contain an egress section are assumed to affect egress, and all policies\n(whether or not they contain an ingress section) are assumed to affect ingress.\nIf you want to write an egress-only policy, you must explicitly specify policyTypes [ \"Egress\" ].\nLikewise, if you want to write a policy that specifies that no egress is allowed,\nyou must specify a policyTypes value that include \"Egress\" (since such a policy would not include\nan egress section and would otherwise default to just [ \"Ingress\" ]).\nThis field is beta-level in 1.8\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.PolicyType"
-                    }
                 }
             }
         },
@@ -8350,17 +8176,6 @@
                     ]
                 }
             }
-        },
-        "v1.PolicyType": {
-            "type": "string",
-            "enum": [
-                "Ingress",
-                "Egress"
-            ],
-            "x-enum-varnames": [
-                "PolicyTypeIngress",
-                "PolicyTypeEgress"
-            ]
         },
         "v1.PortStatus": {
             "type": "object",
