@@ -27,41 +27,43 @@ var log = common.Log
 
 func main() {
 	var (
-		kubeconfig           string
-		namespace            string
-		port                 int
-		gpuVendorFlag        string
-		maxAnalyses          int
-		nodeLabelSelector    string
-		logLevel             string
-		basicAuth            bool
-		basicAuthUsername    string
-		basicAuthPassword    string
-		viceBaseURL          string
-		clusterConfigSecret  string
-		imagePullSecret      string
-		registryServer       string
-		registryUsername     string
-		registryPassword     string
-		loadingPort          int
-		loadingServiceName   string
-		loadingServicePort   int
-		loadingTimeoutMs     int64
-		operatorPodSelector  string
-		gatewayName          string
-		gatewayClassName     string
-		gatewayEntryPort     int
-		keycloakBaseURL      string
-		keycloakRealm        string
-		keycloakClientID     string
-		keycloakClientSecret string
-		disableViceProxyAuth bool
-		apiSubdomain         string
-		apiServiceName       string
-		serviceCIDR          string
-		blockedCIDRs         stringSliceFlag
-		egressPodExceptions  stringSliceFlag
-		ingressPodExceptions stringSliceFlag
+		kubeconfig            string
+		namespace             string
+		port                  int
+		gpuVendorFlag         string
+		maxAnalyses           int
+		nodeLabelSelector     string
+		logLevel              string
+		basicAuth             bool
+		basicAuthUsername     string
+		basicAuthPassword     string
+		viceBaseURL           string
+		clusterConfigSecret   string
+		imagePullSecret       string
+		registryServer        string
+		registryUsername      string
+		registryPassword      string
+		loadingPort           int
+		loadingServiceName    string
+		loadingServicePort    int
+		loadingTimeoutMs      int64
+		operatorPodSelector   string
+		gatewayName           string
+		gatewayClassName      string
+		gatewayEntryPort      int
+		keycloakBaseURL       string
+		keycloakRealm         string
+		keycloakClientID      string
+		keycloakClientSecret  string
+		disableViceProxyAuth  bool
+		apiSubdomain          string
+		apiServiceName        string
+		serviceCIDR           string
+		blockedCIDRs          stringSliceFlag
+		egressPodExceptions   stringSliceFlag
+		egressHostExceptions  stringSliceFlag
+		ingressPodExceptions  stringSliceFlag
+		disableInternetAccess bool
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -98,7 +100,9 @@ func main() {
 	flag.StringVar(&serviceCIDR, "service-cidr", "", "Cluster service CIDR to block in egress (auto-detected from kubernetes API server if empty)")
 	flag.Var(&blockedCIDRs, "blocked-cidr", "Additional CIDRs to block in egress (repeatable)")
 	flag.Var(&egressPodExceptions, "egress-pod-exception", "Pod selector label (key=value) to allow egress to (repeatable)")
+	flag.Var(&egressHostExceptions, "egress-host-exception", "Hostname or IP that analyses should be able to reach; resolved to IPs at startup (repeatable)")
 	flag.Var(&ingressPodExceptions, "ingress-pod-exception", "Cross-namespace ingress source as kubernetes.io/metadata.name=<ns>,pod-label=val (repeatable). The kubernetes.io/metadata.name pair selects the namespace; remaining pairs select pods.")
+	flag.BoolVar(&disableInternetAccess, "disable-internet-access", false, "Block analysis pods from reaching the public internet; only DNS, explicit host/CIDR exceptions, and pod exceptions are allowed")
 	flag.Parse()
 
 	// Validate basic auth flags.
@@ -284,8 +288,52 @@ func main() {
 		log.Warn("no --ingress-pod-exception flags provided; ingress policy will only allow vice-operator — external traffic (e.g. Traefik) will be blocked")
 	}
 
+	if disableInternetAccess {
+		log.Info("internet access disabled for analysis pods (--disable-internet-access)")
+		if keycloakBaseURL == "" && !disableViceProxyAuth {
+			log.Fatal("--disable-internet-access requires --keycloak-base-url (or --disable-vice-proxy-auth); without it vice-proxy cannot reach Keycloak for OIDC auth")
+		}
+	}
+
+	// Resolve hostnames to IPs for egress CIDR exceptions. Keycloak is
+	// included when configured (vice-proxy needs it for OIDC auth);
+	// additional hosts come from --egress-host-exception flags.
+	var allowedCIDRs []string
+	if keycloakBaseURL != "" {
+		cidrs, resolveErr := operator.ResolveHostCIDRs(keycloakBaseURL)
+		if resolveErr != nil {
+			log.Fatalf("resolving Keycloak host for egress exception: %v", resolveErr)
+		}
+		allowedCIDRs = append(allowedCIDRs, cidrs...)
+		log.Infof("allowing egress to Keycloak IPs: %v", cidrs)
+	}
+
+	for _, host := range egressHostExceptions {
+		// Accept both bare hostnames and URLs with a scheme.
+		target := host
+		if !strings.Contains(host, "://") {
+			target = "https://" + host
+		}
+		cidrs, resolveErr := operator.ResolveHostCIDRs(target)
+		if resolveErr != nil {
+			log.Fatalf("resolving --egress-host-exception %q: %v", host, resolveErr)
+		}
+		allowedCIDRs = append(allowedCIDRs, cidrs...)
+		log.Infof("allowing egress to %s: %v", host, cidrs)
+	}
+
+	egressConfig := operator.NetworkPolicyConfig{
+		Namespace:         namespace,
+		ServiceCIDR:       serviceCIDR,
+		BlockedCIDRs:      blockedCIDRs,
+		AllowedCIDRs:      allowedCIDRs,
+		PodExceptions:     podExceptions,
+		IngressExceptions: ingressExceptions,
+		DisableInternet:   disableInternetAccess,
+	}
+
 	mustEnsure("network policies", func(ctx context.Context) error {
-		return operator.EnsureNetworkPolicies(ctx, clientset, namespace, serviceCIDR, blockedCIDRs, podExceptions, ingressExceptions)
+		return operator.EnsureNamespacePolicies(ctx, clientset, egressConfig)
 	})
 
 	gpuVendor, err := operator.ParseGPUVendor(gpuVendorFlag)
@@ -301,7 +349,7 @@ func main() {
 	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
 	imageCache := operator.NewImageCacheManager(clientset, namespace, imagePullSecret)
 	op := operator.NewOperator(clientset, gwClient, namespace, gpuVendor, capacityCalc, imageCache,
-		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs, baseDomain, clusterConfigSecret)
+		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs, baseDomain, clusterConfigSecret, egressConfig)
 
 	app := NewApp(op, basicAuth, basicAuthUsername, basicAuthPassword)
 	loadingApp := NewLoadingApp(op)
