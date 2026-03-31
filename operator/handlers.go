@@ -48,7 +48,8 @@ type Operator struct {
 	loadingServicePort  int32
 	loadingTimeoutMs    int64
 	baseDomain          string
-	clusterConfigSecret string // Name of the Secret holding cluster config for vice-proxy envFrom.
+	clusterConfigSecret string              // Name of the Secret holding cluster config for vice-proxy envFrom.
+	egressConfig        NetworkPolicyConfig // Egress policy config for per-analysis policies.
 }
 
 // NewOperator creates a new Operator. Panics if required dependencies are nil
@@ -65,6 +66,7 @@ func NewOperator(
 	loadingTimeoutMs int64,
 	baseDomain string,
 	clusterConfigSecret string,
+	egressConfig NetworkPolicyConfig,
 ) *Operator {
 	if clientset == nil {
 		panic("operator: clientset must not be nil")
@@ -94,6 +96,7 @@ func NewOperator(
 		loadingTimeoutMs:    loadingTimeoutMs,
 		baseDomain:          baseDomain,
 		clusterConfigSecret: clusterConfigSecret,
+		egressConfig:        egressConfig,
 	}
 }
 
@@ -181,6 +184,23 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 	// Apply all resources via upsert pattern.
 	if err := o.applyBundle(ctx, &bundle); err != nil {
 		log.Errorf("launch failed for analysis %s: %v", bundle.AnalysisID, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	// Create a per-analysis egress NetworkPolicy using the cluster's egress
+	// config. This is done by vice-operator (not app-exposer) because only
+	// the operator knows the cluster environment (blocked CIDRs, Keycloak
+	// IPs, internet access setting, etc.). Pod template labels are used
+	// because they include analysis-id, which deleteAnalysisResources uses
+	// for cleanup.
+	bundleLabels := bundle.Deployment.Spec.Template.Labels
+	np := buildAnalysisEgressPolicy(bundle.AnalysisID, o.namespace, bundleLabels, o.egressConfig)
+	if len(np.Spec.Egress) == 0 {
+		log.Warnf("analysis %s egress policy has no allow rules; pods will have DNS-only egress", bundle.AnalysisID)
+	}
+	npClient := o.clientset.NetworkingV1().NetworkPolicies(o.namespace)
+	if err := upsert(ctx, npClient, "NetworkPolicy", np.Name, np); err != nil {
+		log.Errorf("egress policy failed for analysis %s: %v", bundle.AnalysisID, err)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

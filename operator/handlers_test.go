@@ -67,7 +67,7 @@ func newTestOperator(t *testing.T, maxAnalyses int, vendor ...GPUVendor) (*Opera
 	gwClientset := gatewayfake.NewSimpleClientset()
 	calc := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
 	cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
-	op := NewOperator(clientset, gwClientset.GatewayV1(), "vice-apps", gpuVendor, calc, cache, "vice-operator-loading", 80, 600000, "", "cluster-config-secret")
+	op := NewOperator(clientset, gwClientset.GatewayV1(), "vice-apps", gpuVendor, calc, cache, "vice-operator-loading", 80, 600000, "", "cluster-config-secret", NetworkPolicyConfig{})
 	return op, clientset, gwClientset
 }
 
@@ -196,6 +196,10 @@ func TestHandleLaunch(t *testing.T) {
 
 				_, err = clientset.CoreV1().Services("vice-apps").Get(ctx, "test-svc", metav1.GetOptions{})
 				assert.NoError(t, err, "service should exist")
+
+				// HandleLaunch now creates a per-analysis egress NetworkPolicy.
+				_, err = clientset.NetworkingV1().NetworkPolicies("vice-apps").Get(ctx, "vice-egress-"+tt.bundle.AnalysisID, metav1.GetOptions{})
+				assert.NoError(t, err, "per-analysis egress NetworkPolicy should exist")
 			}
 		})
 	}
