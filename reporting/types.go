@@ -81,6 +81,14 @@ type RouteInfo struct {
 	Hostnames []string `json:"hostnames"`
 }
 
+// VICELogEntry contains the log output for a container in a running VICE analysis.
+// Both app-exposer and vice-operator use this format for compatibility with
+// external UI consumers.
+type VICELogEntry struct {
+	SinceTime string   `json:"since_time"`
+	Lines     []string `json:"lines"`
+}
+
 // ResourceInfo contains all of the K8s resource information about running
 // VICE analyses that we know of and care about.
 type ResourceInfo struct {

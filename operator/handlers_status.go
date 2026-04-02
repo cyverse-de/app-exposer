@@ -4,10 +4,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
+	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/labstack/echo/v4"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // StatusResponse describes the state of an analysis's K8s resources.
@@ -223,24 +228,21 @@ func isPodReady(p apiv1.Pod) bool {
 	return false
 }
 
-// LogEntry holds a single container's log output. If log retrieval failed,
-// Error is set and Log is empty.
-type LogEntry struct {
-	PodName       string `json:"podName"`
-	ContainerName string `json:"containerName"`
-	Log           string `json:"log"`
-	Error         string `json:"error,omitempty"`
-}
-
 // HandleLogs returns container logs for an analysis's pods.
 //
 //	@Summary		Get analysis logs
-//	@Description	Returns the last 5 minutes of container logs for all pods
-//	@Description	belonging to the given analysis.
+//	@Description	Returns container logs for pods belonging to the given analysis.
+//	@Description	Supports filtering by container, tail lines, and time.
 //	@Tags			analyses
 //	@Produce		json
 //	@Param			analysis-id	path		string	true	"The analysis ID"
-//	@Success		200			{array}		LogEntry
+//	@Param			container	query		string	false	"The container name (default: analysis)"
+//	@Param			tail-lines	query		int		false	"Number of lines from the end"
+//	@Param			since		query		int		false	"Seconds in the past"
+//	@Param			since-time	query		int		false	"Epoch timestamp"
+//	@Param			previous	query		bool	false	"Previously terminated container"
+//	@Param			timestamps	query		bool	false	"Include timestamps"
+//	@Success		200			{object}	reporting.VICELogEntry
 //	@Failure		400			{object}	common.ErrorResponse
 //	@Failure		500			{object}	common.ErrorResponse
 //	@Security		BasicAuth
@@ -253,48 +255,84 @@ func (o *Operator) HandleLogs(c echo.Context) error {
 	}
 	log.Debugf("logs request for analysis %s", analysisID)
 
+	logOpts := &apiv1.PodLogOptions{
+		Follow: false,
+	}
+
+	// container is optional, but should have a default value of "analysis"
+	if container := c.QueryParam("container"); container != "" {
+		logOpts.Container = container
+	} else {
+		logOpts.Container = "analysis"
+	}
+
+	if prevStr := c.QueryParam("previous"); prevStr != "" {
+		if previous, err := strconv.ParseBool(prevStr); err == nil {
+			logOpts.Previous = previous
+		}
+	}
+
+	if sinceStr := c.QueryParam("since"); sinceStr != "" {
+		if since, err := strconv.ParseInt(sinceStr, 10, 64); err == nil {
+			logOpts.SinceSeconds = &since
+		}
+	}
+
+	if sinceTimeStr := c.QueryParam("since-time"); sinceTimeStr != "" {
+		if sinceTime, err := strconv.ParseInt(sinceTimeStr, 10, 64); err == nil {
+			t := metav1.Unix(sinceTime, 0)
+			logOpts.SinceTime = &t
+		}
+	}
+
+	if tailStr := c.QueryParam("tail-lines"); tailStr != "" {
+		if tailLines, err := strconv.ParseInt(tailStr, 10, 64); err == nil {
+			logOpts.TailLines = &tailLines
+		}
+	}
+
+	if tsStr := c.QueryParam("timestamps"); tsStr != "" {
+		if timestamps, err := strconv.ParseBool(tsStr); err == nil {
+			logOpts.Timestamps = timestamps
+		}
+	}
+
 	opts := analysisLabelSelector(analysisID)
 	pods, err := o.clientset.CoreV1().Pods(o.namespace).List(ctx, opts)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	sinceSeconds := int64(300)
-	logOpts := &apiv1.PodLogOptions{
-		SinceSeconds: &sinceSeconds,
+	if len(pods.Items) == 0 {
+		return echo.NewHTTPError(http.StatusNotFound, "no pods found for analysis")
 	}
 
-	var entries []LogEntry
-	for _, pod := range pods.Items {
-		for _, container := range pod.Spec.Containers {
-			logOpts.Container = container.Name
-			logReq := o.clientset.CoreV1().Pods(o.namespace).GetLogs(pod.Name, logOpts)
-			stream, err := logReq.Stream(ctx)
-			if err != nil {
-				log.Errorf("error getting logs for %s/%s: %v", pod.Name, container.Name, err)
-				entries = append(entries, LogEntry{
-					PodName: pod.Name, ContainerName: container.Name,
-					Error: fmt.Sprintf("failed to stream logs: %v", err),
-				})
-				continue
-			}
-			logBytes, err := io.ReadAll(stream)
-			_ = stream.Close() //nolint:errcheck // best-effort close inside loop; any error is secondary to read error above
-			if err != nil {
-				log.Errorf("error reading logs for %s/%s: %v", pod.Name, container.Name, err)
-				entries = append(entries, LogEntry{
-					PodName: pod.Name, ContainerName: container.Name,
-					Error: fmt.Sprintf("failed to read logs: %v", err),
-				})
-				continue
-			}
-			entries = append(entries, LogEntry{
-				PodName:       pod.Name,
-				ContainerName: container.Name,
-				Log:           string(logBytes),
-			})
-		}
+	// Match app-exposer's original LogsHandler behavior by returning logs for
+	// only the first pod. VICE analyses are single-replica deployments, so
+	// there is typically only one pod, and the UI expects a single log entry
+	// (VICELogEntry) rather than an array of logs for all pods/containers.
+	pod := pods.Items[0]
+
+	logReq := o.clientset.CoreV1().Pods(o.namespace).GetLogs(pod.Name, logOpts)
+	stream, err := logReq.Stream(ctx)
+	if err != nil {
+		log.Errorf("error streaming logs for %s/%s: %v", pod.Name, logOpts.Container, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer func() { _ = stream.Close() }()
+
+	logBytes, err := io.ReadAll(stream)
+	if err != nil {
+		log.Errorf("error reading logs for %s/%s: %v", pod.Name, logOpts.Container, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	return c.JSON(http.StatusOK, entries)
+	bodyLines := strings.Split(string(logBytes), "\n")
+	newSinceTime := fmt.Sprintf("%d", time.Now().Unix())
+
+	// Return the same format as the original app-exposer LogsHandler.
+	return c.JSON(http.StatusOK, &reporting.VICELogEntry{
+		SinceTime: newSinceTime,
+		Lines:     bodyLines,
+	})
 }

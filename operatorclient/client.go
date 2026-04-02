@@ -338,8 +338,33 @@ func (c *Client) Pods(ctx context.Context, analysisID string) (json.RawMessage, 
 }
 
 // Logs returns container logs for an analysis from the operator.
-func (c *Client) Logs(ctx context.Context, analysisID string) (json.RawMessage, error) {
-	return c.getAnalysisJSON(ctx, analysisID, "logs")
+func (c *Client) Logs(ctx context.Context, analysisID string, params url.Values) (json.RawMessage, error) {
+	reqURL, err := url.Parse(c.analysisURL(analysisID, "logs"))
+	if err != nil {
+		return nil, err
+	}
+	reqURL.RawQuery = params.Encode()
+
+	log.Debugf("operator %s: GET %s (analysis %s, logs)", c.name, reqURL.String(), analysisID)
+
+	resp, err := c.doRequest(ctx, http.MethodGet, reqURL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("logs request for analysis %s: %w", analysisID, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading logs response for analysis %s: %w", analysisID, err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		err := fmt.Errorf("logs returned %d: %s", resp.StatusCode, string(body))
+		log.Errorf("operator %s: %v", c.name, err)
+		return nil, err
+	}
+
+	return json.RawMessage(body), nil
 }
 
 // getAnalysisJSON GETs a JSON response from an analysis sub-endpoint.
