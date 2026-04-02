@@ -57,11 +57,6 @@ func (h *HTTPHandlers) SetScheduler(s *operatorclient.Scheduler) {
 //
 // Callers must treat a nil return as a fatal condition.
 func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID string) *operatorclient.Client {
-	if h.scheduler == nil {
-		log.Errorf("no scheduler configured, cannot find operator for analysis %s", analysisID)
-		return nil
-	}
-
 	// Fast path: check the DB for a recorded operator name.
 	operatorName, err := h.apps.GetOperatorName(ctx, analysisID)
 	if err != nil {
@@ -281,21 +276,31 @@ func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 		return err
 	}
 
-	filter := map[string]string{
-		"external-id": externalID,
+	var userID string
+
+	client := h.operatorClientForAnalysis(ctx, analysisID)
+	if client == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "analysis not found on any operator")
 	}
 
-	deployments, err := h.incluster.DeploymentList(ctx, h.incluster.ViceNamespace, filter, []string{})
+	// The operator status includes the deployment names. We need the labels.
+	// Since we can't easily get labels from the operator Status endpoint,
+	// we'll use the Listing endpoint which is more verbose but has everything.
+	info, err := client.Listing(ctx)
 	if err != nil {
-		return err
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	if len(deployments.Items) < 1 {
-		return echo.NewHTTPError(http.StatusNotFound, "no deployments found.")
+	for _, d := range info.Deployments {
+		if d.ExternalID == externalID {
+			userID = d.UserID
+			break
+		}
 	}
 
-	labels := deployments.Items[0].GetLabels()
-	userID := labels["user-id"]
+	if userID == "" {
+		return echo.NewHTTPError(http.StatusNotFound, "user-id not found for analysis")
+	}
 
 	subdomain := common.Subdomain(userID, externalID)
 	ipAddr, err := h.apps.GetUserIP(ctx, userID)
@@ -309,4 +314,46 @@ func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 		Subdomain:  subdomain,
 		IPAddr:     ipAddr,
 	})
+}
+
+// OperatorStatus contains the capacity status of an operator or an error if it could not be reached.
+type OperatorStatus struct {
+	Operator string                           `json:"operator"`
+	Capacity *operatorclient.CapacityResponse `json:"capacity,omitempty"`
+	Error    string                           `json:"error,omitempty"`
+}
+
+// AdminOperatorsHandler returns the capacity status of all configured operators.
+//
+//	@ID				admin-operators
+//	@Summary		Lists configured operators and their capacity
+//	@Description	Iterates through all configured operators and checks their capacity endpoints.
+//	@Produce		json
+//	@Success		200	{array}		OperatorStatus
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/admin/operators [get]
+func (h *HTTPHandlers) AdminOperatorsHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+	clients := h.scheduler.Clients()
+
+	results := make([]OperatorStatus, len(clients))
+	var wg sync.WaitGroup
+
+	for i, client := range clients {
+		wg.Add(1)
+		go func(idx int, cl *operatorclient.Client) {
+			defer wg.Done()
+			capResp, err := cl.Capacity(ctx)
+			status := OperatorStatus{Operator: cl.Name()}
+			if err != nil {
+				status.Error = err.Error()
+			} else {
+				status.Capacity = capResp
+			}
+			results[idx] = status
+		}(i, client)
+	}
+	wg.Wait()
+
+	return c.JSON(http.StatusOK, results)
 }

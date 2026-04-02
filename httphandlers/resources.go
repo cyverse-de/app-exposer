@@ -9,6 +9,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/permissions"
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/labstack/echo/v4"
@@ -276,7 +277,8 @@ func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 
 // FilterableResourcesHandler returns all K8s resources for the requesting user's
 // VICE analyses, filtered by query string parameters. Requires a valid 'user'
-// query parameter.
+// query parameter. Aggregates results from all operators if a scheduler is
+// configured.
 //
 //	@ID				filterable-resources
 //	@Summary		Returns resources for a VICE analysis
@@ -317,12 +319,62 @@ func (h *HTTPHandlers) FilterableResourcesHandler(c echo.Context) error {
 
 	log.Debugf("user ID is %s", userID)
 
-	listing, err := h.incluster.DoResourceListing(ctx, filter)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	merged := reporting.NewResourceInfo()
+	clients := h.scheduler.Clients()
+
+	var wg sync.WaitGroup
+	type result struct {
+		info *reporting.ResourceInfo
+		err  error
+	}
+	results := make([]result, len(clients))
+
+	for i, client := range clients {
+		wg.Add(1)
+		go func(idx int, c *operatorclient.Client) {
+			defer wg.Done()
+			info, err := c.Listing(ctx)
+			results[idx] = result{info: info, err: err}
+		}(i, client)
+	}
+	wg.Wait()
+
+	for _, r := range results {
+		if r.err != nil {
+			log.Errorf("listing aggregation error: %v", r.err)
+			continue
+		}
+		// Manual filtering by userID if operator doesn't support it yet.
+		// Most of our labels are present in the reporting types.
+		for _, d := range r.info.Deployments {
+			if d.UserID == userID {
+				merged.Deployments = append(merged.Deployments, d)
+			}
+		}
+		for _, p := range r.info.Pods {
+			if p.UserID == userID {
+				merged.Pods = append(merged.Pods, p)
+			}
+		}
+		for _, cm := range r.info.ConfigMaps {
+			if cm.UserID == userID {
+				merged.ConfigMaps = append(merged.ConfigMaps, cm)
+			}
+		}
+		for _, s := range r.info.Services {
+			if s.UserID == userID {
+				merged.Services = append(merged.Services, s)
+			}
+		}
+		for _, rt := range r.info.Routes {
+			if rt.UserID == userID {
+				merged.Routes = append(merged.Routes, rt)
+			}
+		}
 	}
 
-	return c.JSON(http.StatusOK, listing)
+	reporting.SortByCreationTime(merged)
+	return c.JSON(http.StatusOK, merged)
 }
 
 // AdminFilterableResourcesHandler returns K8s resources filtered by query string
@@ -367,11 +419,6 @@ func (h *HTTPHandlers) AdminOperatorListingHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	merged := reporting.NewResourceInfo()
-
-	if h.scheduler == nil {
-		// No operators configured; return empty resource info.
-		return c.JSON(http.StatusOK, merged)
-	}
 
 	// Query all operators in parallel and collect results.
 	clients := h.scheduler.Clients()
@@ -432,7 +479,8 @@ type ListPodsResponse struct {
 }
 
 // PodsHandler lists the K8s pods associated with the given analysis ID for the
-// requesting user.
+// requesting user. Delegates to the appropriate operator if a scheduler is
+// configured.
 //
 //	@ID				list-pods
 //	@Summary		Lists the k8s pods associated with the provided external-id
@@ -457,24 +505,16 @@ func (h *HTTPHandlers) PodsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "user not set")
 	}
 
-	externalIDs, err := h.incluster.GetExternalIDs(ctx, user, analysisID)
+	client := h.operatorClientForAnalysis(ctx, analysisID)
+	if client == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "analysis not found on any operator")
+	}
+
+	rawPods, err := client.Pods(ctx, analysisID)
 	if err != nil {
-		return err
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-
-	if len(externalIDs) == 0 {
-		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no external-id found for analysis-id %s", analysisID))
-	}
-
-	// For now, just use the first external ID
-	externalID := externalIDs[0]
-
-	returnedPods, err := h.incluster.GetPods(ctx, externalID)
-	if err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusOK, ListPodsResponse{
-		Pods: returnedPods,
-	})
+	// The operator returns []operator.PodInfo. app-exposer PodsHandler
+	// originally returned {"pods": []incluster.RetPod}. We need to wrap it.
+	return c.Blob(http.StatusOK, "application/json", []byte(fmt.Sprintf(`{"pods":%s}`, string(rawPods))))
 }

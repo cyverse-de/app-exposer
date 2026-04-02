@@ -41,20 +41,10 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 		return err
 	}
 
-	found, err := h.incluster.IsAnalysisInCluster(ctx, job.InvocationID)
-	if err != nil {
-		return err
-	}
-
-	// If the deployment for this invocation ID is already in the cluster, there's nothing to do.
-	if found {
+	// Check if already running on any operator for idempotency.
+	if client := h.operatorClientForAnalysis(ctx, job.ID); client != nil {
+		log.Infof("analysis %s already running on operator %s, returning success", job.ID, client.Name())
 		return c.NoContent(http.StatusOK)
-	}
-
-	// Scheduler is required for multi-cluster routing. Fail fast before doing
-	// any expensive work.
-	if h.scheduler == nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "no scheduler configured for VICE launches")
 	}
 
 	if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
@@ -64,16 +54,8 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 		return echo.NewHTTPError(status, err.Error())
 	}
 
-	// Create the excludes file ConfigMap for the job.
-	if err = h.incluster.UpsertExcludesConfigMap(ctx, job); err != nil {
-		return err
-	}
-
-	// Create the input path list config map
-	if err = h.incluster.UpsertInputPathListConfigMap(ctx, job); err != nil {
-		return err
-	}
-
+	// Pre-build the deployment locally just to calculate millicores reservation
+	// and validate resource requirements.
 	deployment, err := h.incluster.GetDeployment(ctx, job)
 	if err != nil {
 		return err
