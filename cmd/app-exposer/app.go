@@ -143,19 +143,21 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter),
 	}
 
-	// Configure operator scheduler if operators are defined in config.
+	// Configure operator scheduler. Must have at least one operator configured.
 	var operatorConfigs []operatorclient.OperatorConfig
 	if err := c.Unmarshal("vice.operators", &operatorConfigs); err != nil {
-		log.Warnf("could not parse operators config: %v", err)
+		log.Fatalf("could not parse operators config: %v", err)
 	}
-	if len(operatorConfigs) > 0 {
-		scheduler, err := operatorclient.NewScheduler(operatorConfigs)
-		if err != nil {
-			log.Fatalf("error creating operator scheduler: %v", err)
-		}
-		app.handlers.SetScheduler(scheduler)
-		log.Infof("operator scheduler configured with %d operators", len(operatorConfigs))
+	if len(operatorConfigs) == 0 {
+		log.Fatalf("no operators configured in vice.operators")
 	}
+
+	scheduler, err := operatorclient.NewScheduler(operatorConfigs)
+	if err != nil {
+		log.Fatalf("error creating operator scheduler: %v", err)
+	}
+	app.handlers.SetScheduler(scheduler)
+	log.Infof("operator scheduler configured with %d operators", len(operatorConfigs))
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
 
@@ -227,6 +229,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	vicelisting.GET("/routes", app.handlers.FilterableRoutesHandler)
 
 	viceadmin := vice.Group("/admin")
+	viceadmin.GET("/operators", app.handlers.AdminOperatorsHandler)
 	viceadmin.GET("/listing", app.handlers.AdminFilterableResourcesHandler)
 	viceadmin.GET("/operator-listing", app.handlers.AdminOperatorListingHandler)
 	viceadmin.POST("/terminate-all", app.handlers.TerminateAllAnalysesHandler)
