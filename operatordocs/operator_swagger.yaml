@@ -202,17 +202,6 @@ definitions:
         description: '"ready", "pulling", "cached-with-errors", "error"'
         type: string
     type: object
-  operator.LogEntry:
-    properties:
-      containerName:
-        type: string
-      error:
-        type: string
-      log:
-        type: string
-      podName:
-        type: string
-    type: object
   operator.PermissionsResponse:
     properties:
       allowedUsers:
@@ -563,6 +552,15 @@ definitions:
       targetPort:
         type: integer
       targetPortName:
+        type: string
+    type: object
+  reporting.VICELogEntry:
+    properties:
+      lines:
+        items:
+          type: string
+        type: array
+      since_time:
         type: string
     type: object
   resource.Quantity:
@@ -10908,23 +10906,45 @@ paths:
   /analyses/{analysis-id}/logs:
     get:
       description: |-
-        Returns the last 5 minutes of container logs for all pods
-        belonging to the given analysis.
+        Returns container logs for pods belonging to the given analysis.
+        Supports filtering by container, tail lines, and time.
       parameters:
       - description: The analysis ID
         in: path
         name: analysis-id
         required: true
         type: string
+      - description: 'The container name (default: analysis)'
+        in: query
+        name: container
+        type: string
+      - description: Number of lines from the end
+        in: query
+        name: tail-lines
+        type: integer
+      - description: Seconds in the past
+        in: query
+        name: since
+        type: integer
+      - description: Epoch timestamp
+        in: query
+        name: since-time
+        type: integer
+      - description: Previously terminated container
+        in: query
+        name: previous
+        type: boolean
+      - description: Include timestamps
+        in: query
+        name: timestamps
+        type: boolean
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/operator.LogEntry'
-            type: array
+            $ref: '#/definitions/reporting.VICELogEntry'
         "400":
           description: Bad Request
           schema:

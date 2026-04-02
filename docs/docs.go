@@ -170,7 +170,7 @@ const docTemplate = `{
         },
         "/vice/admin/analyses/{analysis-id}/exit": {
             "post": {
-                "description": "Terminates the VICE analysis based on the analysisID and\nand should not require any user information to be provided. Otherwise, the\ndocumentation for ExitHandler applies here as well.",
+                "description": "Terminates the VICE analysis based on the analysisID and\nshould not require any user information to be provided. Otherwise,\nthe documentation for ExitHandler applies here as well.",
                 "summary": "Terminates a VICE analysis",
                 "operationId": "admin-exit",
                 "parameters": [
@@ -241,7 +241,7 @@ const docTemplate = `{
         },
         "/vice/admin/analyses/{analysis-id}/save-and-exit": {
             "post": {
-                "description": "Handles requests to save the output files in iRODS and\nthen exit. This version of the call operates based on the analysis ID and does\nnot require user information to be required by the caller. Otherwise, the docs\nfor the VICESaveAndExit function apply here as well.",
+                "description": "Handles requests to save the output files in iRODS and\nthen exit. This version of the call operates based on the analysis ID and does\nnot require user information to be required by the caller. Otherwise, the docs\nfor SaveAndExitHandler apply here as well.",
                 "summary": "Admin endpoint to trigger output file transfer and analysis exit",
                 "operationId": "admin-save-and-exit",
                 "parameters": [
@@ -386,7 +386,7 @@ const docTemplate = `{
         },
         "/vice/admin/is-deployed/analysis-id/{analysis-id}": {
             "get": {
-                "description": "Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state",
+                "description": "Returns whether a deployment for the analysis with the provided analysis ID is present in the cluster, regardless of its state",
                 "summary": "Returns whether a deployment for an analysis is in the cluster",
                 "operationId": "admin-analysis-in-cluster-by-id",
                 "parameters": [
@@ -499,6 +499,33 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/reporting.ResourceInfo"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/operators": {
+            "get": {
+                "description": "Iterates through all configured operators and checks their capacity endpoints.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists configured operators and their capacity",
+                "operationId": "admin-operators",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/httphandlers.OperatorStatus"
+                            }
                         }
                     },
                     "500": {
@@ -1028,7 +1055,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/httphandlers.VICELogEntry"
+                            "$ref": "#/definitions/reporting.VICELogEntry"
                         }
                     },
                     "400": {
@@ -1410,7 +1437,7 @@ const docTemplate = `{
         },
         "/vice/{id}/exit": {
             "post": {
-                "description": "Terminates the VICE analysis deployment and cleans up\nresources associated with it. Does not save outputs first. Uses\nthe external-id label to find all of the objects in the configured\nnamespace associated with the job. Deletes the following objects:\nHTTP routes, services, deployments, and configmaps.",
+                "description": "Terminates the VICE analysis by routing through the operator\nrunning it. Converts the external ID to an analysis ID and\ndelegates all resource cleanup to the operator.",
                 "summary": "Terminates a VICE analysis",
                 "operationId": "exit",
                 "parameters": [
@@ -1788,6 +1815,20 @@ const docTemplate = `{
                 }
             }
         },
+        "httphandlers.OperatorStatus": {
+            "type": "object",
+            "properties": {
+                "capacity": {
+                    "$ref": "#/definitions/operatorclient.CapacityResponse"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "operator": {
+                    "type": "string"
+                }
+            }
+        },
         "httphandlers.TerminateAllResponse": {
             "type": "object",
             "properties": {
@@ -1836,20 +1877,6 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
-                }
-            }
-        },
-        "httphandlers.VICELogEntry": {
-            "type": "object",
-            "properties": {
-                "lines": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "since_time": {
-                    "type": "string"
                 }
             }
         },
@@ -2757,6 +2784,36 @@ const docTemplate = `{
                 }
             }
         },
+        "operatorclient.CapacityResponse": {
+            "type": "object",
+            "properties": {
+                "allocatableCPU": {
+                    "description": "millicores",
+                    "type": "integer"
+                },
+                "allocatableMemory": {
+                    "description": "bytes",
+                    "type": "integer"
+                },
+                "availableSlots": {
+                    "type": "integer"
+                },
+                "maxAnalyses": {
+                    "type": "integer"
+                },
+                "runningAnalyses": {
+                    "type": "integer"
+                },
+                "usedCPU": {
+                    "description": "millicores",
+                    "type": "integer"
+                },
+                "usedMemory": {
+                    "description": "bytes",
+                    "type": "integer"
+                }
+            }
+        },
         "reporting.ConfigMapInfo": {
             "type": "object",
             "properties": {
@@ -3093,6 +3150,20 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "targetPortName": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.VICELogEntry": {
+            "type": "object",
+            "properties": {
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "since_time": {
                     "type": "string"
                 }
             }

@@ -301,7 +301,7 @@ const docTemplateoperator = `{
                         "BasicAuth": []
                     }
                 ],
-                "description": "Returns the last 5 minutes of container logs for all pods\nbelonging to the given analysis.",
+                "description": "Returns container logs for pods belonging to the given analysis.\nSupports filtering by container, tail lines, and time.",
                 "produces": [
                     "application/json"
                 ],
@@ -316,16 +316,49 @@ const docTemplateoperator = `{
                         "name": "analysis-id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "The container name (default: analysis)",
+                        "name": "container",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of lines from the end",
+                        "name": "tail-lines",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Seconds in the past",
+                        "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Epoch timestamp",
+                        "name": "since-time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Previously terminated container",
+                        "name": "previous",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include timestamps",
+                        "name": "timestamps",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/operator.LogEntry"
-                            }
+                            "$ref": "#/definitions/reporting.VICELogEntry"
                         }
                     },
                     "400": {
@@ -1261,23 +1294,6 @@ const docTemplateoperator = `{
                 }
             }
         },
-        "operator.LogEntry": {
-            "type": "object",
-            "properties": {
-                "containerName": {
-                    "type": "string"
-                },
-                "error": {
-                    "type": "string"
-                },
-                "log": {
-                    "type": "string"
-                },
-                "podName": {
-                    "type": "string"
-                }
-            }
-        },
         "operator.PermissionsResponse": {
             "type": "object",
             "properties": {
@@ -1810,6 +1826,20 @@ const docTemplateoperator = `{
                     "type": "integer"
                 },
                 "targetPortName": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.VICELogEntry": {
+            "type": "object",
+            "properties": {
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "since_time": {
                     "type": "string"
                 }
             }

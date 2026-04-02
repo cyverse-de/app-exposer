@@ -184,6 +184,15 @@ definitions:
           $ref: '#/definitions/incluster.RetPod'
         type: array
     type: object
+  httphandlers.OperatorStatus:
+    properties:
+      capacity:
+        $ref: '#/definitions/operatorclient.CapacityResponse'
+      error:
+        type: string
+      operator:
+        type: string
+    type: object
   httphandlers.TerminateAllResponse:
     properties:
       batch:
@@ -216,15 +225,6 @@ definitions:
         items:
           type: string
         type: array
-    type: object
-  httphandlers.VICELogEntry:
-    properties:
-      lines:
-        items:
-          type: string
-        type: array
-      since_time:
-        type: string
     type: object
   httphandlers.uuidBody:
     properties:
@@ -888,6 +888,27 @@ definitions:
       service:
         $ref: '#/definitions/v1.Service'
     type: object
+  operatorclient.CapacityResponse:
+    properties:
+      allocatableCPU:
+        description: millicores
+        type: integer
+      allocatableMemory:
+        description: bytes
+        type: integer
+      availableSlots:
+        type: integer
+      maxAnalyses:
+        type: integer
+      runningAnalyses:
+        type: integer
+      usedCPU:
+        description: millicores
+        type: integer
+      usedMemory:
+        description: bytes
+        type: integer
+    type: object
   reporting.ConfigMapInfo:
     properties:
       analysisID:
@@ -1110,6 +1131,15 @@ definitions:
       targetPort:
         type: integer
       targetPortName:
+        type: string
+    type: object
+  reporting.VICELogEntry:
+    properties:
+      lines:
+        items:
+          type: string
+        type: array
+      since_time:
         type: string
     type: object
   resource.Quantity:
@@ -11379,7 +11409,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/httphandlers.VICELogEntry'
+            $ref: '#/definitions/reporting.VICELogEntry'
         "400":
           description: Bad Request
           schema:
@@ -11651,11 +11681,9 @@ paths:
   /vice/{id}/exit:
     post:
       description: |-
-        Terminates the VICE analysis deployment and cleans up
-        resources associated with it. Does not save outputs first. Uses
-        the external-id label to find all of the objects in the configured
-        namespace associated with the job. Deletes the following objects:
-        HTTP routes, services, deployments, and configmaps.
+        Terminates the VICE analysis by routing through the operator
+        running it. Converts the external ID to an analysis ID and
+        delegates all resource cleanup to the operator.
       operationId: exit
       parameters:
       - description: The external ID of the VICE analysis
@@ -11817,8 +11845,8 @@ paths:
     post:
       description: |-
         Terminates the VICE analysis based on the analysisID and
-        and should not require any user information to be provided. Otherwise, the
-        documentation for ExitHandler applies here as well.
+        should not require any user information to be provided. Otherwise,
+        the documentation for ExitHandler applies here as well.
       operationId: admin-exit
       parameters:
       - description: The analysis ID of the VICE analysis
@@ -11872,7 +11900,7 @@ paths:
         Handles requests to save the output files in iRODS and
         then exit. This version of the call operates based on the analysis ID and does
         not require user information to be required by the caller. Otherwise, the docs
-        for the VICESaveAndExit function apply here as well.
+        for SaveAndExitHandler apply here as well.
       operationId: admin-save-and-exit
       parameters:
       - description: Analysis ID
@@ -11974,7 +12002,7 @@ paths:
   /vice/admin/is-deployed/analysis-id/{analysis-id}:
     get:
       description: Returns whether a deployment for the analysis with the provided
-        external ID is present in the cluster, regardless of its state
+        analysis ID is present in the cluster, regardless of its state
       operationId: admin-analysis-in-cluster-by-id
       parameters:
       - description: analysis id
@@ -12062,6 +12090,25 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Lists running analyses across all operators
+  /vice/admin/operators:
+    get:
+      description: Iterates through all configured operators and checks their capacity
+        endpoints.
+      operationId: admin-operators
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/httphandlers.OperatorStatus'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Lists configured operators and their capacity
   /vice/admin/terminate-all:
     post:
       description: |-
