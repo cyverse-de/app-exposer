@@ -332,8 +332,19 @@ func main() {
 		log.Infof("allowing egress to CIDR %s", cidr)
 	}
 
+	// Determine operator labels for NetworkPolicy.
+	operatorLabels := map[string]string{"app": "vice-operator"}
+	if operatorPodSelector != "" {
+		selector, selectorErr := parseSelector(operatorPodSelector)
+		if selectorErr != nil {
+			log.Fatalf("invalid --operator-pod-selector: %v", selectorErr)
+		}
+		operatorLabels = selector
+	}
+
 	egressConfig := operator.NetworkPolicyConfig{
 		Namespace:         namespace,
+		OperatorLabels:    operatorLabels,
 		ServiceCIDR:       serviceCIDR,
 		BlockedCIDRs:      blockedCIDRs,
 		AllowedCIDRs:      allowedCIDRs,

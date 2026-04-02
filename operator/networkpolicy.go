@@ -51,6 +51,7 @@ type IngressException struct {
 // NetworkPolicyConfig holds all parameters for network policy management.
 type NetworkPolicyConfig struct {
 	Namespace         string
+	OperatorLabels    map[string]string // Pod selector labels for the operator itself.
 	ServiceCIDR       string
 	BlockedCIDRs      []string            // CIDRs to block in egress (in addition to ServiceCIDR).
 	AllowedCIDRs      []string            // Explicit CIDR exceptions always allowed (e.g. Keycloak IPs).
@@ -133,7 +134,7 @@ func EnsureNamespacePolicies(
 		},
 		Spec: netv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "vice-operator"},
+				MatchLabels: cfg.OperatorLabels,
 			},
 			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeEgress},
 			Egress: []netv1.NetworkPolicyEgressRule{
@@ -182,7 +183,7 @@ func EnsureNamespacePolicies(
 			From: []netv1.NetworkPolicyPeer{
 				{
 					PodSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"app": "vice-operator"},
+						MatchLabels: cfg.OperatorLabels,
 					},
 				},
 			},
