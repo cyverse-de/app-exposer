@@ -2,6 +2,7 @@ package httphandlers
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -229,7 +230,7 @@ func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 	fixedUser := h.incluster.FixUsername(user)
 	_, err := h.apps.GetUserID(ctx, fixedUser)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("user %s not found", fixedUser))
 		}
 		return err
@@ -303,7 +304,7 @@ func (h *HTTPHandlers) FilterableResourcesHandler(c echo.Context) error {
 	user = h.incluster.FixUsername(user)
 	userID, err := h.apps.GetUserID(ctx, user)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("user %s not found", user))
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

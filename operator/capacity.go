@@ -81,7 +81,7 @@ func (cc *CapacityCalculator) Calculate(ctx context.Context) (*operatorclient.Ca
 
 	runningAnalyses := len(deps.Items)
 
-	// Sum resource requests from running VICE pods.
+	// Sum resource requests from VICE deployment specs (reserved capacity, not actual utilization).
 	var usedCPU, usedMemory int64
 	for _, dep := range deps.Items {
 		for _, container := range dep.Spec.Template.Spec.Containers {

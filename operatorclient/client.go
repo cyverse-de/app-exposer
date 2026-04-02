@@ -47,6 +47,7 @@ func NewClient(cfg OperatorConfig) (*Client, error) {
 		dt := http.DefaultTransport.(*http.Transport).Clone()
 		dt.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec // intentional for dev/testing
 		transport = dt
+		log.Warnf("operator %q: TLS certificate verification disabled (insecure mode)", cfg.Name)
 	}
 
 	return &Client{
@@ -356,9 +357,14 @@ func (c *Client) getAnalysisJSON(ctx context.Context, analysisID, subpath string
 	if err != nil {
 		return nil, fmt.Errorf("reading %s response for analysis %s: %w", subpath, analysisID, err)
 	}
-	if err := checkStatus(resp, subpath); err != nil {
+
+	// Check status after reading body — checkStatus would try to re-read
+	// the already-consumed body, producing empty error messages.
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		err := fmt.Errorf("%s returned %d: %s", subpath, resp.StatusCode, string(body))
 		log.Errorf("operator %s: %v", c.name, err)
 		return nil, err
 	}
+
 	return json.RawMessage(body), nil
 }

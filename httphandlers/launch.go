@@ -3,6 +3,7 @@ package httphandlers
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -249,7 +250,7 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 	fixedUser := common.FixUsername(user, h.incluster.UserSuffix)
 	_, err := h.apps.GetUserID(ctx, fixedUser)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("user %s not found", fixedUser))
 		}
 		return err
@@ -367,7 +368,7 @@ func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error 
 //
 //	@ID				admin-analysis-in-cluster-by-id
 //	@Summary		Returns whether a deployment for an analysis is in the cluster
-//	@Description	Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state
+//	@Description	Returns whether a deployment for the analysis with the provided analysis ID is present in the cluster, regardless of its state
 //	@Produces		json
 //	@Param			analysis-id	path		string	true	"analysis id"
 //	@Success		200			{object}	AnalysisInClusterResponse

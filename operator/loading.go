@@ -199,6 +199,7 @@ func (o *Operator) HandleLoadingPage(c echo.Context) error {
 	// rendering fails instead of writing a partial response body with a 200 header.
 	var buf strings.Builder
 	if err := loadingTemplate.Execute(&buf, data); err != nil {
+		log.Errorf("rendering loading page for analysis %s: %v", analysisID, err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to render loading page")
 	}
 	return c.HTML(http.StatusOK, buf.String())

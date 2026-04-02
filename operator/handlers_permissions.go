@@ -76,7 +76,7 @@ func (o *Operator) HandleGetPermissions(c echo.Context) error {
 
 	// Parse the allowed-users file: one username per line, skip blanks.
 	var users []string
-	for _, line := range strings.Split(permsCM.Data[constants.PermissionsFileName], "\n") {
+	for line := range strings.SplitSeq(permsCM.Data[constants.PermissionsFileName], "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			users = append(users, line)
@@ -153,7 +153,6 @@ func (o *Operator) viceProxyURL(svcName, path string) string {
 	return u.String()
 }
 
-// findAnalysisService returns the first Service matching the analysis-id label.
 // forwardToViceProxy finds the analysis service, builds a vice-proxy URL,
 // makes the HTTP request, and returns the response body. Returns an echo
 // HTTPError on failure so handlers can return it directly.
@@ -197,6 +196,8 @@ func (o *Operator) forwardToViceProxy(ctx context.Context, analysisID, method, p
 	return body, nil
 }
 
+// findAnalysisService returns the first Service matching the analysis-id label,
+// or nil if none exists.
 func (o *Operator) findAnalysisService(ctx context.Context, analysisID string) (*apiv1.Service, error) {
 	opts := analysisLabelSelector(analysisID)
 	svcList, err := o.clientset.CoreV1().Services(o.namespace).List(ctx, opts)
@@ -287,15 +288,3 @@ func (o *Operator) HandleLogoutUser(c echo.Context) error {
 	log.Infof("logout-user forwarded for analysis %s (user %s)", analysisID, req.Username)
 	return c.JSONBlob(http.StatusOK, body)
 }
-
-// HandleSwapRoute manually triggers the route swap for an analysis, pointing
-// its HTTPRoute at the analysis Service regardless of readiness.
-//
-//	@Summary		Manually swap route to analysis service
-//	@Description	Swaps the HTTPRoute backend from the loading page service to
-//	@Description	the analysis Service. Idempotent.
-//	@Tags			analyses
-//	@Param			analysis-id	path	string	true	"The analysis ID"
-//	@Success		200
-//	@Failure		400	{object}	common.ErrorResponse
-//	@Failure		500	{object}	common.ErrorResponse

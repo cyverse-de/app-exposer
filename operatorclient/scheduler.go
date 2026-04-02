@@ -84,9 +84,9 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 		return op.Name(), nil
 	}
 
-	// Every operator failed with an error (none were reachable).
+	// Every operator's capacity check failed (all returned errors).
 	if capacityErrors == len(s.operators) {
-		return "", fmt.Errorf("all %d operators unreachable: %w", len(s.operators), ErrAllOperatorsExhausted)
+		return "", fmt.Errorf("all %d operators failed capacity check: %w", len(s.operators), ErrAllOperatorsExhausted)
 	}
 
 	return "", ErrAllOperatorsExhausted

@@ -14,11 +14,9 @@ import (
 //
 //	@ID				exit
 //	@Summary		Terminates a VICE analysis
-//	@Description	Terminates the VICE analysis deployment and cleans up
-//	@Description	resources associated with it. Does not save outputs first. Uses
-//	@Description	the external-id label to find all of the objects in the configured
-//	@Description	namespace associated with the job. Deletes the following objects:
-//	@Description	HTTP routes, services, deployments, and configmaps.
+//	@Description	Terminates the VICE analysis by routing through the operator
+//	@Description	running it. Converts the external ID to an analysis ID and
+//	@Description	delegates all resource cleanup to the operator.
 //	@Param			id	path	string	true	"The external ID of the VICE analysis"
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
@@ -37,8 +35,8 @@ func (h *HTTPHandlers) ExitHandler(c echo.Context) error {
 //	@ID				admin-exit
 //	@Summary		Terminates a VICE analysis
 //	@Description	Terminates the VICE analysis based on the analysisID and
-//	@Description	and should not require any user information to be provided. Otherwise, the
-//	@Description	documentation for ExitHandler applies here as well.
+//	@Description	should not require any user information to be provided. Otherwise,
+//	@Description	the documentation for ExitHandler applies here as well.
 //	@Param			analysis-id	path	string	true	"The analysis ID of the VICE analysis"
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
@@ -80,7 +78,7 @@ func (h *HTTPHandlers) SaveAndExitHandler(c echo.Context) error {
 //	@Description	Handles requests to save the output files in iRODS and
 //	@Description	then exit. This version of the call operates based on the analysis ID and does
 //	@Description	not require user information to be required by the caller. Otherwise, the docs
-//	@Description	for the VICESaveAndExit function apply here as well.
+//	@Description	for SaveAndExitHandler apply here as well.
 //	@Param			analysis-id	path	string	true	"Analysis ID"
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
