@@ -1,11 +1,14 @@
 package operator
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/labstack/echo/v4"
@@ -17,9 +20,14 @@ import (
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
+// HTTPClient is an interface that matches http.Client's Do method.
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 // noRedirectHTTPClient is used for vice-proxy requests where a redirect
 // indicates an auth wall rather than a valid response.
-var noRedirectHTTPClient = &http.Client{
+var noRedirectHTTPClient HTTPClient = &http.Client{
 	Timeout: 5 * time.Second,
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -51,6 +59,7 @@ type Operator struct {
 	baseDomain          string
 	clusterConfigSecret string              // Name of the Secret holding cluster config for vice-proxy envFrom.
 	egressConfig        NetworkPolicyConfig // Egress policy config for per-analysis policies.
+	httpClient          HTTPClient          // Client for contacting the vice-proxy sidecar.
 }
 
 // NewOperator creates a new Operator. Panics if required dependencies are nil
@@ -98,7 +107,44 @@ func NewOperator(
 		baseDomain:          baseDomain,
 		clusterConfigSecret: clusterConfigSecret,
 		egressConfig:        egressConfig,
+		httpClient:          noRedirectHTTPClient,
 	}
+}
+
+// getAccessURL contacts the vice-proxy sidecar through its in-cluster Service
+// and returns the full frontend URL. This requires the vice-proxy to be
+// running and reachable within the same namespace.
+func (o *Operator) getAccessURL(ctx context.Context, serviceName string) (string, error) {
+	endpoint := fmt.Sprintf(
+		"http://%s.%s.svc.cluster.local:%d/frontend-url",
+		serviceName,
+		o.namespace,
+		constants.VICEProxyServicePort,
+	)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to build request for %s: %w", endpoint, err)
+	}
+
+	resp, err := o.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to contact vice-proxy at %s: %w", endpoint, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		return "", fmt.Errorf("vice-proxy at %s returned status %d", endpoint, resp.StatusCode)
+	}
+
+	var result struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode vice-proxy response from %s: %w", endpoint, err)
+	}
+
+	return result.URL, nil
 }
 
 // HandleCapacity returns the current cluster capacity.
@@ -268,12 +314,13 @@ func (o *Operator) HandleSwapRoute(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
-// HandleListing lists all VICE resources in the operator's namespace,
-// returning full resource info for aggregation by app-exposer.
+// HandleListing lists interactive (VICE) resources in the operator's namespace,
+// optionally filtered by label key-value pairs provided in the query string.
 //
 //	@Summary		List running VICE analyses
-//	@Description	Returns all interactive (VICE) resources in the operator's namespace
+//	@Description	Returns interactive (VICE) resources in the operator's namespace
 //	@Description	including deployments, pods, configmaps, services, and routes.
+//	@Description	Query parameters are used as label filters.
 //	@Tags			analyses
 //	@Produce		json
 //	@Success		200	{object}	reporting.ResourceInfo
@@ -281,10 +328,17 @@ func (o *Operator) HandleSwapRoute(c echo.Context) error {
 //	@Security		BasicAuth
 //	@Router			/analyses [get]
 func (o *Operator) HandleListing(c echo.Context) error {
-	log.Debug("listing all VICE resources")
 	ctx := c.Request().Context()
-	viceSelector := labels.Set{"app-type": "interactive"}.AsSelector().String()
-	opts := metav1.ListOptions{LabelSelector: viceSelector}
+	filter := common.FilterMap(c.Request().URL.Query())
+
+	log.Debugf("listing interactive resources with filter: %v", filter)
+
+	// Build label selector starting with the mandatory app-type=interactive label.
+	ls := labels.Set{"app-type": "interactive"}
+	for k, v := range filter {
+		ls[k] = v
+	}
+	opts := metav1.ListOptions{LabelSelector: ls.AsSelector().String()}
 
 	result := reporting.NewResourceInfo()
 

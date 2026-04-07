@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/operatorclient"
+	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/cyverse-de/model/v10"
 	"github.com/labstack/echo/v4"
 	"k8s.io/client-go/kubernetes"
@@ -46,6 +48,7 @@ func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.I
 // When set, launches and lifecycle operations are routed to remote operators.
 func (h *HTTPHandlers) SetScheduler(s *operatorclient.Scheduler) {
 	h.scheduler = s
+	h.incluster.SetScheduler(s)
 }
 
 // operatorClientForAnalysis looks up which operator is running an analysis
@@ -141,6 +144,58 @@ func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisI
 	}
 
 	return nil
+}
+
+// aggregateListing queries all configured operators in parallel, applying the
+// provided filters, and merges the results into a single ResourceInfo.
+// Partial results are returned if some operators are unreachable.
+func (h *HTTPHandlers) aggregateListing(ctx context.Context, params url.Values) (*reporting.ResourceInfo, []OperatorError, error) {
+	merged := reporting.NewResourceInfo()
+	clients := h.scheduler.Clients()
+	if len(clients) == 0 {
+		return merged, nil, nil
+	}
+
+	type result struct {
+		info *reporting.ResourceInfo
+		name string
+		err  error
+	}
+	results := make([]result, len(clients))
+
+	var wg sync.WaitGroup
+	for i, client := range clients {
+		wg.Go(func() {
+			info, err := client.Listing(ctx, params)
+			results[i] = result{info: info, name: client.Name(), err: err}
+		})
+	}
+	wg.Wait()
+
+	var opErrs []OperatorError
+	for _, r := range results {
+		if r.err != nil {
+			log.Errorf("error listing analyses from operator %s: %v", r.name, r.err)
+			opErrs = append(opErrs, OperatorError{Operator: r.name, Error: r.err.Error()})
+			continue
+		}
+		merged.Deployments = append(merged.Deployments, r.info.Deployments...)
+		merged.Pods = append(merged.Pods, r.info.Pods...)
+		merged.ConfigMaps = append(merged.ConfigMaps, r.info.ConfigMaps...)
+		merged.Services = append(merged.Services, r.info.Services...)
+		merged.Ingresses = append(merged.Ingresses, r.info.Ingresses...)
+		merged.Routes = append(merged.Routes, r.info.Routes...)
+	}
+
+	reporting.SortByCreationTime(merged)
+	return merged, opErrs, nil
+}
+
+// OperatorError represents an error returned by an operator during a listing
+// request.
+type OperatorError struct {
+	Operator string `json:"operator"`
+	Error    string `json:"error"`
 }
 
 // operatorAction is a function that performs an operation on an operator client
@@ -286,7 +341,7 @@ func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 	// The operator status includes the deployment names. We need the labels.
 	// Since we can't easily get labels from the operator Status endpoint,
 	// we'll use the Listing endpoint which is more verbose but has everything.
-	info, err := client.Listing(ctx)
+	info, err := client.Listing(ctx, nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}

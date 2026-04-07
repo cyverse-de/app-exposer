@@ -5,9 +5,12 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/url"
+	"sync"
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/go-mod/gotelnats"
 	"github.com/cyverse-de/go-mod/pbinit"
 	"github.com/cyverse-de/model/v10"
@@ -16,9 +19,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 
-	v1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -47,6 +47,7 @@ type Enforcer struct {
 	db         *sqlx.DB
 	apps       *apps.Apps
 	nec        *nats.EncodedConn
+	scheduler  *operatorclient.Scheduler
 	userDomain string
 }
 
@@ -66,64 +67,71 @@ func NewEnforcer(
 	}
 }
 
+// SetScheduler configures the operator scheduler for multi-cluster job counting.
+func (e *Enforcer) SetScheduler(s *operatorclient.Scheduler) {
+	e.scheduler = s
+}
+
 func (e *Enforcer) countJobsForUser(ctx context.Context, namespace, username string) (int, error) {
-	set := labels.Set(map[string]string{
-		"username": username,
-	})
-
-	listoptions := metav1.ListOptions{
-		LabelSelector: set.AsSelector().String(),
+	if e.scheduler == nil {
+		return 0, fmt.Errorf("scheduler not configured for quota enforcer")
 	}
 
-	depclient := e.clientset.AppsV1().Deployments(namespace)
-	deplist, err := depclient.List(ctx, listoptions)
-	if err != nil {
-		return 0, err
+	clients := e.scheduler.Clients()
+	if len(clients) == 0 {
+		return 0, nil
 	}
 
-	countedDeployments := []v1.Deployment{}
+	totalCount := 0
+	type result struct {
+		count int
+		err   error
+	}
+	results := make([]result, len(clients))
 
-	for _, deployment := range deplist.Items {
-		var (
-			externalID, analysisID, analysisStatus string
-			ok                                     bool
-		)
+	var wg sync.WaitGroup
+	for i, client := range clients {
+		wg.Add(1)
+		go func(idx int, c *operatorclient.Client) {
+			defer wg.Done()
+			// Use the Listing endpoint with a user filter to count jobs.
+			params := url.Values{}
+			params.Set("username", username)
+			info, err := c.Listing(ctx, params)
+			if err != nil {
+				results[idx] = result{err: err}
+				return
+			}
 
-		labels := deployment.GetLabels()
+			// Filter results by status to only count active jobs.
+			count := 0
+			for _, d := range info.Deployments {
+				// We need the analysis status from the DB to decide whether to count it.
+				// This is similar to the logic in the original countJobsForUser.
+				status, err := e.apps.GetAnalysisStatus(ctx, d.AnalysisID)
+				if err != nil {
+					log.Errorf("error getting status for analysis %s: %v", d.AnalysisID, err)
+					// If we can't get the status, count it to be safe.
+					count++
+					continue
+				}
+				if shouldCountStatus(status) {
+					count++
+				}
+			}
+			results[idx] = result{count: count}
+		}(i, client)
+	}
+	wg.Wait()
 
-		// If we don't have the external-id on the deployment, count it.
-		if externalID, ok = labels["external-id"]; !ok {
-			countedDeployments = append(countedDeployments, deployment)
-			continue
+	for _, r := range results {
+		if r.err != nil {
+			return 0, r.err
 		}
-
-		if analysisID, err = e.apps.GetAnalysisIDByExternalID(ctx, externalID); err != nil {
-			// If we failed to get it from the database, count it because it
-			// shouldn't be running.
-			log.Error(err)
-			countedDeployments = append(countedDeployments, deployment)
-			continue
-		}
-
-		analysisStatus, err = e.apps.GetAnalysisStatus(ctx, analysisID)
-		if err != nil {
-			// If we failed to get the status, then something is horribly wrong.
-			// Count the analysis.
-			log.Error(err)
-			countedDeployments = append(countedDeployments, deployment)
-			continue
-		}
-
-		// If the running state is Failed, Completed, or Canceled, don't
-		// count it because it's probably in the process of shutting down
-		// or the database and the cluster are out of sync which is not
-		// the user's fault.
-		if shouldCountStatus(analysisStatus) {
-			countedDeployments = append(countedDeployments, deployment)
-		}
+		totalCount += r.count
 	}
 
-	return len(countedDeployments), nil
+	return totalCount, nil
 }
 
 const getJobLimitForUserSQL = `

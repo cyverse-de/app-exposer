@@ -174,5 +174,6 @@ func RouteInfoFrom(route *gatewayv1.HTTPRoute) *RouteInfo {
 			labels,
 		),
 		Hostnames: hostnames,
+		Rules:     route.Spec.Rules,
 	}
 }

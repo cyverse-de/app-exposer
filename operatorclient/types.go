@@ -16,14 +16,22 @@ import (
 // and sends it to an operator, which applies the resources to its local cluster.
 // HTTPRoute is the canonical networking resource (Gateway API).
 type AnalysisBundle struct {
-	AnalysisID             string                         `json:"analysisID"`
-	Deployment             *appsv1.Deployment             `json:"deployment"`
-	Service                *apiv1.Service                 `json:"service"`
-	HTTPRoute              *gatewayv1.HTTPRoute           `json:"httpRoute"`
-	ConfigMaps             []*apiv1.ConfigMap             `json:"configMaps"`
-	PersistentVolumes      []*apiv1.PersistentVolume      `json:"persistentVolumes"`
+	// AnalysisID is the unique identifier for the analysis.
+	AnalysisID string `json:"analysisID"`
+	// Deployment is the Kubernetes Deployment object for the analysis.
+	Deployment *appsv1.Deployment `json:"deployment"`
+	// Service is the Kubernetes Service object for the analysis.
+	Service *apiv1.Service `json:"service"`
+	// HTTPRoute is the Gateway API HTTPRoute object for the analysis's routing.
+	HTTPRoute *gatewayv1.HTTPRoute `json:"httpRoute"`
+	// ConfigMaps is a list of Kubernetes ConfigMap objects for the analysis.
+	ConfigMaps []*apiv1.ConfigMap `json:"configMaps"`
+	// PersistentVolumes is a list of Kubernetes PersistentVolume objects for the analysis.
+	PersistentVolumes []*apiv1.PersistentVolume `json:"persistentVolumes"`
+	// PersistentVolumeClaims is a list of Kubernetes PersistentVolumeClaim objects for the analysis.
 	PersistentVolumeClaims []*apiv1.PersistentVolumeClaim `json:"persistentVolumeClaims"`
-	PodDisruptionBudget    *policyv1.PodDisruptionBudget  `json:"podDisruptionBudget"`
+	// PodDisruptionBudget is the Kubernetes PodDisruptionBudget object for the analysis.
+	PodDisruptionBudget *policyv1.PodDisruptionBudget `json:"podDisruptionBudget"`
 }
 
 // CapacityResponse describes the current resource capacity and usage
@@ -71,6 +79,13 @@ type LogoutUserRequest struct {
 // LogoutUserResponse is returned by the logout-user endpoint.
 type LogoutUserResponse struct {
 	SessionsInvalidated int `json:"sessions_invalidated"`
+}
+
+// URLReadyResponse indicates whether a VICE analysis is ready for user access
+// and provides the frontend URL for it.
+type URLReadyResponse struct {
+	Ready     bool   `json:"ready"`
+	AccessURL string `json:"access_url,omitempty"`
 }
 
 // OperatorConfig holds the configuration for a single vice-operator instance.

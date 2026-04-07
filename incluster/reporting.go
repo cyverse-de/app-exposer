@@ -176,27 +176,11 @@ type ConfigMapInfo = reporting.ConfigMapInfo
 type ServiceInfoPort = reporting.ServiceInfoPort
 type ServiceInfo = reporting.ServiceInfo
 type IngressInfo = reporting.IngressInfo
-
-// RouteInfo is defined locally (not aliased from reporting) because the
-// incluster listing exposes the full HTTPRoute rules for detailed status,
-// while reporting.RouteInfo uses simplified hostname-only info for
-// cross-cluster aggregation.
-type RouteInfo struct {
-	MetaInfo
-	Rules []gatewayv1.HTTPRouteRule `json:"rules"`
-}
+type RouteInfo = reporting.RouteInfo
 
 // routeInfo returns a RouteInfo struct for an HTTPRoute.
 func routeInfo(route *gatewayv1.HTTPRoute) *RouteInfo {
-	return &RouteInfo{
-		MetaInfo: reporting.MetaInfoFromLabels(
-			route.GetName(),
-			route.GetNamespace(),
-			route.GetCreationTimestamp().String(),
-			route.GetObjectMeta().GetLabels(),
-		),
-		Rules: route.Spec.Rules,
-	}
+	return reporting.RouteInfoFrom(route)
 }
 
 // ResourceInfo contains all of the K8s resource information about a running
@@ -209,134 +193,10 @@ type ResourceInfo struct {
 	Routes      []RouteInfo      `json:"routes"`
 }
 
-// GetFilteredDeployments returns DeploymentInfo for all VICE deployments
-// matching the given label filter.
-func (i *Incluster) GetFilteredDeployments(ctx context.Context, filter map[string]string) ([]DeploymentInfo, error) {
-	depList, err := i.DeploymentList(ctx, i.ViceNamespace, filter, []string{})
-	if err != nil {
-		return nil, err
-	}
-
-	deployments := make([]DeploymentInfo, 0, len(depList.Items))
-
-	for _, dep := range depList.Items {
-		info := reporting.DeploymentInfoFrom(&dep)
-		deployments = append(deployments, *info)
-	}
-
-	return deployments, nil
-}
-
-// GetFilteredPods returns PodInfo for all VICE pods matching the given label filter.
-func (i *Incluster) GetFilteredPods(ctx context.Context, filter map[string]string) ([]PodInfo, error) {
-	podList, err := i.podList(ctx, i.ViceNamespace, filter, []string{})
-	if err != nil {
-		return nil, err
-	}
-
-	pods := make([]PodInfo, 0, len(podList.Items))
-
-	for _, pod := range podList.Items {
-		info := reporting.PodInfoFrom(&pod)
-		pods = append(pods, *info)
-	}
-
-	return pods, nil
-}
-
-// GetFilteredConfigMaps returns ConfigMapInfo for all VICE ConfigMaps
-// matching the given label filter.
-func (i *Incluster) GetFilteredConfigMaps(ctx context.Context, filter map[string]string) ([]ConfigMapInfo, error) {
-	cmList, err := i.configmapsList(ctx, i.ViceNamespace, filter, []string{})
-	if err != nil {
-		return nil, err
-	}
-
-	cms := make([]ConfigMapInfo, 0, len(cmList.Items))
-
-	for _, cm := range cmList.Items {
-		info := reporting.ConfigMapInfoFrom(&cm)
-		cms = append(cms, *info)
-	}
-
-	return cms, nil
-}
-
-// GetFilteredServices returns ServiceInfo for all VICE Services
-// matching the given label filter.
-func (i *Incluster) GetFilteredServices(ctx context.Context, filter map[string]string) ([]ServiceInfo, error) {
-	svcList, err := i.serviceList(ctx, i.ViceNamespace, filter, []string{})
-	if err != nil {
-		return nil, err
-	}
-
-	svcs := make([]ServiceInfo, 0, len(svcList.Items))
-
-	for _, svc := range svcList.Items {
-		info := reporting.ServiceInfoFrom(&svc)
-		svcs = append(svcs, *info)
-	}
-
-	return svcs, nil
-}
-
-// GetFilteredRoutes returns RouteInfo for all VICE HTTPRoutes
-// matching the given label filter.
-func (i *Incluster) GetFilteredRoutes(ctx context.Context, filter map[string]string) ([]RouteInfo, error) {
-	routeList, err := i.routeList(ctx, i.ViceNamespace, filter, []string{})
-	if err != nil {
-		return nil, err
-	}
-
-	routes := make([]RouteInfo, 0, len(routeList.Items))
-	for _, route := range routeList.Items {
-		routes = append(routes, *routeInfo(&route))
-	}
-
-	return routes, nil
-}
-
 // FixUsername normalizes a username by appending the configured user suffix
 // if it is not already present.
 func (i *Incluster) FixUsername(username string) string {
 	return common.FixUsername(username, i.UserSuffix)
-}
-
-// DoResourceListing returns all VICE K8s resources (deployments, pods,
-// configmaps, services, routes) matching the given label filter.
-func (i *Incluster) DoResourceListing(ctx context.Context, filter map[string]string) (*ResourceInfo, error) {
-	deployments, err := i.GetFilteredDeployments(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	pods, err := i.GetFilteredPods(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	cms, err := i.GetFilteredConfigMaps(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	svcs, err := i.GetFilteredServices(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	routes, err := i.GetFilteredRoutes(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ResourceInfo{
-		Deployments: deployments,
-		Pods:        pods,
-		ConfigMaps:  cms,
-		Services:    svcs,
-		Routes:      routes,
-	}, nil
 }
 
 func populateAnalysisID(ctx context.Context, a *apps.Apps, existingLabels map[string]string) (map[string]string, error) {

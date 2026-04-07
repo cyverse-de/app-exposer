@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sync"
+	"net/url"
 
-	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
-	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/permissions"
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/labstack/echo/v4"
@@ -35,15 +33,13 @@ type FilteredDeploymentsResponse struct {
 //	@Router			/vice/listing/deployments [get]
 func (h *HTTPHandlers) FilterableDeploymentsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	filter := common.FilterMap(c.Request().URL.Query())
-
-	deployments, err := h.incluster.GetFilteredDeployments(ctx, filter)
+	listing, _, err := h.aggregateListing(ctx, c.Request().URL.Query())
 	if err != nil {
 		return err
 	}
 
 	return c.JSON(http.StatusOK, FilteredDeploymentsResponse{
-		Deployments: deployments,
+		Deployments: listing.Deployments,
 	})
 }
 
@@ -67,15 +63,13 @@ type FilteredPodsResponse struct {
 //	@Router			/vice/listing/pods [get]
 func (h *HTTPHandlers) FilterablePodsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	filter := common.FilterMap(c.Request().URL.Query())
-
-	pods, err := h.incluster.GetFilteredPods(ctx, filter)
+	listing, _, err := h.aggregateListing(ctx, c.Request().URL.Query())
 	if err != nil {
 		return err
 	}
 
 	return c.JSON(http.StatusOK, FilteredPodsResponse{
-		Pods: pods,
+		Pods: listing.Pods,
 	})
 }
 
@@ -98,15 +92,13 @@ type FilteredConfigMapsResponse struct {
 //	@Router			/vice/listing/configmaps [get]
 func (h *HTTPHandlers) FilterableConfigMapsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	filter := common.FilterMap(c.Request().URL.Query())
-
-	cms, err := h.incluster.GetFilteredConfigMaps(ctx, filter)
+	listing, _, err := h.aggregateListing(ctx, c.Request().URL.Query())
 	if err != nil {
 		return err
 	}
 
 	return c.JSON(http.StatusOK, FilteredConfigMapsResponse{
-		ConfigMaps: cms,
+		ConfigMaps: listing.ConfigMaps,
 	})
 }
 
@@ -129,15 +121,13 @@ type FilteredServicesResponse struct {
 //	@Router			/vice/listing/services [get]
 func (h *HTTPHandlers) FilterableServicesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	filter := common.FilterMap(c.Request().URL.Query())
-
-	svcs, err := h.incluster.GetFilteredServices(ctx, filter)
+	listing, _, err := h.aggregateListing(ctx, c.Request().URL.Query())
 	if err != nil {
 		return err
 	}
 
 	return c.JSON(http.StatusOK, FilteredServicesResponse{
-		Services: svcs,
+		Services: listing.Services,
 	})
 }
 
@@ -160,15 +150,13 @@ type FilteredRoutesResponse struct {
 //	@Router			/vice/listing/routes [get]
 func (h *HTTPHandlers) FilterableRoutesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	filter := common.FilterMap(c.Request().URL.Query())
-
-	routes, err := h.incluster.GetFilteredRoutes(ctx, filter)
+	listing, _, err := h.aggregateListing(ctx, c.Request().URL.Query())
 	if err != nil {
 		return err
 	}
 
 	return c.JSON(http.StatusOK, FilteredRoutesResponse{
-		Routes: routes,
+		Routes: listing.Routes,
 	})
 }
 
@@ -180,7 +168,7 @@ func (h *HTTPHandlers) FilterableRoutesHandler(c echo.Context) error {
 //	@Description	Returns a listing entry for a single analysis
 //	@Description	associated with the host/subdomain passed in as 'host' from the URL.
 //	@Param			host	path		string	true	"Host/Subdomain"
-//	@Success		200		{object}	incluster.ResourceInfo
+//	@Success		200		{object}	reporting.ResourceInfo
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/vice/admin/{host}/description [get]
@@ -188,11 +176,10 @@ func (h *HTTPHandlers) AdminDescribeAnalysisHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	host := c.Param("host")
 
-	filter := map[string]string{
-		"subdomain": host,
-	}
+	params := url.Values{}
+	params.Set("subdomain", host)
 
-	listing, err := h.incluster.DoResourceListing(ctx, filter)
+	listing, _, err := h.aggregateListing(ctx, params)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -211,7 +198,7 @@ func (h *HTTPHandlers) AdminDescribeAnalysisHandler(c echo.Context) error {
 //	@Produce		json
 //	@Param			user	query		string	true	"username"
 //	@Param			host	path		string	true	"subdomain"
-//	@Success		200		{object}	incluster.ResourceInfo
+//	@Success		200		{object}	reporting.ResourceInfo
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		403		{object}	common.ErrorResponse
 //	@Failure		404		{object}	common.ErrorResponse
@@ -237,11 +224,10 @@ func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 		return err
 	}
 
-	filter := map[string]string{
-		"subdomain": host,
-	}
+	params := url.Values{}
+	params.Set("subdomain", host)
 
-	listing, err := h.incluster.DoResourceListing(ctx, filter)
+	listing, _, err := h.aggregateListing(ctx, params)
 	if err != nil {
 		return err
 	}
@@ -288,7 +274,7 @@ func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 //	@Description	resources returned from the handler.
 //	@Produce		json
 //	@Param			user	query		string	true	"username"
-//	@Success		200		{object}	incluster.ResourceInfo
+//	@Success		200		{object}	reporting.ResourceInfo
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		403		{object}	common.ErrorResponse
 //	@Failure		404		{object}	common.ErrorResponse
@@ -312,68 +298,17 @@ func (h *HTTPHandlers) FilterableResourcesHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	filter := common.FilterMap(c.Request().URL.Query())
-	delete(filter, "user")
-
-	filter["user-id"] = userID
+	params := c.Request().URL.Query()
+	params.Del("user")
+	params.Set("user-id", userID)
 
 	log.Debugf("user ID is %s", userID)
 
-	merged := reporting.NewResourceInfo()
-	clients := h.scheduler.Clients()
-
-	var wg sync.WaitGroup
-	type result struct {
-		info *reporting.ResourceInfo
-		err  error
-	}
-	results := make([]result, len(clients))
-
-	for i, client := range clients {
-		wg.Add(1)
-		go func(idx int, c *operatorclient.Client) {
-			defer wg.Done()
-			info, err := c.Listing(ctx)
-			results[idx] = result{info: info, err: err}
-		}(i, client)
-	}
-	wg.Wait()
-
-	for _, r := range results {
-		if r.err != nil {
-			log.Errorf("listing aggregation error: %v", r.err)
-			continue
-		}
-		// Manual filtering by userID if operator doesn't support it yet.
-		// Most of our labels are present in the reporting types.
-		for _, d := range r.info.Deployments {
-			if d.UserID == userID {
-				merged.Deployments = append(merged.Deployments, d)
-			}
-		}
-		for _, p := range r.info.Pods {
-			if p.UserID == userID {
-				merged.Pods = append(merged.Pods, p)
-			}
-		}
-		for _, cm := range r.info.ConfigMaps {
-			if cm.UserID == userID {
-				merged.ConfigMaps = append(merged.ConfigMaps, cm)
-			}
-		}
-		for _, s := range r.info.Services {
-			if s.UserID == userID {
-				merged.Services = append(merged.Services, s)
-			}
-		}
-		for _, rt := range r.info.Routes {
-			if rt.UserID == userID {
-				merged.Routes = append(merged.Routes, rt)
-			}
-		}
+	merged, _, err := h.aggregateListing(ctx, params)
+	if err != nil {
+		return err
 	}
 
-	reporting.SortByCreationTime(merged)
 	return c.JSON(http.StatusOK, merged)
 }
 
@@ -385,15 +320,13 @@ func (h *HTTPHandlers) FilterableResourcesHandler(c echo.Context) error {
 //	@Description	Returns k8s resources in the cluster based on the filter. The query
 //	@Description	parameters are used as the filter and are not listed as params here.
 //	@Produce		json
-//	@Success		200	{object}	incluster.ResourceInfo
+//	@Success		200	{object}	reporting.ResourceInfo
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/admin/listing [get]
 func (h *HTTPHandlers) AdminFilterableResourcesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	filter := common.FilterMap(c.Request().URL.Query())
-
-	listing, err := h.incluster.DoResourceListing(ctx, filter)
+	listing, _, err := h.aggregateListing(ctx, c.Request().URL.Query())
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -418,56 +351,19 @@ func (h *HTTPHandlers) AdminFilterableResourcesHandler(c echo.Context) error {
 func (h *HTTPHandlers) AdminOperatorListingHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	merged := reporting.NewResourceInfo()
-
-	// Query all operators in parallel and collect results.
-	clients := h.scheduler.Clients()
-	type result struct {
-		info *reporting.ResourceInfo
-		name string
-		err  error
+	merged, opErrs, err := h.aggregateListing(ctx, c.Request().URL.Query())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	results := make([]result, len(clients))
-
-	var wg sync.WaitGroup
-	for i, client := range clients {
-		wg.Go(func() {
-			info, err := client.Listing(ctx)
-			results[i] = result{info: info, name: client.Name(), err: err}
-		})
-	}
-	wg.Wait()
-
-	type operatorError struct {
-		Operator string `json:"operator"`
-		Error    string `json:"error"`
-	}
-	var errs []operatorError
-
-	for _, r := range results {
-		if r.err != nil {
-			log.Errorf("error listing analyses from operator %s: %v", r.name, r.err)
-			errs = append(errs, operatorError{Operator: r.name, Error: r.err.Error()})
-			continue
-		}
-		merged.Deployments = append(merged.Deployments, r.info.Deployments...)
-		merged.Pods = append(merged.Pods, r.info.Pods...)
-		merged.ConfigMaps = append(merged.ConfigMaps, r.info.ConfigMaps...)
-		merged.Services = append(merged.Services, r.info.Services...)
-		merged.Ingresses = append(merged.Ingresses, r.info.Ingresses...)
-		merged.Routes = append(merged.Routes, r.info.Routes...)
-	}
-
-	reporting.SortByCreationTime(merged)
 
 	// Include operator errors in the response so clients know which
 	// operators were unreachable and that results may be partial.
 	resp := struct {
 		reporting.ResourceInfo
-		Errors []operatorError `json:"errors,omitempty"`
+		Errors []OperatorError `json:"errors,omitempty"`
 	}{
 		ResourceInfo: *merged,
-		Errors:       errs,
+		Errors:       opErrs,
 	}
 
 	return c.JSON(http.StatusOK, resp)

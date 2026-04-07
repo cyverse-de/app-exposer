@@ -340,7 +340,7 @@ func TestHandleURLReady(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var resp URLReadyResponse
+	var resp operatorclient.URLReadyResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.False(t, resp.Ready)

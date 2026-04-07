@@ -3,18 +3,18 @@ package httphandlers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
-	_ "github.com/cyverse-de/app-exposer/operatorclient" // swagger type reference
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/permissions"
 	"github.com/cyverse-de/model/v10"
 	"github.com/labstack/echo/v4"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 )
 
 // LaunchAppHandler orchestrates the launch of a VICE analysis: validates the job,
@@ -145,61 +145,26 @@ func (h *HTTPHandlers) DryRunBundleHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, bundle)
 }
 
-// URLReadyResponse indicates whether a VICE analysis is accessible and provides its URL.
-type URLReadyResponse struct {
-	Ready     bool   `json:"ready"`
-	AccessURL string `json:"access_url,omitempty"`
-}
-
-// checkURLReady verifies K8s resource readiness (service + deployment replicas)
-// and probes the access URL via vice-proxy. Returns a URLReadyResponse with
-// Ready=true only when all checks pass. externalID is the external-id label
-// value used to locate resources.
-func (h *HTTPHandlers) checkURLReady(ctx context.Context, externalID string) (URLReadyResponse, error) {
-	listoptions := metav1.ListOptions{
-		LabelSelector: labels.Set{"external-id": externalID}.AsSelector().String(),
+// checkURLReady verifies K8s resource readiness by delegating to the
+// operator running the analysis. It returns a URLReadyResponse indicating
+// if the deployment, service, and routing are fully live.
+func (h *HTTPHandlers) checkURLReady(ctx context.Context, analysisID string) (operatorclient.URLReadyResponse, error) {
+	client := h.operatorClientForAnalysis(ctx, analysisID)
+	if client == nil {
+		return operatorclient.URLReadyResponse{Ready: false}, nil
 	}
 
-	// Check service existence.
-	svclist, err := h.clientset.CoreV1().Services(h.incluster.ViceNamespace).List(ctx, listoptions)
+	raw, err := client.URLReady(ctx, analysisID)
 	if err != nil {
-		return URLReadyResponse{}, err
-	}
-	serviceExists := len(svclist.Items) > 0
-
-	// Check whether any deployment has ready replicas.
-	deplist, err := h.clientset.AppsV1().Deployments(h.incluster.ViceNamespace).List(ctx, listoptions)
-	if err != nil {
-		return URLReadyResponse{}, err
-	}
-	var podReady bool
-	for _, dep := range deplist.Items {
-		if dep.Status.ReadyReplicas > 0 {
-			podReady = true
-			break
-		}
+		return operatorclient.URLReadyResponse{Ready: false}, fmt.Errorf("operator %s url-ready check failed: %w", client.Name(), err)
 	}
 
-	// Route existence is implied by the caller resolving the host to an external ID.
-	data := URLReadyResponse{Ready: false}
-	if !serviceExists || !podReady {
-		return data, nil
+	var resp operatorclient.URLReadyResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return operatorclient.URLReadyResponse{Ready: false}, fmt.Errorf("failed to decode url-ready response from operator %s: %w", client.Name(), err)
 	}
 
-	accessURL, err := h.incluster.GetAccessURL(ctx, externalID)
-	if err != nil {
-		log.Debugf("vice-proxy not reachable for %s: %v", externalID, err)
-		return data, nil
-	}
-
-	if err := h.incluster.CheckAccessURL(ctx, accessURL); err != nil {
-		log.Debugf("access URL not live for %s: %v", externalID, err)
-		return data, nil
-	}
-
-	data.Ready = true
-	data.AccessURL = accessURL
-	return data, nil
+	return resp, nil
 }
 
 // URLReadyHandler checks whether the VICE analysis for the given subdomain is
@@ -213,7 +178,7 @@ func (h *HTTPHandlers) checkURLReady(ctx context.Context, externalID string) (UR
 //	@Produce		json
 //	@Param			user	query		string	true	"A user's username"
 //	@Param			host	path		string	true	"The subdomain of the analysis. AKA the ingress name"
-//	@Success		200		{object}	URLReadyResponse
+//	@Success		200		{object}	operatorclient.URLReadyResponse
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		403		{object}	common.ErrorResponse
 //	@Failure		404		{object}	common.ErrorResponse
@@ -240,13 +205,20 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 
 	host := c.Param("host")
 
-	// Use the name of the route to retrieve the externalID.
-	id, err := h.incluster.GetIDFromHost(ctx, host)
+	params := url.Values{}
+	params.Set("subdomain", host)
+
+	// Search all operators for the analysis with this subdomain.
+	listing, _, err := h.aggregateListing(ctx, params)
 	if err != nil {
 		return err
 	}
+	if len(listing.Deployments) == 0 {
+		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no deployment found for subdomain %s", host))
+	}
 
-	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, id)
+	externalID := listing.Deployments[0].ExternalID
+	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
 	if err != nil {
 		return err
 	}
@@ -265,7 +237,7 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("user %s cannot access analysis %s", user, analysisID))
 	}
 
-	data, err := h.checkURLReady(ctx, id)
+	data, err := h.checkURLReady(ctx, analysisID)
 	if err != nil {
 		return err
 	}
@@ -284,7 +256,7 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 //	@Description	existence of the various resources created for the app.
 //	@Produce		json
 //	@Param			host	path		string	true	"The subdomain of the analysis"
-//	@Success		200		{object}	URLReadyResponse
+//	@Success		200		{object}	operatorclient.URLReadyResponse
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		404		{object}	common.ErrorResponse
 //	@Failure		500		{object}	common.ErrorResponse
@@ -293,19 +265,32 @@ func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	host := c.Param("host")
 
-	// Use the name of the route to retrieve the externalID.
-	id, err := h.incluster.GetIDFromHost(ctx, host)
+	params := url.Values{}
+	params.Set("subdomain", host)
+
+	// Search all operators for the analysis with this subdomain.
+	listing, _, err := h.aggregateListing(ctx, params)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		return err
+	}
+	if len(listing.Deployments) == 0 {
+		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no deployment found for subdomain %s", host))
 	}
 
-	data, err := h.checkURLReady(ctx, id)
+	externalID := listing.Deployments[0].ExternalID
+	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
+	if err != nil {
+		return err
+	}
+
+	data, err := h.checkURLReady(ctx, analysisID)
 	if err != nil {
 		return err
 	}
 
 	return c.JSON(http.StatusOK, data)
 }
+
 
 // AnalysisInClusterResponse is the response body for the in-cluster check endpoints.
 type AnalysisInClusterResponse struct {
@@ -333,12 +318,14 @@ func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error 
 		return echo.NewHTTPError(http.StatusBadRequest, "external-id is not set")
 	}
 
-	found, err := h.incluster.IsAnalysisInCluster(ctx, externalID)
+	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
 	if err != nil {
 		return err
 	}
+
+	client := h.searchOperatorsForAnalysis(ctx, analysisID)
 	retval := AnalysisInClusterResponse{
-		Found: found,
+		Found: client != nil,
 	}
 	return c.JSON(http.StatusOK, retval)
 }
@@ -363,13 +350,7 @@ func (h *HTTPHandlers) AdminAnalysisInClusterByID(c echo.Context) error {
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is not set")
 	}
-	externalID, err := h.incluster.GetExternalIDByAnalysisID(ctx, analysisID)
-	if err != nil {
-		return err
-	}
-	found, err := h.incluster.IsAnalysisInCluster(ctx, externalID)
-	if err != nil {
-		return err
-	}
-	return c.JSON(http.StatusOK, AnalysisInClusterResponse{Found: found})
+
+	client := h.searchOperatorsForAnalysis(ctx, analysisID)
+	return c.JSON(http.StatusOK, AnalysisInClusterResponse{Found: client != nil})
 }

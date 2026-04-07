@@ -12,8 +12,8 @@ import (
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
-	"github.com/cyverse-de/app-exposer/incluster/httproutes"
 	"github.com/cyverse-de/app-exposer/incluster/jobinfo"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/quota"
 
 	"github.com/jmoiron/sqlx"
@@ -25,9 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
@@ -89,6 +87,11 @@ func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, gatewayClient 
 		quotaEnforcer: quota.NewEnforcer(clientset, db, apps, init.NATSEncodedConn, init.UserSuffix),
 		jobInfo:       jobinfo.NewJobInfo(apps),
 	}
+}
+
+// SetScheduler configures the operator scheduler for multi-cluster operations.
+func (i *Incluster) SetScheduler(s *operatorclient.Scheduler) {
+	i.quotaEnforcer.SetScheduler(s)
 }
 
 // getRoutesClient returns the HTTPRoutes client for the VICE namespace.
@@ -156,121 +159,6 @@ func (i *Incluster) UpsertInputPathListConfigMap(ctx context.Context, job *model
 	return nil
 }
 
-// UpsertDeployment creates or updates the given Deployment and its associated
-// resources (PVs, PVCs, PDB, Service, HTTPRoute) for the VICE analysis.
-func (i *Incluster) UpsertDeployment(ctx context.Context, deployment *appsv1.Deployment, job *model.Job) error {
-	var err error
-	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
-
-	_, err = depclient.Get(ctx, job.InvocationID, metav1.GetOptions{})
-	if err != nil {
-		_, err = depclient.Create(ctx, deployment, metav1.CreateOptions{})
-		if err != nil {
-			return err
-		}
-	} else {
-		_, err = depclient.Update(ctx, deployment, metav1.UpdateOptions{})
-		if err != nil {
-			return err
-		}
-	}
-
-	persistentVolumes, err := i.getPersistentVolumes(ctx, job)
-	if err != nil {
-		return err
-	}
-
-	volumeClaims, err := i.getVolumeClaims(ctx, job)
-	if err != nil {
-		return err
-	}
-
-	if len(persistentVolumes) > 0 {
-		pvclient := i.clientset.CoreV1().PersistentVolumes()
-
-		for _, volume := range persistentVolumes {
-			_, err = pvclient.Get(ctx, volume.GetName(), metav1.GetOptions{})
-			if err != nil {
-				_, err = pvclient.Create(ctx, volume, metav1.CreateOptions{})
-				if err != nil {
-					return err
-				}
-			} else {
-				_, err = pvclient.Update(ctx, volume, metav1.UpdateOptions{})
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	if len(volumeClaims) > 0 {
-		pvcclient := i.clientset.CoreV1().PersistentVolumeClaims(i.ViceNamespace)
-
-		for _, volumeClaim := range volumeClaims {
-			_, err = pvcclient.Get(ctx, volumeClaim.GetName(), metav1.GetOptions{})
-			if err != nil {
-				_, err = pvcclient.Create(ctx, volumeClaim, metav1.CreateOptions{})
-				if err != nil {
-					return err
-				}
-			} else {
-				_, err = pvcclient.Update(ctx, volumeClaim, metav1.UpdateOptions{})
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	// Create the pod disruption budget for the job.
-	pdb, err := i.createPodDisruptionBudget(ctx, job)
-	if err != nil {
-		return err
-	}
-	pdbClient := i.clientset.PolicyV1().PodDisruptionBudgets(i.ViceNamespace)
-	_, err = pdbClient.Get(ctx, job.InvocationID, metav1.GetOptions{})
-	if err != nil {
-		_, err = pdbClient.Create(ctx, pdb, metav1.CreateOptions{})
-		if err != nil {
-			return err
-		}
-	}
-
-	// Create the service for the job.
-	svc, err := i.getService(ctx, job)
-	if err != nil {
-		return err
-	}
-	svcclient := i.clientset.CoreV1().Services(i.ViceNamespace)
-	_, err = svcclient.Get(ctx, job.InvocationID, metav1.GetOptions{})
-	if err != nil {
-		_, err = svcclient.Create(ctx, svc, metav1.CreateOptions{})
-		if err != nil {
-			return err
-		}
-	}
-
-	// Create the HTTPRoute complete with provider-specific customizations if applicable.
-	routeBuilder := httproutes.NewHTTPRouteBuilder(
-		i.GatewayProvider,
-		i.VICEBackendNamespace,
-		i.ViceNamespace,
-		i.ViceDomain,
-		i.jobInfo,
-	)
-	route, err := routeBuilder.BuildRoute(ctx, job, svc)
-	if err != nil {
-		return err
-	}
-	_, err = i.getRoutesClient().Create(ctx, route, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // GetMillicoresFromDeployment extracts the CPU limit from the analysis
 // container in the given Deployment and converts it to millicores.
 func GetMillicoresFromDeployment(deployment *appsv1.Deployment) (*apd.Decimal, error) {
@@ -315,142 +203,7 @@ func GetMillicoresFromDeployment(deployment *appsv1.Deployment) (*apd.Decimal, e
 	return millicores, nil
 }
 
-// DoExit deletes all K8s resources (PDB, HTTPRoute, service, deployment,
-// PVCs, PVs, and ConfigMaps) associated with the given external ID.
-func (i *Incluster) DoExit(ctx context.Context, externalID string) error {
-	set := labels.Set(map[string]string{
-		"external-id": externalID,
-	})
-
-	listoptions := metav1.ListOptions{
-		LabelSelector: set.AsSelector().String(),
-	}
-
-	// Delete the pod disruption budget
-	pdbClient := i.clientset.PolicyV1().PodDisruptionBudgets(i.ViceNamespace)
-	pdbList, err := pdbClient.List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-
-	for _, pdb := range pdbList.Items {
-		if err = pdbClient.Delete(ctx, pdb.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-		}
-	}
-
-	// Delete the HTTP route.
-	routesClient := i.getRoutesClient()
-	routeList, err := routesClient.List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-	for _, route := range routeList.Items {
-		if err = routesClient.Delete(ctx, route.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-		}
-	}
-
-	// Delete the service
-	svcclient := i.clientset.CoreV1().Services(i.ViceNamespace)
-	svclist, err := svcclient.List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-
-	for _, svc := range svclist.Items {
-		if err = svcclient.Delete(ctx, svc.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-		}
-	}
-
-	// Delete the deployment
-	depclient := i.clientset.AppsV1().Deployments(i.ViceNamespace)
-	deplist, err := depclient.List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-
-	for _, dep := range deplist.Items {
-		if err = depclient.Delete(ctx, dep.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-		}
-	}
-
-	// Delete volumes used by the deployment
-	// Delete persistent volume claims.
-	// This will automatically delete persistent volumes associated with them.
-	pvcclient := i.clientset.CoreV1().PersistentVolumeClaims(i.ViceNamespace)
-	pvclist, err := pvcclient.List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-
-	for _, pvc := range pvclist.Items {
-		if err = pvcclient.Delete(ctx, pvc.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-		}
-	}
-
-	// Persistent volumes with "Retain" reclaim policy should be deleted manually
-	// Persistent volumes created via CSI Driver only supports "Retain" reclaim policy
-	pvclient := i.clientset.CoreV1().PersistentVolumes()
-	pvlist, err := pvclient.List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-
-	for _, pv := range pvlist.Items {
-		if err = pvclient.Delete(ctx, pv.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-		}
-	}
-
-	// Delete the input files list and the excludes list config maps
-	cmclient := i.clientset.CoreV1().ConfigMaps(i.ViceNamespace)
-	cmlist, err := cmclient.List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-
-	log.Infof("number of configmaps to be deleted for %s: %d", externalID, len(cmlist.Items))
-
-	for _, cm := range cmlist.Items {
-		log.Infof("deleting configmap %s for %s", cm.Name, externalID)
-		if err = cmclient.Delete(ctx, cm.Name, metav1.DeleteOptions{}); err != nil {
-			log.Error(err)
-		}
-	}
-
-	return nil
-}
-
-// GetIDFromHost returns the external ID for the running VICE app associated with the host, which is the same as the
-// name of the HTTPRoute.
-func (i *Incluster) GetIDFromHost(ctx context.Context, host string) (string, error) {
-	routesClient := i.getRoutesClient()
-
-	// Determine the host FQDN to use when doing the search.
-	hostFQDN := host
-	if !strings.Contains(host, ".") {
-		hostFQDN = fmt.Sprintf("%s.%s", host, i.ViceDomain)
-	}
-
-	// Obtain the list of routes.
-	routeList, err := routesClient.List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return "", err
-	}
-
-	// Find the route matching the given host name.
-	for _, route := range routeList.Items {
-		if slices.Contains(route.Spec.Hostnames, gatewayv1.Hostname(hostFQDN)) {
-			return route.Name, nil
-		}
-	}
-
-	return "", fmt.Errorf("no HTTPRoute found for host %s", host)
-}
+// GetMillicoresFromDeployment extracts the CPU limit from the analysis
 
 const updateTimeLimitSQL = `
 	UPDATE ONLY jobs

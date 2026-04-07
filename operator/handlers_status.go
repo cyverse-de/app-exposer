@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/labstack/echo/v4"
 	appsv1 "k8s.io/api/apps/v1"
@@ -113,11 +115,6 @@ func (o *Operator) HandleStatus(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// URLReadyResponse indicates whether a VICE analysis is ready for user access.
-type URLReadyResponse struct {
-	Ready bool `json:"ready"`
-}
-
 // HandleURLReady checks if deployment has ready replicas, service exists,
 // and an HTTPRoute exists for the given analysis.
 //
@@ -127,7 +124,7 @@ type URLReadyResponse struct {
 //	@Tags			analyses
 //	@Produce		json
 //	@Param			analysis-id	path		string	true	"The analysis ID"
-//	@Success		200			{object}	URLReadyResponse
+//	@Success		200			{object}	operatorclient.URLReadyResponse
 //	@Failure		400			{object}	common.ErrorResponse
 //	@Failure		500			{object}	common.ErrorResponse
 //	@Security		BasicAuth
@@ -147,24 +144,39 @@ func (o *Operator) HandleURLReady(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	podReady := hasReadyDeployment(deps.Items)
+	if !hasReadyDeployment(deps.Items) {
+		return c.JSON(http.StatusOK, operatorclient.URLReadyResponse{Ready: false})
+	}
 
-	// Check service exists.
+	// Check service existence.
 	svcs, err := o.clientset.CoreV1().Services(o.namespace).List(ctx, opts)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	serviceExists := len(svcs.Items) > 0
+	if len(svcs.Items) == 0 {
+		return c.JSON(http.StatusOK, operatorclient.URLReadyResponse{Ready: false})
+	}
 
-	// Check HTTPRoute exists.
+	// Check HTTPRoute existence.
 	routes, err := o.gatewayClient.HTTPRoutes(o.namespace).List(ctx, opts)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	routingExists := len(routes.Items) > 0
+	if len(routes.Items) == 0 {
+		return c.JSON(http.StatusOK, operatorclient.URLReadyResponse{Ready: false})
+	}
 
-	return c.JSON(http.StatusOK, URLReadyResponse{
-		Ready: podReady && serviceExists && routingExists,
+	// Attempt to get the access URL from the vice-proxy sidecar.
+	// Use the first service found for this analysis.
+	accessURL, err := o.getAccessURL(ctx, svcs.Items[0].Name)
+	if err != nil {
+		log.Debugf("analysis %s: vice-proxy not yet reachable: %v", analysisID, err)
+		return c.JSON(http.StatusOK, operatorclient.URLReadyResponse{Ready: false})
+	}
+
+	return c.JSON(http.StatusOK, operatorclient.URLReadyResponse{
+		Ready:     true,
+		AccessURL: accessURL,
 	})
 }
 
@@ -210,22 +222,16 @@ func (o *Operator) HandlePods(c echo.Context) error {
 // hasReadyDeployment returns true if any deployment in the list has at least
 // one ready replica.
 func hasReadyDeployment(deps []appsv1.Deployment) bool {
-	for _, d := range deps {
-		if d.Status.ReadyReplicas > 0 {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(deps, func(d appsv1.Deployment) bool {
+		return d.Status.ReadyReplicas > 0
+	})
 }
 
 // isPodReady returns true if the pod has a PodReady condition set to True.
 func isPodReady(p apiv1.Pod) bool {
-	for _, cond := range p.Status.Conditions {
-		if cond.Type == apiv1.PodReady && cond.Status == apiv1.ConditionTrue {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(p.Status.Conditions, func(cond apiv1.PodCondition) bool {
+		return cond.Type == apiv1.PodReady && cond.Status == apiv1.ConditionTrue
+	})
 }
 
 // HandleLogs returns container logs for an analysis's pods.

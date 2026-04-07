@@ -715,7 +715,7 @@ const docTemplateoperator = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/operator.URLReadyResponse"
+                            "$ref": "#/definitions/operatorclient.URLReadyResponse"
                         }
                     },
                     "400": {
@@ -1365,14 +1365,6 @@ const docTemplateoperator = `{
                 }
             }
         },
-        "operator.URLReadyResponse": {
-            "type": "object",
-            "properties": {
-                "ready": {
-                    "type": "boolean"
-                }
-            }
-        },
         "operator.UpdatePermissionsRequest": {
             "type": "object",
             "properties": {
@@ -1410,37 +1402,61 @@ const docTemplateoperator = `{
             "type": "object",
             "properties": {
                 "analysisID": {
+                    "description": "AnalysisID is the unique identifier for the analysis.",
                     "type": "string"
                 },
                 "configMaps": {
+                    "description": "ConfigMaps is a list of Kubernetes ConfigMap objects for the analysis.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/v1.ConfigMap"
                     }
                 },
                 "deployment": {
-                    "$ref": "#/definitions/v1.Deployment"
+                    "description": "Deployment is the Kubernetes Deployment object for the analysis.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Deployment"
+                        }
+                    ]
                 },
                 "httpRoute": {
-                    "$ref": "#/definitions/v1.HTTPRoute"
+                    "description": "HTTPRoute is the Gateway API HTTPRoute object for the analysis's routing.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.HTTPRoute"
+                        }
+                    ]
                 },
                 "persistentVolumeClaims": {
+                    "description": "PersistentVolumeClaims is a list of Kubernetes PersistentVolumeClaim objects for the analysis.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/v1.PersistentVolumeClaim"
                     }
                 },
                 "persistentVolumes": {
+                    "description": "PersistentVolumes is a list of Kubernetes PersistentVolume objects for the analysis.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/v1.PersistentVolume"
                     }
                 },
                 "podDisruptionBudget": {
-                    "$ref": "#/definitions/v1.PodDisruptionBudget"
+                    "description": "PodDisruptionBudget is the Kubernetes PodDisruptionBudget object for the analysis.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodDisruptionBudget"
+                        }
+                    ]
                 },
                 "service": {
-                    "$ref": "#/definitions/v1.Service"
+                    "description": "Service is the Kubernetes Service object for the analysis.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Service"
+                        }
+                    ]
                 }
             }
         },
@@ -1487,6 +1503,17 @@ const docTemplateoperator = `{
             "properties": {
                 "sessions_invalidated": {
                     "type": "integer"
+                }
+            }
+        },
+        "operatorclient.URLReadyResponse": {
+            "type": "object",
+            "properties": {
+                "access_url": {
+                    "type": "string"
+                },
+                "ready": {
+                    "type": "boolean"
                 }
             }
         },

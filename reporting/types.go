@@ -10,6 +10,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // MetaInfo contains useful information provided by multiple resource types.
@@ -78,7 +79,8 @@ type IngressInfo struct {
 // RouteInfo contains information about an HTTPRoute used for VICE apps.
 type RouteInfo struct {
 	MetaInfo
-	Hostnames []string `json:"hostnames"`
+	Hostnames []string                  `json:"hostnames"`
+	Rules     []gatewayv1.HTTPRouteRule `json:"rules"`
 }
 
 // VICELogEntry contains the log output for a container in a running VICE analysis.

@@ -281,11 +281,16 @@ func (c *Client) LogoutUser(ctx context.Context, analysisID, username string) er
 
 // Listing returns full resource info for all running VICE analyses from
 // this operator's cluster.
-func (c *Client) Listing(ctx context.Context) (*reporting.ResourceInfo, error) {
-	reqURL := c.baseURL.JoinPath("analyses").String()
-	log.Debugf("operator %s: GET %s (listing)", c.name, reqURL)
+func (c *Client) Listing(ctx context.Context, params url.Values) (*reporting.ResourceInfo, error) {
+	reqURL, err := url.Parse(c.baseURL.JoinPath("analyses").String())
+	if err != nil {
+		return nil, err
+	}
+	reqURL.RawQuery = params.Encode()
 
-	resp, err := c.doRequest(ctx, http.MethodGet, reqURL, nil)
+	log.Debugf("operator %s: GET %s (listing)", c.name, reqURL.String())
+
+	resp, err := c.doRequest(ctx, http.MethodGet, reqURL.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("listing request: %w", err)
 	}
