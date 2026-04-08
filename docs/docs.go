@@ -468,7 +468,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/incluster.ResourceInfo"
+                            "$ref": "#/definitions/reporting.ResourceInfo"
                         }
                     },
                     "400": {
@@ -582,7 +582,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/incluster.ResourceInfo"
+                            "$ref": "#/definitions/reporting.ResourceInfo"
                         }
                     },
                     "400": {
@@ -822,7 +822,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/incluster.ResourceInfo"
+                            "$ref": "#/definitions/reporting.ResourceInfo"
                         }
                     },
                     "400": {
@@ -1311,7 +1311,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/incluster.ResourceInfo"
+                            "$ref": "#/definitions/reporting.ResourceInfo"
                         }
                     },
                     "400": {
@@ -2027,41 +2027,6 @@ const docTemplate = `{
                 }
             }
         },
-        "incluster.ResourceInfo": {
-            "type": "object",
-            "properties": {
-                "configMaps": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/incluster.ConfigMapInfo"
-                    }
-                },
-                "deployments": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/incluster.DeploymentInfo"
-                    }
-                },
-                "pods": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/incluster.PodInfo"
-                    }
-                },
-                "routes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/incluster.RouteInfo"
-                    }
-                },
-                "services": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/incluster.ServiceInfo"
-                    }
-                }
-            }
-        },
         "incluster.RetPod": {
             "type": "object",
             "properties": {
@@ -2090,6 +2055,12 @@ const docTemplate = `{
                 },
                 "externalID": {
                     "type": "string"
+                },
+                "hostnames": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "name": {
                     "type": "string"
@@ -3105,6 +3076,12 @@ const docTemplate = `{
                 },
                 "namespace": {
                     "type": "string"
+                },
+                "rules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.HTTPRouteRule"
+                    }
                 },
                 "userID": {
                     "type": "string"

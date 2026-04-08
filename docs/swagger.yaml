@@ -323,29 +323,6 @@ definitions:
       username:
         type: string
     type: object
-  incluster.ResourceInfo:
-    properties:
-      configMaps:
-        items:
-          $ref: '#/definitions/incluster.ConfigMapInfo'
-        type: array
-      deployments:
-        items:
-          $ref: '#/definitions/incluster.DeploymentInfo'
-        type: array
-      pods:
-        items:
-          $ref: '#/definitions/incluster.PodInfo'
-        type: array
-      routes:
-        items:
-          $ref: '#/definitions/incluster.RouteInfo'
-        type: array
-      services:
-        items:
-          $ref: '#/definitions/incluster.ServiceInfo'
-        type: array
-    type: object
   incluster.RetPod:
     properties:
       name:
@@ -365,6 +342,10 @@ definitions:
         type: string
       externalID:
         type: string
+      hostnames:
+        items:
+          type: string
+        type: array
       name:
         type: string
       namespace:
@@ -1103,6 +1084,10 @@ definitions:
         type: string
       namespace:
         type: string
+      rules:
+        items:
+          $ref: '#/definitions/v1.HTTPRouteRule'
+        type: array
       userID:
         type: string
       username:
@@ -11609,7 +11594,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/incluster.ResourceInfo'
+            $ref: '#/definitions/reporting.ResourceInfo'
         "400":
           description: Bad Request
           schema:
@@ -11788,7 +11773,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/incluster.ResourceInfo'
+            $ref: '#/definitions/reporting.ResourceInfo'
         "400":
           description: Bad Request
           schema:
@@ -12078,7 +12063,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/incluster.ResourceInfo'
+            $ref: '#/definitions/reporting.ResourceInfo'
         "400":
           description: Bad Request
           schema:
@@ -12281,7 +12266,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/incluster.ResourceInfo'
+            $ref: '#/definitions/reporting.ResourceInfo'
         "400":
           description: Bad Request
           schema:

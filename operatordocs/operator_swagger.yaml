@@ -526,6 +526,10 @@ definitions:
         type: string
       namespace:
         type: string
+      rules:
+        items:
+          $ref: '#/definitions/v1.HTTPRouteRule'
+        type: array
       userID:
         type: string
       username:
@@ -10733,8 +10737,9 @@ paths:
   /analyses:
     get:
       description: |-
-        Returns all interactive (VICE) resources in the operator's namespace
+        Returns interactive (VICE) resources in the operator's namespace
         including deployments, pods, configmaps, services, and routes.
+        Query parameters are used as label filters.
       produces:
       - application/json
       responses:

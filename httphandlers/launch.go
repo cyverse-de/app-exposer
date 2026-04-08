@@ -291,7 +291,6 @@ func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, data)
 }
 
-
 // AnalysisInClusterResponse is the response body for the in-cluster check endpoints.
 type AnalysisInClusterResponse struct {
 	Found bool `json:"found"`

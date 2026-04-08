@@ -22,7 +22,7 @@ const docTemplateoperator = `{
                         "BasicAuth": []
                     }
                 ],
-                "description": "Returns all interactive (VICE) resources in the operator's namespace\nincluding deployments, pods, configmaps, services, and routes.",
+                "description": "Returns interactive (VICE) resources in the operator's namespace\nincluding deployments, pods, configmaps, services, and routes.\nQuery parameters are used as label filters.",
                 "produces": [
                     "application/json"
                 ],
@@ -1784,6 +1784,12 @@ const docTemplateoperator = `{
                 },
                 "namespace": {
                     "type": "string"
+                },
+                "rules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.HTTPRouteRule"
+                    }
                 },
                 "userID": {
                     "type": "string"

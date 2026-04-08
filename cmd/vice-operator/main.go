@@ -48,9 +48,11 @@ func main() {
 		loadingServicePort    int
 		loadingTimeoutMs      int64
 		operatorPodSelector   string
+		gatewayNamespace      string
 		gatewayName           string
 		gatewayClassName      string
 		gatewayEntryPort      int
+		gatewaySkipCreation   bool
 		keycloakBaseURL       string
 		keycloakRealm         string
 		keycloakClientID      string
@@ -88,9 +90,11 @@ func main() {
 	flag.IntVar(&loadingServicePort, "loading-service-port", 80, "Port of the loading page service")
 	flag.Int64Var(&loadingTimeoutMs, "loading-timeout-ms", 600000, "Loading page timeout in milliseconds")
 	flag.StringVar(&operatorPodSelector, "operator-pod-selector", "", "Pod selector for vice-operator services (e.g. app=vice-operator-local); if set, ensures API and loading services exist at startup")
+	flag.StringVar(&gatewayNamespace, "gateway-namespace", "", "Namespace of the Gateway resource (defaults to --namespace)")
 	flag.StringVar(&gatewayName, "gateway-name", "vice", "Name of the Gateway resource")
 	flag.StringVar(&gatewayClassName, "gateway-class-name", "traefik", "GatewayClass name for the Gateway resource")
 	flag.IntVar(&gatewayEntryPort, "gateway-entrypoint-port", 8000, "Entrypoint port on the Gateway listener (must match the gateway controller's internal port)")
+	flag.BoolVar(&gatewaySkipCreation, "gateway-skip-creation", false, "Skip creation of the Gateway resource (use when attaching to a pre-existing Gateway)")
 	flag.StringVar(&keycloakBaseURL, "keycloak-base-url", "", "Keycloak base URL for vice-proxy auth")
 	flag.StringVar(&keycloakRealm, "keycloak-realm", "", "Keycloak realm for vice-proxy auth")
 	flag.StringVar(&keycloakClientID, "keycloak-client-id", "", "OIDC client ID for vice-proxy auth")
@@ -212,14 +216,26 @@ func main() {
 		// the Gateway (e.g. for HAProxy / tailscale serve).
 		apiHostname := fmt.Sprintf("%s.%s", apiSubdomain, parsedURL.Hostname())
 		mustEnsure("API HTTPRoute", func(ctx context.Context) error {
-			return operator.EnsureAPIRoute(ctx, gwClient, namespace, gatewayName, apiHostname, apiServiceName, int32(port))
+			gwNS := gatewayNamespace
+			if gwNS == "" {
+				gwNS = namespace
+			}
+			return operator.EnsureAPIRoute(ctx, gwClient, namespace, gwNS, gatewayName, apiHostname, apiServiceName, int32(port))
 		})
 	}
 
 	// Ensure the Gateway resource exists so HTTPRoutes can attach to it.
-	mustEnsure("gateway", func(ctx context.Context) error {
-		return operator.EnsureGateway(ctx, gwClient, namespace, gatewayName, gatewayClassName, int32(gatewayEntryPort))
-	})
+	// We skip this if --gateway-skip-creation is set, or if --gateway-namespace
+	// points to a different namespace than the operator.
+	shouldEnsureGateway := !gatewaySkipCreation && (gatewayNamespace == "" || gatewayNamespace == namespace)
+	if shouldEnsureGateway {
+		mustEnsure("gateway", func(ctx context.Context) error {
+			return operator.EnsureGateway(ctx, gwClient, namespace, gatewayName, gatewayClassName, int32(gatewayEntryPort))
+		})
+	} else {
+		log.Infof("skipping Gateway creation (skip-flag=%v, namespace=%s, gateway-namespace=%s)",
+			gatewaySkipCreation, namespace, gatewayNamespace)
+	}
 
 	// Ensure the CORS middleware exists so HTTPRoutes can reference it.
 	mustEnsure("CORS middleware", func(ctx context.Context) error {
@@ -369,7 +385,7 @@ func main() {
 
 	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
 	imageCache := operator.NewImageCacheManager(clientset, namespace, imagePullSecret)
-	op := operator.NewOperator(clientset, gwClient, namespace, gpuVendor, capacityCalc, imageCache,
+	op := operator.NewOperator(clientset, gwClient, namespace, gatewayNamespace, gatewayName, gpuVendor, capacityCalc, imageCache,
 		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs, baseDomain, clusterConfigSecret, egressConfig)
 
 	app := NewApp(op, basicAuth, basicAuthUsername, basicAuthPassword)
