@@ -748,10 +748,12 @@ func TestTransformGatewayNamespace(t *testing.T) {
 		name          string
 		route         *gatewayv1.HTTPRoute
 		namespace     string
+		gwName        string
 		wantNamespace string
+		wantName      string
 	}{
 		{
-			name: "parentRef namespace rewritten",
+			name: "parentRef namespace and name rewritten",
 			route: &gatewayv1.HTTPRoute{
 				Spec: gatewayv1.HTTPRouteSpec{
 					CommonRouteSpec: gatewayv1.CommonRouteSpec{
@@ -762,15 +764,18 @@ func TestTransformGatewayNamespace(t *testing.T) {
 				},
 			},
 			namespace:     "vice-apps",
+			gwName:        "new-vice",
 			wantNamespace: "vice-apps",
+			wantName:      "new-vice",
 		},
 		{
 			name:      "nil route does not panic",
 			route:     nil,
 			namespace: "vice-apps",
+			gwName:    "vice",
 		},
 		{
-			name: "empty namespace is no-op",
+			name: "empty namespace and name is no-op",
 			route: &gatewayv1.HTTPRoute{
 				Spec: gatewayv1.HTTPRouteSpec{
 					CommonRouteSpec: gatewayv1.CommonRouteSpec{
@@ -781,7 +786,9 @@ func TestTransformGatewayNamespace(t *testing.T) {
 				},
 			},
 			namespace:     "",
+			gwName:        "",
 			wantNamespace: "qa",
+			wantName:      "vice",
 		},
 		{
 			name: "multiple parentRefs all rewritten",
@@ -796,13 +803,15 @@ func TestTransformGatewayNamespace(t *testing.T) {
 				},
 			},
 			namespace:     "de",
+			gwName:        "gw",
 			wantNamespace: "de",
+			wantName:      "gw",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			TransformGatewayNamespace(tt.route, tt.namespace)
+			TransformGatewayNamespace(tt.route, tt.namespace, tt.gwName)
 
 			if tt.route == nil {
 				return
@@ -810,6 +819,7 @@ func TestTransformGatewayNamespace(t *testing.T) {
 			for _, ref := range tt.route.Spec.ParentRefs {
 				require.NotNil(t, ref.Namespace)
 				assert.Equal(t, tt.wantNamespace, string(*ref.Namespace))
+				assert.Equal(t, tt.wantName, string(ref.Name))
 			}
 		})
 	}

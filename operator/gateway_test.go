@@ -80,9 +80,26 @@ func TestEnsureAPIRoute(t *testing.T) {
 	tests := []struct {
 		name      string
 		preCreate bool
+		preNS     string
+		wantNS    string
 	}{
-		{name: "creates HTTPRoute when missing", preCreate: false},
-		{name: "no-op when HTTPRoute already matches", preCreate: true},
+		{
+			name:      "creates HTTPRoute when missing",
+			preCreate: false,
+			wantNS:    "vice-apps",
+		},
+		{
+			name:      "no-op when HTTPRoute already matches",
+			preCreate: true,
+			preNS:     "vice-apps",
+			wantNS:    "vice-apps",
+		},
+		{
+			name:      "updates HTTPRoute when gateway namespace differs",
+			preCreate: true,
+			preNS:     "wrong-ns",
+			wantNS:    "correct-ns",
+		},
 	}
 
 	for _, tt := range tests {
@@ -91,17 +108,21 @@ func TestEnsureAPIRoute(t *testing.T) {
 			gwClient := gwClientset.GatewayV1()
 
 			if tt.preCreate {
-				err := EnsureAPIRoute(context.Background(), gwClient, "vice-apps", "vice", "vice-api.localhost", "vice-operator", 10000)
+				err := EnsureAPIRoute(context.Background(), gwClient, "vice-apps", tt.preNS, "vice", "vice-api.localhost", "vice-operator", 10000)
 				require.NoError(t, err)
 			}
 
-			err := EnsureAPIRoute(context.Background(), gwClient, "vice-apps", "vice", "vice-api.localhost", "vice-operator", 10000)
+			err := EnsureAPIRoute(context.Background(), gwClient, "vice-apps", tt.wantNS, "vice", "vice-api.localhost", "vice-operator", 10000)
 			require.NoError(t, err)
 
 			route, err := gwClient.HTTPRoutes("vice-apps").Get(context.Background(), "vice-operator-api", metav1.GetOptions{})
 			require.NoError(t, err)
 			require.Len(t, route.Spec.Hostnames, 1)
 			assert.Equal(t, "vice-api.localhost", string(route.Spec.Hostnames[0]))
+
+			require.Len(t, route.Spec.ParentRefs, 1)
+			require.NotNil(t, route.Spec.ParentRefs[0].Namespace)
+			assert.Equal(t, tt.wantNS, string(*route.Spec.ParentRefs[0].Namespace))
 		})
 	}
 }

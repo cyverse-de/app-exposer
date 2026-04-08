@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/cyverse-de/app-exposer/operatorclient"
@@ -20,6 +22,14 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayfake "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
 )
+
+type mockHTTPClient struct {
+	DoFunc func(req *http.Request) (*http.Response, error)
+}
+
+func (m *mockHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	return m.DoFunc(req)
+}
 
 // makeGatewayPort converts an int32 to a gatewayv1.PortNumber pointer.
 func makeGatewayPort(port int32) *gatewayv1.PortNumber {
@@ -67,7 +77,7 @@ func newTestOperator(t *testing.T, maxAnalyses int, vendor ...GPUVendor) (*Opera
 	gwClientset := gatewayfake.NewSimpleClientset()
 	calc := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
 	cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
-	op := NewOperator(clientset, gwClientset.GatewayV1(), "vice-apps", gpuVendor, calc, cache, "vice-operator-loading", 80, 600000, "", "cluster-config-secret", NetworkPolicyConfig{})
+	op := NewOperator(clientset, gwClientset.GatewayV1(), "vice-apps", "vice-apps", "vice", gpuVendor, calc, cache, "vice-operator-loading", 80, 600000, "", "cluster-config-secret", NetworkPolicyConfig{})
 	return op, clientset, gwClientset
 }
 
@@ -369,6 +379,16 @@ func TestHandleURLReady(t *testing.T) {
 	gwPort := makeGatewayPort(int32(80))
 	_, err = gwClientset.GatewayV1().HTTPRoutes("vice-apps").Create(ctx, makeTestHTTPRouteWithLabels(labels, gwPort), metav1.CreateOptions{})
 	require.NoError(t, err)
+
+	// Mock the HTTP client for the vice-proxy check.
+	op.httpClient = &mockHTTPClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"url": "http://test.localhost"}`)),
+			}, nil
+		},
+	}
 
 	// Now should be ready.
 	req = httptest.NewRequest(http.MethodGet, "/analyses/"+analysisID+"/url-ready", nil)
