@@ -104,13 +104,13 @@ The General Info file for swag is `cmd/app-exposer/main.go`.
       │                    │
   vice-operator (QA)  vice-operator (local)
   ├─ Apply resources   ├─ Apply resources
-  ├─ nginx Ingress     ├─ Transform → Tailscale Ingress
+  ├─ Gateway API       ├─ Gateway API
   └─ K8s API only      └─ K8s API only
 ```
 
 The operator has **no external dependencies** — no database, NATS, apps service, permissions, or quota. It only needs a K8s client and an HTTP server.
 
-App-exposer builds all K8s resource objects (Deployment, Service, Ingress, ConfigMaps, PVs, PVCs, PodDisruptionBudget) using its existing builder functions, serializes them into an `AnalysisBundle`, and sends the bundle to the operator via HTTP. The operator applies the resources to its local cluster, transforming routing as needed.
+App-exposer builds all K8s resource objects (Deployment, Service, HTTPRoute, ConfigMaps, PVs, PVCs, PodDisruptionBudget) using its existing builder functions, serializes them into an `AnalysisBundle`, and sends the bundle to the operator via HTTP. The operator applies the resources to its local cluster, transforming routing as needed to attach to the local Gateway.
 
 ## Command-Line Flags
 
@@ -119,10 +119,13 @@ App-exposer builds all K8s resource objects (Deployment, Service, Ingress, Confi
 | `--kubeconfig` | `""` (in-cluster) | Path to kubeconfig file. Empty uses in-cluster config. |
 | `--namespace` | `vice-apps` | K8s namespace where VICE resources are created. |
 | `--port` | `60001` | HTTP listen port. |
-| `--routing-type` | `nginx` | Ingress routing type: `nginx` or `tailscale`. |
-| `--ingress-class` | `nginx` | Ingress class name to set on Ingress resources. |
 | `--max-analyses` | `50` | Maximum concurrent VICE analyses allowed on this cluster. |
 | `--node-label-selector` | `""` | K8s label selector to filter schedulable nodes for capacity calculation. |
+| `--gateway-namespace` | `""` | Namespace of the Gateway resource (defaults to `--namespace`). |
+| `--gateway-name` | `vice` | Name of the Gateway resource. |
+| `--gateway-class-name` | `traefik` | GatewayClass name for the Gateway resource. |
+| `--gateway-entrypoint-port` | `8000` | Entrypoint port on the Gateway listener. |
+| `--gateway-skip-creation` | `false` | Skip creation of the Gateway resource (use when attaching to a pre-existing Gateway). |
 | `--log-level` | `info` | Log level (`debug`, `info`, `warn`, `error`, `fatal`). |
 
 ## Running Locally
@@ -134,8 +137,9 @@ just vice-operator
   --kubeconfig=$HOME/.kube/local-admin.conf \
   --namespace=vice-apps \
   --port=60001 \
-  --routing-type=tailscale \
-  --ingress-class=tailscale \
+  --gateway-name=vice \
+  --gateway-namespace=qa \
+  --gateway-skip-creation \
   --max-analyses=10 \
   --log-level=debug
 ```
@@ -151,8 +155,8 @@ All per-analysis endpoints use `:analysis-id` (the job UUID from the DE database
 | POST | `/analyses` | Receive an AnalysisBundle, transform routing, apply all resources. Returns `409 Conflict` if at capacity. |
 | DELETE | `/analyses/:analysis-id` | Delete all resources for an analysis by label |
 | POST | `/analyses/:analysis-id/save-and-exit` | Trigger file upload via sidecar, then delete resources |
-| GET | `/analyses/:analysis-id/status` | Resource status (deployments, pods, services, ingresses) |
-| GET | `/analyses/:analysis-id/url-ready` | Check if deployment, service, and ingress are all ready |
+| GET | `/analyses/:analysis-id/status` | Resource status (deployments, pods, services, routes) |
+| GET | `/analyses/:analysis-id/url-ready` | Check if deployment, service, and HTTPRoute are all ready |
 | POST | `/analyses/:analysis-id/download-input-files` | Trigger file-transfer sidecar to download inputs |
 | POST | `/analyses/:analysis-id/save-output-files` | Trigger file-transfer sidecar to upload outputs |
 | GET | `/analyses/:analysis-id/pods` | Pod info for the analysis |
@@ -161,12 +165,11 @@ All per-analysis endpoints use `:analysis-id` (the job UUID from the DE database
 
 ## Routing Transformation
 
-When the bundle's Ingress uses a different routing type than the operator's cluster, the operator transforms the Ingress in memory before applying it:
+The operator automatically transforms the `HTTPRoute` resources in the bundle to match the local cluster's Gateway configuration:
 
-- **nginx → nginx**: No transformation (pass through). If the ingress class differs, it is updated.
-- **nginx → tailscale**: All `nginx.ingress.kubernetes.io/*` annotations are removed and the `IngressClassName` is set to the configured tailscale class.
-
-This is a pure in-memory data transformation with no K8s API calls.
+- **Hostname Rewriting**: Hostnames are rewritten to match the cluster's base domain (configured via `--vice-base-url`).
+- **Gateway Attachment**: The `ParentRef` of each `HTTPRoute` is updated to point to the Gateway specified by `--gateway-namespace` and `--gateway-name`.
+- **Loading Page**: During the initial startup phase, traffic is temporarily routed to a "loading page" service before being swapped to the actual analysis container once it is ready.
 
 ## Deploying to Kubernetes
 
@@ -176,16 +179,19 @@ A sample manifest is provided at `k8s/vice-operator.yml`. It includes a Deployme
 kubectl apply -f k8s/vice-operator.yml
 ```
 
-Edit the Deployment args to match your cluster's configuration (routing type, ingress class, max analyses, etc.). For a Tailscale-routed cluster:
+Edit the Deployment args to match your cluster's configuration. For a cluster using a pre-existing Gateway in another namespace:
 
 ```yaml
 args:
   - "--namespace=vice-apps"
-  - "--port=60001"
-  - "--routing-type=tailscale"
-  - "--ingress-class=tailscale"
+  - "--gateway-namespace=qa"
+  - "--gateway-name=vice"
+  - "--gateway-skip-creation"
   - "--max-analyses=10"
 ```
+
+The operator image is built from the same Dockerfile as app-exposer — the `vice-operator` binary is included alongside `app-exposer` in the container image. Override the entrypoint with `command: ["/vice-operator"]`.
+
 
 The operator image is built from the same Dockerfile as app-exposer — the `vice-operator` binary is included alongside `app-exposer` in the container image. Override the entrypoint with `command: ["/vice-operator"]`.
 
