@@ -148,12 +148,12 @@ func EnsureCORSMiddleware(ctx context.Context, clientset kubernetes.Interface, n
 func EnsureAPIRoute(
 	ctx context.Context,
 	gwClient gatewayclient.GatewayV1Interface,
-	namespace, gatewayName, hostname, serviceName string,
+	namespace, gatewayNamespace, gatewayName, hostname, serviceName string,
 	servicePort int32,
 ) error {
 	const routeName = "vice-operator-api"
 
-	gwNamespace := gatewayv1.Namespace(namespace)
+	gwNS := gatewayv1.Namespace(gatewayNamespace)
 	gwObjName := gatewayv1.ObjectName(gatewayName)
 	svcPort := gatewayv1.PortNumber(servicePort)
 
@@ -166,7 +166,7 @@ func EnsureAPIRoute(
 			CommonRouteSpec: gatewayv1.CommonRouteSpec{
 				ParentRefs: []gatewayv1.ParentReference{
 					{
-						Namespace: &gwNamespace,
+						Namespace: &gwNS,
 						Name:      gwObjName,
 					},
 				},
@@ -204,7 +204,7 @@ func EnsureAPIRoute(
 	}
 
 	// Skip the update if the spec already matches to avoid unnecessary writes.
-	if apiRouteMatches(existing, hostname, serviceName, servicePort) {
+	if apiRouteMatches(existing, gatewayNamespace, gatewayName, hostname, serviceName, servicePort) {
 		log.Debugf("API HTTPRoute %s/%s already up to date", namespace, routeName)
 		return nil
 	}
@@ -221,8 +221,8 @@ func EnsureAPIRoute(
 }
 
 // apiRouteMatches returns true if the existing HTTPRoute already has the
-// expected hostname, backend service name, and port.
-func apiRouteMatches(route *gatewayv1.HTTPRoute, hostname, serviceName string, servicePort int32) bool {
+// expected hostname, backend service name, port, and gateway ParentRef.
+func apiRouteMatches(route *gatewayv1.HTTPRoute, gwNamespace, gwName, hostname, serviceName string, servicePort int32) bool {
 	if len(route.Spec.Hostnames) != 1 || string(route.Spec.Hostnames[0]) != hostname {
 		return false
 	}
@@ -230,5 +230,20 @@ func apiRouteMatches(route *gatewayv1.HTTPRoute, hostname, serviceName string, s
 		return false
 	}
 	ref := route.Spec.Rules[0].BackendRefs[0].BackendObjectReference
-	return string(ref.Name) == serviceName && ref.Port != nil && int32(*ref.Port) == servicePort
+	if string(ref.Name) != serviceName || ref.Port == nil || int32(*ref.Port) != servicePort {
+		return false
+	}
+
+	if len(route.Spec.ParentRefs) != 1 {
+		return false
+	}
+	p := route.Spec.ParentRefs[0]
+	if string(p.Name) != gwName {
+		return false
+	}
+	if p.Namespace == nil || string(*p.Namespace) != gwNamespace {
+		return false
+	}
+
+	return true
 }

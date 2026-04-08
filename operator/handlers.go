@@ -50,6 +50,8 @@ type Operator struct {
 	clientset           kubernetes.Interface
 	gatewayClient       gatewayclient.GatewayV1Interface
 	namespace           string
+	gatewayNamespace    string
+	gatewayName         string
 	gpuVendor           GPUVendor
 	capacityCalc        *CapacityCalculator
 	imageCache          *ImageCacheManager
@@ -68,6 +70,8 @@ func NewOperator(
 	clientset kubernetes.Interface,
 	gatewayClient gatewayclient.GatewayV1Interface,
 	namespace string,
+	gatewayNamespace string,
+	gatewayName string,
 	gpuVendor GPUVendor,
 	capacityCalc *CapacityCalculator,
 	imageCache *ImageCacheManager,
@@ -98,6 +102,8 @@ func NewOperator(
 		clientset:           clientset,
 		gatewayClient:       gatewayClient,
 		namespace:           namespace,
+		gatewayNamespace:    gatewayNamespace,
+		gatewayName:         gatewayName,
 		gpuVendor:           gpuVendor,
 		capacityCalc:        capacityCalc,
 		imageCache:          imageCache,
@@ -213,7 +219,13 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 	// Transform the HTTPRoute for the local cluster environment.
 	if bundle.HTTPRoute != nil {
 		TransformHostnames(bundle.HTTPRoute, o.baseDomain)
-		TransformGatewayNamespace(bundle.HTTPRoute, o.namespace)
+
+		gwNamespace := o.gatewayNamespace
+		if gwNamespace == "" {
+			gwNamespace = o.namespace
+		}
+		TransformGatewayNamespace(bundle.HTTPRoute, gwNamespace, o.gatewayName)
+
 		TransformBackendToLoadingService(bundle.HTTPRoute, o.loadingServiceName, o.loadingServicePort)
 	}
 

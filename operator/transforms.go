@@ -369,14 +369,20 @@ func deriveBackendURL(deployment *appsv1.Deployment) string {
 	return "http://localhost:60000"
 }
 
-// TransformGatewayNamespace rewrites the parentRef namespace in an HTTPRoute
-// to match the operator's namespace. No-op if namespace is empty or route is nil.
-func TransformGatewayNamespace(route *gatewayv1.HTTPRoute, namespace string) {
-	if route == nil || namespace == "" {
+// TransformGatewayNamespace rewrites the parentRef namespace and name in an HTTPRoute
+// to match the operator's configured gateway. No-op if route is nil.
+func TransformGatewayNamespace(route *gatewayv1.HTTPRoute, namespace, name string) {
+	if route == nil {
 		return
 	}
 	ns := gatewayv1.Namespace(namespace)
+	objName := gatewayv1.ObjectName(name)
 	for i := range route.Spec.ParentRefs {
-		route.Spec.ParentRefs[i].Namespace = &ns
+		if namespace != "" {
+			route.Spec.ParentRefs[i].Namespace = &ns
+		}
+		if name != "" {
+			route.Spec.ParentRefs[i].Name = objName
+		}
 	}
 }
