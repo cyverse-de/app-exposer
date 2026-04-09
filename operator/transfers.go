@@ -47,14 +47,15 @@ func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 		bgCtx := context.Background()
 
 		if err := o.triggerFileTransfer(bgCtx, analysisID, "/upload"); err != nil {
-			log.Errorf("upload failed for analysis %s, aborting resource cleanup: %v", analysisID, err)
-			return
+			log.Errorf("upload failed for analysis %s, proceeding with resource cleanup anyway: %v", analysisID, err)
+		} else {
+			log.Infof("upload complete for analysis %s, proceeding with cleanup", analysisID)
 		}
-
-		log.Infof("upload complete for analysis %s, proceeding with cleanup", analysisID)
 
 		if err := o.deleteAnalysisResources(bgCtx, analysisID); err != nil {
 			log.Errorf("cleanup failed for analysis %s: %v", analysisID, err)
+		} else {
+			log.Infof("cleanup complete for analysis %s", analysisID)
 		}
 	}()
 
