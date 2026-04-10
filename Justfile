@@ -8,7 +8,7 @@ build-flags := ""
 
 default: build
 
-build: docs operator-docs app-exposer vice-operator workflow-builder vice-export vice-import vice-launch vice-list vice-bundle vice-userid
+build: docs operator-docs app-exposer vice-operator vice-operator-tool workflow-builder vice-export vice-import vice-launch vice-list vice-bundle vice-userid
 
 build-image:
     {{ container-runtime }} build -f {{ build-context}}/{{ dockerfile }} -t {{ image-name }}:{{ tag }} --platform {{ platform }} {{ build-flags }} {{ build-context}}
@@ -61,6 +61,9 @@ app-exposer:
 vice-operator:
     go build -o bin/vice-operator cmd/vice-operator/*.go
 
+vice-operator-tool:
+    go build -o bin/vice-operator-tool cmd/vice-operator-tool/*.go
+
 workflow-builder:
     go build -o bin/workflow-builder cmd/workflow-builder/*.go
 
@@ -94,7 +97,34 @@ test-operator:
 test-operatorclient:
     go test ./operatorclient/...
 
-test: test-imageinfo test-common test-operator test-operatorclient
+test-app-exposer:
+    go test ./cmd/app-exposer/...
+
+test-vice-operator:
+    go test ./cmd/vice-operator/...
+
+test-vice-operator-tool:
+    go test ./cmd/vice-operator-tool/...
+
+test-vice-export:
+    go test ./cmd/vice-export/...
+
+test-vice-import:
+    go test ./cmd/vice-import/...
+
+test-vice-launch:
+    go test ./cmd/vice-launch/...
+
+test-vice-list:
+    go test ./cmd/vice-list/...
+
+test-vice-bundle:
+    go test ./cmd/vice-bundle/...
+
+test-vice-userid:
+    go test ./cmd/vice-userid/...
+
+test: test-imageinfo test-common test-operator test-operatorclient test-app-exposer test-vice-operator test-vice-operator-tool test-vice-export test-vice-import test-vice-launch test-vice-list test-vice-bundle test-vice-userid
 
 fmt-docs:
     swag fmt -g app.go -d cmd/app-exposer/,httphandlers/,common/,incluster/
