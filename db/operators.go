@@ -57,6 +57,53 @@ func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 	return ops, err
 }
 
+// OperatorSummary contains the public, non-sensitive fields of an operator.
+type OperatorSummary struct {
+	Name          string `db:"name" json:"name"`
+	URL           string `db:"url" json:"url"`
+	TLSSkipVerify bool   `db:"tls_skip_verify" json:"tls_skip_verify"`
+}
+
+// ListOperatorSummaries returns the name, URL, and TLS skip-verify flag for
+// all operators, ordered by creation time.
+func (d *Database) ListOperatorSummaries(ctx context.Context) ([]OperatorSummary, error) {
+	ops := make([]OperatorSummary, 0)
+	const query = `
+		SELECT name, url, tls_skip_verify
+		FROM operators
+		ORDER BY created_at ASC
+	`
+	err := d.db.SelectContext(ctx, &ops, query)
+	return ops, err
+}
+
+// InsertOperator inserts a new operator into the database and returns the
+// created row with DB-generated fields (id, created_at, updated_at) populated.
+func (d *Database) InsertOperator(ctx context.Context, op *Operator) (*Operator, error) {
+	const query = `
+		INSERT INTO operators (name, url, tls_skip_verify, auth_user, auth_password_encrypted)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, name, url, tls_skip_verify, auth_user, auth_password_encrypted,
+		          last_reconciled_at, reconciled_by, created_at, updated_at
+	`
+	var created Operator
+	err := d.db.QueryRowxContext(ctx, query, op.Name, op.URL, op.TLSSkipVerify, op.AuthUser, op.AuthPasswordEncrypted).StructScan(&created)
+	if err != nil {
+		return nil, err
+	}
+	return &created, nil
+}
+
+// DeleteOperatorByName deletes the operator with the given name. It is
+// idempotent for operators with no associated jobs: deleting a non-existent
+// operator succeeds silently. Deleting an operator that still has jobs
+// referencing it will fail due to a foreign key constraint.
+func (d *Database) DeleteOperatorByName(ctx context.Context, name string) error {
+	const query = `DELETE FROM operators WHERE name = $1`
+	_, err := d.db.ExecContext(ctx, query, name)
+	return err
+}
+
 // ClaimAndReconcile atomically claims an operator that hasn't been reconciled
 // recently and calls the provided function while the row lock is held. On
 // success it updates last_reconciled_at before committing the transaction.

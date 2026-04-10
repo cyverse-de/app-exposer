@@ -7,6 +7,7 @@ import (
 	"github.com/cyverse-de/app-exposer/adapter"
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/db"
 	"github.com/cyverse-de/app-exposer/httphandlers"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/instantlaunches"
@@ -52,6 +53,7 @@ type ExposerAppInit struct {
 	ClientSet               kubernetes.Interface
 	GatewayClient           *gatewayclient.GatewayV1Client
 	batchadapter            *adapter.JEXAdapter
+	dbase                   *db.Database
 	ImagePullSecretName     string
 	LocalStorageClass       string
 	ClusterConfigSecretName string
@@ -140,7 +142,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		clientset:  init.ClientSet,
 		router:     echo.New(),
 		db:         init.db,
-		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter),
+		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter, init.dbase),
 	}
 
 	// Configure operator scheduler. Try config first for backward compatibility,
@@ -228,6 +230,9 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	viceadmin := vice.Group("/admin")
 	viceadmin.GET("/operators", app.handlers.AdminOperatorsHandler)
+	viceadmin.POST("/operators", app.handlers.CreateOperatorHandler)
+	viceadmin.GET("/operators/capacities", app.handlers.AdminOperatorCapacitiesHandler)
+	viceadmin.DELETE("/operators/name/:name", app.handlers.DeleteOperatorHandler)
 	viceadmin.GET("/listing", app.handlers.AdminFilterableResourcesHandler)
 	viceadmin.GET("/operator-listing", app.handlers.AdminOperatorListingHandler)
 	viceadmin.POST("/terminate-all", app.handlers.TerminateAllAnalysesHandler)

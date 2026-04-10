@@ -11,6 +11,7 @@ import (
 	"github.com/cyverse-de/app-exposer/adapter"
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/db"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
@@ -32,15 +33,17 @@ type HTTPHandlers struct {
 	clientset    kubernetes.Interface
 	batchadapter *adapter.JEXAdapter
 	scheduler    *operatorclient.Scheduler
+	db           *db.Database
 }
 
 // New creates an HTTPHandlers with the provided dependencies injected.
-func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface, batchadapter *adapter.JEXAdapter) *HTTPHandlers {
+func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface, batchadapter *adapter.JEXAdapter, db *db.Database) *HTTPHandlers {
 	return &HTTPHandlers{
 		incluster:    incluster,
 		apps:         apps,
 		clientset:    clientset,
 		batchadapter: batchadapter,
+		db:           db,
 	}
 }
 
@@ -376,27 +379,55 @@ func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 	})
 }
 
-// OperatorStatus contains the capacity status of an operator or an error if it could not be reached.
-type OperatorStatus struct {
+// AdminOperatorsHandler lists all operators registered in the database,
+// returning only their name, URL, and TLS skip-verify flag.
+//
+//	@ID				admin-list-operators
+//	@Summary		Lists registered operators
+//	@Description	Returns the name, URL, and tls_skip_verify flag for all operators in the database.
+//	@Produce		json
+//	@Success		200	{array}		db.OperatorSummary
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/admin/operators [get]
+func (h *HTTPHandlers) AdminOperatorsHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	ops, err := h.db.ListOperatorSummaries(ctx)
+	if err != nil {
+		log.Errorf("failed to list operators: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, ops)
+}
+
+// OperatorCapacity contains the capacity status of an operator or an error
+// if it could not be reached.
+type OperatorCapacity struct {
 	Operator string                           `json:"operator"`
 	Capacity *operatorclient.CapacityResponse `json:"capacity,omitempty"`
 	Error    string                           `json:"error,omitempty"`
 }
 
-// AdminOperatorsHandler returns the capacity status of all configured operators.
+// AdminOperatorCapacitiesHandler returns the live capacity status of all
+// configured operators by querying each one in parallel.
 //
-//	@ID				admin-operators
-//	@Summary		Lists configured operators and their capacity
-//	@Description	Iterates through all configured operators and checks their capacity endpoints.
+//	@ID				admin-operator-capacities
+//	@Summary		Returns operator capacities
+//	@Description	Queries each configured operator's capacity endpoint in parallel and returns the results.
 //	@Produce		json
-//	@Success		200	{array}		OperatorStatus
+//	@Success		200	{array}		OperatorCapacity
 //	@Failure		500	{object}	common.ErrorResponse
-//	@Router			/vice/admin/operators [get]
-func (h *HTTPHandlers) AdminOperatorsHandler(c echo.Context) error {
+//	@Router			/vice/admin/operators/capacities [get]
+func (h *HTTPHandlers) AdminOperatorCapacitiesHandler(c echo.Context) error {
+	if h.scheduler == nil {
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "operator scheduler not configured")
+	}
+
 	ctx := c.Request().Context()
 	clients := h.scheduler.Clients()
 
-	results := make([]OperatorStatus, len(clients))
+	results := make([]OperatorCapacity, len(clients))
 	var wg sync.WaitGroup
 
 	for i, client := range clients {
@@ -404,7 +435,7 @@ func (h *HTTPHandlers) AdminOperatorsHandler(c echo.Context) error {
 		go func(idx int, cl *operatorclient.Client) {
 			defer wg.Done()
 			capResp, err := cl.Capacity(ctx)
-			status := OperatorStatus{Operator: cl.Name()}
+			status := OperatorCapacity{Operator: cl.Name()}
 			if err != nil {
 				status.Error = err.Error()
 			} else {
@@ -416,4 +447,98 @@ func (h *HTTPHandlers) AdminOperatorsHandler(c echo.Context) error {
 	wg.Wait()
 
 	return c.JSON(http.StatusOK, results)
+}
+
+// createOperatorRequest is the JSON request body for creating a new operator.
+type createOperatorRequest struct {
+	Name                  string `json:"name"`
+	URL                   string `json:"url"`
+	TLSSkipVerify         bool   `json:"tls_skip_verify"`
+	AuthUser              string `json:"auth_user"`
+	AuthPasswordEncrypted string `json:"auth_password_encrypted"`
+}
+
+// CreateOperatorHandler adds a new operator to the database.
+// The auth_password_encrypted field is assumed to be pre-encrypted by the caller.
+//
+//	@ID				admin-create-operator
+//	@Summary		Creates a new operator
+//	@Description	Adds a new operator to the database. The password must be pre-encrypted.
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		createOperatorRequest	true	"Operator to create"
+//	@Success		201		{object}	db.OperatorSummary
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Router			/vice/admin/operators [post]
+func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	var req createOperatorRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	if strings.TrimSpace(req.Name) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "name is required")
+	}
+	if strings.TrimSpace(req.URL) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "url is required")
+	}
+	if strings.TrimSpace(req.AuthUser) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "auth_user is required")
+	}
+	if strings.TrimSpace(req.AuthPasswordEncrypted) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "auth_password_encrypted is required")
+	}
+
+	op := &db.Operator{
+		Name:                  req.Name,
+		URL:                   req.URL,
+		TLSSkipVerify:         req.TLSSkipVerify,
+		AuthUser:              req.AuthUser,
+		AuthPasswordEncrypted: req.AuthPasswordEncrypted,
+	}
+
+	created, err := h.db.InsertOperator(ctx, op)
+	if err != nil {
+		log.Errorf("failed to insert operator %q: %v", req.Name, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	// Return only non-sensitive fields.
+	return c.JSON(http.StatusCreated, db.OperatorSummary{
+		Name:          created.Name,
+		URL:           created.URL,
+		TLSSkipVerify: created.TLSSkipVerify,
+	})
+}
+
+// DeleteOperatorHandler deletes an operator by name. The operation is
+// idempotent for operators with no associated jobs: deleting a non-existent
+// operator returns 200. Deleting an operator that still has jobs referencing
+// it will fail due to a foreign key constraint.
+//
+//	@ID				admin-delete-operator
+//	@Summary		Deletes an operator by name
+//	@Description	Removes the named operator from the database. Succeeds silently if the operator does not exist. Fails if jobs still reference the operator.
+//	@Param			name	path	string	true	"Operator name"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/admin/operators/name/{name} [delete]
+func (h *HTTPHandlers) DeleteOperatorHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	name := c.Param("name")
+	if name == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "name is required")
+	}
+
+	if err := h.db.DeleteOperatorByName(ctx, name); err != nil {
+		log.Errorf("failed to delete operator %q: %v", name, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.NoContent(http.StatusOK)
 }

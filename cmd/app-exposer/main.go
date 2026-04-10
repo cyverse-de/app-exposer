@@ -373,6 +373,7 @@ func main() {
 		ClientSet:               clientset,
 		GatewayClient:           gatewayClient,
 		batchadapter:            jexAdapter,
+		dbase:                   dbase,
 		ImagePullSecretName:     imagePullSecretName,
 		LocalStorageClass:       *localStorageClass,
 		ClusterConfigSecretName: *clusterConfigSecret,

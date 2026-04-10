@@ -512,20 +512,122 @@ const docTemplate = `{
         },
         "/vice/admin/operators": {
             "get": {
-                "description": "Iterates through all configured operators and checks their capacity endpoints.",
+                "description": "Returns the name, URL, and tls_skip_verify flag for all operators in the database.",
                 "produces": [
                     "application/json"
                 ],
-                "summary": "Lists configured operators and their capacity",
-                "operationId": "admin-operators",
+                "summary": "Lists registered operators",
+                "operationId": "admin-list-operators",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/httphandlers.OperatorStatus"
+                                "$ref": "#/definitions/db.OperatorSummary"
                             }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Adds a new operator to the database. The password must be pre-encrypted.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Creates a new operator",
+                "operationId": "admin-create-operator",
+                "parameters": [
+                    {
+                        "description": "Operator to create",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.createOperatorRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/db.OperatorSummary"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/operators/capacities": {
+            "get": {
+                "description": "Queries each configured operator's capacity endpoint in parallel and returns the results.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Returns operator capacities",
+                "operationId": "admin-operator-capacities",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/httphandlers.OperatorCapacity"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/operators/name/{name}": {
+            "delete": {
+                "description": "Removes the named operator from the database. Succeeds silently if the operator does not exist. Fails if jobs still reference the operator.",
+                "summary": "Deletes an operator by name",
+                "operationId": "admin-delete-operator",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Operator name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
                         }
                     },
                     "500": {
@@ -1554,6 +1656,20 @@ const docTemplate = `{
                 }
             }
         },
+        "db.OperatorSummary": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "tls_skip_verify": {
+                    "type": "boolean"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "httphandlers.AnalysisInClusterResponse": {
             "type": "object",
             "properties": {
@@ -1815,7 +1931,7 @@ const docTemplate = `{
                 }
             }
         },
-        "httphandlers.OperatorStatus": {
+        "httphandlers.OperatorCapacity": {
             "type": "object",
             "properties": {
                 "capacity": {
@@ -1866,6 +1982,26 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "httphandlers.createOperatorRequest": {
+            "type": "object",
+            "properties": {
+                "auth_password_encrypted": {
+                    "type": "string"
+                },
+                "auth_user": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "tls_skip_verify": {
+                    "type": "boolean"
+                },
+                "url": {
+                    "type": "string"
                 }
             }
         },

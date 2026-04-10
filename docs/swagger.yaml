@@ -10,6 +10,15 @@ definitions:
       message:
         type: string
     type: object
+  db.OperatorSummary:
+    properties:
+      name:
+        type: string
+      tls_skip_verify:
+        type: boolean
+      url:
+        type: string
+    type: object
   httphandlers.AnalysisInClusterResponse:
     properties:
       found:
@@ -184,7 +193,7 @@ definitions:
           $ref: '#/definitions/incluster.RetPod'
         type: array
     type: object
-  httphandlers.OperatorStatus:
+  httphandlers.OperatorCapacity:
     properties:
       capacity:
         $ref: '#/definitions/operatorclient.CapacityResponse'
@@ -218,6 +227,19 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  httphandlers.createOperatorRequest:
+    properties:
+      auth_password_encrypted:
+        type: string
+      auth_user:
+        type: string
+      name:
+        type: string
+      tls_skip_verify:
+        type: boolean
+      url:
+        type: string
     type: object
   httphandlers.uuidBody:
     properties:
@@ -12094,9 +12116,9 @@ paths:
       summary: Lists running analyses across all operators
   /vice/admin/operators:
     get:
-      description: Iterates through all configured operators and checks their capacity
-        endpoints.
-      operationId: admin-operators
+      description: Returns the name, URL, and tls_skip_verify flag for all operators
+        in the database.
+      operationId: admin-list-operators
       produces:
       - application/json
       responses:
@@ -12104,13 +12126,83 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/httphandlers.OperatorStatus'
+              $ref: '#/definitions/db.OperatorSummary'
             type: array
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Lists configured operators and their capacity
+      summary: Lists registered operators
+    post:
+      consumes:
+      - application/json
+      description: Adds a new operator to the database. The password must be pre-encrypted.
+      operationId: admin-create-operator
+      parameters:
+      - description: Operator to create
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/httphandlers.createOperatorRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/db.OperatorSummary'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Creates a new operator
+  /vice/admin/operators/capacities:
+    get:
+      description: Queries each configured operator's capacity endpoint in parallel
+        and returns the results.
+      operationId: admin-operator-capacities
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/httphandlers.OperatorCapacity'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Returns operator capacities
+  /vice/admin/operators/name/{name}:
+    delete:
+      description: Removes the named operator from the database. Succeeds silently
+        if the operator does not exist. Fails if jobs still reference the operator.
+      operationId: admin-delete-operator
+      parameters:
+      - description: Operator name
+        in: path
+        name: name
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Deletes an operator by name
   /vice/admin/terminate-all:
     post:
       description: |-
