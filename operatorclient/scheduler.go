@@ -55,6 +55,7 @@ func (s *Scheduler) Sync(configs []OperatorConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.operators = clients
+	log.Debugf("scheduler operator list replaced: %d operator(s)", len(clients))
 	return nil
 }
 
