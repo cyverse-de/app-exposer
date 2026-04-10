@@ -94,14 +94,6 @@ func (i *Incluster) SetScheduler(s *operatorclient.Scheduler) {
 	i.quotaEnforcer.SetScheduler(s)
 }
 
-// getRoutesClient returns the HTTPRoutes client for the VICE namespace.
-// Returns nil when the Gateway API client is not configured.
-func (i *Incluster) getRoutesClient() gatewayclient.HTTPRouteInterface {
-	if i.gatewayClient == nil {
-		return nil
-	}
-	return i.gatewayClient.HTTPRoutes(i.ViceNamespace)
-}
 
 // UpsertExcludesConfigMap uses the Job passed in to assemble the ConfigMap
 // containing the files that should not be uploaded to iRODS. It then calls

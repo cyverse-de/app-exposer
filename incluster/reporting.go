@@ -108,20 +108,6 @@ func (i *Incluster) GetDeploymentsByUserID(ctx context.Context, userID string) (
 	return result, nil
 }
 
-func (i *Incluster) podList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.PodList, error) {
-	listOptions, err := getListOptions(customLabels, missingLabels)
-	if err != nil {
-		return nil, err
-	}
-
-	podList, err := i.clientset.CoreV1().Pods(namespace).List(ctx, listOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	return podList, nil
-}
-
 func (i *Incluster) configmapsList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.ConfigMapList, error) {
 	listOptions, err := getListOptions(customLabels, missingLabels)
 	if err != nil {
@@ -177,11 +163,6 @@ type ServiceInfoPort = reporting.ServiceInfoPort
 type ServiceInfo = reporting.ServiceInfo
 type IngressInfo = reporting.IngressInfo
 type RouteInfo = reporting.RouteInfo
-
-// routeInfo returns a RouteInfo struct for an HTTPRoute.
-func routeInfo(route *gatewayv1.HTTPRoute) *RouteInfo {
-	return reporting.RouteInfoFrom(route)
-}
 
 // ResourceInfo contains all of the K8s resource information about a running
 // VICE analysis that we know of and care about.
