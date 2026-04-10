@@ -15,6 +15,7 @@ import (
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/cyverse-de/messaging/v12"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/sirupsen/logrus"
 )
 
@@ -26,17 +27,20 @@ type Reconciler struct {
 	db        *db.Database
 	scheduler *operatorclient.Scheduler
 	aesKey    string
+	dbURI     string
 	hostname  string
 	ip        string
 }
 
-// New creates a new Reconciler.
-func New(db *db.Database, scheduler *operatorclient.Scheduler, aesKey string) *Reconciler {
+// New creates a new Reconciler. The dbURI is used to establish a dedicated
+// LISTEN connection for receiving operator-change notifications from PostgreSQL.
+func New(db *db.Database, scheduler *operatorclient.Scheduler, aesKey, dbURI string) *Reconciler {
 	hostname, _ := os.Hostname()
 	return &Reconciler{
 		db:        db,
 		scheduler: scheduler,
 		aesKey:    aesKey,
+		dbURI:     dbURI,
 		hostname:  hostname,
 		ip:        getLocalIP(),
 	}
@@ -57,8 +61,68 @@ func getLocalIP() string {
 	return "127.0.0.1"
 }
 
+// startListener creates a persistent PostgreSQL LISTEN connection for the
+// "operator_changed" channel. Notifications are forwarded to the returned
+// channel. The listener reconnects automatically on connection loss.
+func (r *Reconciler) startListener(ctx context.Context) <-chan struct{} {
+	ch := make(chan struct{}, 1) // buffered so sends never block
+
+	if r.dbURI == "" {
+		log.Warn("no database URI configured; operator change notifications disabled")
+		return ch
+	}
+
+	reportProblem := func(ev pq.ListenerEventType, err error) {
+		if err != nil {
+			log.Errorf("pg listener: %v", err)
+		}
+		switch ev {
+		case pq.ListenerEventDisconnected:
+			log.Warn("pg listener disconnected; will reconnect automatically")
+		case pq.ListenerEventReconnected:
+			log.Info("pg listener reconnected")
+			// Trigger a sync on reconnect in case we missed notifications.
+			select {
+			case ch <- struct{}{}:
+			default:
+			}
+		default:
+		}
+	}
+
+	listener := pq.NewListener(r.dbURI, 10*time.Second, time.Minute, reportProblem)
+	if err := listener.Listen("operator_changed"); err != nil {
+		log.Errorf("failed to LISTEN on operator_changed: %v", err)
+		return ch
+	}
+	log.Info("listening for operator_changed notifications from PostgreSQL")
+
+	go func() {
+		defer listener.Close() //nolint:errcheck
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case _, ok := <-listener.Notify:
+				if !ok {
+					return
+				}
+				// Signal the main loop to sync. Non-blocking send so
+				// rapid changes don't queue up redundant syncs.
+				select {
+				case ch <- struct{}{}:
+				default:
+				}
+			}
+		}
+	}()
+
+	return ch
+}
+
 // Run starts the reconciliation loop. It periodically refreshes the operator
-// list and reconciles remote clusters.
+// list, reconciles remote clusters, and reacts to PostgreSQL NOTIFY signals
+// for immediate operator sync.
 func (r *Reconciler) Run(ctx context.Context) {
 	log.Info("starting reconciliation worker")
 
@@ -67,6 +131,7 @@ func (r *Reconciler) Run(ctx context.Context) {
 		log.Errorf("initial operator sync failed: %v", err)
 	}
 
+	notifyCh := r.startListener(ctx)
 	syncTicker := time.NewTicker(5 * time.Minute)
 	reconcileTicker := time.NewTicker(30 * time.Second)
 
@@ -78,6 +143,12 @@ func (r *Reconciler) Run(ctx context.Context) {
 		case <-ctx.Done():
 			log.Info("stopping reconciliation worker")
 			return
+
+		case <-notifyCh:
+			log.Info("operator change notification received; syncing")
+			if err := r.SyncOperators(ctx); err != nil {
+				log.Errorf("operator sync (notify-triggered) failed: %v", err)
+			}
 
 		case <-syncTicker.C:
 			if err := r.SyncOperators(ctx); err != nil {
@@ -102,16 +173,27 @@ func (r *Reconciler) SyncOperators(ctx context.Context) error {
 		return err
 	}
 
+	if len(ops) == 0 {
+		log.Info("no operators found in database")
+	}
+
 	configs := make([]operatorclient.OperatorConfig, 0, len(ops))
+	names := make([]string, 0, len(ops))
 	for _, op := range ops {
 		password, err := common.Decrypt(op.AuthPasswordEncrypted, r.aesKey)
 		if err != nil {
 			return fmt.Errorf("decrypting password for operator %q: %w", op.Name, err)
 		}
 		configs = append(configs, op.ToOperatorConfig(password))
+		names = append(names, op.Name)
 	}
 
-	return r.scheduler.Sync(configs)
+	if err := r.scheduler.Sync(configs); err != nil {
+		return err
+	}
+
+	log.Infof("synced %d operator(s) to scheduler: %v", len(configs), names)
+	return nil
 }
 
 // ReconcileNext claims one operator that is due for reconciliation and
@@ -124,7 +206,11 @@ func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 
 		client := r.scheduler.ClientByName(op.Name)
 		if client == nil {
-			return fmt.Errorf("operator %q not found in scheduler", op.Name)
+			known := make([]string, 0)
+			for _, c := range r.scheduler.Clients() {
+				known = append(known, c.Name())
+			}
+			return fmt.Errorf("operator %q not found in scheduler (scheduler has %d operator(s): %v)", op.Name, len(known), known)
 		}
 
 		// Fetch bulk status from operator.

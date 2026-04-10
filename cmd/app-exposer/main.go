@@ -393,7 +393,7 @@ func main() {
 	if aesKey == "" {
 		log.Warn("encryption.key is missing from configuration; remote operator status reconciliation may fail")
 	}
-	reconciler := reconciler.New(dbase, app.handlers.GetScheduler(), aesKey)
+	reconciler := reconciler.New(dbase, app.handlers.GetScheduler(), aesKey, dbURI)
 	go reconciler.Run(context.Background())
 
 	log.Printf("listening on port %d", *listenPort)
