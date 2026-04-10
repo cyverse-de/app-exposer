@@ -32,8 +32,8 @@ type Client struct {
 }
 
 // NewClient creates a new operator Client from an OperatorConfig. When
-// cfg.Insecure is true, TLS certificate verification is skipped — use only
-// for development/testing with self-signed certs.
+// cfg.TLSSkipVerify is true, TLS certificate verification is skipped — use
+// only for development/testing with self-signed certs.
 func NewClient(cfg OperatorConfig) (*Client, error) {
 	u, err := url.Parse(cfg.URL)
 	if err != nil {
@@ -41,13 +41,13 @@ func NewClient(cfg OperatorConfig) (*Client, error) {
 	}
 
 	var transport = http.DefaultTransport
-	if cfg.Insecure {
+	if cfg.TLSSkipVerify {
 		// Clone DefaultTransport to preserve connection pooling, timeouts, and
 		// proxy settings — only override the TLS verification.
 		dt := http.DefaultTransport.(*http.Transport).Clone()
 		dt.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec // intentional for dev/testing
 		transport = dt
-		log.Warnf("operator %q: TLS certificate verification disabled (insecure mode)", cfg.Name)
+		log.Warnf("operator %q: TLS certificate verification disabled (tls_skip_verify)", cfg.Name)
 	}
 
 	return &Client{

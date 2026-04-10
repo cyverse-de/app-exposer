@@ -14,7 +14,7 @@ type Operator struct {
 	ID                    uuid.UUID  `db:"id"`
 	Name                  string     `db:"name"`
 	URL                   string     `db:"url"`
-	Insecure              bool       `db:"insecure"`
+	TLSSkipVerify         bool       `db:"tls_skip_verify"`
 	AuthUser              string     `db:"auth_user"`
 	AuthPasswordEncrypted string     `db:"auth_password_encrypted"`
 	LastReconciledAt      *time.Time `db:"last_reconciled_at"`
@@ -40,7 +40,7 @@ func (o *Operator) ToOperatorConfig(password string) operatorclient.OperatorConf
 		URL:      o.URL,
 		Username: o.AuthUser,
 		Password: password,
-		Insecure: o.Insecure,
+		TLSSkipVerify: o.TLSSkipVerify,
 	}
 }
 
@@ -48,7 +48,7 @@ func (o *Operator) ToOperatorConfig(password string) operatorclient.OperatorConf
 func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 	var ops []Operator
 	const query = `
-		SELECT id, name, url, insecure, auth_user, auth_password_encrypted,
+		SELECT id, name, url, tls_skip_verify, auth_user, auth_password_encrypted,
 		       last_reconciled_at, reconciled_by, created_at, updated_at
 		FROM operators
 		ORDER BY created_at ASC
@@ -70,7 +70,7 @@ func (d *Database) ClaimAndReconcile(ctx context.Context, hostname string, timeo
 	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
 	const claimQuery = `
-		SELECT id, name, url, insecure, auth_user, auth_password_encrypted,
+		SELECT id, name, url, tls_skip_verify, auth_user, auth_password_encrypted,
 		       last_reconciled_at, reconciled_by, created_at, updated_at
 		FROM operators
 		WHERE last_reconciled_at IS NULL OR last_reconciled_at < $1
