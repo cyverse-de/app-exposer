@@ -94,7 +94,6 @@ func (i *Incluster) SetScheduler(s *operatorclient.Scheduler) {
 	i.quotaEnforcer.SetScheduler(s)
 }
 
-
 // UpsertExcludesConfigMap uses the Job passed in to assemble the ConfigMap
 // containing the files that should not be uploaded to iRODS. It then calls
 // the k8s API to create the ConfigMap if it does not already exist or to

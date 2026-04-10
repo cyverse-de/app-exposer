@@ -93,9 +93,9 @@ type URLReadyResponse struct {
 // Username and Password are optional; when set, the client sends basic auth
 // with every request to the operator.
 type OperatorConfig struct {
-	Name     string `json:"name"     koanf:"name"`
-	URL      string `json:"url"      koanf:"url"`
-	Username string `json:"username" koanf:"username"`
-	Password string `json:"password" koanf:"password"`
-	TLSSkipVerify bool `json:"tls_skip_verify" koanf:"tls_skip_verify"`
+	Name          string `json:"name"     koanf:"name"`
+	URL           string `json:"url"      koanf:"url"`
+	Username      string `json:"username" koanf:"username"`
+	Password      string `json:"password" koanf:"password"`
+	TLSSkipVerify bool   `json:"tls_skip_verify" koanf:"tls_skip_verify"`
 }
