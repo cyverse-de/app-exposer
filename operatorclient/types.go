@@ -97,5 +97,5 @@ type OperatorConfig struct {
 	URL      string `json:"url"      koanf:"url"`
 	Username string `json:"username" koanf:"username"`
 	Password string `json:"password" koanf:"password"`
-	Insecure bool   `json:"insecure" koanf:"insecure"`
+	TLSSkipVerify bool `json:"tls_skip_verify" koanf:"tls_skip_verify"`
 }
