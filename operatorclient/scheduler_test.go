@@ -138,10 +138,16 @@ func TestSchedulerLaunchAnalysis(t *testing.T) {
 }
 
 func TestSchedulerNoOperators(t *testing.T) {
-	_, err := NewScheduler(nil)
+	scheduler, err := NewScheduler(nil)
+	assert.NoError(t, err)
+
+	_, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
 	assert.ErrorIs(t, err, ErrNoOperators)
 
-	_, err = NewScheduler([]OperatorConfig{})
+	scheduler, err = NewScheduler([]OperatorConfig{})
+	assert.NoError(t, err)
+
+	_, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
 	assert.ErrorIs(t, err, ErrNoOperators)
 }
 

@@ -77,8 +77,8 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	} else if debugInfo == nil {
 		log.Warnf("debug: no jobs row found for ID %s before launch", job.ID)
 	} else {
-		log.Infof("debug: job %s before launch: status=%s, app_id=%s, operator_name=%v",
-			debugInfo.ID, debugInfo.Status, debugInfo.AppID, debugInfo.OperatorName)
+		log.Infof("debug: job %s before launch: status=%s, app_id=%s, operator_id=%v",
+			debugInfo.ID, debugInfo.Status, debugInfo.AppID, debugInfo.OperatorID)
 	}
 
 	// Build a bundle and route to an operator. Uses job.ID directly because

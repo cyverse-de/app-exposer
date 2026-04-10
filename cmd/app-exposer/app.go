@@ -143,13 +143,11 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter),
 	}
 
-	// Configure operator scheduler. Must have at least one operator configured.
+	// Configure operator scheduler. Try config first for backward compatibility,
+	// but the reconciler will later overwrite this from the database.
 	var operatorConfigs []operatorclient.OperatorConfig
 	if err := c.Unmarshal("vice.operators", &operatorConfigs); err != nil {
-		log.Fatalf("could not parse operators config: %v", err)
-	}
-	if len(operatorConfigs) == 0 {
-		log.Fatalf("no operators configured in vice.operators")
+		log.Warnf("could not parse operators config: %v", err)
 	}
 
 	scheduler, err := operatorclient.NewScheduler(operatorConfigs)
@@ -157,7 +155,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		log.Fatalf("error creating operator scheduler: %v", err)
 	}
 	app.handlers.SetScheduler(scheduler)
-	log.Infof("operator scheduler configured with %d operators", len(operatorConfigs))
+	log.Infof("operator scheduler configured with %d operators from config", len(operatorConfigs))
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
 

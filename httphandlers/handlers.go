@@ -51,6 +51,11 @@ func (h *HTTPHandlers) SetScheduler(s *operatorclient.Scheduler) {
 	h.incluster.SetScheduler(s)
 }
 
+// GetScheduler returns the operator scheduler.
+func (h *HTTPHandlers) GetScheduler() *operatorclient.Scheduler {
+	return h.scheduler
+}
+
 // operatorClientForAnalysis looks up which operator is running an analysis
 // and returns the corresponding client. Uses a three-step strategy:
 //  1. Fast path: check the DB for a recorded operator name.

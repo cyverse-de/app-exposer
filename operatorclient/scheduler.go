@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
 )
 
 // Sentinel errors for scheduler failure modes.
@@ -20,16 +21,13 @@ var (
 // Scheduler manages a priority-ordered list of operator clients and
 // routes analyses to the first operator with available capacity.
 type Scheduler struct {
+	mu        sync.RWMutex
 	operators []*Client
 }
 
 // NewScheduler creates a Scheduler from operator configs. Operators are tried
 // in the order they appear in the configs slice (config order = priority order).
 func NewScheduler(configs []OperatorConfig) (*Scheduler, error) {
-	if len(configs) == 0 {
-		return nil, ErrNoOperators
-	}
-
 	clients := make([]*Client, 0, len(configs))
 	for _, cfg := range configs {
 		c, err := NewClient(cfg)
@@ -42,6 +40,24 @@ func NewScheduler(configs []OperatorConfig) (*Scheduler, error) {
 	return &Scheduler{operators: clients}, nil
 }
 
+// Sync replaces the scheduler's current operator clients with a new list.
+// This allows runtime updates from the database without a restart.
+func (s *Scheduler) Sync(configs []OperatorConfig) error {
+	clients := make([]*Client, 0, len(configs))
+	for _, cfg := range configs {
+		c, err := NewClient(cfg)
+		if err != nil {
+			return fmt.Errorf("creating client for operator %q: %w", cfg.Name, err)
+		}
+		clients = append(clients, c)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.operators = clients
+	return nil
+}
+
 // LaunchAnalysis sends the bundle to the first operator that has capacity.
 // Returns the name of the operator that accepted the analysis, or an error
 // if no operator could accept it.
@@ -51,11 +67,19 @@ func NewScheduler(configs []OperatorConfig) (*Scheduler, error) {
 // analysis. This minimizes usage of later (potentially more expensive)
 // clusters.
 func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) (string, error) {
+	s.mu.RLock()
+	clients := slices.Clone(s.operators)
+	s.mu.RUnlock()
+
+	if len(clients) == 0 {
+		return "", ErrNoOperators
+	}
+
 	// Track capacity-check errors separately so we can distinguish
 	// "all operators unreachable" from "all operators at capacity."
 	var capacityErrors int
 
-	for _, op := range s.operators {
+	for _, op := range clients {
 		// Check capacity first.
 		cap, err := op.Capacity(ctx)
 		if err != nil {
@@ -85,8 +109,8 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 	}
 
 	// Every operator's capacity check failed (all returned errors).
-	if capacityErrors == len(s.operators) {
-		return "", fmt.Errorf("all %d operators failed capacity check: %w", len(s.operators), ErrAllOperatorsExhausted)
+	if capacityErrors == len(clients) {
+		return "", fmt.Errorf("all %d operators failed capacity check: %w", len(clients), ErrAllOperatorsExhausted)
 	}
 
 	return "", ErrAllOperatorsExhausted
@@ -96,11 +120,15 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 // aggregation (e.g. listing analyses across all clusters) without mutating
 // the scheduler's internal state.
 func (s *Scheduler) Clients() []*Client {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return slices.Clone(s.operators)
 }
 
 // ClientByName returns the operator client with the given name, or nil.
 func (s *Scheduler) ClientByName(name string) *Client {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	for _, op := range s.operators {
 		if op.Name() == name {
 			return op

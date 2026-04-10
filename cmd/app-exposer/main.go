@@ -24,6 +24,7 @@ import (
 	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/app-exposer/natsconn"
 	"github.com/cyverse-de/app-exposer/quota"
+	"github.com/cyverse-de/app-exposer/reconciler"
 	"github.com/cyverse-de/app-exposer/resourcing"
 	"github.com/cyverse-de/go-mod/cfg"
 	"github.com/cyverse-de/go-mod/gotelnats"
@@ -385,6 +386,14 @@ func main() {
 		nec,
 		c,
 	)
+
+	// Initialize and start the status reconciliation worker.
+	aesKey := c.String("encryption.key")
+	if aesKey == "" {
+		log.Warn("encryption.key is missing from configuration; remote operator status reconciliation may fail")
+	}
+	reconciler := reconciler.New(dbase, app.handlers.GetScheduler(), aesKey)
+	go reconciler.Run(context.Background())
 
 	log.Printf("listening on port %d", *listenPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *listenPort), app.router))

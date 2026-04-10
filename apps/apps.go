@@ -246,21 +246,35 @@ func (a *Apps) SetMillicoresReserved(job *model.Job, millicores *apd.Decimal) er
 	return nil
 }
 
-const setOperatorNameStmt = `
+const setOperatorIDStmt = `
 	UPDATE jobs
-	SET operator_name = $2
+	SET operator_id = $2
 	WHERE id = $1;
 `
 
-// SetOperatorName records which operator is running an analysis. It retries
-// briefly because the jobs row may not be visible yet if the caller's
-// transaction hasn't committed by the time we reach this point.
+// GetOperatorIDByName returns the UUID for an operator by its unique name.
+func (a *Apps) GetOperatorIDByName(ctx context.Context, name string) (uuid.UUID, error) {
+	var id uuid.UUID
+	const query = "SELECT id FROM operators WHERE name = $1"
+	err := a.DB.GetContext(ctx, &id, query, name)
+	return id, err
+}
+
+// SetOperatorName records which operator is running an analysis by mapping its
+// name to an operator_id and updating the jobs row. It retries briefly because
+// the jobs row may not be visible yet if the caller's transaction hasn't
+// committed by the time we reach this point.
 func (a *Apps) SetOperatorName(ctx context.Context, analysisID, operatorName string) error {
 	const maxRetries = 5
 	const retryDelay = 1 * time.Second
 
+	operatorID, err := a.GetOperatorIDByName(ctx, operatorName)
+	if err != nil {
+		return fmt.Errorf("resolving operator %q to ID: %w", operatorName, err)
+	}
+
 	for attempt := range maxRetries {
-		result, err := a.DB.ExecContext(ctx, setOperatorNameStmt, analysisID, operatorName)
+		result, err := a.DB.ExecContext(ctx, setOperatorIDStmt, analysisID, operatorID)
 		if err != nil {
 			return err
 		}
@@ -269,7 +283,7 @@ func (a *Apps) SetOperatorName(ctx context.Context, analysisID, operatorName str
 			return err
 		}
 		if rows > 0 {
-			log.Infof("set operator name to %q for analysis %s (attempt %d)", operatorName, analysisID, attempt+1)
+			log.Infof("set operator_id %s (name %q) for analysis %s (attempt %d)", operatorID, operatorName, analysisID, attempt+1)
 			return nil
 		}
 
@@ -290,14 +304,14 @@ func (a *Apps) SetOperatorName(ctx context.Context, analysisID, operatorName str
 
 // JobDebugInfo holds key fields from the jobs table for diagnostic logging.
 type JobDebugInfo struct {
-	ID           string         `db:"id"`
-	OperatorName sql.NullString `db:"operator_name"`
-	Status       string         `db:"status"`
-	AppID        string         `db:"app_id"`
+	ID         string         `db:"id"`
+	OperatorID sql.NullString `db:"operator_id"`
+	Status     string         `db:"status"`
+	AppID      string         `db:"app_id"`
 }
 
 const getJobDebugInfoQuery = `
-	SELECT j.id, j.operator_name, j.status, j.app_id
+	SELECT j.id, j.operator_id, j.status, j.app_id
 	FROM jobs j
 	WHERE j.id = $1
 `
@@ -307,7 +321,7 @@ const getJobDebugInfoQuery = `
 func (a *Apps) GetJobDebugInfo(ctx context.Context, analysisID string) (*JobDebugInfo, error) {
 	var info JobDebugInfo
 	err := a.DB.QueryRowContext(ctx, getJobDebugInfoQuery, analysisID).Scan(
-		&info.ID, &info.OperatorName, &info.Status, &info.AppID,
+		&info.ID, &info.OperatorID, &info.Status, &info.AppID,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -319,9 +333,10 @@ func (a *Apps) GetJobDebugInfo(ctx context.Context, analysisID string) (*JobDebu
 }
 
 const getOperatorNameQuery = `
-	SELECT operator_name
-	FROM jobs
-	WHERE id = $1
+	SELECT o.name
+	FROM jobs j
+	JOIN operators o ON j.operator_id = o.id
+	WHERE j.id = $1
 `
 
 // GetOperatorName returns the name of the operator running an analysis,
@@ -330,7 +345,7 @@ func (a *Apps) GetOperatorName(ctx context.Context, analysisID string) (string, 
 	var name sql.NullString
 	err := a.DB.QueryRowContext(ctx, getOperatorNameQuery, analysisID).Scan(&name)
 	if err == sql.ErrNoRows {
-		// The analysis doesn't exist in the database; treat as no operator assigned.
+		// The analysis doesn't exist in the database or has no operator; treat as none.
 		return "", nil
 	}
 	if err != nil {
