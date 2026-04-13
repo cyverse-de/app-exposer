@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/incluster"
@@ -17,15 +18,20 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// LaunchAppHandler orchestrates the launch of a VICE analysis: validates the job,
-// builds K8s resources, selects an operator with capacity, and records the
-// operator assignment. Idempotent — returns 200 if the analysis is already running.
+// LaunchAppHandler validates a VICE analysis job and, if valid, accepts it for
+// asynchronous launch. Returns 200 immediately after validation passes; the
+// actual resource creation and operator scheduling happen in a background
+// goroutine. This allows the caller's database transaction to commit (making
+// the jobs row visible) before app-exposer attempts to update it.
+//
+// Idempotent — returns 200 if the analysis is already running.
 //
 //	@ID				launch-app
 //	@Summary		Launch a VICE analysis
-//	@Description	The HTTP handler that orchestrates the launching of a VICE analysis inside
-//	@Description	the k8s cluster. This gets passed to the router to be associated with a route. The Job
-//	@Description	is passed in as the body of the request.
+//	@Description	Validates the job and accepts it for asynchronous launch.
+//	@Description	A 200 response means the job was accepted, not that it has been
+//	@Description	fully deployed — resource creation and operator scheduling proceed
+//	@Description	in the background.
 //	@Accept			json
 //	@Param			request						body	AnalysisLaunch	true	"The request body containing the analysis details"
 //	@Param			disable-resource-tracking	query	boolean			false	"Bypass resource tracking"	default(false)
@@ -54,52 +60,63 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 		return echo.NewHTTPError(status, err.Error())
 	}
 
-	// Pre-build the deployment locally just to calculate millicores reservation
+	// Validation passed — accept the job and do the heavy lifting in the
+	// background. Returning early lets the caller commit its DB transaction,
+	// which makes the jobs row visible for SetOperatorName below.
+	go h.launchAsync(job)
+
+	return c.NoContent(http.StatusOK)
+}
+
+// launchAsync performs the resource-intensive parts of a VICE launch in
+// the background: builds the deployment spec, reserves millicores, assembles
+// the analysis bundle, schedules it on an operator, and records the operator
+// assignment. Uses a background context with a timeout since the originating
+// HTTP request has already completed.
+func (h *HTTPHandlers) launchAsync(job *model.Job) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	// Pre-build the deployment locally to calculate millicores reservation
 	// and validate resource requirements.
 	deployment, err := h.incluster.GetDeployment(ctx, job)
 	if err != nil {
-		return err
+		log.Errorf("async launch %s: failed to get deployment: %v", job.ID, err)
+		return
 	}
 
 	millicores, err := incluster.GetMillicoresFromDeployment(deployment)
 	if err != nil {
-		return err
+		log.Errorf("async launch %s: failed to get millicores: %v", job.ID, err)
+		return
 	}
 
 	if err = h.apps.SetMillicoresReserved(job, millicores); err != nil {
-		return err
-	}
-
-	// Log the current database state for this job ID before launching.
-	debugInfo, debugErr := h.apps.GetJobDebugInfo(ctx, job.ID)
-	if debugErr != nil {
-		log.Errorf("debug: failed to query job %s: %v", job.ID, debugErr)
-	} else if debugInfo == nil {
-		log.Warnf("debug: no jobs row found for ID %s before launch", job.ID)
-	} else {
-		log.Infof("debug: job %s before launch: status=%s, app_id=%s, operator_id=%v",
-			debugInfo.ID, debugInfo.Status, debugInfo.AppID, debugInfo.OperatorID)
+		log.Errorf("async launch %s: failed to set millicores reserved: %v", job.ID, err)
+		return
 	}
 
 	// Build a bundle and route to an operator. Uses job.ID directly because
 	// job_steps rows don't exist yet at launch time.
 	bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, job.ID)
 	if err != nil {
-		return err
+		log.Errorf("async launch %s: failed to build analysis bundle: %v", job.ID, err)
+		return
 	}
 
 	operatorName, err := h.scheduler.LaunchAnalysis(ctx, bundle)
 	if err != nil {
-		return err
+		log.Errorf("async launch %s: failed to launch analysis: %v", job.ID, err)
+		return
 	}
 
 	// Record which operator is running this analysis. This is best-effort:
 	// the analysis is already running, so a failure here is non-fatal.
 	if err := h.apps.SetOperatorName(ctx, job.ID, operatorName); err != nil {
-		log.Errorf("failed to set operator name for analysis %s: %v", job.ID, err)
+		log.Errorf("async launch %s: failed to set operator name: %v", job.ID, err)
 	}
 
-	return c.NoContent(http.StatusOK)
+	log.Infof("async launch %s: successfully launched on operator %s", job.ID, operatorName)
 }
 
 // DryRunBundleHandler builds the AnalysisBundle for a job without launching it.

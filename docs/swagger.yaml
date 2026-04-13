@@ -12310,9 +12310,10 @@ paths:
       consumes:
       - application/json
       description: |-
-        The HTTP handler that orchestrates the launching of a VICE analysis inside
-        the k8s cluster. This gets passed to the router to be associated with a route. The Job
-        is passed in as the body of the request.
+        Validates the job and accepts it for asynchronous launch.
+        A 200 response means the job was accepted, not that it has been
+        fully deployed — resource creation and operator scheduling proceed
+        in the background.
       operationId: launch-app
       parameters:
       - description: The request body containing the analysis details

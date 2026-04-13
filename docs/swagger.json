@@ -854,7 +854,7 @@
         },
         "/vice/launch": {
             "post": {
-                "description": "The HTTP handler that orchestrates the launching of a VICE analysis inside\nthe k8s cluster. This gets passed to the router to be associated with a route. The Job\nis passed in as the body of the request.",
+                "description": "Validates the job and accepts it for asynchronous launch.\nA 200 response means the job was accepted, not that it has been\nfully deployed — resource creation and operator scheduling proceed\nin the background.",
                 "consumes": [
                     "application/json"
                 ],

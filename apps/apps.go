@@ -262,10 +262,11 @@ func (a *Apps) GetOperatorIDByName(ctx context.Context, name string) (uuid.UUID,
 
 // SetOperatorName records which operator is running an analysis by mapping its
 // name to an operator_id and updating the jobs row. It retries briefly because
-// the jobs row may not be visible yet if the caller's transaction hasn't
-// committed by the time we reach this point.
+// the jobs row may not be visible yet if the caller's database transaction
+// hasn't committed. The launch handler returns early to unblock that commit,
+// so the row typically appears within a few seconds.
 func (a *Apps) SetOperatorName(ctx context.Context, analysisID, operatorName string) error {
-	const maxRetries = 5
+	const maxRetries = 10
 	const retryDelay = 1 * time.Second
 
 	operatorID, err := a.GetOperatorIDByName(ctx, operatorName)
@@ -299,7 +300,7 @@ func (a *Apps) SetOperatorName(ctx context.Context, analysisID, operatorName str
 		}
 	}
 
-	return fmt.Errorf("no jobs row found for analysis ID %s after %d attempts", analysisID, maxRetries)
+	return fmt.Errorf("no jobs row found for analysis %s after %d attempts", analysisID, maxRetries)
 }
 
 // JobDebugInfo holds key fields from the jobs table for diagnostic logging.
