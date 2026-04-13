@@ -221,8 +221,11 @@ func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 
 		// Process each analysis found in the cluster.
 		for _, pod := range info.Pods {
+			log.Debugf("reconciling analysis %s", pod.AnalysisID)
 			if err := r.reconcileAnalysis(ctx, tx, pod); err != nil {
 				log.Errorf("failed to reconcile analysis %s: %v", pod.AnalysisID, err)
+			} else {
+				log.Infof("reconciled analysis %s", pod.AnalysisID)
 			}
 		}
 

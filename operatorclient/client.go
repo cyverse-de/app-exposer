@@ -301,14 +301,10 @@ func (c *Client) Listing(ctx context.Context, params url.Values) (*reporting.Res
 		return nil, err
 	}
 
-	log.Debugf("after checkStatus")
-
 	var info reporting.ResourceInfo
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return nil, fmt.Errorf("decoding listing response: %w", err)
 	}
-
-	log.Debugf("after json decode: %v", info)
 
 	return &info, nil
 }
