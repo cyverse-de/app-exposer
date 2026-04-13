@@ -19,6 +19,7 @@ type OperatorSummary struct {
 	Name          string `json:"name"`
 	URL           string `json:"url"`
 	TLSSkipVerify bool   `json:"tls_skip_verify"`
+	Priority      int    `json:"priority"`
 }
 
 // AddOperatorRequest is the JSON body for creating a new operator.
@@ -28,6 +29,7 @@ type AddOperatorRequest struct {
 	TLSSkipVerify         bool   `json:"tls_skip_verify"`
 	AuthUser              string `json:"auth_user"`
 	AuthPasswordEncrypted string `json:"auth_password_encrypted"`
+	Priority              int    `json:"priority"`
 }
 
 // OperatorClient talks to the app-exposer operator admin API.

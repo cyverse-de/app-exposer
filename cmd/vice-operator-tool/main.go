@@ -99,6 +99,7 @@ func runAdd(baseURLStr string, args []string) {
 	password := fs.String("password", "", "Auth password (prompted if omitted)")
 	encKey := fs.String("encryption-key", "", "Base64-encoded AES-256 encryption key (prompted if omitted)")
 	tlsSkip := fs.Bool("tls-skip-verify", false, "Skip TLS certificate verification")
+	priority := fs.Int("priority", 0, "Scheduling priority (lower = tried first, default 0)")
 	// ExitOnError means Parse calls os.Exit on failure; it never returns a non-nil error.
 	_ = fs.Parse(args)
 
@@ -148,14 +149,15 @@ func runAdd(baseURLStr string, args []string) {
 		TLSSkipVerify:         *tlsSkip,
 		AuthUser:              *username,
 		AuthPasswordEncrypted: encrypted,
+		Priority:              *priority,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Operator %q added successfully (url=%s, tls_skip_verify=%v)\n",
-		summary.Name, summary.URL, summary.TLSSkipVerify)
+	fmt.Printf("Operator %q added successfully (url=%s, priority=%d, tls_skip_verify=%v)\n",
+		summary.Name, summary.URL, summary.Priority, summary.TLSSkipVerify)
 }
 
 func runList(baseURLStr string, args []string) {
@@ -178,9 +180,9 @@ func runList(baseURLStr string, args []string) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tURL\tTLS_SKIP_VERIFY") //nolint:errcheck
+	fmt.Fprintln(w, "NAME\tURL\tPRIORITY\tTLS_SKIP_VERIFY") //nolint:errcheck
 	for _, op := range ops {
-		fmt.Fprintf(w, "%s\t%s\t%v\n", op.Name, op.URL, op.TLSSkipVerify) //nolint:errcheck
+		fmt.Fprintf(w, "%s\t%s\t%d\t%v\n", op.Name, op.URL, op.Priority, op.TLSSkipVerify) //nolint:errcheck
 	}
 	_ = w.Flush()
 }

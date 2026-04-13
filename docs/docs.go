@@ -1662,6 +1662,9 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "priority": {
+                    "type": "integer"
+                },
                 "tls_skip_verify": {
                     "type": "boolean"
                 },
@@ -1996,6 +1999,9 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
                 },
                 "tls_skip_verify": {
                     "type": "boolean"

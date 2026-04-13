@@ -456,6 +456,7 @@ type createOperatorRequest struct {
 	TLSSkipVerify         bool   `json:"tls_skip_verify"`
 	AuthUser              string `json:"auth_user"`
 	AuthPasswordEncrypted string `json:"auth_password_encrypted"`
+	Priority              int    `json:"priority"`
 }
 
 // CreateOperatorHandler adds a new operator to the database.
@@ -498,6 +499,7 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 		TLSSkipVerify:         req.TLSSkipVerify,
 		AuthUser:              req.AuthUser,
 		AuthPasswordEncrypted: req.AuthPasswordEncrypted,
+		Priority:              req.Priority,
 	}
 
 	created, err := h.db.InsertOperator(ctx, op)
@@ -511,6 +513,7 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 		Name:          created.Name,
 		URL:           created.URL,
 		TLSSkipVerify: created.TLSSkipVerify,
+		Priority:      created.Priority,
 	})
 }
 

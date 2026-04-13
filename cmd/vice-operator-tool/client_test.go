@@ -44,7 +44,7 @@ func TestAddOperator(t *testing.T) {
 				AuthPasswordEncrypted: "encrypted-pw",
 			},
 			statusCode: http.StatusCreated,
-			respBody:   `{"name":"cluster-a","url":"https://op-a.example.com","tls_skip_verify":false}`,
+			respBody:   `{"name":"cluster-a","url":"https://op-a.example.com","tls_skip_verify":false,"priority":0}`,
 			wantName:   "cluster-a",
 		},
 		{
@@ -56,6 +56,7 @@ func TestAddOperator(t *testing.T) {
 				TLSSkipVerify:         true,
 				AuthUser:              "admin",
 				AuthPasswordEncrypted: "enc-secret",
+				Priority:              5,
 			},
 			statusCode: http.StatusCreated,
 			// The handler echos back the decoded request, so respBody is built dynamically via validate.
@@ -67,6 +68,7 @@ func TestAddOperator(t *testing.T) {
 				assert.Equal(t, "admin", got.AuthUser)
 				assert.Equal(t, "enc-secret", got.AuthPasswordEncrypted)
 				assert.True(t, got.TLSSkipVerify)
+				assert.Equal(t, 5, got.Priority)
 			},
 		},
 		{
@@ -144,7 +146,7 @@ func TestListOperators(t *testing.T) {
 		{
 			name:       "populated list",
 			statusCode: http.StatusOK,
-			respBody:   `[{"name":"a","url":"https://a.example.com","tls_skip_verify":false},{"name":"b","url":"https://b.example.com","tls_skip_verify":true}]`,
+			respBody:   `[{"name":"a","url":"https://a.example.com","tls_skip_verify":false,"priority":0},{"name":"b","url":"https://b.example.com","tls_skip_verify":true,"priority":10}]`,
 			wantLen:    2,
 		},
 		{
