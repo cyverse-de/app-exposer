@@ -232,10 +232,6 @@ definitions:
     type: object
   httphandlers.createOperatorRequest:
     properties:
-      auth_password_encrypted:
-        type: string
-      auth_user:
-        type: string
       name:
         type: string
       priority:
@@ -12140,7 +12136,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Adds a new operator to the database. The password must be pre-encrypted.
+      description: Adds a new operator to the database.
       operationId: admin-create-operator
       parameters:
       - description: Operator to create

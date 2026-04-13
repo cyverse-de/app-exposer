@@ -2,14 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
-	"github.com/cyverse-de/app-exposer/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,10 +36,8 @@ func TestAddOperator(t *testing.T) {
 		{
 			name: "success",
 			req: &AddOperatorRequest{
-				Name:                  "cluster-a",
-				URL:                   "https://op-a.example.com",
-				AuthUser:              "admin",
-				AuthPasswordEncrypted: "encrypted-pw",
+				Name: "cluster-a",
+				URL:  "https://op-a.example.com",
 			},
 			statusCode: http.StatusCreated,
 			respBody:   `{"name":"cluster-a","url":"https://op-a.example.com","tls_skip_verify":false,"priority":0}`,
@@ -51,12 +47,10 @@ func TestAddOperator(t *testing.T) {
 			// Verify that all fields (including TLSSkipVerify) are sent correctly in the request body.
 			name: "sends all fields in request body",
 			req: &AddOperatorRequest{
-				Name:                  "op-1",
-				URL:                   "https://op.example.com",
-				TLSSkipVerify:         true,
-				AuthUser:              "admin",
-				AuthPasswordEncrypted: "enc-secret",
-				Priority:              5,
+				Name:          "op-1",
+				URL:           "https://op.example.com",
+				TLSSkipVerify: true,
+				Priority:      5,
 			},
 			statusCode: http.StatusCreated,
 			// The handler echos back the decoded request, so respBody is built dynamically via validate.
@@ -65,8 +59,6 @@ func TestAddOperator(t *testing.T) {
 				t.Helper()
 				assert.Equal(t, "op-1", got.Name)
 				assert.Equal(t, "https://op.example.com", got.URL)
-				assert.Equal(t, "admin", got.AuthUser)
-				assert.Equal(t, "enc-secret", got.AuthPasswordEncrypted)
 				assert.True(t, got.TLSSkipVerify)
 				assert.Equal(t, 5, got.Priority)
 			},
@@ -83,10 +75,8 @@ func TestAddOperator(t *testing.T) {
 		{
 			name: "server error",
 			req: &AddOperatorRequest{
-				Name:                  "cluster-c",
-				URL:                   "https://op-c.example.com",
-				AuthUser:              "admin",
-				AuthPasswordEncrypted: "encrypted-pw",
+				Name: "cluster-c",
+				URL:  "https://op-c.example.com",
 			},
 			statusCode: http.StatusInternalServerError,
 			respBody:   `{"message":"database connection lost"}`,
@@ -242,47 +232,3 @@ func TestDeleteOperator(t *testing.T) {
 	}
 }
 
-func TestGenerateKey(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "first call"},
-		{name: "second call"},
-	}
-
-	keys := make([]string, 0, len(tests))
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			key, err := GenerateKey()
-			require.NoError(t, err)
-
-			// Must be valid base64.
-			decoded, err := base64.StdEncoding.DecodeString(key)
-			require.NoError(t, err)
-
-			// AES-256 requires exactly 32 bytes.
-			assert.Len(t, decoded, aesKeySize)
-
-			keys = append(keys, key)
-		})
-	}
-
-	// Consecutive calls must produce distinct keys.
-	if len(keys) == 2 {
-		assert.NotEqual(t, keys[0], keys[1], "consecutive generated keys should differ")
-	}
-}
-
-func TestGenerateKeyRoundTrip(t *testing.T) {
-	key, err := GenerateKey()
-	require.NoError(t, err)
-
-	plaintext := "s3cret-operator-password!"
-	encrypted, err := common.Encrypt(plaintext, key)
-	require.NoError(t, err)
-
-	decrypted, err := common.Decrypt(encrypted, key)
-	require.NoError(t, err)
-
-	assert.Equal(t, plaintext, decrypted)
-}

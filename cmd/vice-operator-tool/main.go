@@ -8,9 +8,6 @@ import (
 	"net/url"
 	"os"
 	"text/tabwriter"
-
-	"github.com/cyverse-de/app-exposer/common"
-	"golang.org/x/term"
 )
 
 const usage = `Usage: vice-operator-tool [--app-exposer-url URL] <command> [flags]
@@ -19,7 +16,6 @@ Commands:
   add      Add a new operator
   list     List configured operators
   delete   Delete an operator by name
-  keygen   Generate an AES-256 encryption key
 
 Use "vice-operator-tool <command> -h" for help on a command.
 `
@@ -51,8 +47,6 @@ func main() {
 		runList(*appExposerURL, subcmdArgs)
 	case "delete":
 		runDelete(*appExposerURL, subcmdArgs)
-	case "keygen":
-		runKeygen()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", subcmd)
 		fmt.Fprint(os.Stderr, usage)
@@ -74,82 +68,29 @@ func requireBaseURL(raw string) *url.URL {
 	return u
 }
 
-// promptSecret reads a secret from the terminal without echoing.
-func promptSecret(prompt string) (string, error) {
-	fd := int(os.Stdin.Fd())
-	if !term.IsTerminal(fd) {
-		return "", fmt.Errorf("cannot prompt for %s: stdin is not a terminal (use the corresponding flag instead)", prompt)
-	}
-	fmt.Fprintf(os.Stderr, "%s: ", prompt)
-	b, err := term.ReadPassword(fd)
-	fmt.Fprintln(os.Stderr) // newline after hidden input
-	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", prompt, err)
-	}
-	return string(b), nil
-}
-
 func runAdd(baseURLStr string, args []string) {
 	u := requireBaseURL(baseURLStr)
 
 	fs := flag.NewFlagSet("add", flag.ExitOnError)
 	name := fs.String("name", "", "Operator name (required)")
 	opURL := fs.String("url", "", "Operator URL (required)")
-	username := fs.String("username", "", "Auth username (required)")
-	password := fs.String("password", "", "Auth password (prompted if omitted)")
-	encKey := fs.String("encryption-key", "", "Base64-encoded AES-256 encryption key (prompted if omitted)")
 	tlsSkip := fs.Bool("tls-skip-verify", false, "Skip TLS certificate verification")
 	priority := fs.Int("priority", 0, "Scheduling priority (lower = tried first, default 0)")
 	// ExitOnError means Parse calls os.Exit on failure; it never returns a non-nil error.
 	_ = fs.Parse(args)
 
-	if *name == "" || *opURL == "" || *username == "" {
-		fmt.Fprintln(os.Stderr, "error: --name, --url, and --username are required")
+	if *name == "" || *opURL == "" {
+		fmt.Fprintln(os.Stderr, "error: --name and --url are required")
 		fs.Usage()
-		os.Exit(1)
-	}
-
-	// Prompt for secrets if not provided via flags.
-	if *password == "" {
-		p, err := promptSecret("Password")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
-		}
-		*password = p
-	}
-	if *encKey == "" {
-		k, err := promptSecret("Encryption key")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
-		}
-		*encKey = k
-	}
-
-	if *password == "" {
-		fmt.Fprintln(os.Stderr, "error: password must not be empty")
-		os.Exit(1)
-	}
-	if *encKey == "" {
-		fmt.Fprintln(os.Stderr, "error: encryption key must not be empty")
-		os.Exit(1)
-	}
-
-	encrypted, err := common.Encrypt(*password, *encKey)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error encrypting password: %v\n", err)
 		os.Exit(1)
 	}
 
 	client := NewOperatorClient(u, http.DefaultClient)
 	summary, err := client.AddOperator(context.Background(), &AddOperatorRequest{
-		Name:                  *name,
-		URL:                   *opURL,
-		TLSSkipVerify:         *tlsSkip,
-		AuthUser:              *username,
-		AuthPasswordEncrypted: encrypted,
-		Priority:              *priority,
+		Name:          *name,
+		URL:           *opURL,
+		TLSSkipVerify: *tlsSkip,
+		Priority:      *priority,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -207,18 +148,4 @@ func runDelete(baseURLStr string, args []string) {
 	}
 
 	fmt.Printf("Operator %q deleted.\n", name)
-}
-
-func runKeygen() {
-	key, err := GenerateKey()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Println(key)
-	fmt.Fprintln(os.Stderr) // blank line for visual separation before the hint text
-	fmt.Fprintln(os.Stderr, "Set this value as the 'encryption.key' setting in the app-exposer configuration.")
-	fmt.Fprintln(os.Stderr, "After updating the key and restarting app-exposer, all existing operators must")
-	fmt.Fprintln(os.Stderr, "be deleted and re-added so their passwords are encrypted with the new key.")
 }

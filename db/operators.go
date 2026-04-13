@@ -11,17 +11,15 @@ import (
 
 // Operator models the operators table.
 type Operator struct {
-	ID                    uuid.UUID  `db:"id"`
-	Name                  string     `db:"name"`
-	URL                   string     `db:"url"`
-	TLSSkipVerify         bool       `db:"tls_skip_verify"`
-	AuthUser              string     `db:"auth_user"`
-	AuthPasswordEncrypted string     `db:"auth_password_encrypted"`
-	Priority              int        `db:"priority"`
-	LastReconciledAt      *time.Time `db:"last_reconciled_at"`
-	ReconciledBy          *string    `db:"reconciled_by"`
-	CreatedAt             time.Time  `db:"created_at"`
-	UpdatedAt             time.Time  `db:"updated_at"`
+	ID               uuid.UUID  `db:"id"`
+	Name             string     `db:"name"`
+	URL              string     `db:"url"`
+	TLSSkipVerify    bool       `db:"tls_skip_verify"`
+	Priority         int        `db:"priority"`
+	LastReconciledAt *time.Time `db:"last_reconciled_at"`
+	ReconciledBy     *string    `db:"reconciled_by"`
+	CreatedAt        time.Time  `db:"created_at"`
+	UpdatedAt        time.Time  `db:"updated_at"`
 }
 
 // JobStatusUpdate models a row in the job_status_updates table.
@@ -35,12 +33,10 @@ type JobStatusUpdate struct {
 }
 
 // ToOperatorConfig converts a DB Operator model to the operatorclient.OperatorConfig type.
-func (o *Operator) ToOperatorConfig(password string) operatorclient.OperatorConfig {
+func (o *Operator) ToOperatorConfig() operatorclient.OperatorConfig {
 	return operatorclient.OperatorConfig{
-		Name:     o.Name,
-		URL:      o.URL,
-		Username: o.AuthUser,
-		Password: password,
+		Name:          o.Name,
+		URL:           o.URL,
 		TLSSkipVerify: o.TLSSkipVerify,
 	}
 }
@@ -50,8 +46,8 @@ func (o *Operator) ToOperatorConfig(password string) operatorclient.OperatorConf
 func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 	var ops []Operator
 	const query = `
-		SELECT id, name, url, tls_skip_verify, auth_user, auth_password_encrypted,
-		       priority, last_reconciled_at, reconciled_by, created_at, updated_at
+		SELECT id, name, url, tls_skip_verify, priority,
+		       last_reconciled_at, reconciled_by, created_at, updated_at
 		FROM operators
 		ORDER BY priority ASC, created_at ASC
 	`
@@ -84,13 +80,13 @@ func (d *Database) ListOperatorSummaries(ctx context.Context) ([]OperatorSummary
 // created row with DB-generated fields (id, created_at, updated_at) populated.
 func (d *Database) InsertOperator(ctx context.Context, op *Operator) (*Operator, error) {
 	const query = `
-		INSERT INTO operators (name, url, tls_skip_verify, auth_user, auth_password_encrypted, priority)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, name, url, tls_skip_verify, auth_user, auth_password_encrypted,
-		          priority, last_reconciled_at, reconciled_by, created_at, updated_at
+		INSERT INTO operators (name, url, tls_skip_verify, priority)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, name, url, tls_skip_verify, priority,
+		          last_reconciled_at, reconciled_by, created_at, updated_at
 	`
 	var created Operator
-	err := d.db.QueryRowxContext(ctx, query, op.Name, op.URL, op.TLSSkipVerify, op.AuthUser, op.AuthPasswordEncrypted, op.Priority).StructScan(&created)
+	err := d.db.QueryRowxContext(ctx, query, op.Name, op.URL, op.TLSSkipVerify, op.Priority).StructScan(&created)
 	if err != nil {
 		return nil, err
 	}
@@ -120,8 +116,8 @@ func (d *Database) ClaimAndReconcile(ctx context.Context, hostname string, timeo
 	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
 	const claimQuery = `
-		SELECT id, name, url, tls_skip_verify, auth_user, auth_password_encrypted,
-		       priority, last_reconciled_at, reconciled_by, created_at, updated_at
+		SELECT id, name, url, tls_skip_verify, priority,
+		       last_reconciled_at, reconciled_by, created_at, updated_at
 		FROM operators
 		WHERE last_reconciled_at IS NULL OR last_reconciled_at < $1
 		ORDER BY last_reconciled_at ASC NULLS FIRST

@@ -537,7 +537,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Adds a new operator to the database. The password must be pre-encrypted.",
+                "description": "Adds a new operator to the database.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1991,12 +1991,6 @@ const docTemplate = `{
         "httphandlers.createOperatorRequest": {
             "type": "object",
             "properties": {
-                "auth_password_encrypted": {
-                    "type": "string"
-                },
-                "auth_user": {
-                    "type": "string"
-                },
                 "name": {
                     "type": "string"
                 },

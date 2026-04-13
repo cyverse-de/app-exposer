@@ -152,7 +152,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		log.Warnf("could not parse operators config: %v", err)
 	}
 
-	scheduler, err := operatorclient.NewScheduler(operatorConfigs)
+	scheduler, err := operatorclient.NewScheduler(operatorConfigs, nil)
 	if err != nil {
 		log.Fatalf("error creating operator scheduler: %v", err)
 	}

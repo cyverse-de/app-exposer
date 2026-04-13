@@ -17,6 +17,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/oauth2"
 )
 
 var log = common.Log.WithFields(logrus.Fields{"package": "reconciler"})
@@ -24,25 +25,27 @@ var log = common.Log.WithFields(logrus.Fields{"package": "reconciler"})
 // Reconciler manages the background process for syncing VICE analysis status
 // from remote operators into the DE database.
 type Reconciler struct {
-	db        *db.Database
-	scheduler *operatorclient.Scheduler
-	aesKey    string
-	dbURI     string
-	hostname  string
-	ip        string
+	db          *db.Database
+	scheduler   *operatorclient.Scheduler
+	tokenSource oauth2.TokenSource
+	dbURI       string
+	hostname    string
+	ip          string
 }
 
 // New creates a new Reconciler. The dbURI is used to establish a dedicated
 // LISTEN connection for receiving operator-change notifications from PostgreSQL.
-func New(db *db.Database, scheduler *operatorclient.Scheduler, aesKey, dbURI string) *Reconciler {
+// The token source is passed through to the scheduler for authenticating
+// requests to operator instances.
+func New(db *db.Database, scheduler *operatorclient.Scheduler, ts oauth2.TokenSource, dbURI string) *Reconciler {
 	hostname, _ := os.Hostname()
 	return &Reconciler{
-		db:        db,
-		scheduler: scheduler,
-		aesKey:    aesKey,
-		dbURI:     dbURI,
-		hostname:  hostname,
-		ip:        getLocalIP(),
+		db:          db,
+		scheduler:   scheduler,
+		tokenSource: ts,
+		dbURI:       dbURI,
+		hostname:    hostname,
+		ip:          getLocalIP(),
 	}
 }
 
@@ -126,6 +129,10 @@ func (r *Reconciler) startListener(ctx context.Context) <-chan struct{} {
 func (r *Reconciler) Run(ctx context.Context) {
 	log.Info("starting reconciliation worker")
 
+	// Propagate the token source to the scheduler so all operator clients
+	// created during Sync use it for authentication.
+	r.scheduler.SetTokenSource(r.tokenSource)
+
 	// Initial sync of operators from DB.
 	if err := r.SyncOperators(ctx); err != nil {
 		log.Errorf("initial operator sync failed: %v", err)
@@ -163,10 +170,7 @@ func (r *Reconciler) Run(ctx context.Context) {
 	}
 }
 
-// SyncOperators fetches operators from the DB, decrypts their passwords,
-// and updates the scheduler. If any operator's password cannot be decrypted,
-// the entire sync is aborted to avoid silently dropping operators from the
-// scheduler's routing list.
+// SyncOperators fetches operators from the DB and updates the scheduler.
 func (r *Reconciler) SyncOperators(ctx context.Context) error {
 	ops, err := r.db.ListOperators(ctx)
 	if err != nil {
@@ -180,11 +184,7 @@ func (r *Reconciler) SyncOperators(ctx context.Context) error {
 	configs := make([]operatorclient.OperatorConfig, 0, len(ops))
 	names := make([]string, 0, len(ops))
 	for _, op := range ops {
-		password, err := common.Decrypt(op.AuthPasswordEncrypted, r.aesKey)
-		if err != nil {
-			return fmt.Errorf("decrypting password for operator %q: %w", op.Name, err)
-		}
-		configs = append(configs, op.ToOperatorConfig(password))
+		configs = append(configs, op.ToOperatorConfig())
 		names = append(names, op.Name)
 	}
 

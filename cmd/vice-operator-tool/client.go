@@ -5,8 +5,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,12 +22,10 @@ type OperatorSummary struct {
 
 // AddOperatorRequest is the JSON body for creating a new operator.
 type AddOperatorRequest struct {
-	Name                  string `json:"name"`
-	URL                   string `json:"url"`
-	TLSSkipVerify         bool   `json:"tls_skip_verify"`
-	AuthUser              string `json:"auth_user"`
-	AuthPasswordEncrypted string `json:"auth_password_encrypted"`
-	Priority              int    `json:"priority"`
+	Name          string `json:"name"`
+	URL           string `json:"url"`
+	TLSSkipVerify bool   `json:"tls_skip_verify"`
+	Priority      int    `json:"priority"`
 }
 
 // OperatorClient talks to the app-exposer operator admin API.
@@ -121,19 +117,6 @@ func (c *OperatorClient) DeleteOperator(ctx context.Context, name string) error 
 		return readError(resp)
 	}
 	return nil
-}
-
-// aesKeySize is the byte length for AES-256 keys.
-const aesKeySize = 32
-
-// GenerateKey produces a base64-encoded AES-256 key suitable for use as
-// the encryption.key configuration setting.
-func GenerateKey() (string, error) {
-	key := make([]byte, aesKeySize)
-	if _, err := rand.Read(key); err != nil {
-		return "", fmt.Errorf("generating random bytes: %w", err)
-	}
-	return base64.StdEncoding.EncodeToString(key), nil
 }
 
 // maxErrBody caps the amount of data read from error response bodies to

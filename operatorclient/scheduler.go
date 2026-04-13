@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+
+	"golang.org/x/oauth2"
 )
 
 // Sentinel errors for scheduler failure modes.
@@ -21,23 +23,34 @@ var (
 // Scheduler manages a priority-ordered list of operator clients and
 // routes analyses to the first operator with available capacity.
 type Scheduler struct {
-	mu        sync.RWMutex
-	operators []*Client
+	mu          sync.RWMutex
+	operators   []*Client
+	tokenSource oauth2.TokenSource
 }
 
-// NewScheduler creates a Scheduler from operator configs. Operators are tried
-// in the order they appear in the configs slice (config order = priority order).
-func NewScheduler(configs []OperatorConfig) (*Scheduler, error) {
+// NewScheduler creates a Scheduler from operator configs. The token source is
+// used to authenticate requests to all operators; pass nil to disable auth.
+// Operators are tried in the order they appear in the configs slice
+// (config order = priority order).
+func NewScheduler(configs []OperatorConfig, ts oauth2.TokenSource) (*Scheduler, error) {
 	clients := make([]*Client, 0, len(configs))
 	for _, cfg := range configs {
-		c, err := NewClient(cfg)
+		c, err := NewClient(cfg, ts)
 		if err != nil {
 			return nil, fmt.Errorf("creating client for operator %q: %w", cfg.Name, err)
 		}
 		clients = append(clients, c)
 	}
 
-	return &Scheduler{operators: clients}, nil
+	return &Scheduler{operators: clients, tokenSource: ts}, nil
+}
+
+// SetTokenSource updates the token source used for authenticating requests
+// to operators. Subsequent calls to Sync will use the new token source.
+func (s *Scheduler) SetTokenSource(ts oauth2.TokenSource) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tokenSource = ts
 }
 
 // Sync replaces the scheduler's current operator clients with a new list.
@@ -45,7 +58,7 @@ func NewScheduler(configs []OperatorConfig) (*Scheduler, error) {
 func (s *Scheduler) Sync(configs []OperatorConfig) error {
 	clients := make([]*Client, 0, len(configs))
 	for _, cfg := range configs {
-		c, err := NewClient(cfg)
+		c, err := NewClient(cfg, s.tokenSource)
 		if err != nil {
 			return fmt.Errorf("creating client for operator %q: %w", cfg.Name, err)
 		}

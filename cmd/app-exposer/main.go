@@ -32,6 +32,8 @@ import (
 	"github.com/cyverse-de/go-mod/otelutils"
 	"github.com/cyverse-de/go-mod/protobufjson"
 	"github.com/pkg/errors"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -388,12 +390,29 @@ func main() {
 		c,
 	)
 
-	// Initialize and start the status reconciliation worker.
-	aesKey := c.String("encryption.key")
-	if aesKey == "" {
-		log.Warn("encryption.key is missing from configuration; remote operator status reconciliation may fail")
+	// Build an OAuth2 token source for authenticating with vice-operator
+	// instances using the Keycloak client credentials grant. When
+	// unconfigured, the reconciler will contact operators without auth.
+	var tokenSource oauth2.TokenSource
+	kcBaseURL := c.String("vice.keycloak.base_url")
+	kcRealm := c.String("vice.keycloak.realm")
+	kcClientID := c.String("vice.keycloak.client_id")
+	kcClientSecret := c.String("vice.keycloak.client_secret")
+	if kcBaseURL != "" && kcRealm != "" && kcClientID != "" && kcClientSecret != "" {
+		tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", kcBaseURL, kcRealm)
+		ccConfig := &clientcredentials.Config{
+			ClientID:     kcClientID,
+			ClientSecret: kcClientSecret,
+			TokenURL:     tokenURL,
+		}
+		tokenSource = ccConfig.TokenSource(context.Background())
+		log.Infof("Keycloak OIDC client credentials configured (client_id=%s, token_url=%s)", kcClientID, tokenURL)
+	} else {
+		log.Warn("vice.keycloak.* settings incomplete; operator requests will be unauthenticated")
 	}
-	reconciler := reconciler.New(dbase, app.handlers.GetScheduler(), aesKey, dbURI)
+
+	// Initialize and start the status reconciliation worker.
+	reconciler := reconciler.New(dbase, app.handlers.GetScheduler(), tokenSource, dbURI)
 	go reconciler.Run(context.Background())
 
 	log.Printf("listening on port %d", *listenPort)

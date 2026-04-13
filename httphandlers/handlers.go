@@ -451,20 +451,17 @@ func (h *HTTPHandlers) AdminOperatorCapacitiesHandler(c echo.Context) error {
 
 // createOperatorRequest is the JSON request body for creating a new operator.
 type createOperatorRequest struct {
-	Name                  string `json:"name"`
-	URL                   string `json:"url"`
-	TLSSkipVerify         bool   `json:"tls_skip_verify"`
-	AuthUser              string `json:"auth_user"`
-	AuthPasswordEncrypted string `json:"auth_password_encrypted"`
-	Priority              int    `json:"priority"`
+	Name          string `json:"name"`
+	URL           string `json:"url"`
+	TLSSkipVerify bool   `json:"tls_skip_verify"`
+	Priority      int    `json:"priority"`
 }
 
 // CreateOperatorHandler adds a new operator to the database.
-// The auth_password_encrypted field is assumed to be pre-encrypted by the caller.
 //
 //	@ID				admin-create-operator
 //	@Summary		Creates a new operator
-//	@Description	Adds a new operator to the database. The password must be pre-encrypted.
+//	@Description	Adds a new operator to the database.
 //	@Accept			json
 //	@Produce		json
 //	@Param			body	body		createOperatorRequest	true	"Operator to create"
@@ -486,20 +483,12 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 	if strings.TrimSpace(req.URL) == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "url is required")
 	}
-	if strings.TrimSpace(req.AuthUser) == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "auth_user is required")
-	}
-	if strings.TrimSpace(req.AuthPasswordEncrypted) == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "auth_password_encrypted is required")
-	}
 
 	op := &db.Operator{
-		Name:                  req.Name,
-		URL:                   req.URL,
-		TLSSkipVerify:         req.TLSSkipVerify,
-		AuthUser:              req.AuthUser,
-		AuthPasswordEncrypted: req.AuthPasswordEncrypted,
-		Priority:              req.Priority,
+		Name:          req.Name,
+		URL:           req.URL,
+		TLSSkipVerify: req.TLSSkipVerify,
+		Priority:      req.Priority,
 	}
 
 	created, err := h.db.InsertOperator(ctx, op)

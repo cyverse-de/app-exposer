@@ -121,7 +121,7 @@ func TestSchedulerLaunchAnalysis(t *testing.T) {
 				}
 			}()
 
-			scheduler, err := NewScheduler(configs)
+			scheduler, err := NewScheduler(configs, nil)
 			require.NoError(t, err)
 
 			bundle := &AnalysisBundle{AnalysisID: "test-123"}
@@ -138,13 +138,13 @@ func TestSchedulerLaunchAnalysis(t *testing.T) {
 }
 
 func TestSchedulerNoOperators(t *testing.T) {
-	scheduler, err := NewScheduler(nil)
+	scheduler, err := NewScheduler(nil, nil)
 	assert.NoError(t, err)
 
 	_, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
 	assert.ErrorIs(t, err, ErrNoOperators)
 
-	scheduler, err = NewScheduler([]OperatorConfig{})
+	scheduler, err = NewScheduler([]OperatorConfig{}, nil)
 	assert.NoError(t, err)
 
 	_, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
@@ -157,7 +157,7 @@ func TestSchedulerClientByName(t *testing.T) {
 
 	scheduler, err := NewScheduler([]OperatorConfig{
 		{Name: "test-op", URL: srv.URL},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	client := scheduler.ClientByName("test-op")

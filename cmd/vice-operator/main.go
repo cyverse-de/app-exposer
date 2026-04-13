@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/operator"
 	"github.com/sirupsen/logrus"
@@ -34,9 +35,9 @@ func main() {
 		maxAnalyses           int
 		nodeLabelSelector     string
 		logLevel              string
-		basicAuth             bool
-		basicAuthUsername     string
-		basicAuthPassword     string
+		apiAuth               bool
+		apiAuthIssuerURL      string
+		apiAuthClientID       string
 		viceBaseURL           string
 		clusterConfigSecret   string
 		imagePullSecret       string
@@ -76,9 +77,9 @@ func main() {
 	flag.IntVar(&maxAnalyses, "max-analyses", 50, "Max concurrent analyses (0 disables the limit for autoscaling clusters)")
 	flag.StringVar(&nodeLabelSelector, "node-label-selector", "", "Filter schedulable nodes by label")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level")
-	flag.BoolVar(&basicAuth, "basic-auth", false, "Enable basic auth for the API")
-	flag.StringVar(&basicAuthUsername, "basic-auth-username", "", "Basic auth username (required when --basic-auth is set)")
-	flag.StringVar(&basicAuthPassword, "basic-auth-password", "", "Basic auth password (required when --basic-auth is set)")
+	flag.BoolVar(&apiAuth, "api-auth", true, "Enable OIDC JWT Bearer auth for the API")
+	flag.StringVar(&apiAuthIssuerURL, "api-auth-issuer-url", "", "OIDC issuer URL for API auth (e.g. https://keycloak.example.com/realms/cyverse)")
+	flag.StringVar(&apiAuthClientID, "api-auth-client-id", "", "Expected client ID (azp claim) for API auth")
 	flag.StringVar(&viceBaseURL, "vice-base-url", "https://cyverse.run", "Base URL for VICE, stored in the cluster config secret")
 	flag.StringVar(&clusterConfigSecret, "cluster-config-secret", "cluster-config-secret", "Name of the K8s Secret holding cluster config")
 	flag.StringVar(&imagePullSecret, "image-pull-secret", "vice-image-pull-secret", "Name of the K8s image pull Secret")
@@ -111,9 +112,9 @@ func main() {
 	flag.BoolVar(&disableInternetAccess, "disable-internet-access", false, "Block analysis pods from reaching the public internet; only DNS, explicit host/CIDR exceptions, and pod exceptions are allowed")
 	flag.Parse()
 
-	// Validate basic auth flags.
-	if basicAuth && (basicAuthUsername == "" || basicAuthPassword == "") {
-		log.Fatal("--basic-auth-username and --basic-auth-password are required when --basic-auth is enabled")
+	// Validate OIDC auth flags.
+	if apiAuth && (apiAuthIssuerURL == "" || apiAuthClientID == "") {
+		log.Fatal("--api-auth-issuer-url and --api-auth-client-id are required when --api-auth is enabled")
 	}
 
 	// Validate vice-base-url is a proper HTTP(S) URL.
@@ -388,7 +389,26 @@ func main() {
 	op := operator.NewOperator(clientset, gwClient, namespace, gatewayNamespace, gatewayName, gpuVendor, capacityCalc, imageCache,
 		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs, baseDomain, clusterConfigSecret, egressConfig)
 
-	app := NewApp(op, basicAuth, basicAuthUsername, basicAuthPassword)
+	// Set up OIDC JWT verification when API auth is enabled.
+	var verifier *oidc.IDTokenVerifier
+	if apiAuth {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		provider, providerErr := oidc.NewProvider(ctx, apiAuthIssuerURL)
+		if providerErr != nil {
+			log.Fatalf("failed to discover OIDC provider at %q: %v", apiAuthIssuerURL, providerErr)
+		}
+		// Skip the built-in audience check — Keycloak client credentials
+		// tokens use azp (authorized party) instead of aud for the client ID.
+		// The bearerAuthMiddleware verifies azp manually.
+		verifier = provider.Verifier(&oidc.Config{SkipClientIDCheck: true})
+		log.Infof("OIDC API auth enabled (issuer=%s, expected_client_id=%s)", apiAuthIssuerURL, apiAuthClientID)
+	} else {
+		log.Warn("API auth disabled (--api-auth=false); all requests are unauthenticated")
+	}
+
+	app := NewApp(op, verifier, apiAuthClientID)
 	loadingApp := NewLoadingApp(op)
 
 	apiAddr := fmt.Sprintf(":%d", port)

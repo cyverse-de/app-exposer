@@ -14,6 +14,7 @@ import (
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"golang.org/x/oauth2"
 )
 
 var log = common.Log.WithFields(logrus.Fields{"package": "operatorclient"})
@@ -24,23 +25,23 @@ var ErrCapacityExhausted = errors.New("operator at capacity")
 
 // Client communicates with a single vice-operator instance via HTTP.
 type Client struct {
-	name     string
-	baseURL  *url.URL
-	http     *http.Client
-	username string
-	password string
+	name    string
+	baseURL *url.URL
+	http    *http.Client
 }
 
-// NewClient creates a new operator Client from an OperatorConfig. When
+// NewClient creates a new operator Client from an OperatorConfig. When ts is
+// non-nil, an oauth2.Transport is inserted into the transport chain so that
+// every request carries a Bearer token (automatically refreshed). When
 // cfg.TLSSkipVerify is true, TLS certificate verification is skipped — use
 // only for development/testing with self-signed certs.
-func NewClient(cfg OperatorConfig) (*Client, error) {
+func NewClient(cfg OperatorConfig, ts oauth2.TokenSource) (*Client, error) {
 	u, err := url.Parse(cfg.URL)
 	if err != nil {
 		return nil, fmt.Errorf("parsing operator URL %q: %w", cfg.URL, err)
 	}
 
-	var transport = http.DefaultTransport
+	transport := http.RoundTripper(http.DefaultTransport)
 	if cfg.TLSSkipVerify {
 		// Clone DefaultTransport to preserve connection pooling, timeouts, and
 		// proxy settings — only override the TLS verification.
@@ -50,24 +51,23 @@ func NewClient(cfg OperatorConfig) (*Client, error) {
 		log.Warnf("operator %q: TLS certificate verification disabled (tls_skip_verify)", cfg.Name)
 	}
 
+	// When a token source is provided, wrap the transport so every outgoing
+	// request carries an Authorization: Bearer header. Token refresh is
+	// handled automatically by oauth2.Transport.
+	if ts != nil {
+		transport = &oauth2.Transport{Source: ts, Base: transport}
+	}
+
 	return &Client{
-		name:     cfg.Name,
-		baseURL:  u,
-		http:     &http.Client{Transport: otelhttp.NewTransport(transport)},
-		username: cfg.Username,
-		password: cfg.Password,
+		name:    cfg.Name,
+		baseURL: u,
+		http:    &http.Client{Transport: otelhttp.NewTransport(transport)},
 	}, nil
 }
 
-// setAuth adds basic auth credentials to the request when configured.
-func (c *Client) setAuth(req *http.Request) {
-	if c.username != "" {
-		req.SetBasicAuth(c.username, c.password)
-	}
-}
-
-// doRequest builds, authenticates, and executes an HTTP request. The caller
-// is responsible for closing the response body.
+// doRequest builds and executes an HTTP request. Auth is handled by the
+// transport chain (oauth2.Transport when configured). The caller is
+// responsible for closing the response body.
 func (c *Client) doRequest(ctx context.Context, method, url string, body io.Reader) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
@@ -76,7 +76,6 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body io.Read
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	c.setAuth(req)
 	return c.http.Do(req)
 }
 
@@ -296,14 +295,20 @@ func (c *Client) Listing(ctx context.Context, params url.Values) (*reporting.Res
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	log.Debugf("after GET %s", reqURL.String())
+
 	if err := checkStatus(resp, "listing"); err != nil {
 		return nil, err
 	}
+
+	log.Debugf("after checkStatus")
 
 	var info reporting.ResourceInfo
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return nil, fmt.Errorf("decoding listing response: %w", err)
 	}
+
+	log.Debugf("after json decode: %v", info)
 
 	return &info, nil
 }

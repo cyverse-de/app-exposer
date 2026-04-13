@@ -11453,6 +11453,8 @@ paths:
       tags:
       - network-policies
 securityDefinitions:
-  BasicAuth:
-    type: basic
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"
