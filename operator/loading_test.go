@@ -181,9 +181,9 @@ func TestHandleLoadingPage(t *testing.T) {
 			wantContains: []string{"JupyterLab", "loading-page-test"},
 		},
 		{
-			name:        "unknown subdomain returns 404",
-			host:        "unknown.cyverse.run",
-			wantErrCode: http.StatusNotFound,
+			name:         "unknown subdomain serves waiting page",
+			host:         "unknown.cyverse.run",
+			wantContains: []string{"Waiting for Analysis", "window.location.reload()"},
 		},
 	}
 

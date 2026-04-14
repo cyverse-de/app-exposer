@@ -126,3 +126,61 @@ func TestEnsureAPIRoute(t *testing.T) {
 		})
 	}
 }
+
+func TestEnsureDefaultRoute(t *testing.T) {
+	tests := []struct {
+		name      string
+		preCreate bool
+		preNS     string
+		wantNS    string
+	}{
+		{
+			name:      "creates HTTPRoute when missing",
+			preCreate: false,
+			wantNS:    "vice-apps",
+		},
+		{
+			name:      "no-op when HTTPRoute already matches",
+			preCreate: true,
+			preNS:     "vice-apps",
+			wantNS:    "vice-apps",
+		},
+		{
+			name:      "updates HTTPRoute when gateway namespace differs",
+			preCreate: true,
+			preNS:     "wrong-ns",
+			wantNS:    "correct-ns",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gwClientset := gatewayfake.NewSimpleClientset()
+			gwClient := gwClientset.GatewayV1()
+
+			if tt.preCreate {
+				err := EnsureDefaultRoute(context.Background(), gwClient, "vice-apps", tt.preNS, "vice", "my-domain.org", "vice-operator-loading", 80)
+				require.NoError(t, err)
+			}
+
+			err := EnsureDefaultRoute(context.Background(), gwClient, "vice-apps", tt.wantNS, "vice", "my-domain.org", "vice-operator-loading", 80)
+			require.NoError(t, err)
+
+			route, err := gwClient.HTTPRoutes("vice-apps").Get(context.Background(), "vice-default-route", metav1.GetOptions{})
+			require.NoError(t, err)
+			require.Len(t, route.Spec.Hostnames, 1)
+			assert.Equal(t, "*.my-domain.org", string(route.Spec.Hostnames[0]))
+
+			require.Len(t, route.Spec.Rules, 1)
+			require.Len(t, route.Spec.Rules[0].BackendRefs, 1)
+			ref := route.Spec.Rules[0].BackendRefs[0].BackendObjectReference
+			assert.Equal(t, "vice-operator-loading", string(ref.Name))
+			require.NotNil(t, ref.Port)
+			assert.Equal(t, int32(80), int32(*ref.Port))
+
+			require.Len(t, route.Spec.ParentRefs, 1)
+			require.NotNil(t, route.Spec.ParentRefs[0].Namespace)
+			assert.Equal(t, tt.wantNS, string(*route.Spec.ParentRefs[0].Namespace))
+		})
+	}
+}

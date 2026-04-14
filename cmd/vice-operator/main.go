@@ -123,6 +123,11 @@ func main() {
 		log.Fatalf("--vice-base-url must be a valid HTTP(S) URL, got %q", viceBaseURL)
 	}
 
+	// Extract the base domain from vice-base-url for hostname rewriting and
+	// wildcard route creation (e.g. "https://my-own-domain.org" → "my-own-domain.org").
+	// Use Hostname() to strip any port, since HTTPRoute hostnames should not include ports.
+	baseDomain := parsedURL.Hostname()
+
 	// Validate registry flags: all three required together, or none.
 	registryFlagsSet := registryServer != "" || registryUsername != "" || registryPassword != ""
 	if registryFlagsSet && (registryServer == "" || registryUsername == "" || registryPassword == "") {
@@ -236,6 +241,21 @@ func main() {
 	} else {
 		log.Infof("skipping Gateway creation (skip-flag=%v, namespace=%s, gateway-namespace=%s)",
 			gatewaySkipCreation, namespace, gatewayNamespace)
+	}
+
+	// Ensure the wildcard default HTTPRoute so subdomain requests arriving
+	// before the analysis-specific HTTPRoute is created get a waiting page
+	// instead of nothing. Only applies when the operator manages its own
+	// Gateway (external clusters); in the local cluster where
+	// --gateway-skip-creation is set, vice-default-backend handles this.
+	if shouldEnsureGateway && operatorPodSelector != "" {
+		mustEnsure("default wildcard HTTPRoute", func(ctx context.Context) error {
+			gwNS := gatewayNamespace
+			if gwNS == "" {
+				gwNS = namespace
+			}
+			return operator.EnsureDefaultRoute(ctx, gwClient, namespace, gwNS, gatewayName, baseDomain, loadingServiceName, int32(loadingServicePort))
+		})
 	}
 
 	// Ensure the CORS middleware exists so HTTPRoutes can reference it.
@@ -378,11 +398,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("invalid GPU vendor: %v", err)
 	}
-
-	// Extract the base domain from vice-base-url for hostname rewriting
-	// (e.g. "https://localhost" → "localhost"). Use Hostname() to strip any
-	// port, since HTTPRoute hostnames should not include ports.
-	baseDomain := parsedURL.Hostname()
 
 	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
 	imageCache := operator.NewImageCacheManager(clientset, namespace, imagePullSecret)

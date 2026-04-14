@@ -204,7 +204,7 @@ func EnsureAPIRoute(
 	}
 
 	// Skip the update if the spec already matches to avoid unnecessary writes.
-	if apiRouteMatches(existing, gatewayNamespace, gatewayName, hostname, serviceName, servicePort) {
+	if routeSpecMatches(existing, gatewayNamespace, gatewayName, hostname, serviceName, servicePort) {
 		log.Debugf("API HTTPRoute %s/%s already up to date", namespace, routeName)
 		return nil
 	}
@@ -220,9 +220,89 @@ func EnsureAPIRoute(
 	return nil
 }
 
-// apiRouteMatches returns true if the existing HTTPRoute already has the
+// EnsureDefaultRoute ensures a wildcard HTTPRoute exists that catches all
+// *.baseDomain requests and routes them to the loading service. This provides
+// a fall-through for subdomains that don't yet have an analysis-specific
+// HTTPRoute. The more-specific analysis routes take priority in the Gateway
+// once they are created.
+func EnsureDefaultRoute(
+	ctx context.Context,
+	gwClient gatewayclient.GatewayV1Interface,
+	namespace, gatewayNamespace, gatewayName, baseDomain, serviceName string,
+	servicePort int32,
+) error {
+	const routeName = "vice-default-route"
+	wildcardHostname := "*." + baseDomain
+
+	gwNS := gatewayv1.Namespace(gatewayNamespace)
+	gwObjName := gatewayv1.ObjectName(gatewayName)
+	svcPort := gatewayv1.PortNumber(servicePort)
+
+	desired := &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      routeName,
+			Namespace: namespace,
+		},
+		Spec: gatewayv1.HTTPRouteSpec{
+			CommonRouteSpec: gatewayv1.CommonRouteSpec{
+				ParentRefs: []gatewayv1.ParentReference{
+					{
+						Namespace: &gwNS,
+						Name:      gwObjName,
+					},
+				},
+			},
+			Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(wildcardHostname)},
+			Rules: []gatewayv1.HTTPRouteRule{
+				{
+					BackendRefs: []gatewayv1.HTTPBackendRef{
+						{
+							BackendRef: gatewayv1.BackendRef{
+								BackendObjectReference: gatewayv1.BackendObjectReference{
+									Name: gatewayv1.ObjectName(serviceName),
+									Port: &svcPort,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	client := gwClient.HTTPRoutes(namespace)
+	existing, err := client.Get(ctx, routeName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		log.Infof("creating default HTTPRoute %s/%s (hostname=%s, backend=%s:%d)", namespace, routeName, wildcardHostname, serviceName, servicePort)
+		_, err = client.Create(ctx, desired, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("creating default HTTPRoute %s: %w", routeName, err)
+		}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("checking for existing default HTTPRoute %s: %w", routeName, err)
+	}
+
+	if routeSpecMatches(existing, gatewayNamespace, gatewayName, wildcardHostname, serviceName, servicePort) {
+		log.Debugf("default HTTPRoute %s/%s already up to date", namespace, routeName)
+		return nil
+	}
+
+	desired.ResourceVersion = existing.ResourceVersion
+	desired.UID = existing.UID
+	log.Infof("updating default HTTPRoute %s/%s (hostname=%s, backend=%s:%d)", namespace, routeName, wildcardHostname, serviceName, servicePort)
+	_, err = client.Update(ctx, desired, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("updating default HTTPRoute %s: %w", routeName, err)
+	}
+	return nil
+}
+
+// routeSpecMatches returns true if the existing HTTPRoute already has the
 // expected hostname, backend service name, port, and gateway ParentRef.
-func apiRouteMatches(route *gatewayv1.HTTPRoute, gwNamespace, gwName, hostname, serviceName string, servicePort int32) bool {
+// Used by both EnsureAPIRoute and EnsureDefaultRoute.
+func routeSpecMatches(route *gatewayv1.HTTPRoute, gwNamespace, gwName, hostname, serviceName string, servicePort int32) bool {
 	if len(route.Spec.Hostnames) != 1 || string(route.Spec.Hostnames[0]) != hostname {
 		return false
 	}

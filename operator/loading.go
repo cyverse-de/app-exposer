@@ -27,6 +27,22 @@ var loadingTemplateFS embed.FS
 // time rather than on every request.
 var loadingTemplate = template.Must(template.ParseFS(loadingTemplateFS, "templates/loading.html"))
 
+//go:embed templates/waiting.html
+var waitingTemplateFS embed.FS
+
+// waitingTemplate is the waiting page served when no analysis matches the
+// requested subdomain yet. It periodically reloads until the analysis-specific
+// HTTPRoute takes over.
+var waitingTemplate = template.Must(template.ParseFS(waitingTemplateFS, "templates/waiting.html"))
+
+// waitingRefreshSeconds is the interval between page reloads on the waiting page.
+const waitingRefreshSeconds = 5
+
+// waitingPageData holds the template data for the waiting page.
+type waitingPageData struct {
+	RefreshSeconds int
+}
+
 // Stage constants for the loading page status response.
 const (
 	StageDeploying   = "deploying"
@@ -183,7 +199,10 @@ func (o *Operator) HandleLoadingPage(c echo.Context) error {
 	analysisID, appName, err := o.resolveSubdomain(ctx, host)
 	if err != nil {
 		if errors.Is(err, errAnalysisNotFound) {
-			return echo.NewHTTPError(http.StatusNotFound, "Analysis not found.")
+			// No analysis exists for this subdomain yet. Serve a waiting
+			// page that periodically reloads until the analysis-specific
+			// HTTPRoute takes over.
+			return renderWaitingPage(c)
 		}
 		log.Errorf("resolveSubdomain failed for host %q: %v", host, err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to look up analysis.")
@@ -215,7 +234,12 @@ func (o *Operator) HandleLoadingStatus(c echo.Context) error {
 	analysisID, _, err := o.resolveSubdomain(ctx, host)
 	if err != nil {
 		if errors.Is(err, errAnalysisNotFound) {
-			return echo.NewHTTPError(http.StatusNotFound, "Analysis not found.")
+			// No analysis yet — report deploying stage so callers get a
+			// consistent JSON response rather than a 404.
+			return c.JSON(http.StatusOK, LoadingStatusResponse{
+				Ready: false,
+				Stage: StageDeploying,
+			})
 		}
 		log.Errorf("resolveSubdomain failed for host %q: %v", host, err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to look up analysis.")
@@ -267,6 +291,18 @@ func (o *Operator) HandleLoadingStatus(c echo.Context) error {
 		Error: errMsg,
 		Pods:  buildLoadingPodInfo(podList.Items),
 	})
+}
+
+// renderWaitingPage renders the waiting page template. Used when no analysis
+// matches the requested subdomain yet.
+func renderWaitingPage(c echo.Context) error {
+	data := waitingPageData{RefreshSeconds: waitingRefreshSeconds}
+	var buf strings.Builder
+	if err := waitingTemplate.Execute(&buf, data); err != nil {
+		log.Errorf("rendering waiting page: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to render waiting page")
+	}
+	return c.HTML(http.StatusOK, buf.String())
 }
 
 // resolveSubdomain extracts the subdomain from the Host header and looks up
