@@ -401,6 +401,19 @@ func (h *HTTPHandlers) PodsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "user not set")
 	}
 
+	// Verify the user has permission to access this analysis.
+	p := &permissions.Permissions{
+		BaseURL: h.incluster.PermissionsURL,
+	}
+	allowed, err := p.IsAllowed(ctx, user, analysisID)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return echo.NewHTTPError(http.StatusForbidden,
+			fmt.Sprintf("user %s cannot access analysis %s", user, analysisID))
+	}
+
 	client := h.operatorClientForAnalysis(ctx, analysisID)
 	if client == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "analysis not found on any operator")
