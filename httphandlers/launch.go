@@ -47,10 +47,15 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 		return err
 	}
 
-	// Check if already running on any operator for idempotency.
-	if client := h.operatorClientForAnalysis(ctx, job.ID); client != nil {
-		log.Infof("analysis %s already running on operator %s, returning success", job.ID, client.Name())
-		return c.NoContent(http.StatusOK)
+	// Fast-path idempotency check: only consult the DB, not all operators.
+	// For new launches the DB has no record, so a fan-out search would hit
+	// every operator and get "not found" from all of them — wasted work that
+	// becomes a problem during workshops with many concurrent launches.
+	if name, _ := h.apps.GetOperatorName(ctx, job.ID); name != "" {
+		if client := h.scheduler.ClientByName(name); client != nil {
+			log.Infof("analysis %s already running on operator %s, returning success", job.ID, client.Name())
+			return c.NoContent(http.StatusOK)
+		}
 	}
 
 	if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
@@ -360,7 +365,7 @@ func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error 
 		return err
 	}
 
-	client := h.searchOperatorsForAnalysis(ctx, analysisID)
+	client := h.operatorClientForAnalysis(ctx, analysisID)
 	retval := AnalysisInClusterResponse{
 		Found: client != nil,
 	}
@@ -388,6 +393,6 @@ func (h *HTTPHandlers) AdminAnalysisInClusterByID(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is not set")
 	}
 
-	client := h.searchOperatorsForAnalysis(ctx, analysisID)
+	client := h.operatorClientForAnalysis(ctx, analysisID)
 	return c.JSON(http.StatusOK, AnalysisInClusterResponse{Found: client != nil})
 }
