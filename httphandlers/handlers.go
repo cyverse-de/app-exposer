@@ -2,6 +2,8 @@ package httphandlers
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -219,7 +221,11 @@ func (h *HTTPHandlers) routeOperatorAction(c echo.Context, fn operatorAction) er
 
 	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		if errors.Is(err, sql.ErrNoRows) {
+			return echo.NewHTTPError(http.StatusNotFound, "analysis not found for external ID")
+		}
+		log.Errorf("error looking up analysis for external ID %s: %v", externalID, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to look up analysis")
 	}
 
 	client := h.operatorClientForAnalysis(ctx, analysisID)
@@ -277,24 +283,6 @@ func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, ExternalIDResp{ExternalID: externalID})
-}
-
-// ApplyAsyncLabelsHandler is the http handler for triggering the application
-// of labels on running VICE analyses.
-//
-//	@ID				apply-async-labels
-//	@Summary		Applies labels to running VICE analyses.
-//	@Description	Asynchronously applies labels to all running VICE analyses.
-//	@Description	The application of the labels may not be complete by the time the response is returned.
-//	@Success		200
-//	@Failure		500	{object}	common.ErrorResponse
-//	@Failure		400	{object}	common.ErrorResponse
-//	@Router			/vice/apply-labels [post]
-func (h *HTTPHandlers) ApplyAsyncLabelsHandler(c echo.Context) error {
-	// In the multi-cluster architecture, VICE resources are managed by
-	// operators on remote clusters. Label reconciliation is handled by
-	// the operators themselves, not by app-exposer.
-	return c.NoContent(http.StatusOK)
 }
 
 // AsyncData contains metadata that is computed asynchronously after job launch:
@@ -473,6 +461,10 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 	if strings.TrimSpace(req.URL) == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "url is required")
 	}
+	parsedURL, parseErr := url.Parse(req.URL)
+	if parseErr != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "url must be a valid HTTP(S) URL")
+	}
 
 	op := &db.Operator{
 		Name:          req.Name,
@@ -519,7 +511,7 @@ func (h *HTTPHandlers) DeleteOperatorHandler(c echo.Context) error {
 
 	if err := h.db.DeleteOperatorByName(ctx, name); err != nil {
 		log.Errorf("failed to delete operator %q: %v", name, err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete operator")
 	}
 
 	return c.NoContent(http.StatusOK)

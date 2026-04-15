@@ -205,7 +205,6 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	vice.Use(middleware.Logger())
 	vice.POST("/launch", app.handlers.LaunchAppHandler)
 	vice.POST("/dry-run", app.handlers.DryRunBundleHandler)
-	vice.POST("/apply-labels", app.handlers.ApplyAsyncLabelsHandler)
 	vice.GET("/async-data", app.handlers.AsyncDataHandler)
 	vice.GET("/listing", app.handlers.FilterableResourcesHandler)
 	vice.POST("/:id/download-input-files", app.handlers.TriggerDownloadsHandler)
