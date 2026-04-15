@@ -247,10 +247,10 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 	// Create a per-analysis egress NetworkPolicy using the cluster's egress
 	// config. This is done by vice-operator (not app-exposer) because only
 	// the operator knows the cluster environment (blocked CIDRs, Keycloak
-	// IPs, internet access setting, etc.). Pod template labels are used
-	// because they include analysis-id, which deleteAnalysisResources uses
-	// for cleanup.
-	bundleLabels := bundle.Deployment.Spec.Template.Labels
+	// IPs, internet access setting, etc.). Deployment metadata labels are
+	// used (not pod template labels) because they always include analysis-id,
+	// which deleteAnalysisResources uses for label-based cleanup.
+	bundleLabels := bundle.Deployment.Labels
 	np := buildAnalysisEgressPolicy(bundle.AnalysisID, o.namespace, bundleLabels, o.egressConfig)
 	if len(np.Spec.Egress) == 0 {
 		log.Warnf("analysis %s egress policy has no allow rules; pods will have DNS-only egress", bundle.AnalysisID)
@@ -441,7 +441,7 @@ func (o *Operator) HandleRegenerateNetworkPolicies(c echo.Context) error {
 			continue
 		}
 
-		bundleLabels := dep.Spec.Template.Labels
+		bundleLabels := dep.Labels
 		np := buildAnalysisEgressPolicy(analysisID, o.namespace, bundleLabels, o.egressConfig)
 		if err := upsert(ctx, npClient, "NetworkPolicy", np.Name, np); err != nil {
 			log.Errorf("regenerating egress policy for analysis %s: %v", analysisID, err)

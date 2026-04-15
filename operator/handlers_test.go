@@ -208,9 +208,16 @@ func TestHandleLaunch(t *testing.T) {
 				_, err = clientset.CoreV1().Services("vice-apps").Get(ctx, "test-svc", metav1.GetOptions{})
 				assert.NoError(t, err, "service should exist")
 
-				// HandleLaunch now creates a per-analysis egress NetworkPolicy.
-				_, err = clientset.NetworkingV1().NetworkPolicies("vice-apps").Get(ctx, "vice-egress-"+tt.bundle.AnalysisID, metav1.GetOptions{})
+				// HandleLaunch creates a per-analysis egress NetworkPolicy using
+				// deployment metadata labels (which include analysis-id), not pod
+				// template labels (which may not). Verify the NP has the analysis-id
+				// label so deleteAnalysisResources can find it during cleanup.
+				np, err := clientset.NetworkingV1().NetworkPolicies("vice-apps").Get(ctx, "vice-egress-"+tt.bundle.AnalysisID, metav1.GetOptions{})
 				assert.NoError(t, err, "per-analysis egress NetworkPolicy should exist")
+				if np != nil {
+					assert.Equal(t, tt.bundle.AnalysisID, np.Labels["analysis-id"],
+						"NetworkPolicy should have analysis-id label from deployment metadata")
+				}
 			}
 		})
 	}
