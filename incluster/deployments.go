@@ -449,6 +449,11 @@ func (i *Incluster) GetDeployment(ctx context.Context, job *model.Job) (*appsv1.
 		}
 	}
 
+	podVolumes, err := i.deploymentVolumes(job)
+	if err != nil {
+		return nil, fmt.Errorf("building deployment volumes: %w", err)
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   job.InvocationID,
@@ -468,7 +473,7 @@ func (i *Incluster) GetDeployment(ctx context.Context, job *model.Job) (*appsv1.
 				Spec: apiv1.PodSpec{
 					Hostname:                     common.Subdomain(job.UserID, job.InvocationID),
 					RestartPolicy:                apiv1.RestartPolicy("Always"),
-					Volumes:                      i.deploymentVolumes(job),
+					Volumes:                      podVolumes,
 					InitContainers:               i.initContainers(job),
 					Containers:                   i.deploymentContainers(job),
 					ImagePullSecrets:             i.imagePullSecrets(job),

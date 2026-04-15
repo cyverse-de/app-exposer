@@ -365,7 +365,7 @@ func (i *Incluster) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMou
 // it returns the objects that can be included in the Deployment object that
 // will get passed to the k8s API later. Also not that these are the Volumes,
 // not the container-specific VolumeMounts.
-func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
+func (i *Incluster) deploymentVolumes(job *model.Job) ([]apiv1.Volume, error) {
 	output := []apiv1.Volume{}
 
 	if len(job.FilterInputsWithoutTickets()) > 0 {
@@ -391,14 +391,13 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 	// 	},
 	// )
 
-	// Always add persistent volume sources (includes working-dir volume, and CSI data volume when enabled)
+	// Always add persistent volume sources (includes working-dir volume, and CSI data volume when enabled).
 	volumeSources, err := i.getPersistentVolumeSources(job)
 	if err != nil {
-		log.Warn(err)
-	} else {
-		for _, volumeSource := range volumeSources {
-			output = append(output, *volumeSource)
-		}
+		return nil, fmt.Errorf("getting persistent volume sources: %w", err)
+	}
+	for _, volumeSource := range volumeSources {
+		output = append(output, *volumeSource)
 	}
 
 	if !i.UseCSIDriver {
@@ -457,7 +456,7 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 		)
 	}
 
-	return output
+	return output, nil
 }
 
 func (i *Incluster) deploymentVolumeMounts(job *model.Job) []apiv1.VolumeMount {
