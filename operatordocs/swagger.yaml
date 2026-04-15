@@ -10,409 +10,6 @@ definitions:
       message:
         type: string
     type: object
-  db.OperatorSummary:
-    properties:
-      name:
-        type: string
-      priority:
-        type: integer
-      tls_skip_verify:
-        type: boolean
-      url:
-        type: string
-    type: object
-  httphandlers.AnalysisInClusterResponse:
-    properties:
-      found:
-        type: boolean
-    type: object
-  httphandlers.AnalysisLaunch:
-    properties:
-      app_description:
-        type: string
-      app_id:
-        type: string
-      app_name:
-        type: string
-      archive_logs:
-        type: boolean
-      batch_id:
-        type: string
-      condor_id:
-        type: string
-      condor_log_path:
-        description: comes from config, not upstream service
-        type: string
-      config_file:
-        description: path to the job configuration file (not from upstream)
-        type: string
-      create_output_subdir:
-        type: boolean
-      date_completed:
-        type: string
-      date_started:
-        type: string
-      date_submitted:
-        type: string
-      description:
-        type: string
-      email:
-        type: string
-      execution_target:
-        type: string
-      exit_code:
-        type: integer
-      extra:
-        $ref: '#/definitions/model.ExtraInfo'
-      failure_count:
-        type: integer
-      failure_threshold:
-        type: integer
-      file-metadata:
-        items:
-          $ref: '#/definitions/model.FileMetadata'
-        type: array
-      filter_files:
-        description: comes from config, not upstream service
-        items:
-          type: string
-        type: array
-      group:
-        description: untested for now
-        type: string
-      id:
-        type: string
-      input_path_list:
-        description: path to a list of inputs (not from upstream).
-        type: string
-      input_ticket_list:
-        description: path to a list of inputs with tickets (not from upstream).
-        type: string
-      irods_base:
-        type: string
-      mount_data_store:
-        type: boolean
-      name:
-        type: string
-      nfs_base:
-        type: string
-      notify:
-        type: boolean
-      now_date:
-        type: string
-      output_dir:
-        description: the value parsed out of the JSON. Use OutputDirectory() instead.
-        type: string
-      output_dir_ticket:
-        description: the write ticket for output_dir (assumes output_dir is set correctly).
-        type: string
-      output_ticket_list:
-        description: path to the file of the output dest with ticket (not from upstream).
-        type: string
-      request_type:
-        type: string
-      run-on-nfs:
-        type: boolean
-      skip-parent-meta:
-        type: boolean
-      steps:
-        items:
-          $ref: '#/definitions/model.Step'
-        type: array
-      submission_date:
-        type: string
-      type:
-        type: string
-      user_groups:
-        items:
-          type: string
-        type: array
-      user_home:
-        type: string
-      user_id:
-        type: string
-      username:
-        type: string
-      uuid:
-        type: string
-      wiki_url:
-        type: string
-    type: object
-  httphandlers.AsyncData:
-    properties:
-      analysisID:
-        type: string
-      ipAddr:
-        type: string
-      subdomain:
-        type: string
-    type: object
-  httphandlers.ExternalIDResp:
-    properties:
-      external_id:
-        example: bb52aefb-e021-4ece-89e5-fd73ce30643c
-        type: string
-    type: object
-  httphandlers.FilteredConfigMapsResponse:
-    properties:
-      configmaps:
-        items:
-          $ref: '#/definitions/incluster.ConfigMapInfo'
-        type: array
-    type: object
-  httphandlers.FilteredDeploymentsResponse:
-    properties:
-      deployments:
-        items:
-          $ref: '#/definitions/incluster.DeploymentInfo'
-        type: array
-    type: object
-  httphandlers.FilteredPodsResponse:
-    properties:
-      pods:
-        items:
-          $ref: '#/definitions/incluster.PodInfo'
-        type: array
-    type: object
-  httphandlers.FilteredRoutesResponse:
-    properties:
-      routes:
-        items:
-          $ref: '#/definitions/incluster.RouteInfo'
-        type: array
-    type: object
-  httphandlers.FilteredServicesResponse:
-    properties:
-      services:
-        items:
-          $ref: '#/definitions/incluster.ServiceInfo'
-        type: array
-    type: object
-  httphandlers.ListPodsResponse:
-    properties:
-      pods:
-        items:
-          $ref: '#/definitions/incluster.RetPod'
-        type: array
-    type: object
-  httphandlers.OperatorCapacity:
-    properties:
-      capacity:
-        $ref: '#/definitions/operatorclient.CapacityResponse'
-      error:
-        type: string
-      operator:
-        type: string
-    type: object
-  httphandlers.TerminateAllResponse:
-    properties:
-      batch:
-        items:
-          type: string
-        type: array
-      failed_batch:
-        items:
-          type: string
-        type: array
-      failed_vice:
-        items:
-          type: string
-        type: array
-      vice:
-        items:
-          type: string
-        type: array
-    type: object
-  httphandlers.UpdatePermissionsRequest:
-    properties:
-      allowedUsers:
-        items:
-          type: string
-        type: array
-    type: object
-  httphandlers.createOperatorRequest:
-    properties:
-      name:
-        type: string
-      priority:
-        type: integer
-      tls_skip_verify:
-        type: boolean
-      url:
-        type: string
-    type: object
-  httphandlers.uuidBody:
-    properties:
-      uuid:
-        type: string
-    type: object
-  incluster.ConfigMapInfo:
-    properties:
-      analysisID:
-        type: string
-      analysisName:
-        type: string
-      appID:
-        type: string
-      appName:
-        type: string
-      creationTimestamp:
-        type: string
-      data:
-        additionalProperties:
-          type: string
-        type: object
-      externalID:
-        type: string
-      name:
-        type: string
-      namespace:
-        type: string
-      userID:
-        type: string
-      username:
-        type: string
-    type: object
-  incluster.DeploymentInfo:
-    properties:
-      analysisID:
-        type: string
-      analysisName:
-        type: string
-      appID:
-        type: string
-      appName:
-        type: string
-      command:
-        items:
-          type: string
-        type: array
-      creationTimestamp:
-        type: string
-      externalID:
-        type: string
-      group:
-        type: integer
-      image:
-        type: string
-      name:
-        type: string
-      namespace:
-        type: string
-      port:
-        type: integer
-      user:
-        type: integer
-      userID:
-        type: string
-      username:
-        type: string
-    type: object
-  incluster.PodInfo:
-    properties:
-      analysisID:
-        type: string
-      analysisName:
-        type: string
-      appID:
-        type: string
-      appName:
-        type: string
-      containerStatuses:
-        items:
-          $ref: '#/definitions/v1.ContainerStatus'
-        type: array
-      creationTimestamp:
-        type: string
-      externalID:
-        type: string
-      initContainerStatuses:
-        items:
-          $ref: '#/definitions/v1.ContainerStatus'
-        type: array
-      message:
-        type: string
-      name:
-        type: string
-      namespace:
-        type: string
-      phase:
-        type: string
-      reason:
-        type: string
-      userID:
-        type: string
-      username:
-        type: string
-    type: object
-  incluster.RetPod:
-    properties:
-      name:
-        type: string
-    type: object
-  incluster.RouteInfo:
-    properties:
-      analysisID:
-        type: string
-      analysisName:
-        type: string
-      appID:
-        type: string
-      appName:
-        type: string
-      creationTimestamp:
-        type: string
-      externalID:
-        type: string
-      hostnames:
-        items:
-          type: string
-        type: array
-      name:
-        type: string
-      namespace:
-        type: string
-      rules:
-        items:
-          $ref: '#/definitions/v1.HTTPRouteRule'
-        type: array
-      userID:
-        type: string
-      username:
-        type: string
-    type: object
-  incluster.ServiceInfo:
-    properties:
-      analysisID:
-        type: string
-      analysisName:
-        type: string
-      appID:
-        type: string
-      appName:
-        type: string
-      creationTimestamp:
-        type: string
-      externalID:
-        type: string
-      name:
-        type: string
-      namespace:
-        type: string
-      ports:
-        items:
-          $ref: '#/definitions/reporting.ServiceInfoPort'
-        type: array
-      userID:
-        type: string
-      username:
-        type: string
-    type: object
-  incluster.TimeLimit:
-    properties:
-      time_limit:
-        type: string
-    type: object
   intstr.IntOrString:
     properties:
       intVal:
@@ -550,314 +147,127 @@ definitions:
     - ConditionTrue
     - ConditionFalse
     - ConditionUnknown
-  model.Container:
+  operator.DeploymentInfo:
     properties:
-      container_devices:
-        items:
-          $ref: '#/definitions/model.Device'
-        type: array
-      container_volumes:
-        items:
-          $ref: '#/definitions/model.Volume'
-        type: array
-      container_volumes_from:
-        items:
-          $ref: '#/definitions/model.VolumesFrom'
-        type: array
-      cpu_shares:
+      desiredReplicas:
         type: integer
-      entrypoint:
+      name:
         type: string
-      gpu_models:
-        description: A list of acceptable GPU models. Empty means no limitation.
+      readyReplicas:
+        type: integer
+    type: object
+  operator.ImageCacheBulkResponse:
+    properties:
+      results:
+        items:
+          $ref: '#/definitions/operator.ImageCacheResult'
+        type: array
+    type: object
+  operator.ImageCacheListResponse:
+    properties:
+      images:
+        items:
+          $ref: '#/definitions/operator.ImageCacheStatus'
+        type: array
+    type: object
+  operator.ImageCacheRequest:
+    properties:
+      images:
         items:
           type: string
         type: array
+    type: object
+  operator.ImageCacheResult:
+    properties:
+      error:
+        description: present only when status is "error"
+        type: string
+      image:
+        type: string
+      status:
+        description: '"ok" or "error"'
+        type: string
+    type: object
+  operator.ImageCacheStatus:
+    properties:
+      desired:
+        type: integer
       id:
         type: string
       image:
-        $ref: '#/definitions/model.ContainerImage'
-      interactive_apps:
-        $ref: '#/definitions/model.InteractiveApps'
-      max_cpu_cores:
-        description: The maximum number of cores the container needs.
-        type: number
-      max_gpus:
-        description: The maximum number of GPUs the container needs.
-        type: integer
-      memory_limit:
-        description: The maximum the container is allowed to have.
-        type: integer
-      min_cpu_cores:
-        description: The minimum number of cores the container needs.
-        type: number
-      min_disk_space:
-        description: The minimum amount of disk space that the container needs.
-        type: integer
-      min_gpus:
-        description: The minimum number of GPUs the container needs.
-        type: integer
-      min_memory_limit:
-        description: The minimum the container needs.
-        type: integer
-      name:
         type: string
-      network_mode:
-        type: string
-      pids_limit:
+      ready:
         type: integer
-      ports:
+      status:
+        description: '"ready", "pulling", "cached-with-errors", "error"'
+        type: string
+    type: object
+  operator.PermissionsResponse:
+    properties:
+      allowedUsers:
         items:
-          $ref: '#/definitions/model.Ports'
-        type: array
-      skip_tmp_mount:
-        type: boolean
-      uid:
-        type: integer
-      working_directory:
-        type: string
-    type: object
-  model.ContainerImage:
-    properties:
-      auth:
-        type: string
-      id:
-        type: string
-      name:
-        type: string
-      osg_image_path:
-        type: string
-      tag:
-        type: string
-      url:
-        type: string
-    type: object
-  model.Device:
-    properties:
-      cgroup_permissions:
-        type: string
-      container_path:
-        type: string
-      host_path:
-        type: string
-    type: object
-  model.ExtraInfo:
-    properties:
-      htcondor:
-        $ref: '#/definitions/model.HTCondorExtraInfo'
-    type: object
-  model.FileMetadata:
-    properties:
-      attr:
-        type: string
-      unit:
-        type: string
-      value:
-        type: string
-    type: object
-  model.HTCondorExtraInfo:
-    properties:
-      extra_requirements:
-        type: string
-    type: object
-  model.InteractiveApps:
-    properties:
-      backend_url:
-        description: |-
-          Only used if you need to override the default backendURL, which should be
-          http://<container_name>.
-        type: string
-      cas_url:
-        description: The base URL for the CAS server.
-        type: string
-      cas_validate:
-        description: The path to the validate endpoint on the CAS server.
-        type: string
-      frontend_url:
-        description: |-
-          The URL for the frontend of the application. Will get prefixed with the job
-          id.
-        type: string
-      proxy_image:
-        description: |-
-          The docker image for the reverse proxy that runs on the cluster with the
-          job steps.
-        type: string
-      proxy_name:
-        description: The name of the container for the reverse proxy.
-        type: string
-      ssl_cert_path:
-        description: The path to the SSL cert file on the Condor nodes.
-        type: string
-      ssl_key_path:
-        description: The path to the SSL key file on the Condor nodes.
-        type: string
-      websocket_path:
-        description: |-
-          If websocket handling requires a special path in the app. The default is to
-          have this be empty.
-        type: string
-      websocket_port:
-        description: |-
-          If websocket handling requires a special port in the app. The default is to
-          use the same port as the backend URL.
-        type: string
-      websocket_proto:
-        description: If websocket handling requires a protocol other than ws://.
-        type: string
-    type: object
-  model.Ports:
-    properties:
-      bind_to_host:
-        type: boolean
-      container_port:
-        type: integer
-      host_port:
-        type: integer
-    type: object
-  model.Step:
-    properties:
-      component:
-        $ref: '#/definitions/model.StepComponent'
-      config:
-        $ref: '#/definitions/model.StepConfig'
-      environment:
-        $ref: '#/definitions/model.StepEnvironment'
-      input:
-        items:
-          $ref: '#/definitions/model.StepInput'
-        type: array
-      log-file:
-        type: string
-      output:
-        items:
-          $ref: '#/definitions/model.StepOutput'
-        type: array
-      stderr:
-        type: string
-      stdin:
-        type: string
-      stdout:
-        type: string
-      type:
-        type: string
-    type: object
-  model.StepComponent:
-    properties:
-      container:
-        $ref: '#/definitions/model.Container'
-      description:
-        type: string
-      interactive:
-        type: boolean
-      location:
-        type: string
-      name:
-        type: string
-      restricted:
-        type: boolean
-      time_limit_seconds:
-        type: integer
-      type:
-        type: string
-    type: object
-  model.StepConfig:
-    properties:
-      input:
-        items:
-          $ref: '#/definitions/model.StepInput'
-        type: array
-      output:
-        items:
-          $ref: '#/definitions/model.StepOutput'
-        type: array
-      params:
-        items:
-          $ref: '#/definitions/model.StepParam'
+          type: string
         type: array
     type: object
-  model.StepEnvironment:
-    additionalProperties:
-      type: string
-    type: object
-  model.StepInput:
+  operator.PodInfo:
     properties:
-      id:
-        type: string
-      multiplicity:
-        type: string
       name:
         type: string
-      property:
+      phase:
         type: string
-      retain:
+      ready:
         type: boolean
-      ticket:
-        type: string
-      type:
-        type: string
-      value:
-        type: string
     type: object
-  model.StepOutput:
+  operator.RegenerateResponse:
     properties:
-      multiplicity:
-        type: string
-      name:
-        type: string
-      property:
-        type: string
-      qual-id:
-        type: string
-      retain:
-        type: boolean
-      type:
-        type: string
-    type: object
-  model.StepParam:
-    properties:
-      id:
-        type: string
-      name:
-        type: string
-      order:
+      errors:
+        items:
+          type: string
+        type: array
+      updated:
         type: integer
-      path:
+    type: object
+  operator.StatusResponse:
+    properties:
+      analysisID:
         type: string
-      type:
+      deployments:
+        items:
+          $ref: '#/definitions/operator.DeploymentInfo'
+        type: array
+      pods:
+        items:
+          $ref: '#/definitions/operator.PodInfo'
+        type: array
+      routes:
+        items:
+          type: string
+        type: array
+      services:
+        items:
+          type: string
+        type: array
+    type: object
+  operator.UpdatePermissionsRequest:
+    properties:
+      allowedUsers:
+        items:
+          type: string
+        type: array
+    type: object
+  operatorclient.ActiveSession:
+    properties:
+      session_id:
         type: string
-      value:
+      username:
         type: string
     type: object
-  model.Volume:
+  operatorclient.ActiveSessionsResponse:
     properties:
-      container_path:
-        type: string
-      host_path:
-        type: string
-      mode:
-        type: string
-      read_only:
-        type: boolean
-    type: object
-  model.VolumesFrom:
-    properties:
-      auth:
-        type: string
-      container_path:
-        type: string
-      host_path:
-        type: string
-      name:
-        type: string
-      name_prefix:
-        type: string
-      read_only:
-        type: boolean
-      tag:
-        type: string
-      url:
-        type: string
+      sessions:
+        items:
+          $ref: '#/definitions/operatorclient.ActiveSession'
+        type: array
     type: object
   operatorclient.AnalysisBundle:
     properties:
@@ -920,6 +330,16 @@ definitions:
         type: integer
       usedMemory:
         description: bytes
+        type: integer
+    type: object
+  operatorclient.LogoutUserRequest:
+    properties:
+      username:
+        type: string
+    type: object
+  operatorclient.LogoutUserResponse:
+    properties:
+      sessions_invalidated:
         type: integer
     type: object
   operatorclient.URLReadyResponse:
@@ -11308,79 +10728,78 @@ definitions:
           +optional
         type: string
     type: object
-host: localhost:60000
 info:
   contact: {}
-  description: The app-exposer API for the Discovery Environment's VICE feature.
-  license:
-    name: 3-Clause BSD License
-    url: https://github.com/cyverse-de/app-exposer?tab=License-1-ov-file#readme
-  title: app-exposer
+  description: The vice-operator API for managing VICE analyses on remote clusters.
+  title: vice-operator
   version: "1.0"
 paths:
-  /batch/launch:
-    post:
-      description: Launch a batch analysis
-      operationId: batch-launch
-      parameters:
-      - description: Analysis Definition
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/httphandlers.AnalysisLaunch'
-      - default: false
-        description: Bypass resource tracking
-        in: query
-        name: disable-resource-tracking
-        type: boolean
+  /analyses:
+    get:
+      description: |-
+        Returns interactive (VICE) resources in the operator's namespace
+        including deployments, pods, configmaps, services, and routes.
+        Query parameters are used as label filters.
+      produces:
+      - application/json
       responses:
         "200":
           description: OK
-        "400":
-          description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/reporting.ResourceInfo'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Launch a batch analysis
-  /batch/stop/{id}:
-    delete:
-      description: Stop a batch analysis by its external UUID
-      operationId: batch-stop
-      parameters:
-      - description: External UUID
-        in: path
-        name: id
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Stop a batch analysis by its external UUID
-  /cleanup:
+      summary: List running VICE analyses
+      tags:
+      - analyses
     post:
       consumes:
       - application/json
-      description: Stop a batch analysis by its external UUID
-      operationId: batch-cleanup
+      description: |-
+        Receives a pre-built AnalysisBundle, transforms routing for
+        this cluster, and applies all K8s resources. Returns 409 if at capacity.
       parameters:
-      - description: External UUID
+      - description: The analysis bundle to launch
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/httphandlers.uuidBody'
+          $ref: '#/definitions/operatorclient.AnalysisBundle'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Launch a VICE analysis
+      tags:
+      - analyses
+  /analyses/{analysis-id}:
+    delete:
+      description: Deletes all K8s resources associated with an analysis.
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
       responses:
         "200":
           description: OK
@@ -11392,41 +10811,145 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Stop a batch analysis by its external UUID
-  /vice/{analysis-id}/logs:
+      summary: Exit (delete) a VICE analysis
+      tags:
+      - analyses
+  /analyses/{analysis-id}/active-sessions:
     get:
       description: |-
-        Handlers requests to access the container logs for a pod in a running
-        VICE app.
-      operationId: logs
+        Returns the list of currently authenticated user sessions from
+        the vice-proxy sidecar. Each entry includes the session ID and
+        username. Use this to see who is logged in before calling
+        POST /logout-user to remove a specific user.
       parameters:
-      - description: Whether to return previously terminated container logs
-        in: query
-        name: previous
-        type: boolean
-      - description: The number of seconds in the past to begin showing logs
-        format: int64
-        in: query
-        name: since
-        type: integer
-      - description: The number of seconds since the epoch to begin showing logs
-        format: int64
-        in: query
-        name: since-time
-        type: integer
-      - description: The number of lines from the end of the log to show
-        format: int64
-        in: query
-        name: tail-lines
-        type: integer
-      - description: Whether to display timestamps at the beginning of each log line
-        in: query
-        name: timestamps
-        type: boolean
-      - description: The name of the container to display logs from
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/operatorclient.ActiveSessionsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: List active sessions for an analysis
+      tags:
+      - analyses
+  /analyses/{analysis-id}/download-input-files:
+    post:
+      description: |-
+        Triggers the file-transfer sidecar to download input files
+        for the analysis. Runs asynchronously.
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Download input files
+      tags:
+      - transfers
+  /analyses/{analysis-id}/logout-user:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Invalidates all active sessions for the given username in the
+        vice-proxy sidecar. Use this to kick a specific user out of an
+        analysis without needing their browser cookie or a Keycloak
+        logout token. Does not trigger Keycloak SSO logout — the user
+        remains logged in to other applications in the realm. Use
+        GET /active-sessions first to see who is currently logged in.
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      - description: The user to log out
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/operatorclient.LogoutUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/operatorclient.LogoutUserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Admin logout (by username, no cookie needed)
+      tags:
+      - analyses
+  /analyses/{analysis-id}/logs:
+    get:
+      description: |-
+        Returns container logs for pods belonging to the given analysis.
+        Supports filtering by container, tail lines, and time.
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      - description: 'The container name (default: analysis)'
         in: query
         name: container
         type: string
+      - description: Number of lines from the end
+        in: query
+        name: tail-lines
+        type: integer
+      - description: Seconds in the past
+        in: query
+        name: since
+        type: integer
+      - description: Epoch timestamp
+        in: query
+        name: since-time
+        type: integer
+      - description: Previously terminated container
+        in: query
+        name: previous
+        type: boolean
+      - description: Include timestamps
+        in: query
+        name: timestamps
+        type: boolean
       produces:
       - application/json
       responses:
@@ -11438,23 +10961,52 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-        "403":
-          description: Forbidden
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Get analysis logs
+      tags:
+      - analyses
+  /analyses/{analysis-id}/permissions:
+    get:
+      description: |-
+        Returns the allowed-users list from the permissions ConfigMap
+        for the given analysis.
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/operator.PermissionsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/common.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Return the logs for a running analysis
-  /vice/{analysis-id}/permissions:
+      summary: Get analysis permissions
+      tags:
+      - analyses
     put:
       consumes:
       - application/json
       description: |-
-        Pushes an updated list of allowed users to the operator's
-        permissions ConfigMap for the given analysis.
-      operationId: update-permissions
+        Replaces the allowed-users list in the permissions ConfigMap
+        for the given analysis. The full list must be provided (not incremental).
       parameters:
       - description: The analysis ID
         in: path
@@ -11466,7 +11018,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/httphandlers.UpdatePermissionsRequest'
+          $ref: '#/definitions/operator.UpdatePermissionsRequest'
       responses:
         "200":
           description: OK
@@ -11482,59 +11034,16 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Update VICE analysis permissions
-  /vice/{analysis-id}/pods:
+      summary: Update analysis permissions
+      tags:
+      - analyses
+  /analyses/{analysis-id}/pods:
     get:
       description: |-
-        Lists the k8s pods associated with the provided external-id. For now
-        just returns pod info in the format `{"pods" : [{}]}`
-      operationId: list-pods
+        Returns pod name, phase, and readiness for all pods
+        belonging to the given analysis.
       parameters:
-      - description: Analysis ID
-        in: path
-        name: analysis-id
-        required: true
-        type: string
-      - description: Username
-        in: query
-        name: user
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/httphandlers.ListPodsResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Lists the k8s pods associated with the provided external-id
-  /vice/{analysis-id}/time-limit:
-    get:
-      description: Gets the time limit for an analysis on behalf of a user.
-      operationId: get-time-limit
-      parameters:
-      - description: Username
-        in: query
-        name: user
-        required: true
-        type: string
-      - description: Analysis ID
+      - description: The analysis ID
         in: path
         name: analysis-id
         required: true
@@ -11545,28 +11054,69 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/incluster.TimeLimit'
+            items:
+              $ref: '#/definitions/operator.PodInfo'
+            type: array
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "403":
-          description: Forbidden
           schema:
             $ref: '#/definitions/common.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Gets the time limit for an analysis on behalf of a user.
+      summary: Get analysis pods
+      tags:
+      - analyses
+  /analyses/{analysis-id}/save-and-exit:
     post:
       description: |-
-        Updates the time limit on a running VICE app for a user. The user
-        must have access to the analysis. The time limit is increased by a
-        configurable amount (default 4 hours, set via vice.time-limit-extension).
-      operationId: time-limit-update
+        Triggers the file-transfer sidecar to upload output files,
+        then deletes all K8s resources for the analysis. Runs asynchronously.
       parameters:
-      - description: Analysis ID
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Save outputs and exit
+      tags:
+      - transfers
+  /analyses/{analysis-id}/save-output-files:
+    post:
+      description: |-
+        Triggers the file-transfer sidecar to upload output files
+        for the analysis. Runs asynchronously.
+      parameters:
+      - description: The analysis ID
+        in: path
+        name: analysis-id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Save output files
+      tags:
+      - transfers
+  /analyses/{analysis-id}/status:
+    get:
+      description: |-
+        Returns the status of all K8s resources (deployments, pods,
+        services, routes) for the given analysis.
+      parameters:
+      - description: The analysis ID
         in: path
         name: analysis-id
         required: true
@@ -11577,79 +11127,52 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/incluster.TimeLimit'
+            $ref: '#/definitions/operator.StatusResponse'
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "403":
-          description: Forbidden
           schema:
             $ref: '#/definitions/common.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Handles requests to update the time limit on an already running VICE
-        app.
-  /vice/{host}/description:
-    get:
+      summary: Get analysis status
+      tags:
+      - analyses
+  /analyses/{analysis-id}/swap-route:
+    post:
       description: |-
-        Returns a listing entry for a single analysis associated
-        with the host/subdomain passed in as 'host' from the URL.
-        The user passed in must have access to the VICE analysis.
-      operationId: describe-analysis
+        Swaps the HTTPRoute backend from the loading page service to
+        the analysis Service. Idempotent.
       parameters:
-      - description: username
-        in: query
-        name: user
-        required: true
-        type: string
-      - description: subdomain
+      - description: The analysis ID
         in: path
-        name: host
+        name: analysis-id
         required: true
         type: string
-      produces:
-      - application/json
       responses:
         "200":
           description: OK
-          schema:
-            $ref: '#/definitions/reporting.ResourceInfo'
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "404":
-          description: Not Found
           schema:
             $ref: '#/definitions/common.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Returns resources by user and subdomain.
-  /vice/{host}/url-ready:
+      summary: Manually swap route to analysis service
+      tags:
+      - analyses
+  /analyses/{analysis-id}/url-ready:
     get:
       description: |-
-        Returns whether or not a VICE app is ready
-        for users to access it. This version will check the user's permissions
-        and return an error if they aren't allowed to access the running app.
-      operationId: url-ready
+        Returns whether the analysis has ready replicas, a service,
+        and an HTTPRoute.
       parameters:
-      - description: A user's username
-        in: query
-        name: user
-        required: true
-        type: string
-      - description: The subdomain of the analysis. AKA the ingress name
+      - description: The analysis ID
         in: path
-        name: host
+        name: analysis-id
         required: true
         type: string
       produces:
@@ -11663,532 +11186,125 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Check if a VICE app is ready for users to access it.
-  /vice/{id}/download-input-files:
-    post:
-      description: |-
-        Triggers input downloads for an analysis by routing through
-        the operator running it.
-      operationId: trigger-downloads
-      parameters:
-      - description: External ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Triggers input downloads for an analysis
-  /vice/{id}/exit:
-    post:
-      description: |-
-        Terminates the VICE analysis by routing through the operator
-        running it. Converts the external ID to an analysis ID and
-        delegates all resource cleanup to the operator.
-      operationId: exit
-      parameters:
-      - description: The external ID of the VICE analysis
-        in: path
-        name: id
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Terminates a VICE analysis
-  /vice/{id}/save-and-exit:
-    post:
-      description: |-
-        Handles requests to save the output files in iRODS and then exit.
-        The exit portion will only occur if the save operation succeeds. The operation is
-        performed inside of a goroutine so that the caller isn't waiting for hours/days for
-        output file transfers to complete.
-      operationId: save-and-exit
-      parameters:
-      - description: external ID of the analysis
-        in: path
-        name: id
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Save files and terminate VICE analysis
-  /vice/{id}/save-output-files:
-    post:
-      description: |-
-        Triggers output uploads from a running analysis by routing
-        through the operator running it.
-      operationId: trigger-uploads
-      parameters:
-      - description: External ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Triggers output uploads from an analysis
-  /vice/admin/{host}/description:
+      summary: Check if analysis URL is ready
+      tags:
+      - analyses
+  /capacity:
     get:
       description: |-
-        Returns a listing entry for a single analysis
-        associated with the host/subdomain passed in as 'host' from the URL.
-      operationId: admin-describe-analysis
-      parameters:
-      - description: Host/Subdomain
-        in: path
-        name: host
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/reporting.ResourceInfo'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Lists resources by subdomain
-  /vice/admin/{host}/url-ready:
-    get:
-      description: |-
-        Handles requests to check the status of a running VICE app in K8s.
-        This will return an overall status and status for the individual containers in
-        the app's pod. Uses the state of the readiness checks in K8s, along with the
-        existence of the various resources created for the app.
-      operationId: admin-url-ready
-      parameters:
-      - description: The subdomain of the analysis
-        in: path
-        name: host
-        required: true
-        type: string
+        Returns the current cluster capacity including available slots,
+        allocatable CPU/memory, and current usage.
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/operatorclient.URLReadyResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/operatorclient.CapacityResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Checks the status of a running VICE app in K8s
-  /vice/admin/analyses/{analysis-id}/download-input-files:
-    post:
-      description: |-
-        Handles requests to trigger file downloads without requiring
-        user information, operating from the analysis UUID.
-      operationId: admin-trigger-downloads
-      parameters:
-      - description: Analysis ID
-        in: path
-        name: analysis-id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Administratively trigger file downloads to an analysis
-  /vice/admin/analyses/{analysis-id}/exit:
-    post:
-      description: |-
-        Terminates the VICE analysis based on the analysisID and
-        should not require any user information to be provided. Otherwise,
-        the documentation for ExitHandler applies here as well.
-      operationId: admin-exit
-      parameters:
-      - description: The analysis ID of the VICE analysis
-        in: path
-        name: analysis-id
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Terminates a VICE analysis
-  /vice/admin/analyses/{analysis-id}/external-id:
-    get:
-      description: |-
-        Returns the external ID associated with the provided analysis ID.
-        Only returns the first external ID in multi-step analyses.
-      operationId: admin-get-external-id
-      parameters:
-      - description: analysis UUID
-        in: path
-        maxLength: 36
-        minLength: 36
-        name: analysis-id
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/httphandlers.ExternalIDResp'
-        "400":
-          description: id parameter is empty
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Returns external ID
-  /vice/admin/analyses/{analysis-id}/save-and-exit:
-    post:
-      description: |-
-        Handles requests to save the output files in iRODS and
-        then exit. This version of the call operates based on the analysis ID and does
-        not require user information to be required by the caller. Otherwise, the docs
-        for SaveAndExitHandler apply here as well.
-      operationId: admin-save-and-exit
-      parameters:
-      - description: Analysis ID
-        in: path
-        name: analysis-id
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Admin endpoint to trigger output file transfer and analysis exit
-  /vice/admin/analyses/{analysis-id}/save-output-files:
-    post:
-      description: |-
-        Handles requests to trigger file uploads without requiring
-        user information, operating from the analysis UUID.
-      operationId: admin-trigger-uploads
-      parameters:
-      - description: Analysis ID
-        in: path
-        name: analysis-id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Administratively trigger output file uploads from an analysis
-  /vice/admin/analyses/{analysis-id}/time-limit:
-    get:
-      description: Gets an analysis's time limit without requiring user info.
-      operationId: admin-get-time-limit
-      parameters:
-      - description: Analysis ID
-        in: path
-        name: analysis-id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/incluster.TimeLimit'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Gets an analysis's time limit without requiring user info.
-    post:
-      description: |-
-        Updates the time limit on an analysis without requiring user information.
-        The time limit is increased by a configurable amount (default 4 hours, set via vice.time-limit-extension).
-      operationId: admin-time-limit-update
-      parameters:
-      - description: Analysis ID
-        in: path
-        name: analysis-id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/incluster.TimeLimit'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Updates the time limit on an analysis without requiring user information
-  /vice/admin/is-deployed/analysis-id/{analysis-id}:
-    get:
-      description: Returns whether a deployment for the analysis with the provided
-        analysis ID is present in the cluster, regardless of its state
-      operationId: admin-analysis-in-cluster-by-id
-      parameters:
-      - description: analysis id
-        in: path
-        name: analysis-id
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/httphandlers.AnalysisInClusterResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Returns whether a deployment for an analysis is in the cluster
-  /vice/admin/is-deployed/external-id/{external-id}:
-    get:
-      description: Returns whether a deployment for the analysis with the provided
-        external ID is present in the cluster, regardless of its state
-      operationId: admin-analysis-in-cluster-by-external-id
-      parameters:
-      - description: external id
-        in: path
-        name: external-id
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/httphandlers.AnalysisInClusterResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Returns whether a deployment for an analysis is in the cluster
-  /vice/admin/listing:
-    get:
-      description: |-
-        Returns k8s resources in the cluster based on the filter. The query
-        parameters are used as the filter and are not listed as params here.
-      operationId: admin-filterable-resources
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/reporting.ResourceInfo'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Lists resources based on a filter
-  /vice/admin/operator-listing:
-    get:
-      description: |-
-        Aggregates the listing endpoints of all configured operators
-        and returns combined resource info. Errors for individual
-        operators are logged but do not prevent partial results.
-      operationId: admin-operator-listing
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/reporting.ResourceInfo'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Lists running analyses across all operators
-  /vice/admin/operators:
-    get:
-      description: Returns the name, URL, and tls_skip_verify flag for all operators
-        in the database.
-      operationId: admin-list-operators
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/db.OperatorSummary'
-            type: array
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Lists registered operators
-    post:
-      consumes:
-      - application/json
-      description: Adds a new operator to the database.
-      operationId: admin-create-operator
-      parameters:
-      - description: Operator to create
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/httphandlers.createOperatorRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/db.OperatorSummary'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Creates a new operator
-  /vice/admin/operators/capacities:
-    get:
-      description: Queries each configured operator's capacity endpoint in parallel
-        and returns the results.
-      operationId: admin-operator-capacities
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/httphandlers.OperatorCapacity'
-            type: array
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Returns operator capacities
-  /vice/admin/operators/name/{name}:
+      summary: Get cluster capacity
+      tags:
+      - capacity
+  /image-cache:
     delete:
-      description: Removes the named operator from the database. Succeeds silently
-        if the operator does not exist. Fails if jobs still reference the operator.
-      operationId: admin-delete-operator
+      consumes:
+      - application/json
+      description: |-
+        Deletes the cache DaemonSets for the specified images.
+        Non-existent images are silently ignored (idempotent).
+        Note: some HTTP clients drop the body on DELETE requests.
+        Use DELETE /image-cache/:id for single-image removal from browsers.
       parameters:
-      - description: Operator name
+      - description: Images to remove
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/operator.ImageCacheRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/operator.ImageCacheBulkResponse'
+        "207":
+          description: Partial success
+          schema:
+            $ref: '#/definitions/operator.ImageCacheBulkResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Remove cached images (bulk)
+      tags:
+      - image-cache
+    get:
+      description: Returns all image cache DaemonSets with their pull status.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/operator.ImageCacheListResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: List cached images
+      tags:
+      - image-cache
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Creates a DaemonSet per image to pre-pull it onto every node.
+        Each DaemonSet uses an init container with the target image and
+        a pause main container. For distroless/scratch images lacking
+        "true", the init container will CrashLoopBackOff — this is expected
+        and the image is still cached. Status will show "cached-with-errors".
+      parameters:
+      - description: Images to cache
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/operator.ImageCacheRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: All images cached successfully
+          schema:
+            $ref: '#/definitions/operator.ImageCacheBulkResponse'
+        "207":
+          description: Partial success
+          schema:
+            $ref: '#/definitions/operator.ImageCacheBulkResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Cache container images
+      tags:
+      - image-cache
+  /image-cache/{id}:
+    delete:
+      description: |-
+        Deletes the cache DaemonSet for the image with the given slug ID.
+        Returns success even if already absent (idempotent).
+      parameters:
+      - description: Image cache slug ID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       responses:
@@ -12202,137 +11318,17 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Deletes an operator by name
-  /vice/admin/terminate-all:
-    post:
-      description: |-
-        Terminates all analyses marked as running in the DE database.
-        Does not check for analyses in the cluster but not marked as running in the database.
-        Terminates both VICE and batch analyses.
-      operationId: terminate-all-analyses
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/httphandlers.TerminateAllResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Terminates all analyses
-  /vice/async-data:
+      summary: Remove a cached image
+      tags:
+      - image-cache
     get:
       description: |-
-        Returns data that is applied to analyses outside of an API call.
-        The returned data is not returned asynchronously, despite the name of the call.
-      operationId: async-data
+        Returns the cache status for a single image by its slug ID
+        (from the "id" field in list responses).
       parameters:
-      - description: External ID
-        in: query
-        name: external-id
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/httphandlers.AsyncData'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Returns data that is generated asynchronously from the job launch.
-  /vice/dry-run:
-    post:
-      consumes:
-      - application/json
-      description: |-
-        Accepts the same model.Job body as /vice/launch but returns the
-        assembled AnalysisBundle JSON instead of dispatching it to an operator.
-        No side effects (no ConfigMaps, no scheduling, no DB writes).
-      operationId: dry-run-bundle
-      parameters:
-      - description: The job to build a bundle for
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/httphandlers.AnalysisLaunch'
-      - default: false
-        description: Run validation checks on the job
-        in: query
-        name: validate
-        type: boolean
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/operatorclient.AnalysisBundle'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Build an AnalysisBundle without launching
-  /vice/launch:
-    post:
-      consumes:
-      - application/json
-      description: |-
-        Validates the job and accepts it for asynchronous launch.
-        A 200 response means the job was accepted, not that it has been
-        fully deployed — resource creation and operator scheduling proceed
-        in the background.
-      operationId: launch-app
-      parameters:
-      - description: The request body containing the analysis details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/httphandlers.AnalysisLaunch'
-      - default: false
-        description: Bypass resource tracking
-        in: query
-        name: disable-resource-tracking
-        type: boolean
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Launch a VICE analysis
-  /vice/listing:
-    get:
-      description: |-
-        Returns all of the k8s resources associated with a VICE analysis
-        but checks permissions to see if the requesting user has permission
-        to access the resource. The rest of the query map is used to filter
-        resources returned from the handler.
-      operationId: filterable-resources
-      parameters:
-      - description: username
-        in: query
-        name: user
+      - description: Image cache slug ID
+        in: path
+        name: id
         required: true
         type: string
       produces:
@@ -12341,13 +11337,9 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/reporting.ResourceInfo'
+            $ref: '#/definitions/operator.ImageCacheStatus'
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "403":
-          description: Forbidden
           schema:
             $ref: '#/definitions/common.ErrorResponse'
         "404":
@@ -12358,117 +11350,60 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Returns resources for a VICE analysis
-  /vice/listing/configmaps:
-    get:
+      summary: Get cached image status
+      tags:
+      - image-cache
+  /image-cache/refresh:
+    post:
+      consumes:
+      - application/json
       description: |-
-        Lists configmaps in use by VICE apps. The query parameters
-        are used to filter the results and aren't listed as parameters.
-      operationId: filterable-configmaps
+        Restarts cache DaemonSet pods to force a fresh pull of images
+        that may have been updated under the same tag. The DaemonSet
+        init container uses PullAlways, so the restart causes containerd
+        to fetch the latest manifest.
+      parameters:
+      - description: Images to refresh
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/operator.ImageCacheRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: All images refreshed
+          schema:
+            $ref: '#/definitions/operator.ImageCacheBulkResponse'
+        "207":
+          description: Partial success
+          schema:
+            $ref: '#/definitions/operator.ImageCacheBulkResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Refresh cached images
+      tags:
+      - image-cache
+  /regenerate-network-policies:
+    post:
+      description: |-
+        Rebuilds egress NetworkPolicies for all running analyses to
+        match the operator's current configuration.
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/httphandlers.FilteredConfigMapsResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/operator.RegenerateResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Lists configmaps in use by VICE apps.
-  /vice/listing/deployments:
-    get:
-      description: |-
-        Returns a filtered listing of deployments in use by VICE apps.
-        The key-value pairs in the query string are used to filter the deployments.
-        The key-value pairs are not listed as parameters.
-      operationId: filterable-deployments
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/httphandlers.FilteredDeploymentsResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Lists all of the deployments.
-  /vice/listing/pods:
-    get:
-      description: |-
-        Returns a filtered listing of pods in use by VICE apps.
-        The key-value pairs in the query string are used to filter the pods.
-        The key-value pairs are not listed as parameters.
-      operationId: filterable-pods
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/httphandlers.FilteredPodsResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Returns a listing of the pods in a VICE analysis.
-  /vice/listing/routes:
-    get:
-      description: |-
-        Lists HTTP routes in use by VICE apps. The query parameters
-        are used to filter the results and aren't listed as parameters.
-      operationId: filterable-routes
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/httphandlers.FilteredRoutesResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Lists HTTP routes in use by VICE apps.
-  /vice/listing/services:
-    get:
-      description: |-
-        Lists services in use by VICE apps. The query parameters
-        are used to filter the results and aren't listed as parameters.
-      operationId: filterable-services
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/httphandlers.FilteredServicesResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      summary: Lists services in use by VICE apps.
+      summary: Regenerate per-analysis network policies
+      tags:
+      - network-policies
 swagger: "2.0"

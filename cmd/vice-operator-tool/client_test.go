@@ -231,4 +231,3 @@ func TestDeleteOperator(t *testing.T) {
 		})
 	}
 }
-

@@ -11,16 +11,16 @@ func TestBuildAnalysisEgressPolicy(t *testing.T) {
 	labels := map[string]string{"analysis-id": "test-123", "app-type": "interactive"}
 
 	tests := []struct {
-		name             string
-		cfg              NetworkPolicyConfig
-		wantRuleCount    int
-		wantExceptCIDRs  []string // expected Except list on the first rule (if present)
-		wantNoExceptEmpty bool    // if true, verify no empty string in Except
+		name              string
+		cfg               NetworkPolicyConfig
+		wantRuleCount     int
+		wantExceptCIDRs   []string // expected Except list on the first rule (if present)
+		wantNoExceptEmpty bool     // if true, verify no empty string in Except
 	}{
 		{
 			name: "normal ServiceCIDR included in except list",
 			cfg: NetworkPolicyConfig{
-				Namespace:  "vice-apps",
+				Namespace:   "vice-apps",
 				ServiceCIDR: "10.0.0.0/8",
 			},
 			wantRuleCount:   1,
