@@ -174,7 +174,7 @@ func (o *Operator) forwardToViceProxy(ctx context.Context, analysisID, method, p
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	resp, err := noRedirectHTTPClient.Do(req)
+	resp, err := o.httpClient.Do(req)
 	if err != nil {
 		log.Errorf("%s request to vice-proxy failed for analysis %s: %v", path, analysisID, err)
 		return nil, echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to reach vice-proxy: %v", err))

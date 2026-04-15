@@ -139,7 +139,7 @@ func (o *Operator) getAccessURL(ctx context.Context, serviceName string) (string
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("vice-proxy at %s returned status %d", endpoint, resp.StatusCode)
 	}
 
