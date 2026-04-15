@@ -175,7 +175,11 @@ func GetMillicoresFromDeployment(deployment *appsv1.Deployment) (*apd.Decimal, e
 		return nil, errors.New("could not find the analysis container in the deployment")
 	}
 
-	millicoresString = analysisContainer.Resources.Limits[apiv1.ResourceCPU].ToUnstructured().(string)
+	cpuQty, ok := analysisContainer.Resources.Limits[apiv1.ResourceCPU]
+	if !ok {
+		return nil, errors.New("analysis container has no CPU limit set")
+	}
+	millicoresString = cpuQty.ToUnstructured().(string)
 
 	millicores, _, err = apd.NewFromString(millicoresString)
 	if err != nil {
@@ -193,8 +197,6 @@ func GetMillicoresFromDeployment(deployment *appsv1.Deployment) (*apd.Decimal, e
 
 	return millicores, nil
 }
-
-// GetMillicoresFromDeployment extracts the CPU limit from the analysis
 
 const updateTimeLimitSQL = `
 	UPDATE ONLY jobs
