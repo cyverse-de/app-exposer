@@ -1121,21 +1121,18 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "format": "int64",
                         "description": "The number of seconds in the past to begin showing logs",
                         "name": "since",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "format": "int64",
                         "description": "The number of seconds since the epoch to begin showing logs",
                         "name": "since-time",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "format": "int64",
                         "description": "The number of lines from the end of the log to show",
                         "name": "tail-lines",
                         "in": "query"
@@ -2283,7 +2280,6 @@ const docTemplate = `{
         },
         "intstr.Type": {
             "type": "integer",
-            "format": "int64",
             "enum": [
                 0,
                 1
@@ -2292,10 +2288,6 @@ const docTemplate = `{
                 "Int": "The IntOrString holds an int.",
                 "String": "The IntOrString holds a string."
             },
-            "x-enum-descriptions": [
-                "The IntOrString holds an int.",
-                "The IntOrString holds a string."
-            ],
             "x-enum-varnames": [
                 "Int",
                 "String"
@@ -3320,11 +3312,6 @@ const docTemplate = `{
                         "DecimalExponent": "e.g., 12e6",
                         "DecimalSI": "e.g., 12M  (12 * 10^6)"
                     },
-                    "x-enum-descriptions": [
-                        "e.g., 12e6",
-                        "e.g., 12Mi (12 * 2^20)",
-                        "e.g., 12M  (12 * 10^6)"
-                    ],
                     "x-enum-varnames": [
                         "DecimalExponent",
                         "BinarySI",
@@ -3940,8 +3927,7 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "array",
                         "items": {
-                            "type": "integer",
-                            "format": "int32"
+                            "type": "integer"
                         }
                     }
                 },
@@ -9766,12 +9752,6 @@ const docTemplate = `{
                 "StorageMediumHugePagesPrefix": "prefix for full medium notation HugePages-\u003csize\u003e",
                 "StorageMediumMemory": "use memory (e.g. tmpfs on linux)"
             },
-            "x-enum-descriptions": [
-                "use whatever the default is for the node, assume anything we don't explicitly handle is this",
-                "use memory (e.g. tmpfs on linux)",
-                "use hugepages",
-                "prefix for full medium notation HugePages-\u003csize\u003e"
-            ],
             "x-enum-varnames": [
                 "StorageMediumDefault",
                 "StorageMediumMemory",

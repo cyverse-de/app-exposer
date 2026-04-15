@@ -17,18 +17,17 @@ type App struct {
 	router *echo.Echo
 }
 
-//	@title						vice-operator
-//	@version					1.0
-//	@description				The vice-operator API for managing VICE analyses on remote clusters.
-//	@BasePath					/
-//	@securityDefinitions.apikey	BearerAuth
-//	@in							header
-//	@name						Authorization
+//	@title			vice-operator
+//	@version		1.0
+//	@description	The vice-operator API for managing VICE analyses on remote clusters.
+//	@BasePath		/
 
 // NewApp creates a new App with all operator routes registered.
-// When verifier is non-nil, all routes except the health check require a
-// valid Keycloak JWT Bearer token with an azp claim matching expectedClientID.
-func NewApp(op *operator.Operator, verifier *oidc.IDTokenVerifier, expectedClientID string) *App {
+// When verifier is non-nil, all API routes require a valid Keycloak JWT Bearer
+// token (or a valid session cookie set by the Swagger login flow).
+// swaggerCfg controls the Swagger UI login gate; when disabled, docs are served
+// without authentication.
+func NewApp(op *operator.Operator, verifier *oidc.IDTokenVerifier, expectedClientID string, swaggerCfg *SwaggerAuthConfig) *App {
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
@@ -39,14 +38,27 @@ func NewApp(op *operator.Operator, verifier *oidc.IDTokenVerifier, expectedClien
 		return c.String(http.StatusOK, "Hello from vice-operator.")
 	})
 
-	// All other routes go through an optional auth group.
-	api := e.Group("")
-	if verifier != nil {
-		api.Use(bearerAuthMiddleware(verifier, expectedClientID))
+	// Swagger UI docs — gated by a session-based login flow when configured,
+	// otherwise served openly. These routes are outside the Bearer auth group
+	// so the login page and OAuth callback are always reachable.
+	if verifier != nil && swaggerCfg.Enabled() {
+		// Login, callback, and logout are outside the session middleware.
+		e.GET("/docs/login", handleLogin(swaggerCfg))
+		e.GET("/docs/callback", handleCallback(swaggerCfg, verifier))
+		e.GET("/docs/logout", handleLogout())
+
+		docs := e.Group("/docs")
+		docs.Use(swaggerSessionMiddleware(verifier, swaggerCfg))
+		docs.GET("/*", echoSwagger.EchoWrapHandler(echoSwagger.InstanceName("operator")))
+	} else {
+		e.GET("/docs/*", echoSwagger.EchoWrapHandler(echoSwagger.InstanceName("operator")))
 	}
 
-	// InstanceName must match the --instanceName used in swag init.
-	api.GET("/docs/*", echoSwagger.EchoWrapHandler(echoSwagger.InstanceName("operator")))
+	// All API routes go through an optional auth group.
+	api := e.Group("")
+	if verifier != nil {
+		api.Use(bearerAuthMiddleware(verifier, expectedClientID, swaggerCfg))
+	}
 	api.GET("/capacity", op.HandleCapacity)
 	api.POST("/analyses", op.HandleLaunch)
 	api.GET("/analyses", op.HandleListing)
@@ -109,17 +121,31 @@ func (a *LoadingApp) Start(addr string) error {
 }
 
 // bearerAuthMiddleware returns Echo middleware that validates JWT Bearer tokens
-// from Keycloak. Keycloak client credentials tokens use the "azp" (authorized
-// party) claim for the client ID rather than "aud", so the standard audience
-// check is skipped and azp is verified manually.
-func bearerAuthMiddleware(verifier *oidc.IDTokenVerifier, expectedClientID string) echo.MiddlewareFunc {
+// from Keycloak. It accepts tokens from two sources:
+//  1. Authorization: Bearer <token> header (machine-to-machine).
+//  2. Session cookie set by the Swagger UI login flow.
+//
+// Keycloak client credentials tokens use the "azp" (authorized party) claim for
+// the client ID rather than "aud", so the standard audience check is skipped and
+// azp is verified manually against the expected API client ID and (optionally)
+// the Swagger UI client ID.
+func bearerAuthMiddleware(verifier *oidc.IDTokenVerifier, expectedClientID string, swaggerCfg *SwaggerAuthConfig) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			auth := c.Request().Header.Get("Authorization")
-			if !strings.HasPrefix(auth, "Bearer ") {
+			var rawToken string
+
+			// Prefer the Authorization header; fall back to the session cookie.
+			if auth := c.Request().Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+				rawToken = strings.TrimPrefix(auth, "Bearer ")
+			} else if swaggerCfg.Enabled() {
+				extracted, err := extractTokenFromCookie(c, swaggerCfg.CookieSecret)
+				if err != nil {
+					return echo.NewHTTPError(http.StatusUnauthorized, "missing or malformed Authorization header")
+				}
+				rawToken = extracted
+			} else {
 				return echo.NewHTTPError(http.StatusUnauthorized, "missing or malformed Authorization header")
 			}
-			rawToken := strings.TrimPrefix(auth, "Bearer ")
 
 			token, err := verifier.Verify(c.Request().Context(), rawToken)
 			if err != nil {
@@ -133,7 +159,9 @@ func bearerAuthMiddleware(verifier *oidc.IDTokenVerifier, expectedClientID strin
 			if err := token.Claims(&claims); err != nil {
 				return echo.NewHTTPError(http.StatusUnauthorized, "failed to parse token claims: "+err.Error())
 			}
-			if claims.AZP != expectedClientID {
+
+			// Accept the API client ID or the Swagger UI client ID.
+			if claims.AZP != expectedClientID && (!swaggerCfg.Enabled() || claims.AZP != swaggerCfg.ClientID) {
 				return echo.NewHTTPError(http.StatusForbidden, "unauthorized client")
 			}
 

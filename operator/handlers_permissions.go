@@ -57,7 +57,6 @@ func (o *Operator) findPermissionsConfigMap(ctx context.Context, analysisID stri
 //	@Failure		400			{object}	common.ErrorResponse
 //	@Failure		404			{object}	common.ErrorResponse
 //	@Failure		500			{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/permissions [get]
 func (o *Operator) HandleGetPermissions(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -100,7 +99,6 @@ func (o *Operator) HandleGetPermissions(c echo.Context) error {
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		404	{object}	common.ErrorResponse
 //	@Failure		500	{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/permissions [put]
 func (o *Operator) HandleUpdatePermissions(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -225,7 +223,6 @@ func (o *Operator) findAnalysisService(ctx context.Context, analysisID string) (
 //	@Failure		400			{object}	common.ErrorResponse
 //	@Failure		404			{object}	common.ErrorResponse
 //	@Failure		502			{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/active-sessions [get]
 func (o *Operator) HandleGetActiveSessions(c echo.Context) error {
 	analysisID, err := requiredParam(c, "analysis-id")
@@ -259,7 +256,6 @@ func (o *Operator) HandleGetActiveSessions(c echo.Context) error {
 //	@Failure		400			{object}	common.ErrorResponse
 //	@Failure		404			{object}	common.ErrorResponse
 //	@Failure		502			{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/logout-user [post]
 func (o *Operator) HandleLogoutUser(c echo.Context) error {
 	analysisID, err := requiredParam(c, "analysis-id")

@@ -57,7 +57,6 @@ func (o *Operator) bulkImageOp(c echo.Context, fn func(ctx context.Context, imag
 //	@Success		200		{object}	ImageCacheBulkResponse	"All images cached successfully"
 //	@Success		207		{object}	ImageCacheBulkResponse	"Partial success"
 //	@Failure		400		{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/image-cache [put]
 func (o *Operator) HandleCacheImages(c echo.Context) error {
 	return o.bulkImageOp(c, o.imageCache.EnsureImageCached)
@@ -77,7 +76,6 @@ func (o *Operator) HandleCacheImages(c echo.Context) error {
 //	@Success		200		{object}	ImageCacheBulkResponse
 //	@Success		207		{object}	ImageCacheBulkResponse	"Partial success"
 //	@Failure		400		{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/image-cache [delete]
 func (o *Operator) HandleRemoveCachedImages(c echo.Context) error {
 	return o.bulkImageOp(c, o.imageCache.RemoveCachedImage)
@@ -99,7 +97,6 @@ func (o *Operator) HandleRemoveCachedImages(c echo.Context) error {
 //	@Success		200		{object}	ImageCacheBulkResponse	"All images refreshed"
 //	@Success		207		{object}	ImageCacheBulkResponse	"Partial success"
 //	@Failure		400		{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/image-cache/refresh [post]
 func (o *Operator) HandleRefreshCachedImages(c echo.Context) error {
 	return o.bulkImageOp(c, o.imageCache.RefreshCachedImage)
@@ -113,7 +110,6 @@ func (o *Operator) HandleRefreshCachedImages(c echo.Context) error {
 //	@Produce		json
 //	@Success		200	{object}	ImageCacheListResponse
 //	@Failure		500	{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/image-cache [get]
 func (o *Operator) HandleListCachedImages(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -138,7 +134,6 @@ func (o *Operator) HandleListCachedImages(c echo.Context) error {
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		404	{object}	common.ErrorResponse
 //	@Failure		500	{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/image-cache/{id} [get]
 func (o *Operator) HandleGetCachedImage(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -169,7 +164,6 @@ func (o *Operator) HandleGetCachedImage(c echo.Context) error {
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		500	{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/image-cache/{id} [delete]
 func (o *Operator) HandleDeleteCachedImage(c echo.Context) error {
 	ctx := c.Request().Context()

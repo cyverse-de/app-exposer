@@ -17,11 +17,6 @@ const docTemplateoperator = `{
     "paths": {
         "/analyses": {
             "get": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Returns interactive (VICE) resources in the operator's namespace\nincluding deployments, pods, configmaps, services, and routes.\nQuery parameters are used as label filters.",
                 "produces": [
                     "application/json"
@@ -46,11 +41,6 @@ const docTemplateoperator = `{
                 }
             },
             "post": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Receives a pre-built AnalysisBundle, transforms routing for\nthis cluster, and applies all K8s resources. Returns 409 if at capacity.",
                 "consumes": [
                     "application/json"
@@ -106,11 +96,6 @@ const docTemplateoperator = `{
         },
         "/analyses/{analysis-id}": {
             "delete": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Deletes all K8s resources associated with an analysis.",
                 "tags": [
                     "analyses"
@@ -146,11 +131,6 @@ const docTemplateoperator = `{
         },
         "/analyses/{analysis-id}/active-sessions": {
             "get": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Returns the list of currently authenticated user sessions from\nthe vice-proxy sidecar. Each entry includes the session ID and\nusername. Use this to see who is logged in before calling\nPOST /logout-user to remove a specific user.",
                 "produces": [
                     "application/json"
@@ -198,11 +178,6 @@ const docTemplateoperator = `{
         },
         "/analyses/{analysis-id}/download-input-files": {
             "post": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Triggers the file-transfer sidecar to download input files\nfor the analysis. Runs asynchronously.",
                 "tags": [
                     "transfers"
@@ -232,11 +207,6 @@ const docTemplateoperator = `{
         },
         "/analyses/{analysis-id}/logout-user": {
             "post": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Invalidates all active sessions for the given username in the\nvice-proxy sidecar. Use this to kick a specific user out of an\nanalysis without needing their browser cookie or a Keycloak\nlogout token. Does not trigger Keycloak SSO logout — the user\nremains logged in to other applications in the realm. Use\nGET /active-sessions first to see who is currently logged in.",
                 "consumes": [
                     "application/json"
@@ -296,11 +266,6 @@ const docTemplateoperator = `{
         },
         "/analyses/{analysis-id}/logs": {
             "get": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Returns container logs for pods belonging to the given analysis.\nSupports filtering by container, tail lines, and time.",
                 "produces": [
                     "application/json"
@@ -378,11 +343,6 @@ const docTemplateoperator = `{
         },
         "/analyses/{analysis-id}/permissions": {
             "get": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Returns the allowed-users list from the permissions ConfigMap\nfor the given analysis.",
                 "produces": [
                     "application/json"
@@ -428,11 +388,6 @@ const docTemplateoperator = `{
                 }
             },
             "put": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Replaces the allowed-users list in the permissions ConfigMap\nfor the given analysis. The full list must be provided (not incremental).",
                 "consumes": [
                     "application/json"
@@ -486,11 +441,6 @@ const docTemplateoperator = `{
         },
         "/analyses/{analysis-id}/pods": {
             "get": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Returns pod name, phase, and readiness for all pods\nbelonging to the given analysis.",
                 "produces": [
                     "application/json"
@@ -535,11 +485,6 @@ const docTemplateoperator = `{
         },
         "/analyses/{analysis-id}/save-and-exit": {
             "post": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Triggers the file-transfer sidecar to upload output files,\nthen deletes all K8s resources for the analysis. Runs asynchronously.",
                 "tags": [
                     "transfers"
@@ -569,11 +514,6 @@ const docTemplateoperator = `{
         },
         "/analyses/{analysis-id}/save-output-files": {
             "post": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Triggers the file-transfer sidecar to upload output files\nfor the analysis. Runs asynchronously.",
                 "tags": [
                     "transfers"
@@ -603,11 +543,6 @@ const docTemplateoperator = `{
         },
         "/analyses/{analysis-id}/status": {
             "get": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Returns the status of all K8s resources (deployments, pods,\nservices, routes) for the given analysis.",
                 "produces": [
                     "application/json"
@@ -649,11 +584,6 @@ const docTemplateoperator = `{
         },
         "/analyses/{analysis-id}/swap-route": {
             "post": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Swaps the HTTPRoute backend from the loading page service to\nthe analysis Service. Idempotent.",
                 "tags": [
                     "analyses"
@@ -689,11 +619,6 @@ const docTemplateoperator = `{
         },
         "/analyses/{analysis-id}/url-ready": {
             "get": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Returns whether the analysis has ready replicas, a service,\nand an HTTPRoute.",
                 "produces": [
                     "application/json"
@@ -735,11 +660,6 @@ const docTemplateoperator = `{
         },
         "/capacity": {
             "get": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Returns the current cluster capacity including available slots,\nallocatable CPU/memory, and current usage.",
                 "produces": [
                     "application/json"
@@ -766,11 +686,6 @@ const docTemplateoperator = `{
         },
         "/image-cache": {
             "get": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Returns all image cache DaemonSets with their pull status.",
                 "produces": [
                     "application/json"
@@ -795,11 +710,6 @@ const docTemplateoperator = `{
                 }
             },
             "put": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Creates a DaemonSet per image to pre-pull it onto every node.\nEach DaemonSet uses an init container with the target image and\na pause main container. For distroless/scratch images lacking\n\"true\", the init container will CrashLoopBackOff — this is expected\nand the image is still cached. Status will show \"cached-with-errors\".",
                 "consumes": [
                     "application/json"
@@ -844,11 +754,6 @@ const docTemplateoperator = `{
                 }
             },
             "delete": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Deletes the cache DaemonSets for the specified images.\nNon-existent images are silently ignored (idempotent).\nNote: some HTTP clients drop the body on DELETE requests.\nUse DELETE /image-cache/:id for single-image removal from browsers.",
                 "consumes": [
                     "application/json"
@@ -895,11 +800,6 @@ const docTemplateoperator = `{
         },
         "/image-cache/refresh": {
             "post": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Restarts cache DaemonSet pods to force a fresh pull of images\nthat may have been updated under the same tag. The DaemonSet\ninit container uses PullAlways, so the restart causes containerd\nto fetch the latest manifest.",
                 "consumes": [
                     "application/json"
@@ -946,11 +846,6 @@ const docTemplateoperator = `{
         },
         "/image-cache/{id}": {
             "get": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Returns the cache status for a single image by its slug ID\n(from the \"id\" field in list responses).",
                 "produces": [
                     "application/json"
@@ -996,11 +891,6 @@ const docTemplateoperator = `{
                 }
             },
             "delete": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Deletes the cache DaemonSet for the image with the given slug ID.\nReturns success even if already absent (idempotent).",
                 "tags": [
                     "image-cache"
@@ -1036,11 +926,6 @@ const docTemplateoperator = `{
         },
         "/regenerate-network-policies": {
             "post": {
-                "security": [
-                    {
-                        "BasicAuth": []
-                    }
-                ],
                 "description": "Rebuilds egress NetworkPolicies for all running analyses to\nmatch the operator's current configuration.",
                 "produces": [
                     "application/json"
@@ -1098,7 +983,6 @@ const docTemplateoperator = `{
         },
         "intstr.Type": {
             "type": "integer",
-            "format": "int64",
             "enum": [
                 0,
                 1
@@ -1107,10 +991,6 @@ const docTemplateoperator = `{
                 "Int": "The IntOrString holds an int.",
                 "String": "The IntOrString holds a string."
             },
-            "x-enum-descriptions": [
-                "The IntOrString holds an int.",
-                "The IntOrString holds a string."
-            ],
             "x-enum-varnames": [
                 "Int",
                 "String"
@@ -1892,11 +1772,6 @@ const docTemplateoperator = `{
                         "DecimalExponent": "e.g., 12e6",
                         "DecimalSI": "e.g., 12M  (12 * 10^6)"
                     },
-                    "x-enum-descriptions": [
-                        "e.g., 12e6",
-                        "e.g., 12Mi (12 * 2^20)",
-                        "e.g., 12M  (12 * 10^6)"
-                    ],
                     "x-enum-varnames": [
                         "DecimalExponent",
                         "BinarySI",
@@ -2512,8 +2387,7 @@ const docTemplateoperator = `{
                     "additionalProperties": {
                         "type": "array",
                         "items": {
-                            "type": "integer",
-                            "format": "int32"
+                            "type": "integer"
                         }
                     }
                 },
@@ -8338,12 +8212,6 @@ const docTemplateoperator = `{
                 "StorageMediumHugePagesPrefix": "prefix for full medium notation HugePages-\u003csize\u003e",
                 "StorageMediumMemory": "use memory (e.g. tmpfs on linux)"
             },
-            "x-enum-descriptions": [
-                "use whatever the default is for the node, assume anything we don't explicitly handle is this",
-                "use memory (e.g. tmpfs on linux)",
-                "use hugepages",
-                "prefix for full medium notation HugePages-\u003csize\u003e"
-            ],
             "x-enum-varnames": [
                 "StorageMediumDefault",
                 "StorageMediumMemory",
@@ -9118,13 +8986,6 @@ const docTemplateoperator = `{
                     "type": "string"
                 }
             }
-        }
-    },
-    "securityDefinitions": {
-        "BearerAuth": {
-            "type": "apiKey",
-            "name": "Authorization",
-            "in": "header"
         }
     }
 }`

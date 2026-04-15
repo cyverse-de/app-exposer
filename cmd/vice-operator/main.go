@@ -59,6 +59,9 @@ func main() {
 		keycloakClientID      string
 		keycloakClientSecret  string
 		disableViceProxyAuth  bool
+		swaggerClientID       string
+		swaggerClientSecret   string
+		swaggerCookieSecret   string
 		apiSubdomain          string
 		apiServiceName        string
 		serviceCIDR           string
@@ -101,6 +104,9 @@ func main() {
 	flag.StringVar(&keycloakClientID, "keycloak-client-id", "", "OIDC client ID for vice-proxy auth")
 	flag.StringVar(&keycloakClientSecret, "keycloak-client-secret", "", "OIDC client secret for vice-proxy auth")
 	flag.BoolVar(&disableViceProxyAuth, "disable-vice-proxy-auth", false, "Disable auth in vice-proxy")
+	flag.StringVar(&swaggerClientID, "swagger-client-id", "", "OAuth2 client ID for the Swagger UI login flow (must support authorization code flow in Keycloak)")
+	flag.StringVar(&swaggerClientSecret, "swagger-client-secret", "", "OAuth2 client secret for the Swagger UI login flow")
+	flag.StringVar(&swaggerCookieSecret, "swagger-cookie-secret", "", "Secret for signing session cookies (random string; auto-generated if empty)")
 	flag.StringVar(&apiSubdomain, "api-subdomain", "vice-api", "Subdomain prefix for the vice-operator API HTTPRoute; combined with --vice-base-url host to form the full hostname")
 	flag.StringVar(&apiServiceName, "api-service-name", "vice-operator", "K8s Service name for the vice-operator API HTTPRoute backend")
 	flag.StringVar(&serviceCIDR, "service-cidr", "", "Cluster service CIDR to block in egress (auto-detected from kubernetes API server if empty)")
@@ -423,7 +429,29 @@ func main() {
 		log.Warn("API auth disabled (--api-auth=false); all requests are unauthenticated")
 	}
 
-	app := NewApp(op, verifier, apiAuthClientID)
+	// Build Swagger UI auth config.
+	var cookieSecret []byte
+	if swaggerClientID != "" {
+		if swaggerCookieSecret != "" {
+			cookieSecret = []byte(swaggerCookieSecret)
+		} else {
+			var genErr error
+			cookieSecret, genErr = GenerateCookieSecret()
+			if genErr != nil {
+				log.Fatalf("failed to generate cookie secret: %v", genErr)
+			}
+			log.Warn("no --swagger-cookie-secret provided; generated an ephemeral key (sessions will not survive restarts)")
+		}
+		log.Infof("Swagger UI login enabled (client_id=%s, issuer=%s)", swaggerClientID, apiAuthIssuerURL)
+	}
+	swaggerCfg := &SwaggerAuthConfig{
+		IssuerURL:    apiAuthIssuerURL,
+		ClientID:     swaggerClientID,
+		ClientSecret: swaggerClientSecret,
+		CookieSecret: cookieSecret,
+	}
+
+	app := NewApp(op, verifier, apiAuthClientID, swaggerCfg)
 	loadingApp := NewLoadingApp(op)
 
 	apiAddr := fmt.Sprintf(":%d", port)

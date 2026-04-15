@@ -23,14 +23,10 @@ definitions:
     enum:
     - 0
     - 1
-    format: int64
     type: integer
     x-enum-comments:
       Int: The IntOrString holds an int.
       String: The IntOrString holds a string.
-    x-enum-descriptions:
-    - The IntOrString holds an int.
-    - The IntOrString holds a string.
     x-enum-varnames:
     - Int
     - String
@@ -598,10 +594,6 @@ definitions:
           BinarySI: e.g., 12Mi (12 * 2^20)
           DecimalExponent: e.g., 12e6
           DecimalSI: e.g., 12M  (12 * 10^6)
-        x-enum-descriptions:
-        - e.g., 12e6
-        - e.g., 12Mi (12 * 2^20)
-        - e.g., 12M  (12 * 10^6)
         x-enum-varnames:
         - DecimalExponent
         - BinarySI
@@ -1439,7 +1431,6 @@ definitions:
       binaryData:
         additionalProperties:
           items:
-            format: int32
             type: integer
           type: array
         description: |-
@@ -9792,12 +9783,6 @@ definitions:
       StorageMediumHugePages: use hugepages
       StorageMediumHugePagesPrefix: prefix for full medium notation HugePages-<size>
       StorageMediumMemory: use memory (e.g. tmpfs on linux)
-    x-enum-descriptions:
-    - use whatever the default is for the node, assume anything we don't explicitly
-      handle is this
-    - use memory (e.g. tmpfs on linux)
-    - use hugepages
-    - prefix for full medium notation HugePages-<size>
     x-enum-varnames:
     - StorageMediumDefault
     - StorageMediumMemory
@@ -10751,8 +10736,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: List running VICE analyses
       tags:
       - analyses
@@ -10790,8 +10773,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Launch a VICE analysis
       tags:
       - analyses
@@ -10815,8 +10796,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Exit (delete) a VICE analysis
       tags:
       - analyses
@@ -10852,8 +10831,6 @@ paths:
           description: Bad Gateway
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: List active sessions for an analysis
       tags:
       - analyses
@@ -10875,8 +10852,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Download input files
       tags:
       - transfers
@@ -10922,8 +10897,6 @@ paths:
           description: Bad Gateway
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Admin logout (by username, no cookie needed)
       tags:
       - analyses
@@ -10977,8 +10950,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Get analysis logs
       tags:
       - analyses
@@ -11012,8 +10983,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Get analysis permissions
       tags:
       - analyses
@@ -11050,8 +11019,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Update analysis permissions
       tags:
       - analyses
@@ -11083,8 +11050,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Get analysis pods
       tags:
       - analyses
@@ -11106,8 +11071,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Save outputs and exit
       tags:
       - transfers
@@ -11129,8 +11092,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Save output files
       tags:
       - transfers
@@ -11160,8 +11121,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Get analysis status
       tags:
       - analyses
@@ -11187,8 +11146,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Manually swap route to analysis service
       tags:
       - analyses
@@ -11218,8 +11175,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Check if analysis URL is ready
       tags:
       - analyses
@@ -11239,8 +11194,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Get cluster capacity
       tags:
       - capacity
@@ -11275,8 +11228,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Remove cached images (bulk)
       tags:
       - image-cache
@@ -11293,8 +11244,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: List cached images
       tags:
       - image-cache
@@ -11329,8 +11278,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Cache container images
       tags:
       - image-cache
@@ -11356,8 +11303,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Remove a cached image
       tags:
       - image-cache
@@ -11390,8 +11335,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Get cached image status
       tags:
       - image-cache
@@ -11426,8 +11369,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Refresh cached images
       tags:
       - image-cache
@@ -11447,14 +11388,7 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - BasicAuth: []
       summary: Regenerate per-analysis network policies
       tags:
       - network-policies
-securityDefinitions:
-  BearerAuth:
-    in: header
-    name: Authorization
-    type: apiKey
 swagger: "2.0"

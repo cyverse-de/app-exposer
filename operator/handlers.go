@@ -162,7 +162,6 @@ func (o *Operator) getAccessURL(ctx context.Context, serviceName string) (string
 //	@Produce		json
 //	@Success		200	{object}	operatorclient.CapacityResponse
 //	@Failure		500	{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/capacity [get]
 func (o *Operator) HandleCapacity(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -187,7 +186,6 @@ func (o *Operator) HandleCapacity(c echo.Context) error {
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		409		{object}	common.ErrorResponse
 //	@Failure		500		{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses [post]
 func (o *Operator) HandleLaunch(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -277,7 +275,6 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		500	{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id} [delete]
 func (o *Operator) HandleExit(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -308,7 +305,6 @@ func (o *Operator) HandleExit(c echo.Context) error {
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		500	{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/swap-route [post]
 func (o *Operator) HandleSwapRoute(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -337,7 +333,6 @@ func (o *Operator) HandleSwapRoute(c echo.Context) error {
 //	@Produce		json
 //	@Success		200	{object}	reporting.ResourceInfo
 //	@Failure		500	{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses [get]
 func (o *Operator) HandleListing(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -421,7 +416,6 @@ type RegenerateResponse struct {
 //	@Produce		json
 //	@Success		200	{object}	RegenerateResponse
 //	@Failure		500	{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/regenerate-network-policies [post]
 func (o *Operator) HandleRegenerateNetworkPolicies(c echo.Context) error {
 	ctx := c.Request().Context()

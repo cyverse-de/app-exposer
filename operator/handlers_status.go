@@ -51,7 +51,6 @@ type PodInfo struct {
 //	@Success		200			{object}	StatusResponse
 //	@Failure		400			{object}	common.ErrorResponse
 //	@Failure		500			{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/status [get]
 func (o *Operator) HandleStatus(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -127,7 +126,6 @@ func (o *Operator) HandleStatus(c echo.Context) error {
 //	@Success		200			{object}	operatorclient.URLReadyResponse
 //	@Failure		400			{object}	common.ErrorResponse
 //	@Failure		500			{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/url-ready [get]
 func (o *Operator) HandleURLReady(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -191,7 +189,6 @@ func (o *Operator) HandleURLReady(c echo.Context) error {
 //	@Success		200			{array}		PodInfo
 //	@Failure		400			{object}	common.ErrorResponse
 //	@Failure		500			{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/pods [get]
 func (o *Operator) HandlePods(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -251,7 +248,6 @@ func isPodReady(p apiv1.Pod) bool {
 //	@Success		200			{object}	reporting.VICELogEntry
 //	@Failure		400			{object}	common.ErrorResponse
 //	@Failure		500			{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/logs [get]
 func (o *Operator) HandleLogs(c echo.Context) error {
 	ctx := c.Request().Context()

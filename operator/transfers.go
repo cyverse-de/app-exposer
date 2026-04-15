@@ -30,7 +30,6 @@ var transferHTTPClient = &http.Client{Timeout: 30 * time.Second}
 //	@Param			analysis-id	path	string	true	"The analysis ID"
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/save-and-exit [post]
 func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 	analysisID, err := requiredParam(c, "analysis-id")
@@ -72,7 +71,6 @@ func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 //	@Param			analysis-id	path	string	true	"The analysis ID"
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/download-input-files [post]
 func (o *Operator) HandleDownloadInputFiles(c echo.Context) error {
 	return o.handleAsyncTransfer(c, "download-input-files", "/download")
@@ -88,7 +86,6 @@ func (o *Operator) HandleDownloadInputFiles(c echo.Context) error {
 //	@Param			analysis-id	path	string	true	"The analysis ID"
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
-//	@Security		BasicAuth
 //	@Router			/analyses/{analysis-id}/save-output-files [post]
 func (o *Operator) HandleSaveOutputFiles(c echo.Context) error {
 	return o.handleAsyncTransfer(c, "save-output-files", "/upload")
