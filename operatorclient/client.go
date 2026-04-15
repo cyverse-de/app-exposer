@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/reporting"
@@ -61,7 +62,10 @@ func NewClient(cfg OperatorConfig, ts oauth2.TokenSource) (*Client, error) {
 	return &Client{
 		name:    cfg.Name,
 		baseURL: u,
-		http:    &http.Client{Transport: otelhttp.NewTransport(transport)},
+		http: &http.Client{
+			Transport: otelhttp.NewTransport(transport),
+			Timeout:   30 * time.Second,
+		},
 	}, nil
 }
 
