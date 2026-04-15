@@ -234,8 +234,22 @@ func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 }
 
 func (r *Reconciler) reconcileAnalysis(ctx context.Context, tx *sqlx.Tx, pod reporting.PodInfo) error {
+	// Skip pods that are missing required labels — these may be from a
+	// different system or were created before labels were populated.
+	if pod.AnalysisID == "" || pod.ExternalID == "" {
+		log.Debugf("pod %s missing analysis-id or external-id label, skipping", pod.Name)
+		return nil
+	}
+
 	dbStatus, err := r.db.GetAnalysisStatus(ctx, tx, pod.AnalysisID)
 	if err != nil {
+		// A pod may exist in the cluster before its jobs row is committed,
+		// or it may belong to a system that doesn't use the jobs table.
+		// Treat this as expected and skip rather than logging an error.
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Debugf("analysis %s not found in jobs table, skipping", pod.AnalysisID)
+			return nil
+		}
 		return err
 	}
 
