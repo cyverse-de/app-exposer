@@ -2,7 +2,6 @@ package httphandlers
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -292,20 +291,9 @@ func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Router			/vice/apply-labels [post]
 func (h *HTTPHandlers) ApplyAsyncLabelsHandler(c echo.Context) error {
-	//ctx := c.Request().Context()
-	//errs := h.incluster.ApplyAsyncLabels(ctx)
-
-	errs := make([]error, 0)
-
-	if len(errs) > 0 {
-		var errMsg strings.Builder
-		for _, err := range errs {
-			log.Error(err)
-			_, _ = fmt.Fprintf(&errMsg, "%s\n", err.Error())
-		}
-
-		return c.String(http.StatusInternalServerError, errMsg.String())
-	}
+	// In the multi-cluster architecture, VICE resources are managed by
+	// operators on remote clusters. Label reconciliation is handled by
+	// the operators themselves, not by app-exposer.
 	return c.NoContent(http.StatusOK)
 }
 
