@@ -56,9 +56,15 @@ func (s *Scheduler) SetTokenSource(ts oauth2.TokenSource) {
 // Sync replaces the scheduler's current operator clients with a new list.
 // This allows runtime updates from the database without a restart.
 func (s *Scheduler) Sync(configs []OperatorConfig) error {
+	// Snapshot the token source under a read-lock so that a concurrent
+	// SetTokenSource call cannot race with our read of s.tokenSource.
+	s.mu.RLock()
+	ts := s.tokenSource
+	s.mu.RUnlock()
+
 	clients := make([]*Client, 0, len(configs))
 	for _, cfg := range configs {
-		c, err := NewClient(cfg, s.tokenSource)
+		c, err := NewClient(cfg, ts)
 		if err != nil {
 			return fmt.Errorf("creating client for operator %q: %w", cfg.Name, err)
 		}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -656,6 +657,90 @@ func TestHandleLaunchFullBundle(t *testing.T) {
 	assert.NoError(t, err, "pvc should exist")
 }
 
+func TestHandleLogs(t *testing.T) {
+	tests := []struct {
+		name       string
+		analysisID string
+		query      string
+		setup      func(t *testing.T, cs *fake.Clientset)
+		wantStatus int
+		wantMsg    string
+	}{
+		{
+			name:       "returns 400 for missing analysis-id",
+			analysisID: "",
+			query:      "",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "returns 404 when no pods exist",
+			analysisID: "no-pods-analysis",
+			query:      "",
+			wantStatus: http.StatusNotFound,
+			wantMsg:    "no pods found for analysis",
+		},
+		{
+			// The fake clientset returns an empty stream for GetLogs().Stream(),
+			// so the handler completes successfully with an empty log body. This
+			// verifies that param parsing and pod lookup both succeed — the
+			// container and tail-lines query params are processed before the
+			// pod list call.
+			name:       "parses query params correctly and returns 200 with pod present",
+			analysisID: "logs-test-1",
+			query:      "?container=mycontainer&tail-lines=100",
+			setup: func(t *testing.T, cs *fake.Clientset) {
+				t.Helper()
+				_, err := cs.CoreV1().Pods("vice-apps").Create(
+					context.Background(),
+					&apiv1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "pod-logs-1",
+							Namespace: "vice-apps",
+							Labels:    map[string]string{"analysis-id": "logs-test-1"},
+						},
+					},
+					metav1.CreateOptions{},
+				)
+				require.NoError(t, err)
+			},
+			wantStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, clientset, _ := newTestOperator(t, 10)
+			if tt.setup != nil {
+				tt.setup(t, clientset)
+			}
+
+			url := "/analyses/" + tt.analysisID + "/logs" + tt.query
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.SetParamNames("analysis-id")
+			c.SetParamValues(tt.analysisID)
+
+			err := op.HandleLogs(c)
+
+			if tt.wantStatus == http.StatusOK {
+				// Successful path: handler writes directly to the response.
+				require.NoError(t, err)
+				assert.Equal(t, http.StatusOK, rec.Code)
+			} else {
+				// Error path: handler returns an *echo.HTTPError.
+				he, ok := err.(*echo.HTTPError)
+				require.True(t, ok, "expected *echo.HTTPError, got %T: %v", err, err)
+				assert.Equal(t, tt.wantStatus, he.Code)
+				if tt.wantMsg != "" {
+					assert.Contains(t, fmt.Sprintf("%v", he.Message), tt.wantMsg)
+				}
+			}
+		})
+	}
+}
+
 func TestAnalysisBundleValidate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -684,6 +769,304 @@ func TestAnalysisBundleValidate(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestHandleRegenerateNetworkPolicies(t *testing.T) {
+	tests := []struct {
+		name        string
+		setup       func(t *testing.T, cs *fake.Clientset)
+		wantUpdated int
+		wantErrors  int
+	}{
+		{
+			name: "regenerates policies for running analyses",
+			setup: func(t *testing.T, cs *fake.Clientset) {
+				t.Helper()
+				ctx := context.Background()
+				for _, id := range []string{"regen-analysis-1", "regen-analysis-2"} {
+					_, err := cs.AppsV1().Deployments("vice-apps").Create(ctx, &appsv1.Deployment{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "dep-" + id,
+							Namespace: "vice-apps",
+							Labels: map[string]string{
+								"app-type":    "interactive",
+								"analysis-id": id,
+							},
+						},
+						Spec: appsv1.DeploymentSpec{
+							Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": id}},
+							Template: apiv1.PodTemplateSpec{
+								ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": id}},
+								Spec:       apiv1.PodSpec{Containers: []apiv1.Container{{Name: "c", Image: "img"}}},
+							},
+						},
+					}, metav1.CreateOptions{})
+					require.NoError(t, err)
+				}
+			},
+			wantUpdated: 2,
+			wantErrors:  0,
+		},
+		{
+			name: "skips deployments without analysis-id label",
+			setup: func(t *testing.T, cs *fake.Clientset) {
+				t.Helper()
+				ctx := context.Background()
+
+				// Deployment with app-type but no analysis-id — should be skipped.
+				_, err := cs.AppsV1().Deployments("vice-apps").Create(ctx, &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "dep-no-analysis-id",
+						Namespace: "vice-apps",
+						Labels:    map[string]string{"app-type": "interactive"},
+					},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "no-id"}},
+						Template: apiv1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "no-id"}},
+							Spec:       apiv1.PodSpec{Containers: []apiv1.Container{{Name: "c", Image: "img"}}},
+						},
+					},
+				}, metav1.CreateOptions{})
+				require.NoError(t, err)
+
+				// Deployment with both labels — should be processed.
+				_, err = cs.AppsV1().Deployments("vice-apps").Create(ctx, &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "dep-with-analysis-id",
+						Namespace: "vice-apps",
+						Labels: map[string]string{
+							"app-type":    "interactive",
+							"analysis-id": "skip-test-analysis",
+						},
+					},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "with-id"}},
+						Template: apiv1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "with-id"}},
+							Spec:       apiv1.PodSpec{Containers: []apiv1.Container{{Name: "c", Image: "img"}}},
+						},
+					},
+				}, metav1.CreateOptions{})
+				require.NoError(t, err)
+			},
+			wantUpdated: 1,
+			wantErrors:  0,
+		},
+		{
+			name:        "handles no deployments",
+			setup:       nil,
+			wantUpdated: 0,
+			wantErrors:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, clientset, _ := newTestOperator(t, 10)
+			if tt.setup != nil {
+				tt.setup(t, clientset)
+			}
+
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodPost, "/regenerate-network-policies", nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			err := op.HandleRegenerateNetworkPolicies(c)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusOK, rec.Code)
+
+			var resp RegenerateResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+			assert.Equal(t, tt.wantUpdated, resp.Updated, "updated count mismatch")
+			assert.Len(t, resp.Errors, tt.wantErrors, "errors count mismatch")
+
+			// Verify NetworkPolicies were created for each deployment that had
+			// a valid analysis-id label.
+			ctx := context.Background()
+			deps, err := clientset.AppsV1().Deployments("vice-apps").List(ctx, metav1.ListOptions{})
+			require.NoError(t, err)
+			for _, dep := range deps.Items {
+				analysisID := dep.Labels["analysis-id"]
+				if analysisID == "" {
+					continue
+				}
+				npName := "vice-egress-" + analysisID
+				_, npErr := clientset.NetworkingV1().NetworkPolicies("vice-apps").Get(ctx, npName, metav1.GetOptions{})
+				assert.NoError(t, npErr, "NetworkPolicy %q should exist for analysis %q", npName, analysisID)
+			}
+		})
+	}
+}
+
+// newTransferContext builds a minimal Echo context with the analysis-id path param set.
+func newTransferContext(e *echo.Echo, analysisID string) (echo.Context, *httptest.ResponseRecorder) {
+	req := httptest.NewRequest(http.MethodPost, "/analyses/"+analysisID+"/transfer", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	if analysisID != "" {
+		c.SetParamNames("analysis-id")
+		c.SetParamValues(analysisID)
+	}
+	return c, rec
+}
+
+// TestHandleSaveAndExit covers param validation and the immediate 200 response.
+// The background goroutine's outcome is not verified since it runs asynchronously
+// and the file-transfer sidecar is unreachable in tests.
+func TestHandleSaveAndExit(t *testing.T) {
+	tests := []struct {
+		name       string
+		analysisID string
+		setup      func(t *testing.T, cs *fake.Clientset)
+		wantStatus int
+		wantErr    bool
+	}{
+		{
+			name:       "missing analysis-id returns 400",
+			analysisID: "",
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name:       "valid analysis-id returns 200 immediately",
+			analysisID: "save-and-exit-test-1",
+			setup: func(t *testing.T, cs *fake.Clientset) {
+				t.Helper()
+				// Create a Service so triggerFileTransfer can find it in the goroutine.
+				// The goroutine will still fail to reach the sidecar, but that happens
+				// after the handler has already returned 200.
+				_, err := cs.CoreV1().Services("vice-apps").Create(
+					context.Background(),
+					&apiv1.Service{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "svc-save-exit",
+							Namespace: "vice-apps",
+							Labels:    map[string]string{"analysis-id": "save-and-exit-test-1"},
+						},
+						Spec: apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 60001}}},
+					},
+					metav1.CreateOptions{},
+				)
+				require.NoError(t, err)
+			},
+			wantStatus: http.StatusOK,
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, clientset, _ := newTestOperator(t, 10)
+			if tt.setup != nil {
+				tt.setup(t, clientset)
+			}
+
+			e := echo.New()
+			c, rec := newTransferContext(e, tt.analysisID)
+
+			err := op.HandleSaveAndExit(c)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				he, ok := err.(*echo.HTTPError)
+				require.True(t, ok, "expected *echo.HTTPError, got %T: %v", err, err)
+				assert.Equal(t, tt.wantStatus, he.Code)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantStatus, rec.Code)
+			}
+		})
+	}
+}
+
+// TestHandleDownloadInputFiles covers param validation and the immediate 200 response.
+func TestHandleDownloadInputFiles(t *testing.T) {
+	tests := []struct {
+		name       string
+		analysisID string
+		wantStatus int
+		wantErr    bool
+	}{
+		{
+			name:       "missing analysis-id returns 400",
+			analysisID: "",
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name:       "valid analysis-id returns 200 immediately",
+			analysisID: "download-inputs-test-1",
+			wantStatus: http.StatusOK,
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, _, _ := newTestOperator(t, 10)
+
+			e := echo.New()
+			c, rec := newTransferContext(e, tt.analysisID)
+
+			err := op.HandleDownloadInputFiles(c)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				he, ok := err.(*echo.HTTPError)
+				require.True(t, ok, "expected *echo.HTTPError, got %T: %v", err, err)
+				assert.Equal(t, tt.wantStatus, he.Code)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantStatus, rec.Code)
+			}
+		})
+	}
+}
+
+// TestHandleSaveOutputFiles covers param validation and the immediate 200 response.
+func TestHandleSaveOutputFiles(t *testing.T) {
+	tests := []struct {
+		name       string
+		analysisID string
+		wantStatus int
+		wantErr    bool
+	}{
+		{
+			name:       "missing analysis-id returns 400",
+			analysisID: "",
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name:       "valid analysis-id returns 200 immediately",
+			analysisID: "save-outputs-test-1",
+			wantStatus: http.StatusOK,
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, _, _ := newTestOperator(t, 10)
+
+			e := echo.New()
+			c, rec := newTransferContext(e, tt.analysisID)
+
+			err := op.HandleSaveOutputFiles(c)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				he, ok := err.(*echo.HTTPError)
+				require.True(t, ok, "expected *echo.HTTPError, got %T: %v", err, err)
+				assert.Equal(t, tt.wantStatus, he.Code)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantStatus, rec.Code)
 			}
 		})
 	}
