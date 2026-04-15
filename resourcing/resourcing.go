@@ -451,17 +451,12 @@ func VICEProxyRequirements(analysis *model.Analysis) *apiv1.ResourceRequirements
 }
 
 // Requirements returns the limits and requests needed for the analysis itself.
+// The resourceLimits function already handles the doDefaultCPUResourceLimit,
+// doDefaultMemResourceLimit, and GPU flags internally, returning an empty
+// ResourceList when no limits are configured.
 func Requirements(analysis *model.Analysis) *apiv1.ResourceRequirements {
-	retval := &apiv1.ResourceRequirements{
+	return &apiv1.ResourceRequirements{
 		Limits:   resourceLimits(analysis),
 		Requests: resourceRequests(analysis),
 	}
-
-	if !doDefaultCPUResourceLimit && !doDefaultMemResourceLimit && !GPUEnabled(analysis) {
-		return retval
-	}
-
-	retval.Limits = resourceLimits(analysis)
-
-	return retval
 }
