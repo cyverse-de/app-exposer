@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cyverse-de/app-exposer/constants"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -61,10 +62,38 @@ func (o *Operator) SwapRoute(ctx context.Context, analysisID string) error {
 			}
 		}
 		if _, err := o.gatewayClient.HTTPRoutes(o.namespace).Update(ctx, &route, metav1.UpdateOptions{}); err != nil {
+			// A conflict means another request already updated the route.
+			// Re-read and verify it points at the right service.
+			if apierrors.IsConflict(err) {
+				if swapped, verifyErr := o.routeAlreadySwapped(ctx, route.Name, name, port); verifyErr != nil {
+					return fmt.Errorf("verifying HTTPRoute %s after conflict: %w", route.Name, verifyErr)
+				} else if swapped {
+					log.Infof("HTTPRoute %s already swapped by concurrent request", route.Name)
+					continue
+				}
+			}
 			return fmt.Errorf("updating HTTPRoute %s: %w", route.Name, err)
 		}
 	}
 
 	log.Infof("route swap complete for analysis %s", analysisID)
 	return nil
+}
+
+// routeAlreadySwapped re-reads an HTTPRoute and returns true if all backend
+// refs already point at the expected service and port (i.e. another request
+// completed the swap).
+func (o *Operator) routeAlreadySwapped(ctx context.Context, routeName string, wantName gatewayv1.ObjectName, wantPort gatewayv1.PortNumber) (bool, error) {
+	current, err := o.gatewayClient.HTTPRoutes(o.namespace).Get(ctx, routeName, metav1.GetOptions{})
+	if err != nil {
+		return false, err
+	}
+	for _, rule := range current.Spec.Rules {
+		for _, ref := range rule.BackendRefs {
+			if ref.Name != wantName || ref.Port == nil || *ref.Port != wantPort {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
 }
