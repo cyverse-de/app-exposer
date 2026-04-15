@@ -124,6 +124,13 @@ func (j *JSLPublisher) Running(ctx context.Context, jobID, msg string) error {
 	return j.postStatus(ctx, jobID, msg, messaging.RunningState)
 }
 
+// PublishFailure publishes a failure status update for the given external ID.
+// This exposes the status publisher's Fail method for use by other packages
+// (e.g. httphandlers) without exporting the publisher itself.
+func (i *Incluster) PublishFailure(ctx context.Context, externalID, msg string) error {
+	return i.statusPublisher.Fail(ctx, externalID, msg)
+}
+
 func hostname() string {
 	h, err := os.Hostname()
 	if err != nil {

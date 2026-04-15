@@ -73,6 +73,9 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 // the analysis bundle, schedules it on an operator, and records the operator
 // assignment. Uses a background context with a timeout since the originating
 // HTTP request has already completed.
+//
+// On failure, publishes a failure status update so the analysis transitions
+// to "Failed" instead of staying stuck in "Submitted" indefinitely.
 func (h *HTTPHandlers) launchAsync(job *model.Job) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -82,17 +85,20 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 	deployment, err := h.incluster.GetDeployment(ctx, job)
 	if err != nil {
 		log.Errorf("async launch %s: failed to get deployment: %v", job.ID, err)
+		h.failLaunch(ctx, job, fmt.Sprintf("failed to build deployment: %v", err))
 		return
 	}
 
 	millicores, err := incluster.GetMillicoresFromDeployment(deployment)
 	if err != nil {
 		log.Errorf("async launch %s: failed to get millicores: %v", job.ID, err)
+		h.failLaunch(ctx, job, fmt.Sprintf("failed to get millicores: %v", err))
 		return
 	}
 
 	if err = h.apps.SetMillicoresReserved(job, millicores); err != nil {
 		log.Errorf("async launch %s: failed to set millicores reserved: %v", job.ID, err)
+		h.failLaunch(ctx, job, fmt.Sprintf("failed to reserve millicores: %v", err))
 		return
 	}
 
@@ -101,12 +107,14 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 	bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, job.ID)
 	if err != nil {
 		log.Errorf("async launch %s: failed to build analysis bundle: %v", job.ID, err)
+		h.failLaunch(ctx, job, fmt.Sprintf("failed to build analysis bundle: %v", err))
 		return
 	}
 
 	operatorName, err := h.scheduler.LaunchAnalysis(ctx, bundle)
 	if err != nil {
 		log.Errorf("async launch %s: failed to launch analysis: %v", job.ID, err)
+		h.failLaunch(ctx, job, fmt.Sprintf("failed to schedule analysis on operator: %v", err))
 		return
 	}
 
@@ -117,6 +125,19 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 	}
 
 	log.Infof("async launch %s: successfully launched on operator %s", job.ID, operatorName)
+}
+
+// failLaunch publishes a failure status update for a launch that failed in the
+// background goroutine. Uses the job's InvocationID (external ID) since the
+// status publisher expects external IDs.
+func (h *HTTPHandlers) failLaunch(ctx context.Context, job *model.Job, msg string) {
+	if job.InvocationID == "" {
+		log.Errorf("async launch %s: cannot publish failure status — no invocation ID", job.ID)
+		return
+	}
+	if err := h.incluster.PublishFailure(ctx, job.InvocationID, msg); err != nil {
+		log.Errorf("async launch %s: failed to publish failure status: %v", job.ID, err)
+	}
 }
 
 // DryRunBundleHandler builds the AnalysisBundle for a job without launching it.
