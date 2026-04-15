@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"slices"
 	"strings"
 
 	apiv1 "k8s.io/api/core/v1"
@@ -252,9 +251,13 @@ func buildAnalysisEgressPolicy(
 	// When internet access is enabled, allow all external IPs except the
 	// service CIDR and any additional blocked CIDRs.
 	if !cfg.DisableInternet {
-		// slices.Concat always allocates a fresh backing array, avoiding
-		// accidental aliasing into cfg.BlockedCIDRs.
-		exceptCIDRs := slices.Concat([]string{cfg.ServiceCIDR}, cfg.BlockedCIDRs)
+		// Build the except list defensively: skip empty ServiceCIDR (which
+		// would be rejected by the K8s API as an invalid CIDR).
+		var exceptCIDRs []string
+		if cfg.ServiceCIDR != "" {
+			exceptCIDRs = append(exceptCIDRs, cfg.ServiceCIDR)
+		}
+		exceptCIDRs = append(exceptCIDRs, cfg.BlockedCIDRs...)
 		rules = append(rules, netv1.NetworkPolicyEgressRule{
 			To: []netv1.NetworkPolicyPeer{
 				{
