@@ -3,6 +3,7 @@ package quota
 import (
 	"context"
 	"database/sql"
+	stderrors "errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -139,10 +140,10 @@ const getJobLimitForUserSQL = `
 	WHERE launcher = regexp_replace($1, '-', '_')
 `
 
-func (e *Enforcer) getJobLimitForUser(username string) (*int, error) {
+func (e *Enforcer) getJobLimitForUser(ctx context.Context, username string) (*int, error) {
 	var jobLimit int
-	err := e.db.QueryRow(getJobLimitForUserSQL, username).Scan(&jobLimit)
-	if err == sql.ErrNoRows {
+	err := e.db.QueryRowContext(ctx, getJobLimitForUserSQL, username).Scan(&jobLimit)
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -156,9 +157,9 @@ const getDefaultJobLimitSQL = `
 	WHERE launcher IS NULL
 `
 
-func (e *Enforcer) getDefaultJobLimit() (int, error) {
+func (e *Enforcer) getDefaultJobLimit(ctx context.Context) (int, error) {
 	var defaultJobLimit int
-	if err := e.db.QueryRow(getDefaultJobLimitSQL).Scan(&defaultJobLimit); err != nil {
+	if err := e.db.QueryRowContext(ctx, getDefaultJobLimitSQL).Scan(&defaultJobLimit); err != nil {
 		return 0, err
 	}
 	return defaultJobLimit, nil
@@ -273,11 +274,11 @@ func (e *Enforcer) ValidateJob(ctx context.Context, job *model.Job, namespace st
 	if err != nil {
 		return http.StatusInternalServerError, errors.Wrapf(err, "unable to determine the number of jobs that %s is currently running", user)
 	}
-	jobLimit, err := e.getJobLimitForUser(user)
+	jobLimit, err := e.getJobLimitForUser(ctx, user)
 	if err != nil {
 		return http.StatusInternalServerError, errors.Wrapf(err, "unable to determine the concurrent job limit for %s", user)
 	}
-	defaultJobLimit, err := e.getDefaultJobLimit()
+	defaultJobLimit, err := e.getDefaultJobLimit(ctx)
 	if err != nil {
 		return http.StatusInternalServerError, errors.Wrapf(err, "unable to determine the default concurrent job limit")
 	}
