@@ -258,8 +258,8 @@ func (i *Incluster) UpdateTimeLimit(ctx context.Context, user, id string) (*Time
 		userID string
 	)
 
-	if !strings.HasSuffix(user, constants.UserSuffix) {
-		user = fmt.Sprintf("%s%s", user, constants.UserSuffix)
+	if !strings.HasSuffix(user, i.UserSuffix) {
+		user = fmt.Sprintf("%s%s", user, i.UserSuffix)
 	}
 
 	if err = i.db.QueryRowContext(ctx, getUserIDSQL, user).Scan(&userID); err != nil {

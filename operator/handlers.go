@@ -62,6 +62,7 @@ type Operator struct {
 	clusterConfigSecret string              // Name of the Secret holding cluster config for vice-proxy envFrom.
 	egressConfig        NetworkPolicyConfig // Egress policy config for per-analysis policies.
 	httpClient          HTTPClient          // Client for contacting the vice-proxy sidecar.
+	userSuffix          string              // Domain suffix for usernames (e.g. "@iplantcollaborative.org").
 }
 
 // NewOperator creates a new Operator. Panics if required dependencies are nil
@@ -81,6 +82,7 @@ func NewOperator(
 	baseDomain string,
 	clusterConfigSecret string,
 	egressConfig NetworkPolicyConfig,
+	userSuffix string,
 ) *Operator {
 	if clientset == nil {
 		panic("operator: clientset must not be nil")
@@ -114,6 +116,7 @@ func NewOperator(
 		clusterConfigSecret: clusterConfigSecret,
 		egressConfig:        egressConfig,
 		httpClient:          noRedirectHTTPClient,
+		userSuffix:          userSuffix,
 	}
 }
 
@@ -229,7 +232,7 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 
 	// Ensure the permissions ConfigMap exists in the bundle (handles bundles
 	// created before the permissions feature was added).
-	EnsurePermissionsConfigMap(&bundle)
+	EnsurePermissionsConfigMap(&bundle, o.userSuffix)
 
 	// Inject per-analysis vice-proxy args and ensure the cluster config secret
 	// is referenced as envFrom so vice-proxy gets cluster-level env vars.

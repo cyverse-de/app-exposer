@@ -68,7 +68,7 @@ func (i *Incluster) permissionsConfigMap(ctx context.Context, job *model.Job) (*
 
 	// The owner is always the first entry. The user suffix is appended
 	// to match the format stored in Keycloak JWT preferred_username.
-	owner := job.Submitter + constants.UserSuffix
+	owner := job.Submitter + i.UserSuffix
 
 	return &apiv1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

@@ -260,7 +260,7 @@ func TransformViceProxyArgs(deployment *appsv1.Deployment, analysisID, clusterCo
 // isn't already present. This handles bundles created before app-exposer added
 // the permissions ConfigMap at build time. The ConfigMap is seeded with the
 // owner username from the deployment's "username" label.
-func EnsurePermissionsConfigMap(bundle *operatorclient.AnalysisBundle) {
+func EnsurePermissionsConfigMap(bundle *operatorclient.AnalysisBundle, userSuffix string) {
 	if bundle == nil || bundle.Deployment == nil {
 		return
 	}
@@ -281,8 +281,8 @@ func EnsurePermissionsConfigMap(bundle *operatorclient.AnalysisBundle) {
 		log.Warnf("deployment %s missing username label; skipping permissions ConfigMap creation", bundle.Deployment.Name)
 		return
 	}
-	if !strings.HasSuffix(owner, constants.UserSuffix) {
-		owner += constants.UserSuffix
+	if !strings.HasSuffix(owner, userSuffix) {
+		owner += userSuffix
 	}
 
 	cmName := fmt.Sprintf("%s-%s", constants.PermissionsConfigMapPrefix, bundle.Deployment.Name)

@@ -857,13 +857,13 @@ func TestEnsurePermissionsConfigMap(t *testing.T) {
 			name:      "creates permissions ConfigMap with owner",
 			bundle:    makeBundle("testuser", false),
 			wantCMs:   1,
-			wantOwner: "testuser" + constants.UserSuffix,
+			wantOwner: "testuser" + constants.DefaultUserSuffix,
 		},
 		{
 			name:      "does not double-append suffix when username already has it",
-			bundle:    makeBundle("testuser"+constants.UserSuffix, false),
+			bundle:    makeBundle("testuser"+constants.DefaultUserSuffix, false),
 			wantCMs:   1,
-			wantOwner: "testuser" + constants.UserSuffix,
+			wantOwner: "testuser" + constants.DefaultUserSuffix,
 		},
 		{
 			name:    "no-op when permissions ConfigMap already exists",
@@ -891,7 +891,7 @@ func TestEnsurePermissionsConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			EnsurePermissionsConfigMap(tt.bundle)
+			EnsurePermissionsConfigMap(tt.bundle, constants.DefaultUserSuffix)
 
 			if tt.bundle == nil {
 				return

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -78,7 +79,7 @@ func newTestOperator(t *testing.T, maxAnalyses int, vendor ...GPUVendor) (*Opera
 	gwClientset := gatewayfake.NewSimpleClientset()
 	calc := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
 	cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
-	op := NewOperator(clientset, gwClientset.GatewayV1(), "vice-apps", "vice-apps", "vice", gpuVendor, calc, cache, "vice-operator-loading", 80, 600000, "", "cluster-config-secret", NetworkPolicyConfig{})
+	op := NewOperator(clientset, gwClientset.GatewayV1(), "vice-apps", "vice-apps", "vice", gpuVendor, calc, cache, "vice-operator-loading", 80, 600000, "", "cluster-config-secret", NetworkPolicyConfig{}, constants.DefaultUserSuffix)
 	return op, clientset, gwClientset
 }
 

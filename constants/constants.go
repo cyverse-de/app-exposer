@@ -73,7 +73,7 @@ const (
 	GPUModelAffinityKey      = "nvidia.com/gpu.product"
 	GPUModelAffinityOperator = "In"
 
-	UserSuffix = "@iplantcollaborative.org"
+	DefaultUserSuffix = "@iplantcollaborative.org"
 
 	ShmDevice = "/dev/shm"
 )

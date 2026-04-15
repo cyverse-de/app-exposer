@@ -15,6 +15,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operator"
 	"github.com/sirupsen/logrus"
 
@@ -71,6 +72,7 @@ func main() {
 		egressCIDRExceptions  stringSliceFlag
 		ingressPodExceptions  stringSliceFlag
 		disableInternetAccess bool
+		userSuffix            string
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -116,7 +118,20 @@ func main() {
 	flag.Var(&egressCIDRExceptions, "egress-cidr-exception", "CIDR (e.g. 10.0.0.0/8) that analyses should be able to reach (repeatable)")
 	flag.Var(&ingressPodExceptions, "ingress-pod-exception", "Cross-namespace ingress source as kubernetes.io/metadata.name=<ns>,pod-label=val (repeatable). The kubernetes.io/metadata.name pair selects the namespace; remaining pairs select pods.")
 	flag.BoolVar(&disableInternetAccess, "disable-internet-access", false, "Block analysis pods from reaching the public internet; only DNS, explicit host/CIDR exceptions, and pod exceptions are allowed")
+	flag.StringVar(&userSuffix, "user-suffix", constants.DefaultUserSuffix, "Domain suffix appended to usernames if not already present")
 	flag.Parse()
+
+	// Allow secrets to come from environment variables when not set on the
+	// command line. Avoids exposing them in process listings.
+	envFallback := func(val *string, envKey string) {
+		if *val == "" {
+			*val = os.Getenv(envKey)
+		}
+	}
+	envFallback(&registryPassword, "REGISTRY_PASSWORD")
+	envFallback(&keycloakClientSecret, "KEYCLOAK_CLIENT_SECRET")
+	envFallback(&swaggerClientSecret, "SWAGGER_CLIENT_SECRET")
+	envFallback(&swaggerCookieSecret, "SWAGGER_COOKIE_SECRET")
 
 	// Validate OIDC auth flags.
 	if apiAuth && (apiAuthIssuerURL == "" || apiAuthClientID == "") {
@@ -408,7 +423,7 @@ func main() {
 	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
 	imageCache := operator.NewImageCacheManager(clientset, namespace, imagePullSecret)
 	op := operator.NewOperator(clientset, gwClient, namespace, gatewayNamespace, gatewayName, gpuVendor, capacityCalc, imageCache,
-		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs, baseDomain, clusterConfigSecret, egressConfig)
+		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs, baseDomain, clusterConfigSecret, egressConfig, userSuffix)
 
 	// Set up OIDC JWT verification when API auth is enabled.
 	var verifier *oidc.IDTokenVerifier
