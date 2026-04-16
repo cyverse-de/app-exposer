@@ -242,13 +242,16 @@ func (r *Reconciler) reconcileAnalysis(ctx context.Context, tx *sqlx.Tx, pod rep
 		return nil
 	}
 
-	dbStatus, err := r.db.GetAnalysisStatus(ctx, tx, pod.AnalysisID)
+	// Compare against the most recent job_status_updates row rather than the
+	// jobs table. There can be lag between recording a status update and
+	// propagating it to jobs, which would cause duplicate reconciliation
+	// updates if we compared against the jobs table.
+	dbStatus, err := r.db.GetLatestStatusByExternalID(ctx, tx, pod.ExternalID)
 	if err != nil {
-		// A pod may exist in the cluster before its jobs row is committed,
-		// or it may belong to a system that doesn't use the jobs table.
-		// Treat this as expected and skip rather than logging an error.
+		// No status updates yet — the pod may have been created before any
+		// status was recorded, or it may belong to a different system.
 		if errors.Is(err, sql.ErrNoRows) {
-			log.Debugf("analysis %s not found in jobs table, skipping", pod.AnalysisID)
+			log.Debugf("no status updates for analysis %s (external %s), skipping", pod.AnalysisID, pod.ExternalID)
 			return nil
 		}
 		return err

@@ -174,3 +174,19 @@ func (d *Database) GetAnalysisStatus(ctx context.Context, tx *sqlx.Tx, analysisI
 	err := tx.GetContext(ctx, &status, query, analysisID)
 	return status, err
 }
+
+// GetLatestStatusByExternalID returns the most recent status from the
+// job_status_updates table for the given external ID. This is more accurate
+// than querying the jobs table directly because there can be lag between
+// when a status update is recorded and when the jobs table is updated.
+func (d *Database) GetLatestStatusByExternalID(ctx context.Context, tx *sqlx.Tx, externalID string) (string, error) {
+	var status string
+	const query = `
+		SELECT status FROM job_status_updates
+		WHERE external_id = $1
+		ORDER BY sent_on DESC
+		LIMIT 1
+	`
+	err := tx.GetContext(ctx, &status, query, externalID)
+	return status, err
+}
