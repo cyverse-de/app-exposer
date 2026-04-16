@@ -25,7 +25,7 @@ var log = common.Log.WithFields(logrus.Fields{"package": "reconciler"})
 // Reconciler manages the background process for syncing VICE analysis status
 // from remote operators into the DE database.
 type Reconciler struct {
-	db          *db.Database
+	db          db.ReconcilerDB
 	scheduler   *operatorclient.Scheduler
 	tokenSource oauth2.TokenSource
 	dbURI       string
@@ -36,11 +36,12 @@ type Reconciler struct {
 // New creates a new Reconciler. The dbURI is used to establish a dedicated
 // LISTEN connection for receiving operator-change notifications from PostgreSQL.
 // The token source is passed through to the scheduler for authenticating
-// requests to operator instances.
-func New(db *db.Database, scheduler *operatorclient.Scheduler, ts oauth2.TokenSource, dbURI string) *Reconciler {
+// requests to operator instances. The db parameter is accepted as a narrow
+// interface so tests can inject a fake; production passes *db.Database.
+func New(database db.ReconcilerDB, scheduler *operatorclient.Scheduler, ts oauth2.TokenSource, dbURI string) *Reconciler {
 	hostname, _ := os.Hostname()
 	return &Reconciler{
-		db:          db,
+		db:          database,
 		scheduler:   scheduler,
 		tokenSource: ts,
 		dbURI:       dbURI,
