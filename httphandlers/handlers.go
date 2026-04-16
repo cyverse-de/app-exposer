@@ -96,8 +96,15 @@ func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID
 	}
 
 	// Search path: ask every operator in parallel whether it has this analysis.
-	client := h.searchOperatorsForAnalysis(ctx, analysisID)
+	client, searchErr := h.searchOperatorsForAnalysis(ctx, analysisID)
 	if client == nil {
+		if searchErr != nil {
+			// Some operators errored AND none reported found. We can't
+			// tell whether the analysis is genuinely missing or hiding
+			// on a degraded cluster, so surface the error rather than
+			// letting the handler return a misleading 404.
+			return nil, searchErr
+		}
 		log.Warnf("no operator has analysis %s", analysisID)
 		return nil, nil
 	}
@@ -111,18 +118,24 @@ func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID
 	return client, nil
 }
 
-// searchOperatorsForAnalysis queries all configured operators in parallel to
-// find which one is running the given analysis. Returns the first operator
-// that reports having the analysis, or nil if none do.
-func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisID string) *operatorclient.Client {
+// searchOperatorsForAnalysis queries all configured operators in parallel
+// to find which one is running the given analysis. Returns (client, nil)
+// on success. Returns (nil, nil) when every operator responded and none
+// has the analysis — truly not found. Returns (nil, err) only when one
+// or more operators errored AND nothing reported found: in that case we
+// cannot distinguish "not running anywhere" from "hiding on a degraded
+// cluster", so the caller should surface the ambiguity (typically as 502)
+// rather than return 404.
+func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisID string) (*operatorclient.Client, error) {
 	type result struct {
 		client *operatorclient.Client
 		found  bool
+		err    error
 	}
 
 	clients := h.scheduler.Clients()
 	if len(clients) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Use a cancellable child context so we can stop remaining searches
@@ -140,7 +153,7 @@ func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisI
 			found, err := c.HasAnalysis(searchCtx, analysisID)
 			if err != nil {
 				log.Warnf("search: operator %s error for analysis %s: %v", c.Name(), analysisID, err)
-				ch <- result{client: c, found: false}
+				ch <- result{client: c, err: err}
 				return
 			}
 			ch <- result{client: c, found: found}
@@ -153,14 +166,24 @@ func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisI
 		close(ch)
 	}()
 
+	var failed []string
 	for r := range ch {
+		if r.err != nil {
+			failed = append(failed, r.client.Name())
+			continue
+		}
 		if r.found {
 			cancel() // Signal remaining goroutines to stop.
-			return r.client
+			return r.client, nil
 		}
 	}
 
-	return nil
+	// Nothing found. If any operator failed during the search, report the
+	// outage so the caller can return 502 rather than a misleading 404.
+	if len(failed) > 0 {
+		return nil, fmt.Errorf("analysis %s not found; %d operator(s) could not be checked: %v", analysisID, len(failed), failed)
+	}
+	return nil, nil
 }
 
 // aggregateListing queries all configured operators in parallel, applying the
