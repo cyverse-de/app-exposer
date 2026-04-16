@@ -44,9 +44,12 @@ func shouldCountStatus(status string) bool {
 }
 
 type Enforcer struct {
-	clientset  kubernetes.Interface
-	db         *sqlx.DB
-	apps       *apps.Apps
+	clientset kubernetes.Interface
+	db        *sqlx.DB
+	// apps is held as a narrow interface so countJobsForUser can be
+	// unit-tested with a fake; production passes *apps.Apps, which
+	// satisfies it structurally.
+	apps       apps.AnalysisStatusLookup
 	nec        *nats.EncodedConn
 	scheduler  *operatorclient.Scheduler
 	userDomain string
@@ -55,7 +58,7 @@ type Enforcer struct {
 func NewEnforcer(
 	clientset kubernetes.Interface,
 	db *sqlx.DB,
-	a *apps.Apps,
+	a apps.AnalysisStatusLookup,
 	ec *nats.EncodedConn,
 	userDomain string,
 ) *Enforcer {
@@ -73,20 +76,48 @@ func (e *Enforcer) SetScheduler(s *operatorclient.Scheduler) {
 	e.scheduler = s
 }
 
-func (e *Enforcer) countJobsForUser(ctx context.Context, namespace, username string) (int, error) {
+// countJobsForUser returns the number of jobs the named user is currently
+// running across all configured operators, together with the names of any
+// operators that failed to respond during the count.
+//
+// Policy: count-surviving with floor semantics. If one or more operators
+// are unreachable, the returned count is a *lower bound* on the user's
+// actual job count. The caller (ValidateJob) uses this lower bound as the
+// input to the quota check: a user who is safely under the limit based
+// on the visible operators is permitted to launch, accepting that they
+// could, in principle, have invisible jobs on the degraded cluster that
+// would push them over. This is deliberately more permissive than the
+// stricter alternative of refusing every launch during any partial
+// outage — that would take the whole DE down on a single cluster blip,
+// which is a worse user experience than the risk of a user exceeding
+// their concurrent-job limit by a small amount for the duration of an
+// outage. The degraded list is surfaced to the caller so operators can
+// be logged and correlated with outages after the fact.
+//
+// Errors have a different semantics than degraded operators. Listing
+// failures (HTTP/network) populate `degraded` but do not return an
+// error. A non-ErrNoRows failure from GetAnalysisStatus is treated as a
+// fatal DB problem and returns an error, because a DB outage affects
+// every count request and cannot be localized to one cluster — falling
+// back to count-surviving there would quietly corrupt quota decisions
+// for all users.
+func (e *Enforcer) countJobsForUser(ctx context.Context, username string) (int, []string, error) {
 	if e.scheduler == nil {
-		return 0, fmt.Errorf("scheduler not configured for quota enforcer")
+		return 0, nil, fmt.Errorf("scheduler not configured for quota enforcer")
 	}
 
 	clients := e.scheduler.Clients()
 	if len(clients) == 0 {
-		return 0, nil
+		return 0, nil, nil
 	}
 
-	totalCount := 0
+	// Per-goroutine result segregates listing errors (operator-local,
+	// tolerable) from DB lookup errors (global, fatal) so the aggregator
+	// can apply the right policy to each.
 	type result struct {
-		count int
-		err   error
+		count      int
+		listingErr error
+		dbErr      error
 	}
 	results := make([]result, len(clients))
 
@@ -95,26 +126,45 @@ func (e *Enforcer) countJobsForUser(ctx context.Context, namespace, username str
 		wg.Add(1)
 		go func(idx int, c *operatorclient.Client) {
 			defer wg.Done()
-			// Use the Listing endpoint with a user filter to count jobs.
+			// Filter by username server-side so we don't decode a large
+			// cluster-wide listing just to count one user's jobs.
 			params := url.Values{}
 			params.Set("username", username)
 			info, err := c.Listing(ctx, params)
 			if err != nil {
-				results[idx] = result{err: err}
+				results[idx] = result{listingErr: err}
 				return
 			}
 
-			// Filter results by status to only count active jobs.
 			count := 0
 			for _, d := range info.Deployments {
-				// We need the analysis status from the DB to decide whether to count it.
-				// This is similar to the logic in the original countJobsForUser.
+				// The cluster knows the analysis exists, but the quota
+				// only counts jobs in active statuses (not Failed,
+				// Completed, or Canceled). Consult the DB for the
+				// authoritative status.
 				status, err := e.apps.GetAnalysisStatus(ctx, d.AnalysisID)
 				if err != nil {
-					log.Errorf("error getting status for analysis %s: %v", d.AnalysisID, err)
-					// If we can't get the status, count it to be safe.
-					count++
-					continue
+					// ErrNoRows = the deployment is labeled with an
+					// analysis id that has no DB row. Legitimate edge
+					// case: the analysis may have been purged from the
+					// DB while the K8s resources linger, or the
+					// deployment may belong to a different subsystem
+					// that reuses the analysis-id label. We can't count
+					// something we have no authoritative status for, so
+					// skip it. A previous implementation counted these
+					// "to be safe", but that was overly cautious — a
+					// purged or foreign analysis doesn't consume the
+					// user's quota.
+					if stderrors.Is(err, sql.ErrNoRows) {
+						log.Debugf("no DB row for analysis %s referenced by deployment %s; not counting", d.AnalysisID, d.Name)
+						continue
+					}
+					// Any other error means the DB itself is in trouble
+					// (connection lost, timeout, etc.). Propagate so the
+					// caller returns 500 and the user retries rather
+					// than getting a silently-wrong quota decision.
+					results[idx] = result{dbErr: fmt.Errorf("looking up status for analysis %s: %w", d.AnalysisID, err)}
+					return
 				}
 				if shouldCountStatus(status) {
 					count++
@@ -125,14 +175,31 @@ func (e *Enforcer) countJobsForUser(ctx context.Context, namespace, username str
 	}
 	wg.Wait()
 
-	for _, r := range results {
-		if r.err != nil {
-			return 0, r.err
+	var (
+		totalCount int
+		degraded   []string
+	)
+	for i, r := range results {
+		// DB lookup errors are fatal: they indicate an infrastructure
+		// problem that affects every per-user count, so returning a
+		// partial-success result here would silently corrupt quota
+		// decisions for the entire DE.
+		if r.dbErr != nil {
+			return 0, nil, r.dbErr
+		}
+		// Listing errors are tolerable: the count becomes a lower bound
+		// but the quota check can still proceed against visible jobs.
+		// Record the operator name so the caller can log what was
+		// missed.
+		if r.listingErr != nil {
+			log.Warnf("quota count: operator %s listing failed: %v", clients[i].Name(), r.listingErr)
+			degraded = append(degraded, clients[i].Name())
+			continue
 		}
 		totalCount += r.count
 	}
 
-	return totalCount, nil
+	return totalCount, degraded, nil
 }
 
 const getJobLimitForUserSQL = `
@@ -269,10 +336,17 @@ func (e *Enforcer) ValidateJob(ctx context.Context, job *model.Job, namespace st
 	usernameLabelValue := common.LabelValueString(job.Submitter)
 	user := job.Submitter
 
-	// Validate the number of concurrent jobs for the user.
-	jobCount, err := e.countJobsForUser(ctx, namespace, usernameLabelValue)
+	// Validate the number of concurrent jobs for the user. jobCount is a
+	// lower bound when degraded is non-empty — see countJobsForUser's
+	// doc comment for the policy rationale. We log the degraded list at
+	// warning level so on-call can correlate permissive quota decisions
+	// with cluster outages.
+	jobCount, degraded, err := e.countJobsForUser(ctx, usernameLabelValue)
 	if err != nil {
 		return http.StatusInternalServerError, errors.Wrapf(err, "unable to determine the number of jobs that %s is currently running", user)
+	}
+	if len(degraded) > 0 {
+		log.Warnf("quota check for %s used visible count only; could not query operator(s): %v", user, degraded)
 	}
 	jobLimit, err := e.getJobLimitForUser(ctx, user)
 	if err != nil {
