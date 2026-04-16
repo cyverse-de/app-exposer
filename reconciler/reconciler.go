@@ -304,16 +304,27 @@ func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 			return fmt.Errorf("listing analyses from %q: %w", op.Name, err)
 		}
 
-		// Process each analysis found in the cluster.
+		// Process each analysis found in the cluster. Per-analysis errors
+		// are collected rather than short-circuited: we want to attempt
+		// every analysis in this claim cycle, but also surface failure
+		// so the enclosing transaction rolls back — which leaves
+		// last_reconciled_at unchanged and re-queues this operator for
+		// the next reconcile tick instead of making the failing analysis
+		// wait until the next full 30s cycle.
+		var analysisErrs []error
 		for _, pod := range info.Pods {
 			log.Debugf("reconciling analysis %s", pod.AnalysisID)
 			if err := r.reconcileAnalysis(ctx, tx, pod); err != nil {
 				log.Errorf("failed to reconcile analysis %s: %v", pod.AnalysisID, err)
+				analysisErrs = append(analysisErrs, fmt.Errorf("analysis %s: %w", pod.AnalysisID, err))
 			} else {
 				log.Infof("reconciled analysis %s", pod.AnalysisID)
 			}
 		}
 
+		if len(analysisErrs) > 0 {
+			return fmt.Errorf("reconciling %d analysis(es) from operator %q: %w", len(analysisErrs), op.Name, errors.Join(analysisErrs...))
+		}
 		return nil
 	})
 }
