@@ -475,3 +475,89 @@ func TestReconcileNext(t *testing.T) {
 		assert.True(t, errors.Is(err, sql.ErrNoRows), "expected sql.ErrNoRows, got %v", err)
 	})
 }
+
+func TestStartListenerNoDBURI(t *testing.T) {
+	// With dbURI empty, startListener must short-circuit: return a
+	// usable (buffered) channel without spawning a goroutine or touching
+	// pq.NewListener. A regression here would re-introduce a goroutine
+	// leak on every reconciler construction in environments where the
+	// DB URI isn't threaded through.
+	r := newTestReconciler(t, &fakeReconcilerDB{})
+	// r.dbURI is "" because newTestReconciler passes "" to New().
+
+	ch := r.startListener(context.Background())
+	require.NotNil(t, ch, "startListener must always return a non-nil channel")
+
+	// Confirm the channel is inert — nothing should ever arrive.
+	select {
+	case <-ch:
+		t.Fatal("unexpected notification on inert channel")
+	case <-time.After(10 * time.Millisecond):
+	}
+}
+
+func TestStartListenerContextAlreadyCanceled(t *testing.T) {
+	// A pre-canceled context should cause the goroutine to exit on its
+	// first iteration without attempting Listen(). We can't observe that
+	// directly without plumbing an injectable listener factory, so we
+	// settle for verifying the channel is returned and no panic occurs.
+	// A real-world test would be an integration test against Postgres.
+	r := &Reconciler{dbURI: "postgres://nobody@127.0.0.1:1/nope"}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	ch := r.startListener(ctx)
+	require.NotNil(t, ch)
+	// Give the goroutine a brief window to observe the cancellation and
+	// exit. If it's stuck in Listen(), the -race test would still pass;
+	// this is a smoke test, not a leak check.
+	time.Sleep(50 * time.Millisecond)
+}
+
+func TestNextBackoff(t *testing.T) {
+	tests := []struct {
+		name string
+		cur  time.Duration
+		max  time.Duration
+		want time.Duration
+	}{
+		{"doubles below ceiling", 5 * time.Second, time.Minute, 10 * time.Second},
+		{"doubles up to ceiling", 30 * time.Second, time.Minute, time.Minute},
+		{"caps at ceiling", 40 * time.Second, time.Minute, time.Minute},
+		{"stays at ceiling when already there", time.Minute, time.Minute, time.Minute},
+		{"zero doubles to zero", 0, time.Minute, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, nextBackoff(tt.cur, tt.max))
+		})
+	}
+}
+
+func TestSleepCtx(t *testing.T) {
+	t.Run("returns true when duration elapses", func(t *testing.T) {
+		start := time.Now()
+		assert.True(t, sleepCtx(context.Background(), 20*time.Millisecond))
+		assert.GreaterOrEqual(t, time.Since(start), 20*time.Millisecond)
+	})
+
+	t.Run("returns false when context already canceled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		start := time.Now()
+		assert.False(t, sleepCtx(ctx, time.Hour))
+		// Should return promptly — definitely not wait the full hour.
+		assert.Less(t, time.Since(start), 100*time.Millisecond)
+	})
+
+	t.Run("returns false when context cancels mid-wait", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			cancel()
+		}()
+		start := time.Now()
+		assert.False(t, sleepCtx(ctx, time.Hour))
+		assert.Less(t, time.Since(start), 100*time.Millisecond)
+	})
+}

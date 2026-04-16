@@ -65,18 +65,86 @@ func getLocalIP() string {
 	return "127.0.0.1"
 }
 
-// startListener creates a persistent PostgreSQL LISTEN connection for the
-// "operator_changed" channel. Notifications are forwarded to the returned
-// channel. The listener reconnects automatically on connection loss.
+// Backoff bounds for the LISTEN retry loop. The outer retry only fires
+// when pq.Listener.Listen() itself fails at setup (bad channel name,
+// missing privilege, etc.); post-setup DB blips are handled by pq's own
+// reconnect machinery. Capped at 5 minutes to match syncTicker so we
+// never sit idle for longer than the fallback polling interval.
+const (
+	initialListenerBackoff = 5 * time.Second
+	maxListenerBackoff     = 5 * time.Minute
+)
+
+// startListener returns a channel that fires whenever this process should
+// re-sync operators from the DB. It opens a PostgreSQL LISTEN on the
+// "operator_changed" channel in a background goroutine with retry-and-
+// backoff, so a transient Listen() failure at startup does not silently
+// disable NOTIFY-driven syncs for the life of the process.
+//
+// The returned channel never closes; callers should select on it in the
+// same loop that handles ctx.Done(). If dbURI is empty, the channel is
+// returned inert (operator change notifications are disabled and only
+// the periodic syncTicker drives SyncOperators).
 func (r *Reconciler) startListener(ctx context.Context) <-chan struct{} {
 	ch := make(chan struct{}, 1) // buffered so sends never block
 
 	if r.dbURI == "" {
-		log.Warn("no database URI configured; operator change notifications disabled")
+		log.Warn("no database URI configured; operator change notifications disabled, falling back to periodic sync only")
 		return ch
 	}
 
-	reportProblem := func(ev pq.ListenerEventType, err error) {
+	go r.listenerLoop(ctx, ch)
+	return ch
+}
+
+// listenerLoop owns the pq.Listener lifecycle. It retries failed Listen()
+// calls with exponential backoff and guarantees listener.Close() is called
+// on every exit path — pq.NewListener spawns an internal reconnect
+// goroutine as part of its constructor, so skipping Close leaks it.
+func (r *Reconciler) listenerLoop(ctx context.Context, ch chan<- struct{}) {
+	backoff := initialListenerBackoff
+
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+
+		listener := pq.NewListener(r.dbURI, 10*time.Second, time.Minute, r.reportListenerProblem(ch))
+		if err := listener.Listen("operator_changed"); err != nil {
+			// Usual cause: the NOTIFY channel name is misconfigured or
+			// the role lacks LISTEN privilege. Close so pq.Listener's
+			// internal reconnect goroutine stops; otherwise we leak one
+			// goroutine per retry attempt.
+			_ = listener.Close()
+			log.Warnf(
+				"LISTEN on operator_changed failed; periodic sync continues, will retry in %s: %v",
+				backoff, err,
+			)
+			if !sleepCtx(ctx, backoff) {
+				return
+			}
+			backoff = nextBackoff(backoff, maxListenerBackoff)
+			continue
+		}
+
+		log.Info("listening for operator_changed notifications from PostgreSQL")
+		backoff = initialListenerBackoff // reset after any successful Listen
+
+		r.pumpNotifications(ctx, listener, ch)
+		_ = listener.Close()
+		if ctx.Err() != nil {
+			return
+		}
+		// Pump exited without context cancel, which means pq closed the
+		// Notify channel. Fall through to re-establish.
+	}
+}
+
+// reportListenerProblem returns the callback pq.NewListener invokes on
+// connection-state transitions. It trips a resync on reconnect so changes
+// missed during the disconnect window propagate immediately.
+func (r *Reconciler) reportListenerProblem(ch chan<- struct{}) func(pq.ListenerEventType, error) {
+	return func(ev pq.ListenerEventType, err error) {
 		if err != nil {
 			log.Errorf("pg listener: %v", err)
 		}
@@ -93,35 +161,50 @@ func (r *Reconciler) startListener(ctx context.Context) <-chan struct{} {
 		default:
 		}
 	}
+}
 
-	listener := pq.NewListener(r.dbURI, 10*time.Second, time.Minute, reportProblem)
-	if err := listener.Listen("operator_changed"); err != nil {
-		log.Errorf("failed to LISTEN on operator_changed: %v", err)
-		return ch
-	}
-	log.Info("listening for operator_changed notifications from PostgreSQL")
-
-	go func() {
-		defer listener.Close() //nolint:errcheck
-		for {
-			select {
-			case <-ctx.Done():
+// pumpNotifications forwards every NOTIFY event onto ch until the context
+// is canceled or pq closes the Notify channel. Sends to ch are
+// non-blocking because ch is buffered size-1 and rapid bursts should
+// collapse into at most one pending sync.
+func (r *Reconciler) pumpNotifications(ctx context.Context, listener *pq.Listener, ch chan<- struct{}) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case _, ok := <-listener.Notify:
+			if !ok {
 				return
-			case _, ok := <-listener.Notify:
-				if !ok {
-					return
-				}
-				// Signal the main loop to sync. Non-blocking send so
-				// rapid changes don't queue up redundant syncs.
-				select {
-				case ch <- struct{}{}:
-				default:
-				}
+			}
+			select {
+			case ch <- struct{}{}:
+			default:
 			}
 		}
-	}()
+	}
+}
 
-	return ch
+// sleepCtx waits for d or until ctx is canceled. Returns true when the
+// wait completed normally, false when the context canceled — lets callers
+// use it as a loop guard without checking ctx separately.
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+// nextBackoff doubles cur, capped at maxBackoff.
+func nextBackoff(cur, maxBackoff time.Duration) time.Duration {
+	next := cur * 2
+	if next > maxBackoff {
+		return maxBackoff
+	}
+	return next
 }
 
 // Run starts the reconciliation loop. It periodically refreshes the operator
