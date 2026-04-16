@@ -222,7 +222,7 @@ func (c *Client) UpdatePermissions(ctx context.Context, analysisID string, users
 
 	log.Infof("operator %s: PUT %s (analysis %s, %d users)", c.name, reqURL, analysisID, len(users))
 
-	body, err := json.Marshal(map[string][]string{"allowedUsers": users})
+	body, err := json.Marshal(UpdatePermissionsRequest{AllowedUsers: users})
 	if err != nil {
 		return fmt.Errorf("marshalling permissions request: %w", err)
 	}

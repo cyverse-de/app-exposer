@@ -3,13 +3,9 @@ package httphandlers
 import (
 	"net/http"
 
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/labstack/echo/v4"
 )
-
-// UpdatePermissionsRequest is the request body for the permissions update endpoint.
-type UpdatePermissionsRequest struct {
-	AllowedUsers []string `json:"allowedUsers"`
-}
 
 // UpdatePermissionsHandler pushes a new allowed-users list to the operator
 // running the given analysis. The full user list is provided (not incremental).
@@ -19,8 +15,8 @@ type UpdatePermissionsRequest struct {
 //	@Description	Pushes an updated list of allowed users to the operator's
 //	@Description	permissions ConfigMap for the given analysis.
 //	@Accept			json
-//	@Param			analysis-id	path	string						true	"The analysis ID"
-//	@Param			request		body	UpdatePermissionsRequest	true	"The new allowed users list"
+//	@Param			analysis-id	path	string									true	"The analysis ID"
+//	@Param			request		body	operatorclient.UpdatePermissionsRequest	true	"The new allowed users list"
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		404	{object}	common.ErrorResponse
@@ -33,7 +29,7 @@ func (h *HTTPHandlers) UpdatePermissionsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}
 
-	var req UpdatePermissionsRequest
+	var req operatorclient.UpdatePermissionsRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}

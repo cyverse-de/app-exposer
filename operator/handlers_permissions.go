@@ -22,11 +22,6 @@ type PermissionsResponse struct {
 	AllowedUsers []string `json:"allowedUsers"`
 }
 
-// UpdatePermissionsRequest is the request body for HandleUpdatePermissions.
-type UpdatePermissionsRequest struct {
-	AllowedUsers []string `json:"allowedUsers"`
-}
-
 // findPermissionsConfigMap locates the permissions ConfigMap for an analysis
 // by its analysis-id label and permissions- name prefix.
 func (o *Operator) findPermissionsConfigMap(ctx context.Context, analysisID string) (*apiv1.ConfigMap, error) {
@@ -93,8 +88,8 @@ func (o *Operator) HandleGetPermissions(c echo.Context) error {
 //	@Description	for the given analysis. The full list must be provided (not incremental).
 //	@Tags			analyses
 //	@Accept			json
-//	@Param			analysis-id	path	string						true	"The analysis ID"
-//	@Param			request		body	UpdatePermissionsRequest	true	"The new allowed users list"
+//	@Param			analysis-id	path	string									true	"The analysis ID"
+//	@Param			request		body	operatorclient.UpdatePermissionsRequest	true	"The new allowed users list"
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		404	{object}	common.ErrorResponse
@@ -107,7 +102,7 @@ func (o *Operator) HandleUpdatePermissions(c echo.Context) error {
 		return err
 	}
 
-	var req UpdatePermissionsRequest
+	var req operatorclient.UpdatePermissionsRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}

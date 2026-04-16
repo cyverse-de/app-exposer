@@ -544,7 +544,7 @@ func TestHandleUpdatePermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Call HandleUpdatePermissions with new users.
-	body, _ := json.Marshal(UpdatePermissionsRequest{AllowedUsers: []string{"new-user1", "new-user2"}})
+	body, _ := json.Marshal(operatorclient.UpdatePermissionsRequest{AllowedUsers: []string{"new-user1", "new-user2"}})
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -566,7 +566,7 @@ func TestHandleUpdatePermissions(t *testing.T) {
 func TestHandleUpdatePermissionsEmptyUsers(t *testing.T) {
 	op, _, _ := newTestOperator(t, 10)
 
-	body, _ := json.Marshal(UpdatePermissionsRequest{AllowedUsers: []string{}})
+	body, _ := json.Marshal(operatorclient.UpdatePermissionsRequest{AllowedUsers: []string{}})
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

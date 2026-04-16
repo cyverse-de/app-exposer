@@ -76,6 +76,13 @@ type LogoutUserRequest struct {
 	Username string `json:"username"`
 }
 
+// UpdatePermissionsRequest is the request body for the permissions-update
+// endpoint. Canonical definition lives in operatorclient so both app-exposer's
+// user-facing handler and the operator's HTTP handler share one type.
+type UpdatePermissionsRequest struct {
+	AllowedUsers []string `json:"allowedUsers"`
+}
+
 // LogoutUserResponse is returned by the logout-user endpoint.
 type LogoutUserResponse struct {
 	SessionsInvalidated int `json:"sessions_invalidated"`
