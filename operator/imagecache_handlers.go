@@ -2,12 +2,14 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/labstack/echo/v4"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // bulkImageOp binds the request, validates it, applies fn to each image,
@@ -144,8 +146,11 @@ func (o *Operator) HandleGetCachedImage(c echo.Context) error {
 
 	status, err := o.imageCache.GetCachedImageStatus(ctx, id)
 	if err != nil {
-		// Check if the underlying K8s error is NotFound through the wrapping.
-		if apierrors.IsNotFound(err) {
+		// GetCachedImageStatus wraps the K8s error with fmt.Errorf(%w), so
+		// unwrap explicitly with errors.As before comparing the reason. This
+		// matches the pattern used in gateway.go for CORS middleware lookups.
+		var statusErr *apierrors.StatusError
+		if errors.As(err, &statusErr) && statusErr.ErrStatus.Reason == metav1.StatusReasonNotFound {
 			return c.JSON(http.StatusNotFound, common.ErrorResponse{Message: fmt.Sprintf("no cached image with id %q", id)})
 		}
 		return c.JSON(http.StatusInternalServerError, common.ErrorResponse{Message: err.Error()})
