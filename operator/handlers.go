@@ -414,10 +414,13 @@ type RegenerateResponse struct {
 //
 //	@Summary		Regenerate per-analysis network policies
 //	@Description	Rebuilds egress NetworkPolicies for all running analyses to
-//	@Description	match the operator's current configuration.
+//	@Description	match the operator's current configuration. Returns 207
+//	@Description	Multi-Status when some analyses failed to regenerate; the
+//	@Description	Errors field lists them.
 //	@Tags			network-policies
 //	@Produce		json
-//	@Success		200	{object}	RegenerateResponse
+//	@Success		200	{object}	RegenerateResponse	"All regenerated successfully"
+//	@Success		207	{object}	RegenerateResponse	"Partial success"
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/regenerate-network-policies [post]
 func (o *Operator) HandleRegenerateNetworkPolicies(c echo.Context) error {
@@ -456,7 +459,14 @@ func (o *Operator) HandleRegenerateNetworkPolicies(c echo.Context) error {
 	}
 
 	log.Infof("network policy regeneration complete: %d updated, %d errors", updated, len(errs))
-	return c.JSON(http.StatusOK, RegenerateResponse{
+	// Use 207 Multi-Status when any regeneration failed so automation
+	// that checks status codes notices partial failure. Matches the
+	// pattern used by bulkImageOp.
+	status := http.StatusOK
+	if len(errs) > 0 {
+		status = http.StatusMultiStatus
+	}
+	return c.JSON(status, RegenerateResponse{
 		Updated: updated,
 		Errors:  errs,
 	})

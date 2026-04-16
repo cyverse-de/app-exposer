@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,7 +21,9 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	ktesting "k8s.io/client-go/testing"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayfake "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
 )
@@ -786,6 +789,7 @@ func TestHandleRegenerateNetworkPolicies(t *testing.T) {
 	tests := []struct {
 		name        string
 		setup       func(t *testing.T, cs *fake.Clientset)
+		wantStatus  int
 		wantUpdated int
 		wantErrors  int
 	}{
@@ -815,6 +819,7 @@ func TestHandleRegenerateNetworkPolicies(t *testing.T) {
 					require.NoError(t, err)
 				}
 			},
+			wantStatus:  http.StatusOK,
 			wantUpdated: 2,
 			wantErrors:  0,
 		},
@@ -861,14 +866,66 @@ func TestHandleRegenerateNetworkPolicies(t *testing.T) {
 				}, metav1.CreateOptions{})
 				require.NoError(t, err)
 			},
+			wantStatus:  http.StatusOK,
 			wantUpdated: 1,
 			wantErrors:  0,
 		},
 		{
 			name:        "handles no deployments",
 			setup:       nil,
+			wantStatus:  http.StatusOK,
 			wantUpdated: 0,
 			wantErrors:  0,
+		},
+		{
+			// When a NetworkPolicy upsert fails for any analysis, the
+			// handler should keep processing the rest but return 207
+			// Multi-Status so automation can detect partial success.
+			name: "partial failure returns 207 Multi-Status",
+			setup: func(t *testing.T, cs *fake.Clientset) {
+				t.Helper()
+				ctx := context.Background()
+				for _, id := range []string{"ok-analysis", "fail-analysis"} {
+					_, err := cs.AppsV1().Deployments("vice-apps").Create(ctx, &appsv1.Deployment{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "dep-" + id,
+							Namespace: "vice-apps",
+							Labels: map[string]string{
+								"app-type":    "interactive",
+								"analysis-id": id,
+							},
+						},
+						Spec: appsv1.DeploymentSpec{
+							Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": id}},
+							Template: apiv1.PodTemplateSpec{
+								ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": id}},
+								Spec:       apiv1.PodSpec{Containers: []apiv1.Container{{Name: "c", Image: "img"}}},
+							},
+						},
+					}, metav1.CreateOptions{})
+					require.NoError(t, err)
+				}
+				// Reject create attempts targeting the specific failing
+				// analysis's NetworkPolicy so we can assert 207 on a
+				// real partial outcome.
+				cs.PrependReactor("create", "networkpolicies", func(action ktesting.Action) (bool, runtime.Object, error) {
+					createAction, ok := action.(ktesting.CreateAction)
+					if !ok {
+						return false, nil, nil
+					}
+					obj, ok := createAction.GetObject().(metav1.Object)
+					if !ok {
+						return false, nil, nil
+					}
+					if obj.GetName() == "vice-egress-fail-analysis" {
+						return true, nil, errors.New("injected failure")
+					}
+					return false, nil, nil
+				})
+			},
+			wantStatus:  http.StatusMultiStatus,
+			wantUpdated: 1,
+			wantErrors:  1,
 		},
 	}
 
@@ -886,12 +943,20 @@ func TestHandleRegenerateNetworkPolicies(t *testing.T) {
 
 			err := op.HandleRegenerateNetworkPolicies(c)
 			require.NoError(t, err)
-			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, tt.wantStatus, rec.Code, "status code mismatch")
 
 			var resp RegenerateResponse
 			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 			assert.Equal(t, tt.wantUpdated, resp.Updated, "updated count mismatch")
 			assert.Len(t, resp.Errors, tt.wantErrors, "errors count mismatch")
+
+			// For the partial-failure case we only verify the response
+			// shape and status code — the body-level presence check is
+			// skipped because the injected reactor deliberately prevents
+			// creation of one of the NetworkPolicies.
+			if tt.wantErrors > 0 {
+				return
+			}
 
 			// Verify NetworkPolicies were created for each deployment that had
 			// a valid analysis-id label.

@@ -107,8 +107,11 @@ type TerminateAllResponse struct {
 //	@Summary		Terminates all analyses
 //	@Description	Terminates all analyses marked as running in the DE database.
 //	@Description	Does not check for analyses in the cluster but not marked as running in the database.
-//	@Description	Terminates both VICE and batch analyses.
-//	@Success		200	{object}	TerminateAllResponse
+//	@Description	Terminates both VICE and batch analyses. Returns 207
+//	@Description	Multi-Status when any termination failed; the failed_vice
+//	@Description	and failed_batch fields list the external IDs that failed.
+//	@Success		200	{object}	TerminateAllResponse	"All terminated successfully"
+//	@Success		207	{object}	TerminateAllResponse	"Partial success"
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/admin/terminate-all [post]
@@ -182,5 +185,13 @@ func (h *HTTPHandlers) TerminateAllAnalysesHandler(c echo.Context) error {
 		FailedBatch: failedBatch,
 	}
 
-	return c.JSON(http.StatusOK, retval)
+	// 207 Multi-Status when any termination failed so automation can
+	// distinguish complete success from partial success without parsing
+	// the body. Matches the pattern used in HandleRegenerateNetworkPolicies
+	// and the image-cache bulk handlers.
+	status := http.StatusOK
+	if len(failedVICE) > 0 || len(failedBatch) > 0 {
+		status = http.StatusMultiStatus
+	}
+	return c.JSON(status, retval)
 }
