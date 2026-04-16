@@ -15,10 +15,37 @@ import (
 // fileTransfersPort is the port used by the file-transfer sidecar container.
 const fileTransfersPort = int32(60001)
 
+// Transfer-goroutine lifecycle bounds. maxTransferLifetime caps how long any
+// single save/download/upload goroutine may live — if the sidecar stops
+// responding the goroutine is terminated deterministically instead of
+// lingering for the pod's remaining lifetime. pollInterval grows from
+// initialPollInterval to maxPollInterval in pollIntervalStep increments,
+// trading a small amount of tail latency for a linear reduction in
+// request volume against the sidecar.
+const (
+	maxTransferLifetime = time.Hour
+	initialPollInterval = 5 * time.Second
+	maxPollInterval     = 15 * time.Second
+	pollIntervalStep    = 5 * time.Second
+)
+
 // transferHTTPClient is used for requests to the file-transfer sidecar.
 // It has a per-request timeout to prevent goroutines from blocking forever
 // if the sidecar hangs or the connection stalls.
 var transferHTTPClient = &http.Client{Timeout: 30 * time.Second}
+
+// sleepCtx waits for d or until ctx is canceled. Returns true if d elapsed,
+// false if ctx canceled first.
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
 
 // HandleSaveAndExit triggers the file transfer sidecar to upload outputs,
 // then deletes all analysis resources.
@@ -40,10 +67,19 @@ func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 	log.Infof("save-and-exit requested for analysis %s", analysisID)
 
 	// Run file transfer and cleanup asynchronously so the caller doesn't block.
-	// A fresh background context is used because the HTTP request context will
-	// be cancelled once this handler returns, which would abort the transfer.
+	// A detached background context is used because the HTTP request context
+	// will be cancelled once this handler returns, which would abort the
+	// transfer; we bound it with a hard lifetime so a stuck sidecar can't
+	// keep the goroutine alive indefinitely.
+	//
+	// TODO: surface upload failures back to analysis status. The handler has
+	// already responded 200 by the time the goroutine runs, so the user has
+	// no visibility into a failed transfer today beyond the log line below.
+	// That's a larger change (separate notification path or analysis-level
+	// status field) and is tracked separately.
 	go func() {
-		bgCtx := context.Background()
+		bgCtx, cancel := context.WithTimeout(context.Background(), maxTransferLifetime)
+		defer cancel()
 
 		if err := o.triggerFileTransfer(bgCtx, analysisID, "/upload"); err != nil {
 			log.Errorf("upload failed for analysis %s, proceeding with resource cleanup anyway: %v", analysisID, err)
@@ -102,8 +138,15 @@ func (o *Operator) handleAsyncTransfer(c echo.Context, action, transferPath stri
 
 	log.Infof("%s requested for analysis %s", action, analysisID)
 
+	// Same lifetime-bounding rationale as HandleSaveAndExit above: the HTTP
+	// request context is gone once this handler returns, so we need a
+	// fresh context, but it must have an upper bound so a stuck sidecar
+	// can't leak a goroutine for the life of the pod.
 	go func() {
-		if err := o.triggerFileTransfer(context.Background(), analysisID, transferPath); err != nil {
+		bgCtx, cancel := context.WithTimeout(context.Background(), maxTransferLifetime)
+		defer cancel()
+
+		if err := o.triggerFileTransfer(bgCtx, analysisID, transferPath); err != nil {
 			log.Errorf("%s failed for %s: %v", action, analysisID, err)
 		} else {
 			log.Infof("%s succeeded for analysis %s", action, analysisID)
@@ -163,21 +206,37 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 
 	log.Infof("file transfer started for analysis %s (uuid %s)", analysisID, xferResp.UUID)
 
-	// Poll until the transfer finishes, with an upper bound to prevent infinite loops.
-	const maxPollIterations = 720 // 1 hour at 5s intervals
-	pollCount := 0
+	// Poll until the transfer finishes. The overall lifetime cap comes from
+	// the caller's context (bounded by maxTransferLifetime at the goroutine
+	// entry point); the per-poll interval grows from initialPollInterval
+	// to maxPollInterval so a long transfer doesn't pound the sidecar with
+	// 720 requests the way the old fixed-5s-cap loop did.
+	pollInterval := initialPollInterval
+	startTime := time.Now()
+	lastLogged := startTime
+
 	for xferResp.Status != "completed" && xferResp.Status != "failed" {
-		pollCount++
-		if pollCount >= maxPollIterations {
-			return fmt.Errorf("file transfer timed out for analysis %s after %d seconds", analysisID, pollCount*5)
+		// Context-aware sleep: if the goroutine's deadline fires or the
+		// caller cancels, we bail out of the loop promptly instead of
+		// finishing the current 5s sleep first.
+		if !sleepCtx(ctx, pollInterval) {
+			return fmt.Errorf("file transfer canceled for analysis %s after %s: %w", analysisID, time.Since(startTime).Truncate(time.Second), ctx.Err())
 		}
 
-		time.Sleep(5 * time.Second)
+		// Bump the interval towards the ceiling so long-running transfers
+		// don't stay at the aggressive startup cadence.
+		if pollInterval < maxPollInterval {
+			pollInterval += pollIntervalStep
+			if pollInterval > maxPollInterval {
+				pollInterval = maxPollInterval
+			}
+		}
 
-		// Log progress every ~60s (every 12 iterations at 5s intervals).
-		if pollCount%12 == 0 {
-			log.Infof("file transfer in progress for analysis %s (uuid %s, %ds elapsed)",
-				analysisID, xferResp.UUID, pollCount*5)
+		// Log progress at most once per minute regardless of poll cadence.
+		if elapsed := time.Since(lastLogged); elapsed >= time.Minute {
+			log.Infof("file transfer in progress for analysis %s (uuid %s, %s elapsed)",
+				analysisID, xferResp.UUID, time.Since(startTime).Truncate(time.Second))
+			lastLogged = time.Now()
 		}
 
 		// JoinPath appends the transfer UUID to the base path (e.g. /upload/<uuid>).
