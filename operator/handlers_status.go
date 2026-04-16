@@ -276,35 +276,48 @@ func (o *Operator) HandleLogs(c echo.Context) error {
 		logOpts.Container = "analysis"
 	}
 
+	// Parse optional typed query params. Malformed values return 400 so
+	// the caller knows the value was ignored rather than silently using
+	// the default.
 	if prevStr := c.QueryParam("previous"); prevStr != "" {
-		if previous, err := strconv.ParseBool(prevStr); err == nil {
-			logOpts.Previous = previous
+		previous, err := strconv.ParseBool(prevStr)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("invalid 'previous' value %q: must be a boolean", prevStr))
 		}
+		logOpts.Previous = previous
 	}
 
 	if sinceStr := c.QueryParam("since"); sinceStr != "" {
-		if since, err := strconv.ParseInt(sinceStr, 10, 64); err == nil {
-			logOpts.SinceSeconds = &since
+		since, err := strconv.ParseInt(sinceStr, 10, 64)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("invalid 'since' value %q: must be an integer number of seconds", sinceStr))
 		}
+		logOpts.SinceSeconds = &since
 	}
 
 	if sinceTimeStr := c.QueryParam("since-time"); sinceTimeStr != "" {
-		if sinceTime, err := strconv.ParseInt(sinceTimeStr, 10, 64); err == nil {
-			t := metav1.Unix(sinceTime, 0)
-			logOpts.SinceTime = &t
+		sinceTime, err := strconv.ParseInt(sinceTimeStr, 10, 64)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("invalid 'since-time' value %q: must be a unix timestamp in seconds", sinceTimeStr))
 		}
+		t := metav1.Unix(sinceTime, 0)
+		logOpts.SinceTime = &t
 	}
 
 	if tailStr := c.QueryParam("tail-lines"); tailStr != "" {
-		if tailLines, err := strconv.ParseInt(tailStr, 10, 64); err == nil {
-			logOpts.TailLines = &tailLines
+		tailLines, err := strconv.ParseInt(tailStr, 10, 64)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("invalid 'tail-lines' value %q: must be a non-negative integer", tailStr))
 		}
+		logOpts.TailLines = &tailLines
 	}
 
 	if tsStr := c.QueryParam("timestamps"); tsStr != "" {
-		if timestamps, err := strconv.ParseBool(tsStr); err == nil {
-			logOpts.Timestamps = timestamps
+		timestamps, err := strconv.ParseBool(tsStr)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("invalid 'timestamps' value %q: must be a boolean", tsStr))
 		}
+		logOpts.Timestamps = timestamps
 	}
 
 	opts := analysisLabelSelector(analysisID)
