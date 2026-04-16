@@ -32,12 +32,17 @@ type JobStatusUpdate struct {
 	SentOn           int64  `db:"sent_on"`
 }
 
-// ToOperatorConfig converts a DB Operator model to the operatorclient.OperatorConfig type.
+// ToOperatorConfig projects the DB's full Operator row down to the public
+// OperatorConfig shape. Priority is preserved — earlier versions of this
+// method dropped it, which happened to work only because ListOperators
+// returns rows in priority order and the scheduler trusted slice order.
+// Carrying Priority through the type system makes the invariant explicit.
 func (o *Operator) ToOperatorConfig() operatorclient.OperatorConfig {
 	return operatorclient.OperatorConfig{
 		Name:          o.Name,
 		URL:           o.URL,
 		TLSSkipVerify: o.TLSSkipVerify,
+		Priority:      o.Priority,
 	}
 }
 
@@ -55,18 +60,15 @@ func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 	return ops, err
 }
 
-// OperatorSummary contains the public, non-sensitive fields of an operator.
-type OperatorSummary struct {
-	Name          string `db:"name" json:"name"`
-	URL           string `db:"url" json:"url"`
-	TLSSkipVerify bool   `db:"tls_skip_verify" json:"tls_skip_verify"`
-	Priority      int    `db:"priority" json:"priority"`
-}
-
-// ListOperatorSummaries returns non-sensitive operator fields, ordered by
-// priority (lower values first) with creation time as tiebreaker.
-func (d *Database) ListOperatorSummaries(ctx context.Context) ([]OperatorSummary, error) {
-	ops := make([]OperatorSummary, 0)
+// ListOperatorSummaries returns the public (non-sensitive) fields of every
+// operator, ordered by priority (lower values first) with creation time as
+// tiebreaker. The returned type is operatorclient.OperatorConfig rather
+// than a db-local struct because that type already carries the same four
+// fields and serves as the canonical public shape; having a second struct
+// here would invite drift. sqlx can scan directly into OperatorConfig via
+// its db struct tags.
+func (d *Database) ListOperatorSummaries(ctx context.Context) ([]operatorclient.OperatorConfig, error) {
+	ops := make([]operatorclient.OperatorConfig, 0)
 	const query = `
 		SELECT name, url, tls_skip_verify, priority
 		FROM operators

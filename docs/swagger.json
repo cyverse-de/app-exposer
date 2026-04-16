@@ -518,7 +518,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/db.OperatorSummary"
+                                "$ref": "#/definitions/operatorclient.OperatorConfig"
                             }
                         }
                     },
@@ -547,7 +547,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httphandlers.createOperatorRequest"
+                            "$ref": "#/definitions/operatorclient.OperatorConfig"
                         }
                     }
                 ],
@@ -555,7 +555,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/db.OperatorSummary"
+                            "$ref": "#/definitions/operatorclient.OperatorConfig"
                         }
                     },
                     "400": {
@@ -635,12 +635,18 @@
         },
         "/vice/admin/terminate-all": {
             "post": {
-                "description": "Terminates all analyses marked as running in the DE database.\nDoes not check for analyses in the cluster but not marked as running in the database.\nTerminates both VICE and batch analyses.",
+                "description": "Terminates all analyses marked as running in the DE database.\nDoes not check for analyses in the cluster but not marked as running in the database.\nTerminates both VICE and batch analyses. Returns 207\nMulti-Status when any termination failed; the failed_vice\nand failed_batch fields list the external IDs that failed.",
                 "summary": "Terminates all analyses",
                 "operationId": "terminate-all-analyses",
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "All terminated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.TerminateAllResponse"
+                        }
+                    },
+                    "207": {
+                        "description": "Partial success",
                         "schema": {
                             "$ref": "#/definitions/httphandlers.TerminateAllResponse"
                         }
@@ -1626,23 +1632,6 @@
                 }
             }
         },
-        "db.OperatorSummary": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "priority": {
-                    "type": "integer"
-                },
-                "tls_skip_verify": {
-                    "type": "boolean"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
         "httphandlers.AnalysisInClusterResponse": {
             "type": "object",
             "properties": {
@@ -1985,23 +1974,6 @@
                     "items": {
                         "type": "string"
                     }
-                }
-            }
-        },
-        "httphandlers.createOperatorRequest": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "priority": {
-                    "type": "integer"
-                },
-                "tls_skip_verify": {
-                    "type": "boolean"
-                },
-                "url": {
-                    "type": "string"
                 }
             }
         },
@@ -2931,6 +2903,23 @@
                 "usedMemory": {
                     "description": "bytes",
                     "type": "integer"
+                }
+            }
+        },
+        "operatorclient.OperatorConfig": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "tls_skip_verify": {
+                    "type": "boolean"
+                },
+                "url": {
+                    "type": "string"
                 }
             }
         },

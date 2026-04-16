@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,18 +25,18 @@ func testClient(t *testing.T, handler http.Handler) *OperatorClient {
 func TestAddOperator(t *testing.T) {
 	tests := []struct {
 		name       string
-		req        *AddOperatorRequest
+		req        *operatorclient.OperatorConfig
 		statusCode int
 		respBody   string
 		wantErr    bool
 		wantName   string
 		// validate is called with the decoded request body when provided,
 		// allowing individual cases to assert on fields sent to the server.
-		validate func(t *testing.T, got AddOperatorRequest)
+		validate func(t *testing.T, got operatorclient.OperatorConfig)
 	}{
 		{
 			name: "success",
-			req: &AddOperatorRequest{
+			req: &operatorclient.OperatorConfig{
 				Name: "cluster-a",
 				URL:  "https://op-a.example.com",
 			},
@@ -46,7 +47,7 @@ func TestAddOperator(t *testing.T) {
 		{
 			// Verify that all fields (including TLSSkipVerify) are sent correctly in the request body.
 			name: "sends all fields in request body",
-			req: &AddOperatorRequest{
+			req: &operatorclient.OperatorConfig{
 				Name:          "op-1",
 				URL:           "https://op.example.com",
 				TLSSkipVerify: true,
@@ -55,7 +56,7 @@ func TestAddOperator(t *testing.T) {
 			statusCode: http.StatusCreated,
 			// The handler echos back the decoded request, so respBody is built dynamically via validate.
 			wantName: "op-1",
-			validate: func(t *testing.T, got AddOperatorRequest) {
+			validate: func(t *testing.T, got operatorclient.OperatorConfig) {
 				t.Helper()
 				assert.Equal(t, "op-1", got.Name)
 				assert.Equal(t, "https://op.example.com", got.URL)
@@ -65,7 +66,7 @@ func TestAddOperator(t *testing.T) {
 		},
 		{
 			name: "missing required field returns error",
-			req: &AddOperatorRequest{
+			req: &operatorclient.OperatorConfig{
 				Name: "cluster-b",
 			},
 			statusCode: http.StatusBadRequest,
@@ -74,7 +75,7 @@ func TestAddOperator(t *testing.T) {
 		},
 		{
 			name: "server error",
-			req: &AddOperatorRequest{
+			req: &operatorclient.OperatorConfig{
 				Name: "cluster-c",
 				URL:  "https://op-c.example.com",
 			},
@@ -91,7 +92,7 @@ func TestAddOperator(t *testing.T) {
 				assert.Equal(t, "/vice/admin/operators", r.URL.Path)
 				assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-				var got AddOperatorRequest
+				var got operatorclient.OperatorConfig
 				if err := json.NewDecoder(r.Body).Decode(&got); err == nil && tt.validate != nil {
 					tt.validate(t, got)
 				}
@@ -103,7 +104,7 @@ func TestAddOperator(t *testing.T) {
 					_, _ = w.Write([]byte(tt.respBody)) //nolint:errcheck // test server write
 				} else if tt.validate != nil {
 					// Echo the request fields back as the summary so the client can decode it.
-					_ = json.NewEncoder(w).Encode(OperatorSummary{ //nolint:errcheck // test server write
+					_ = json.NewEncoder(w).Encode(operatorclient.OperatorConfig{ //nolint:errcheck // test server write
 						Name:          tt.req.Name,
 						URL:           tt.req.URL,
 						TLSSkipVerify: tt.req.TLSSkipVerify,

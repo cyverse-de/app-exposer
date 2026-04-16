@@ -10,25 +10,15 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/cyverse-de/app-exposer/operatorclient"
 )
 
-// OperatorSummary mirrors db.OperatorSummary from the app-exposer API.
-type OperatorSummary struct {
-	Name          string `json:"name"`
-	URL           string `json:"url"`
-	TLSSkipVerify bool   `json:"tls_skip_verify"`
-	Priority      int    `json:"priority"`
-}
-
-// AddOperatorRequest is the JSON body for creating a new operator.
-type AddOperatorRequest struct {
-	Name          string `json:"name"`
-	URL           string `json:"url"`
-	TLSSkipVerify bool   `json:"tls_skip_verify"`
-	Priority      int    `json:"priority"`
-}
-
-// OperatorClient talks to the app-exposer operator admin API.
+// OperatorClient talks to the app-exposer operator admin API. The JSON
+// payloads it produces and consumes are operatorclient.OperatorConfig,
+// which is the canonical shape for operator metadata on the wire; this
+// package previously carried hand-maintained mirror types that invited
+// drift.
 type OperatorClient struct {
 	baseURL *url.URL
 	http    *http.Client
@@ -44,7 +34,7 @@ func NewOperatorClient(baseURL *url.URL, httpClient *http.Client) *OperatorClien
 }
 
 // AddOperator creates a new operator via POST /vice/admin/operators.
-func (c *OperatorClient) AddOperator(ctx context.Context, req *AddOperatorRequest) (*OperatorSummary, error) {
+func (c *OperatorClient) AddOperator(ctx context.Context, req *operatorclient.OperatorConfig) (*operatorclient.OperatorConfig, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling request: %w", err)
@@ -67,7 +57,7 @@ func (c *OperatorClient) AddOperator(ctx context.Context, req *AddOperatorReques
 		return nil, readError(resp)
 	}
 
-	var summary OperatorSummary
+	var summary operatorclient.OperatorConfig
 	if err := json.NewDecoder(resp.Body).Decode(&summary); err != nil {
 		return nil, fmt.Errorf("decoding response: %w", err)
 	}
@@ -75,7 +65,7 @@ func (c *OperatorClient) AddOperator(ctx context.Context, req *AddOperatorReques
 }
 
 // ListOperators fetches all operators via GET /vice/admin/operators.
-func (c *OperatorClient) ListOperators(ctx context.Context) ([]OperatorSummary, error) {
+func (c *OperatorClient) ListOperators(ctx context.Context) ([]operatorclient.OperatorConfig, error) {
 	u := c.baseURL.JoinPath("vice", "admin", "operators")
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -92,7 +82,7 @@ func (c *OperatorClient) ListOperators(ctx context.Context) ([]OperatorSummary, 
 		return nil, readError(resp)
 	}
 
-	var ops []OperatorSummary
+	var ops []operatorclient.OperatorConfig
 	if err := json.NewDecoder(resp.Body).Decode(&ops); err != nil {
 		return nil, fmt.Errorf("decoding response: %w", err)
 	}

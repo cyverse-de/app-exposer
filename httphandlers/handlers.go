@@ -416,7 +416,7 @@ func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 //	@Summary		Lists registered operators
 //	@Description	Returns the name, URL, and tls_skip_verify flag for all operators in the database.
 //	@Produce		json
-//	@Success		200	{array}		db.OperatorSummary
+//	@Success		200	{array}		operatorclient.OperatorConfig
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/admin/operators [get]
 func (h *HTTPHandlers) AdminOperatorsHandler(c echo.Context) error {
@@ -479,14 +479,6 @@ func (h *HTTPHandlers) AdminOperatorCapacitiesHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, results)
 }
 
-// createOperatorRequest is the JSON request body for creating a new operator.
-type createOperatorRequest struct {
-	Name          string `json:"name"`
-	URL           string `json:"url"`
-	TLSSkipVerify bool   `json:"tls_skip_verify"`
-	Priority      int    `json:"priority"`
-}
-
 // CreateOperatorHandler adds a new operator to the database.
 //
 //	@ID				admin-create-operator
@@ -494,15 +486,18 @@ type createOperatorRequest struct {
 //	@Description	Adds a new operator to the database.
 //	@Accept			json
 //	@Produce		json
-//	@Param			body	body		createOperatorRequest	true	"Operator to create"
-//	@Success		201		{object}	db.OperatorSummary
+//	@Param			body	body		operatorclient.OperatorConfig	true	"Operator to create"
+//	@Success		201		{object}	operatorclient.OperatorConfig
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/vice/admin/operators [post]
 func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	var req createOperatorRequest
+	// The request body has the same shape as the response — both are
+	// operatorclient.OperatorConfig. A separate request type would only
+	// invite the two to drift.
+	var req operatorclient.OperatorConfig
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
@@ -531,13 +526,9 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	// Return only non-sensitive fields.
-	return c.JSON(http.StatusCreated, db.OperatorSummary{
-		Name:          created.Name,
-		URL:           created.URL,
-		TLSSkipVerify: created.TLSSkipVerify,
-		Priority:      created.Priority,
-	})
+	// Return only the public fields — drop timestamps, IDs, and
+	// reconciliation state. ToOperatorConfig performs that projection.
+	return c.JSON(http.StatusCreated, created.ToOperatorConfig())
 }
 
 // DeleteOperatorHandler deletes an operator by name. The operation is

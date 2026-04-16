@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	"text/tabwriter"
+
+	"github.com/cyverse-de/app-exposer/operatorclient"
 )
 
 const usage = `Usage: vice-operator-tool [--app-exposer-url URL] <command> [flags]
@@ -86,7 +88,7 @@ func runAdd(baseURLStr string, args []string) {
 	}
 
 	client := NewOperatorClient(u, http.DefaultClient)
-	summary, err := client.AddOperator(context.Background(), &AddOperatorRequest{
+	summary, err := client.AddOperator(context.Background(), &operatorclient.OperatorConfig{
 		Name:          *name,
 		URL:           *opURL,
 		TLSSkipVerify: *tlsSkip,
