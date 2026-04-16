@@ -403,7 +403,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/operator.UpdatePermissionsRequest"
+                            "$ref": "#/definitions/operatorclient.UpdatePermissionsRequest"
                         }
                     }
                 ],
@@ -1243,17 +1243,6 @@
                 }
             }
         },
-        "operator.UpdatePermissionsRequest": {
-            "type": "object",
-            "properties": {
-                "allowedUsers": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
         "operatorclient.ActiveSession": {
             "type": "object",
             "properties": {
@@ -1392,6 +1381,17 @@
                 },
                 "ready": {
                     "type": "boolean"
+                }
+            }
+        },
+        "operatorclient.UpdatePermissionsRequest": {
+            "type": "object",
+            "properties": {
+                "allowedUsers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

@@ -410,7 +410,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/operator.UpdatePermissionsRequest"
+                            "$ref": "#/definitions/operatorclient.UpdatePermissionsRequest"
                         }
                     }
                 ],
@@ -1250,17 +1250,6 @@ const docTemplate = `{
                 }
             }
         },
-        "operator.UpdatePermissionsRequest": {
-            "type": "object",
-            "properties": {
-                "allowedUsers": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
         "operatorclient.ActiveSession": {
             "type": "object",
             "properties": {
@@ -1399,6 +1388,17 @@ const docTemplate = `{
                 },
                 "ready": {
                     "type": "boolean"
+                }
+            }
+        },
+        "operatorclient.UpdatePermissionsRequest": {
+            "type": "object",
+            "properties": {
+                "allowedUsers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

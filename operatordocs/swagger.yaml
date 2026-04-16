@@ -248,13 +248,6 @@ definitions:
           type: string
         type: array
     type: object
-  operator.UpdatePermissionsRequest:
-    properties:
-      allowedUsers:
-        items:
-          type: string
-        type: array
-    type: object
   operatorclient.ActiveSession:
     properties:
       session_id:
@@ -348,6 +341,13 @@ definitions:
         type: string
       ready:
         type: boolean
+    type: object
+  operatorclient.UpdatePermissionsRequest:
+    properties:
+      allowedUsers:
+        items:
+          type: string
+        type: array
     type: object
   reporting.ConfigMapInfo:
     properties:
@@ -11018,7 +11018,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/operator.UpdatePermissionsRequest'
+          $ref: '#/definitions/operatorclient.UpdatePermissionsRequest'
       responses:
         "200":
           description: OK

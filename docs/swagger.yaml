@@ -159,6 +159,10 @@ definitions:
         items:
           $ref: '#/definitions/incluster.ConfigMapInfo'
         type: array
+      operator_errors:
+        items:
+          $ref: '#/definitions/httphandlers.OperatorError'
+        type: array
     type: object
   httphandlers.FilteredDeploymentsResponse:
     properties:
@@ -166,9 +170,17 @@ definitions:
         items:
           $ref: '#/definitions/incluster.DeploymentInfo'
         type: array
+      operator_errors:
+        items:
+          $ref: '#/definitions/httphandlers.OperatorError'
+        type: array
     type: object
   httphandlers.FilteredPodsResponse:
     properties:
+      operator_errors:
+        items:
+          $ref: '#/definitions/httphandlers.OperatorError'
+        type: array
       pods:
         items:
           $ref: '#/definitions/incluster.PodInfo'
@@ -176,6 +188,10 @@ definitions:
     type: object
   httphandlers.FilteredRoutesResponse:
     properties:
+      operator_errors:
+        items:
+          $ref: '#/definitions/httphandlers.OperatorError'
+        type: array
       routes:
         items:
           $ref: '#/definitions/incluster.RouteInfo'
@@ -183,6 +199,10 @@ definitions:
     type: object
   httphandlers.FilteredServicesResponse:
     properties:
+      operator_errors:
+        items:
+          $ref: '#/definitions/httphandlers.OperatorError'
+        type: array
       services:
         items:
           $ref: '#/definitions/incluster.ServiceInfo'
@@ -204,6 +224,13 @@ definitions:
       operator:
         type: string
     type: object
+  httphandlers.OperatorError:
+    properties:
+      error:
+        type: string
+      operator:
+        type: string
+    type: object
   httphandlers.TerminateAllResponse:
     properties:
       batch:
@@ -219,13 +246,6 @@ definitions:
           type: string
         type: array
       vice:
-        items:
-          type: string
-        type: array
-    type: object
-  httphandlers.UpdatePermissionsRequest:
-    properties:
-      allowedUsers:
         items:
           type: string
         type: array
@@ -928,6 +948,13 @@ definitions:
         type: string
       ready:
         type: boolean
+    type: object
+  operatorclient.UpdatePermissionsRequest:
+    properties:
+      allowedUsers:
+        items:
+          type: string
+        type: array
     type: object
   reporting.ConfigMapInfo:
     properties:
@@ -11466,7 +11493,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/httphandlers.UpdatePermissionsRequest'
+          $ref: '#/definitions/operatorclient.UpdatePermissionsRequest'
       responses:
         "200":
           description: OK

@@ -1179,7 +1179,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httphandlers.UpdatePermissionsRequest"
+                            "$ref": "#/definitions/operatorclient.UpdatePermissionsRequest"
                         }
                     }
                 ],
@@ -1852,6 +1852,12 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/incluster.ConfigMapInfo"
                     }
+                },
+                "operator_errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httphandlers.OperatorError"
+                    }
                 }
             }
         },
@@ -1863,12 +1869,24 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/incluster.DeploymentInfo"
                     }
+                },
+                "operator_errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httphandlers.OperatorError"
+                    }
                 }
             }
         },
         "httphandlers.FilteredPodsResponse": {
             "type": "object",
             "properties": {
+                "operator_errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httphandlers.OperatorError"
+                    }
+                },
                 "pods": {
                     "type": "array",
                     "items": {
@@ -1880,6 +1898,12 @@ const docTemplate = `{
         "httphandlers.FilteredRoutesResponse": {
             "type": "object",
             "properties": {
+                "operator_errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httphandlers.OperatorError"
+                    }
+                },
                 "routes": {
                     "type": "array",
                     "items": {
@@ -1891,6 +1915,12 @@ const docTemplate = `{
         "httphandlers.FilteredServicesResponse": {
             "type": "object",
             "properties": {
+                "operator_errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httphandlers.OperatorError"
+                    }
+                },
                 "services": {
                     "type": "array",
                     "items": {
@@ -1924,6 +1954,17 @@ const docTemplate = `{
                 }
             }
         },
+        "httphandlers.OperatorError": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "operator": {
+                    "type": "string"
+                }
+            }
+        },
         "httphandlers.TerminateAllResponse": {
             "type": "object",
             "properties": {
@@ -1946,17 +1987,6 @@ const docTemplate = `{
                     }
                 },
                 "vice": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "httphandlers.UpdatePermissionsRequest": {
-            "type": "object",
-            "properties": {
-                "allowedUsers": {
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -2918,6 +2948,17 @@ const docTemplate = `{
                 },
                 "ready": {
                     "type": "boolean"
+                }
+            }
+        },
+        "operatorclient.UpdatePermissionsRequest": {
+            "type": "object",
+            "properties": {
+                "allowedUsers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
