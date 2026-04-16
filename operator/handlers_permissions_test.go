@@ -225,3 +225,111 @@ func TestOperatorLogoutUserRequestRoundTrip(t *testing.T) {
 func decodeJSON(data []byte, out any) error {
 	return json.Unmarshal(data, out)
 }
+func TestHandleGetPermissions(t *testing.T) {
+	analysisID := "perms-test-1"
+	labels := map[string]string{"analysis-id": analysisID}
+
+	op, clientset, _ := newTestOperator(t, 10)
+	ctx := context.Background()
+
+	// Create a permissions ConfigMap.
+	_, err := clientset.CoreV1().ConfigMaps("vice-apps").Create(ctx, &apiv1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "permissions-" + analysisID,
+			Labels: labels,
+		},
+		Data: map[string]string{
+			"allowed-users": "user1@example.org\nuser2@example.org\n",
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Call HandleGetPermissions.
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("analysis-id")
+	c.SetParamValues(analysisID)
+
+	err = op.HandleGetPermissions(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp PermissionsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, []string{"user1@example.org", "user2@example.org"}, resp.AllowedUsers)
+}
+
+func TestHandleGetPermissionsNotFound(t *testing.T) {
+	op, _, _ := newTestOperator(t, 10)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("analysis-id")
+	c.SetParamValues("nonexistent")
+
+	err := op.HandleGetPermissions(c)
+	require.Error(t, err)
+	he, ok := err.(*echo.HTTPError)
+	require.True(t, ok)
+	assert.Equal(t, http.StatusNotFound, he.Code)
+}
+
+func TestHandleUpdatePermissions(t *testing.T) {
+	analysisID := "perms-update-1"
+	labels := map[string]string{"analysis-id": analysisID}
+
+	op, clientset, _ := newTestOperator(t, 10)
+	ctx := context.Background()
+
+	// Create existing permissions ConfigMap.
+	_, err := clientset.CoreV1().ConfigMaps("vice-apps").Create(ctx, &apiv1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "permissions-" + analysisID,
+			Labels: labels,
+		},
+		Data: map[string]string{"allowed-users": "old-user\n"},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Call HandleUpdatePermissions with new users.
+	body, _ := json.Marshal(operatorclient.UpdatePermissionsRequest{AllowedUsers: []string{"new-user1", "new-user2"}})
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("analysis-id")
+	c.SetParamValues(analysisID)
+
+	err = op.HandleUpdatePermissions(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Verify the ConfigMap was updated.
+	cm, err := clientset.CoreV1().ConfigMaps("vice-apps").Get(ctx, "permissions-"+analysisID, metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, "new-user1\nnew-user2\n", cm.Data["allowed-users"])
+}
+
+func TestHandleUpdatePermissionsEmptyUsers(t *testing.T) {
+	op, _, _ := newTestOperator(t, 10)
+
+	body, _ := json.Marshal(operatorclient.UpdatePermissionsRequest{AllowedUsers: []string{}})
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("analysis-id")
+	c.SetParamValues("any-id")
+
+	err := op.HandleUpdatePermissions(c)
+	require.Error(t, err)
+	he, ok := err.(*echo.HTTPError)
+	require.True(t, ok)
+	assert.Equal(t, http.StatusBadRequest, he.Code)
+}

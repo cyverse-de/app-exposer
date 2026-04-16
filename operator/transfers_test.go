@@ -11,10 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 // rewriteTransport redirects every outbound request to target, preserving
@@ -229,3 +231,171 @@ func TestTriggerFileTransferInitialRequestFailure(t *testing.T) {
 // Silence the unused-import linter guard for strings if the file is
 // edited in the future to not need it.
 var _ = strings.Builder{}
+
+func newTransferContext(e *echo.Echo, analysisID string) (echo.Context, *httptest.ResponseRecorder) {
+	req := httptest.NewRequest(http.MethodPost, "/analyses/"+analysisID+"/transfer", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	if analysisID != "" {
+		c.SetParamNames("analysis-id")
+		c.SetParamValues(analysisID)
+	}
+	return c, rec
+}
+
+// TestHandleSaveAndExit covers param validation and the immediate 200 response.
+// The background goroutine's outcome is not verified since it runs asynchronously
+// and the file-transfer sidecar is unreachable in tests.
+func TestHandleSaveAndExit(t *testing.T) {
+	tests := []struct {
+		name       string
+		analysisID string
+		setup      func(t *testing.T, cs *fake.Clientset)
+		wantStatus int
+		wantErr    bool
+	}{
+		{
+			name:       "missing analysis-id returns 400",
+			analysisID: "",
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name:       "valid analysis-id returns 200 immediately",
+			analysisID: "save-and-exit-test-1",
+			setup: func(t *testing.T, cs *fake.Clientset) {
+				t.Helper()
+				// Create a Service so triggerFileTransfer can find it in the goroutine.
+				// The goroutine will still fail to reach the sidecar, but that happens
+				// after the handler has already returned 200.
+				_, err := cs.CoreV1().Services("vice-apps").Create(
+					context.Background(),
+					&apiv1.Service{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "svc-save-exit",
+							Namespace: "vice-apps",
+							Labels:    map[string]string{"analysis-id": "save-and-exit-test-1"},
+						},
+						Spec: apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 60001}}},
+					},
+					metav1.CreateOptions{},
+				)
+				require.NoError(t, err)
+			},
+			wantStatus: http.StatusOK,
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, clientset, _ := newTestOperator(t, 10)
+			if tt.setup != nil {
+				tt.setup(t, clientset)
+			}
+
+			e := echo.New()
+			c, rec := newTransferContext(e, tt.analysisID)
+
+			err := op.HandleSaveAndExit(c)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				he, ok := err.(*echo.HTTPError)
+				require.True(t, ok, "expected *echo.HTTPError, got %T: %v", err, err)
+				assert.Equal(t, tt.wantStatus, he.Code)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantStatus, rec.Code)
+			}
+		})
+	}
+}
+
+// TestHandleDownloadInputFiles covers param validation and the immediate 200 response.
+func TestHandleDownloadInputFiles(t *testing.T) {
+	tests := []struct {
+		name       string
+		analysisID string
+		wantStatus int
+		wantErr    bool
+	}{
+		{
+			name:       "missing analysis-id returns 400",
+			analysisID: "",
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name:       "valid analysis-id returns 200 immediately",
+			analysisID: "download-inputs-test-1",
+			wantStatus: http.StatusOK,
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, _, _ := newTestOperator(t, 10)
+
+			e := echo.New()
+			c, rec := newTransferContext(e, tt.analysisID)
+
+			err := op.HandleDownloadInputFiles(c)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				he, ok := err.(*echo.HTTPError)
+				require.True(t, ok, "expected *echo.HTTPError, got %T: %v", err, err)
+				assert.Equal(t, tt.wantStatus, he.Code)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantStatus, rec.Code)
+			}
+		})
+	}
+}
+
+// TestHandleSaveOutputFiles covers param validation and the immediate 200 response.
+func TestHandleSaveOutputFiles(t *testing.T) {
+	tests := []struct {
+		name       string
+		analysisID string
+		wantStatus int
+		wantErr    bool
+	}{
+		{
+			name:       "missing analysis-id returns 400",
+			analysisID: "",
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name:       "valid analysis-id returns 200 immediately",
+			analysisID: "save-outputs-test-1",
+			wantStatus: http.StatusOK,
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, _, _ := newTestOperator(t, 10)
+
+			e := echo.New()
+			c, rec := newTransferContext(e, tt.analysisID)
+
+			err := op.HandleSaveOutputFiles(c)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				he, ok := err.(*echo.HTTPError)
+				require.True(t, ok, "expected *echo.HTTPError, got %T: %v", err, err)
+				assert.Equal(t, tt.wantStatus, he.Code)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantStatus, rec.Code)
+			}
+		})
+	}
+}
