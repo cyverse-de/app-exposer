@@ -411,8 +411,10 @@ func main() {
 		log.Warn("vice.keycloak.* settings incomplete; operator requests will be unauthenticated")
 	}
 
-	// Initialize and start the status reconciliation worker.
-	reconciler := reconciler.New(dbase, app.handlers.GetScheduler(), tokenSource, dbURI)
+	// Initialize and start the status reconciliation worker. The apps
+	// handle is passed so the reconciler can back-fill missing
+	// operator_name records on each cycle (see r.backfillOperatorName).
+	reconciler := reconciler.New(dbase, a, app.handlers.GetScheduler(), tokenSource, dbURI)
 	go reconciler.Run(context.Background())
 
 	log.Printf("listening on port %d", *listenPort)

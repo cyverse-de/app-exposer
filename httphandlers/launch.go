@@ -134,13 +134,44 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 		return
 	}
 
-	// Record which operator is running this analysis. This is best-effort:
-	// the analysis is already running, so a failure here is non-fatal.
-	if err := h.apps.SetOperatorName(ctx, job.ID, operatorName); err != nil {
-		log.Errorf("async launch %s: failed to set operator name: %v", job.ID, err)
+	// Record which operator is running this analysis. Without this record,
+	// every subsequent request for the analysis falls through to the
+	// operator fan-out search, which under burst traffic (workshops) can
+	// amplify a brief DB blip into sustained load on every operator. Retry
+	// a few times to ride out transient blips before giving up; the
+	// reconciler's per-pod back-fill closes any hole that remains.
+	if err := h.setOperatorNameWithRetry(ctx, job.ID, operatorName); err != nil {
+		log.Errorf("async launch %s: failed to set operator name after retries: %v", job.ID, err)
 	}
 
 	log.Infof("async launch %s: successfully launched on operator %s", job.ID, operatorName)
+}
+
+// setOperatorNameWithRetry records which operator is running an analysis,
+// retrying a few times to survive transient DB blips. SetOperatorName
+// already retries internally for the "jobs row not yet visible" case
+// (up to 10 × 1s); this wrapper layers a small additional retry on top
+// to handle connection-level failures that bypass the inner loop. When
+// the outer retry also exhausts, the reconciler's back-fill will
+// eventually close the hole within ~30 s.
+func (h *HTTPHandlers) setOperatorNameWithRetry(ctx context.Context, analysisID, operatorName string) error {
+	const attempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		lastErr = h.apps.SetOperatorName(ctx, analysisID, operatorName)
+		if lastErr == nil {
+			return nil
+		}
+		if attempt < attempts {
+			log.Warnf("async launch %s: SetOperatorName attempt %d/%d failed, retrying: %v", analysisID, attempt, attempts, lastErr)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Duration(attempt) * time.Second):
+			}
+		}
+	}
+	return lastErr
 }
 
 // failLaunch publishes a failure status update for a launch that failed in the

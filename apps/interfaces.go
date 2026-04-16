@@ -12,3 +12,19 @@ type AnalysisStatusLookup interface {
 	// if no row exists for the given analysis ID.
 	GetAnalysisStatus(ctx context.Context, analysisID string) (string, error)
 }
+
+// OperatorNameLookup is the narrow subset of *Apps used by the reconciler
+// to back-fill missing operator_name records. Defined here so the
+// reconciler can be unit-tested with a fake. *Apps satisfies this
+// interface structurally.
+type OperatorNameLookup interface {
+	// GetOperatorName returns the operator name currently recorded for
+	// the analysis, or "" with nil error if no row exists or the column
+	// is NULL.
+	GetOperatorName(ctx context.Context, analysisID string) (string, error)
+
+	// SetOperatorName records the operator running the analysis.
+	// Internally retries a handful of times if the jobs row isn't yet
+	// visible (handles the launch/commit race).
+	SetOperatorName(ctx context.Context, analysisID, operatorName string) error
+}
