@@ -31,7 +31,9 @@ const (
 
 // transferHTTPClient is used for requests to the file-transfer sidecar.
 // It has a per-request timeout to prevent goroutines from blocking forever
-// if the sidecar hangs or the connection stalls.
+// if the sidecar hangs or the connection stalls. Exposed as a package var
+// so tests can substitute a client whose Transport redirects to an
+// httptest.Server.
 var transferHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // sleepCtx waits for d or until ctx is canceled. Returns true if d elapsed,
@@ -46,6 +48,12 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 		return true
 	}
 }
+
+// pollSleep is the function triggerFileTransfer uses between polls.
+// Exposed as a package-level variable so tests can replace it with a
+// no-op that still observes context cancellation — this avoids waiting
+// out the real initialPollInterval (5s) every time the poll loop runs.
+var pollSleep = sleepCtx
 
 // HandleSaveAndExit triggers the file transfer sidecar to upload outputs,
 // then deletes all analysis resources.
@@ -218,8 +226,9 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 	for xferResp.Status != "completed" && xferResp.Status != "failed" {
 		// Context-aware sleep: if the goroutine's deadline fires or the
 		// caller cancels, we bail out of the loop promptly instead of
-		// finishing the current 5s sleep first.
-		if !sleepCtx(ctx, pollInterval) {
+		// finishing the current 5s sleep first. Uses the pollSleep
+		// package var so tests can skip the real wait.
+		if !pollSleep(ctx, pollInterval) {
 			return fmt.Errorf("file transfer canceled for analysis %s after %s: %w", analysisID, time.Since(startTime).Truncate(time.Second), ctx.Err())
 		}
 
