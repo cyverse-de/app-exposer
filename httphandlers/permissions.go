@@ -43,7 +43,11 @@ func (h *HTTPHandlers) UpdatePermissionsHandler(c echo.Context) error {
 	}
 
 	// Find the operator running this analysis.
-	client := h.operatorClientForAnalysis(ctx, analysisID)
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
+	if err != nil {
+		log.Errorf("operator routing unavailable for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "operator routing temporarily unavailable")
+	}
 	if client == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "no operator found for analysis "+analysisID)
 	}

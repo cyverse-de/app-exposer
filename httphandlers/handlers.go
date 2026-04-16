@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -65,22 +66,29 @@ func (h *HTTPHandlers) GetScheduler() *operatorclient.Scheduler {
 //  1. Fast path: check the DB for a recorded operator name.
 //  2. Search path: if no name is recorded or the named operator isn't found,
 //     search all operators in parallel via HasAnalysis.
-//  3. Return nil only if no operator has the analysis.
+//  3. Return (nil, nil) only when no operator has the analysis.
 //
-// Callers must treat a nil return as a fatal condition.
-func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID string) *operatorclient.Client {
-	// Fast path: check the DB for a recorded operator name.
+// A non-nil error indicates the lookup could not be completed (e.g. a
+// database outage) and the caller should surface that to the client rather
+// than treat the analysis as missing. Callers requiring a live client must
+// treat nil-client-with-nil-error as "not found". Callers answering an
+// "exists?" question may use nil-with-nil-error as "no".
+func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID string) (*operatorclient.Client, error) {
+	// Fast path: check the DB for a recorded operator name. GetOperatorName
+	// normalizes sql.ErrNoRows to ("", nil); a non-nil error here signals a
+	// real DB fault, which we must surface instead of silently falling through
+	// to fan-out search. Under burst traffic (e.g. workshop launches), a brief
+	// DB blip otherwise amplifies into an operator fan-out storm.
 	operatorName, err := h.apps.GetOperatorName(ctx, analysisID)
 	if err != nil {
-		log.Errorf("error looking up operator for analysis %s: %v", analysisID, err)
-		// Fall through to search path.
+		return nil, fmt.Errorf("looking up operator for analysis %s: %w", analysisID, err)
 	}
 
 	if operatorName != "" {
 		client := h.scheduler.ClientByName(operatorName)
 		if client != nil {
 			log.Debugf("analysis %s routed to operator %q (fast path)", analysisID, operatorName)
-			return client
+			return client, nil
 		}
 		log.Warnf("operator %q not found in scheduler for analysis %s, searching all operators", operatorName, analysisID)
 	} else {
@@ -91,7 +99,7 @@ func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID
 	client := h.searchOperatorsForAnalysis(ctx, analysisID)
 	if client == nil {
 		log.Warnf("no operator has analysis %s", analysisID)
-		return nil
+		return nil, nil
 	}
 
 	// Update the DB so future lookups use the fast path.
@@ -100,7 +108,7 @@ func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID
 	}
 
 	log.Infof("analysis %s found on operator %q (search path)", analysisID, client.Name())
-	return client
+	return client, nil
 }
 
 // searchOperatorsForAnalysis queries all configured operators in parallel to
@@ -207,6 +215,38 @@ type OperatorError struct {
 	Error    string `json:"error"`
 }
 
+// aggregatedFailureResponse is the JSON body returned when every configured
+// operator failed and no listing data is available.
+type aggregatedFailureResponse struct {
+	Message        string          `json:"error"`
+	OperatorErrors []OperatorError `json:"operator_errors"`
+}
+
+// respondAggregated writes the response for an aggregateListing result. When
+// no results are present and at least one operator errored, it returns 502
+// Bad Gateway — the alternative (200 with an empty list) silently hides a
+// cluster-wide outage. Callers pass the populated response body whose type
+// is expected to carry a JSON-omitempty OperatorErrors field so partial-
+// success can be surfaced without changing the 200 path for healthy clusters.
+func respondAggregated(c echo.Context, body any, opErrs []OperatorError, hasResults bool) error {
+	if !hasResults && len(opErrs) > 0 {
+		return c.JSON(http.StatusBadGateway, aggregatedFailureResponse{
+			Message:        "all operators unreachable or returned errors",
+			OperatorErrors: opErrs,
+		})
+	}
+	return c.JSON(http.StatusOK, body)
+}
+
+// ResourceInfoResponse wraps reporting.ResourceInfo with the list of
+// per-operator errors encountered during aggregation. Consumers that care
+// only about the resource data can keep ignoring the new field thanks to
+// omitempty.
+type ResourceInfoResponse struct {
+	reporting.ResourceInfo
+	OperatorErrors []OperatorError `json:"operator_errors,omitempty"`
+}
+
 // operatorAction is a function that performs an operation on an operator client
 // for a given analysis. Used by routeOperatorAction and routeAdminOperatorAction
 // to eliminate boilerplate in handlers that resolve an ID and forward to an operator.
@@ -228,9 +268,13 @@ func (h *HTTPHandlers) routeOperatorAction(c echo.Context, fn operatorAction) er
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to look up analysis")
 	}
 
-	client := h.operatorClientForAnalysis(ctx, analysisID)
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
+	if err != nil {
+		log.Errorf("operator routing unavailable for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "operator routing temporarily unavailable")
+	}
 	if client == nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "no operator found for analysis")
+		return echo.NewHTTPError(http.StatusNotFound, "no operator found for analysis")
 	}
 
 	return fn(ctx, client, analysisID)
@@ -243,9 +287,13 @@ func (h *HTTPHandlers) routeAdminOperatorAction(c echo.Context, fn operatorActio
 	ctx := c.Request().Context()
 	analysisID := c.Param("analysis-id")
 
-	client := h.operatorClientForAnalysis(ctx, analysisID)
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
+	if err != nil {
+		log.Errorf("operator routing unavailable for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "operator routing temporarily unavailable")
+	}
 	if client == nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "no operator found for analysis")
+		return echo.NewHTTPError(http.StatusNotFound, "no operator found for analysis")
 	}
 
 	return fn(ctx, client, analysisID)
@@ -319,7 +367,11 @@ func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 
 	var userID string
 
-	client := h.operatorClientForAnalysis(ctx, analysisID)
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
+	if err != nil {
+		log.Errorf("operator routing unavailable for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "operator routing temporarily unavailable")
+	}
 	if client == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "analysis not found on any operator")
 	}

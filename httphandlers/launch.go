@@ -51,7 +51,17 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	// For new launches the DB has no record, so a fan-out search would hit
 	// every operator and get "not found" from all of them — wasted work that
 	// becomes a problem during workshops with many concurrent launches.
-	if name, _ := h.apps.GetOperatorName(ctx, job.ID); name != "" {
+	//
+	// GetOperatorName normalizes sql.ErrNoRows to ("", nil); a non-nil error
+	// here is a real DB fault. Treating it as "not running" would silently
+	// drop the idempotency guard and can cause double-launches during
+	// concurrent-launch bursts when the DB briefly blips.
+	name, err := h.apps.GetOperatorName(ctx, job.ID)
+	if err != nil {
+		log.Errorf("idempotency lookup failed for analysis %s: %v", job.ID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "idempotency check unavailable")
+	}
+	if name != "" {
 		if client := h.scheduler.ClientByName(name); client != nil {
 			log.Infof("analysis %s already running on operator %s, returning success", job.ID, client.Name())
 			return c.NoContent(http.StatusOK)
@@ -191,9 +201,14 @@ func (h *HTTPHandlers) DryRunBundleHandler(c echo.Context) error {
 
 // checkURLReady verifies K8s resource readiness by delegating to the
 // operator running the analysis. It returns a URLReadyResponse indicating
-// if the deployment, service, and routing are fully live.
+// if the deployment, service, and routing are fully live. A non-nil error
+// means the operator could not be located (e.g. DB lookup failed) and the
+// caller should surface that rather than reporting "not ready".
 func (h *HTTPHandlers) checkURLReady(ctx context.Context, analysisID string) (operatorclient.URLReadyResponse, error) {
-	client := h.operatorClientForAnalysis(ctx, analysisID)
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
+	if err != nil {
+		return operatorclient.URLReadyResponse{Ready: false}, err
+	}
 	if client == nil {
 		return operatorclient.URLReadyResponse{Ready: false}, nil
 	}
@@ -253,11 +268,18 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 	params.Set("subdomain", host)
 
 	// Search all operators for the analysis with this subdomain.
-	listing, _, err := h.aggregateListing(ctx, params)
+	listing, opErrs, err := h.aggregateListing(ctx, params)
 	if err != nil {
 		return err
 	}
 	if len(listing.Deployments) == 0 {
+		// Distinguish "truly missing" from "all operators unreachable": a 404
+		// for a still-running analysis whose operator is down would have users
+		// staring at a misleading error.
+		if len(opErrs) > 0 {
+			log.Errorf("url-ready lookup degraded for subdomain %s: %+v", host, opErrs)
+			return echo.NewHTTPError(http.StatusBadGateway, "operator listing unavailable")
+		}
 		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no deployment found for subdomain %s", host))
 	}
 
@@ -283,7 +305,8 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 
 	data, err := h.checkURLReady(ctx, analysisID)
 	if err != nil {
-		return err
+		log.Errorf("url-ready check failed for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "url-ready check unavailable")
 	}
 
 	return c.JSON(http.StatusOK, data)
@@ -313,11 +336,15 @@ func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 	params.Set("subdomain", host)
 
 	// Search all operators for the analysis with this subdomain.
-	listing, _, err := h.aggregateListing(ctx, params)
+	listing, opErrs, err := h.aggregateListing(ctx, params)
 	if err != nil {
 		return err
 	}
 	if len(listing.Deployments) == 0 {
+		if len(opErrs) > 0 {
+			log.Errorf("admin url-ready lookup degraded for subdomain %s: %+v", host, opErrs)
+			return echo.NewHTTPError(http.StatusBadGateway, "operator listing unavailable")
+		}
 		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no deployment found for subdomain %s", host))
 	}
 
@@ -329,7 +356,8 @@ func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 
 	data, err := h.checkURLReady(ctx, analysisID)
 	if err != nil {
-		return err
+		log.Errorf("url-ready check failed for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "url-ready check unavailable")
 	}
 
 	return c.JSON(http.StatusOK, data)
@@ -366,11 +394,12 @@ func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error 
 		return err
 	}
 
-	client := h.operatorClientForAnalysis(ctx, analysisID)
-	retval := AnalysisInClusterResponse{
-		Found: client != nil,
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
+	if err != nil {
+		log.Errorf("operator routing unavailable for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "operator routing temporarily unavailable")
 	}
-	return c.JSON(http.StatusOK, retval)
+	return c.JSON(http.StatusOK, AnalysisInClusterResponse{Found: client != nil})
 }
 
 // AdminAnalysisInClusterByID returns whether the provided analysis ID is
@@ -394,6 +423,10 @@ func (h *HTTPHandlers) AdminAnalysisInClusterByID(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is not set")
 	}
 
-	client := h.operatorClientForAnalysis(ctx, analysisID)
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
+	if err != nil {
+		log.Errorf("operator routing unavailable for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "operator routing temporarily unavailable")
+	}
 	return c.JSON(http.StatusOK, AnalysisInClusterResponse{Found: client != nil})
 }

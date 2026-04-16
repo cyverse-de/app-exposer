@@ -144,7 +144,12 @@ func (h *HTTPHandlers) TerminateAllAnalysesHandler(c echo.Context) error {
 			continue
 		}
 
-		client := h.operatorClientForAnalysis(ctx, analysisID)
+		client, routeErr := h.operatorClientForAnalysis(ctx, analysisID)
+		if routeErr != nil {
+			log.Errorf("operator routing unavailable for analysis %s (external ID %s): %v", analysisID, id, routeErr)
+			failedVICE = append(failedVICE, id)
+			continue
+		}
 		if client == nil {
 			log.Errorf("no operator found for analysis %s (external ID %s)", analysisID, id)
 			failedVICE = append(failedVICE, id)

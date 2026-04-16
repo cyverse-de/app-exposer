@@ -33,7 +33,11 @@ func (h *HTTPHandlers) LogsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}
 
-	client := h.operatorClientForAnalysis(ctx, analysisID)
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
+	if err != nil {
+		log.Errorf("operator routing unavailable for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "operator routing temporarily unavailable")
+	}
 	if client == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "analysis not found on any operator")
 	}

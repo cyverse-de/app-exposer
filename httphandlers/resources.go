@@ -9,13 +9,13 @@ import (
 
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/permissions"
-	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/labstack/echo/v4"
 )
 
 // FilteredDeploymentsResponse is the response body for the filterable deployments endpoint.
 type FilteredDeploymentsResponse struct {
-	Deployments []incluster.DeploymentInfo `json:"deployments"`
+	Deployments    []incluster.DeploymentInfo `json:"deployments"`
+	OperatorErrors []OperatorError            `json:"operator_errors,omitempty"`
 }
 
 // FilterableDeploymentsHandler returns a filtered listing of VICE deployments.
@@ -33,19 +33,21 @@ type FilteredDeploymentsResponse struct {
 //	@Router			/vice/listing/deployments [get]
 func (h *HTTPHandlers) FilterableDeploymentsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	listing, _, err := h.aggregateListing(ctx, c.Request().URL.Query())
+	listing, opErrs, err := h.aggregateListing(ctx, c.Request().URL.Query())
 	if err != nil {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, FilteredDeploymentsResponse{
-		Deployments: listing.Deployments,
-	})
+	return respondAggregated(c, FilteredDeploymentsResponse{
+		Deployments:    listing.Deployments,
+		OperatorErrors: opErrs,
+	}, opErrs, len(listing.Deployments) > 0)
 }
 
 // FilteredPodsResponse is the response body for the filterable pods endpoint.
 type FilteredPodsResponse struct {
-	Pods []incluster.PodInfo `json:"pods"`
+	Pods           []incluster.PodInfo `json:"pods"`
+	OperatorErrors []OperatorError     `json:"operator_errors,omitempty"`
 }
 
 // FilterablePodsHandler returns a filtered listing of VICE pods.
@@ -63,19 +65,21 @@ type FilteredPodsResponse struct {
 //	@Router			/vice/listing/pods [get]
 func (h *HTTPHandlers) FilterablePodsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	listing, _, err := h.aggregateListing(ctx, c.Request().URL.Query())
+	listing, opErrs, err := h.aggregateListing(ctx, c.Request().URL.Query())
 	if err != nil {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, FilteredPodsResponse{
-		Pods: listing.Pods,
-	})
+	return respondAggregated(c, FilteredPodsResponse{
+		Pods:           listing.Pods,
+		OperatorErrors: opErrs,
+	}, opErrs, len(listing.Pods) > 0)
 }
 
 // FilteredConfigMapsResponse is the response body for the filterable configmaps endpoint.
 type FilteredConfigMapsResponse struct {
-	ConfigMaps []incluster.ConfigMapInfo `json:"configmaps"`
+	ConfigMaps     []incluster.ConfigMapInfo `json:"configmaps"`
+	OperatorErrors []OperatorError           `json:"operator_errors,omitempty"`
 }
 
 // FilterableConfigMapsHandler returns a filtered listing of VICE ConfigMaps.
@@ -92,19 +96,21 @@ type FilteredConfigMapsResponse struct {
 //	@Router			/vice/listing/configmaps [get]
 func (h *HTTPHandlers) FilterableConfigMapsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	listing, _, err := h.aggregateListing(ctx, c.Request().URL.Query())
+	listing, opErrs, err := h.aggregateListing(ctx, c.Request().URL.Query())
 	if err != nil {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, FilteredConfigMapsResponse{
-		ConfigMaps: listing.ConfigMaps,
-	})
+	return respondAggregated(c, FilteredConfigMapsResponse{
+		ConfigMaps:     listing.ConfigMaps,
+		OperatorErrors: opErrs,
+	}, opErrs, len(listing.ConfigMaps) > 0)
 }
 
 // FilteredServicesResponse is the response body for the filterable services endpoint.
 type FilteredServicesResponse struct {
-	Services []incluster.ServiceInfo `json:"services"`
+	Services       []incluster.ServiceInfo `json:"services"`
+	OperatorErrors []OperatorError         `json:"operator_errors,omitempty"`
 }
 
 // FilterableServicesHandler returns a filtered listing of VICE Services.
@@ -121,19 +127,21 @@ type FilteredServicesResponse struct {
 //	@Router			/vice/listing/services [get]
 func (h *HTTPHandlers) FilterableServicesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	listing, _, err := h.aggregateListing(ctx, c.Request().URL.Query())
+	listing, opErrs, err := h.aggregateListing(ctx, c.Request().URL.Query())
 	if err != nil {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, FilteredServicesResponse{
-		Services: listing.Services,
-	})
+	return respondAggregated(c, FilteredServicesResponse{
+		Services:       listing.Services,
+		OperatorErrors: opErrs,
+	}, opErrs, len(listing.Services) > 0)
 }
 
 // FilteredRoutesResponse is the response body for the filterable routes endpoint.
 type FilteredRoutesResponse struct {
-	Routes []incluster.RouteInfo `json:"routes"`
+	Routes         []incluster.RouteInfo `json:"routes"`
+	OperatorErrors []OperatorError       `json:"operator_errors,omitempty"`
 }
 
 // FilterableRoutesHandler returns a filtered listing of VICE HTTP routes.
@@ -150,14 +158,15 @@ type FilteredRoutesResponse struct {
 //	@Router			/vice/listing/routes [get]
 func (h *HTTPHandlers) FilterableRoutesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	listing, _, err := h.aggregateListing(ctx, c.Request().URL.Query())
+	listing, opErrs, err := h.aggregateListing(ctx, c.Request().URL.Query())
 	if err != nil {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, FilteredRoutesResponse{
-		Routes: listing.Routes,
-	})
+	return respondAggregated(c, FilteredRoutesResponse{
+		Routes:         listing.Routes,
+		OperatorErrors: opErrs,
+	}, opErrs, len(listing.Routes) > 0)
 }
 
 // AdminDescribeAnalysisHandler returns the K8s resource listing for the
@@ -179,11 +188,14 @@ func (h *HTTPHandlers) AdminDescribeAnalysisHandler(c echo.Context) error {
 	params := url.Values{}
 	params.Set("subdomain", host)
 
-	listing, _, err := h.aggregateListing(ctx, params)
+	listing, opErrs, err := h.aggregateListing(ctx, params)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	return c.JSON(http.StatusOK, listing)
+	return respondAggregated(c, ResourceInfoResponse{
+		ResourceInfo:   *listing,
+		OperatorErrors: opErrs,
+	}, opErrs, len(listing.Deployments) > 0)
 }
 
 // DescribeAnalysisHandler returns the K8s resource listing for the analysis
@@ -227,7 +239,7 @@ func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 	params := url.Values{}
 	params.Set("subdomain", host)
 
-	listing, _, err := h.aggregateListing(ctx, params)
+	listing, opErrs, err := h.aggregateListing(ctx, params)
 	if err != nil {
 		return err
 	}
@@ -258,7 +270,10 @@ func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, listing)
+	return respondAggregated(c, ResourceInfoResponse{
+		ResourceInfo:   *listing,
+		OperatorErrors: opErrs,
+	}, opErrs, len(listing.Deployments) > 0)
 }
 
 // FilterableResourcesHandler returns all K8s resources for the requesting user's
@@ -304,12 +319,15 @@ func (h *HTTPHandlers) FilterableResourcesHandler(c echo.Context) error {
 
 	log.Debugf("user ID is %s", userID)
 
-	merged, _, err := h.aggregateListing(ctx, params)
+	merged, opErrs, err := h.aggregateListing(ctx, params)
 	if err != nil {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, merged)
+	return respondAggregated(c, ResourceInfoResponse{
+		ResourceInfo:   *merged,
+		OperatorErrors: opErrs,
+	}, opErrs, len(merged.Deployments) > 0)
 }
 
 // AdminFilterableResourcesHandler returns K8s resources filtered by query string
@@ -326,12 +344,15 @@ func (h *HTTPHandlers) FilterableResourcesHandler(c echo.Context) error {
 //	@Router			/vice/admin/listing [get]
 func (h *HTTPHandlers) AdminFilterableResourcesHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	listing, _, err := h.aggregateListing(ctx, c.Request().URL.Query())
+	listing, opErrs, err := h.aggregateListing(ctx, c.Request().URL.Query())
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	return c.JSON(http.StatusOK, listing)
+	return respondAggregated(c, ResourceInfoResponse{
+		ResourceInfo:   *listing,
+		OperatorErrors: opErrs,
+	}, opErrs, len(listing.Deployments) > 0)
 }
 
 // AdminOperatorListingHandler returns an aggregated listing of all running VICE
@@ -356,17 +377,10 @@ func (h *HTTPHandlers) AdminOperatorListingHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	// Include operator errors in the response so clients know which
-	// operators were unreachable and that results may be partial.
-	resp := struct {
-		reporting.ResourceInfo
-		Errors []OperatorError `json:"errors,omitempty"`
-	}{
-		ResourceInfo: *merged,
-		Errors:       opErrs,
-	}
-
-	return c.JSON(http.StatusOK, resp)
+	return respondAggregated(c, ResourceInfoResponse{
+		ResourceInfo:   *merged,
+		OperatorErrors: opErrs,
+	}, opErrs, len(merged.Deployments) > 0)
 }
 
 // ListPodsResponse is the response body for the pods listing endpoint.
@@ -414,7 +428,11 @@ func (h *HTTPHandlers) PodsHandler(c echo.Context) error {
 			fmt.Sprintf("user %s cannot access analysis %s", user, analysisID))
 	}
 
-	client := h.operatorClientForAnalysis(ctx, analysisID)
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
+	if err != nil {
+		log.Errorf("operator routing unavailable for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "operator routing temporarily unavailable")
+	}
 	if client == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "analysis not found on any operator")
 	}
