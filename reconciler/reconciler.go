@@ -73,11 +73,27 @@ func getLocalIP() string {
 // Backoff bounds for the LISTEN retry loop. The outer retry only fires
 // when pq.Listener.Listen() itself fails at setup (bad channel name,
 // missing privilege, etc.); post-setup DB blips are handled by pq's own
-// reconnect machinery. Capped at 5 minutes to match syncTicker so we
-// never sit idle for longer than the fallback polling interval.
+// reconnect machinery. Capped at DefaultSyncInterval so we never sit
+// idle for longer than the fallback polling cadence.
 const (
 	initialListenerBackoff = 5 * time.Second
-	maxListenerBackoff     = 5 * time.Minute
+	maxListenerBackoff     = DefaultSyncInterval
+)
+
+// Default intervals for the reconciliation worker. All three were
+// previously inline magic numbers; promoting them to named constants
+// makes the relationships between them visible — the reconcile cadence
+// is tighter than the sync cadence because reconciliation is per-
+// operator (so N operators imply N×cycle wall-clock) while sync just
+// refreshes the operator list from the DB. DefaultClaimTTL is the
+// window after which a previously-reconciled operator is eligible for
+// claim-and-reconcile again; it needs to be comfortably larger than
+// DefaultReconcileInterval so a single operator is reconciled at most
+// once per TTL window.
+const (
+	DefaultSyncInterval      = 5 * time.Minute
+	DefaultReconcileInterval = 30 * time.Second
+	DefaultClaimTTL          = 60 * time.Second
 )
 
 // startListener returns a channel that fires whenever this process should
@@ -228,8 +244,8 @@ func (r *Reconciler) Run(ctx context.Context) {
 	}
 
 	notifyCh := r.startListener(ctx)
-	syncTicker := time.NewTicker(5 * time.Minute)
-	reconcileTicker := time.NewTicker(30 * time.Second)
+	syncTicker := time.NewTicker(DefaultSyncInterval)
+	reconcileTicker := time.NewTicker(DefaultReconcileInterval)
 
 	defer syncTicker.Stop()
 	defer reconcileTicker.Stop()
@@ -290,7 +306,7 @@ func (r *Reconciler) SyncOperators(ctx context.Context) error {
 // timestamp update happen within a single transaction so the FOR UPDATE
 // SKIP LOCKED row lock is held for the entire operation.
 func (r *Reconciler) ReconcileNext(ctx context.Context) error {
-	return r.db.ClaimAndReconcile(ctx, r.hostname, 60*time.Second, func(tx *sqlx.Tx, op *db.Operator) error {
+	return r.db.ClaimAndReconcile(ctx, r.hostname, DefaultClaimTTL, func(tx *sqlx.Tx, op *db.Operator) error {
 		log.Infof("reconciling operator %q", op.Name)
 
 		client := r.scheduler.ClientByName(op.Name)
