@@ -108,7 +108,7 @@ func (d *Database) DeleteOperatorByName(ctx context.Context, name string) error 
 // success it updates last_reconciled_at before committing the transaction.
 // The FOR UPDATE SKIP LOCKED clause ensures that concurrent replicas never
 // claim the same operator.
-func (d *Database) ClaimAndReconcile(ctx context.Context, hostname string, timeout time.Duration, fn func(tx *sqlx.Tx, op *Operator) error) error {
+func (d *Database) ClaimAndReconcile(ctx context.Context, hostname string, reconciliationTTL time.Duration, fn func(tx *sqlx.Tx, op *Operator) error) error {
 	tx, err := d.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
@@ -124,7 +124,7 @@ func (d *Database) ClaimAndReconcile(ctx context.Context, hostname string, timeo
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1
 	`
-	cutoff := time.Now().Add(-timeout)
+	cutoff := time.Now().Add(-reconciliationTTL)
 	var op Operator
 	if err := tx.GetContext(ctx, &op, claimQuery, cutoff); err != nil {
 		return err

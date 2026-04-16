@@ -118,7 +118,7 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 		if err := op.Launch(ctx, bundle); err != nil {
 			if errors.Is(err, ErrCapacityExhausted) {
 				// Race condition: capacity was available but filled before our launch.
-				log.Infof("operator %s returned 409, trying next", op.Name())
+				log.Infof("operator %s returned 409, trying next; this usually means it reached capacity after the check but before our job was submitted", op.Name())
 				continue
 			}
 			return "", fmt.Errorf("launch on operator %s failed: %w", op.Name(), err)

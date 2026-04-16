@@ -206,8 +206,9 @@ func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 
 		client := r.scheduler.ClientByName(op.Name)
 		if client == nil {
-			known := make([]string, 0)
-			for _, c := range r.scheduler.Clients() {
+			clients := r.scheduler.Clients()
+			known := make([]string, 0, len(clients))
+			for _, c := range clients {
 				known = append(known, c.Name())
 			}
 			return fmt.Errorf("operator %q not found in scheduler (scheduler has %d operator(s): %v)", op.Name, len(known), known)

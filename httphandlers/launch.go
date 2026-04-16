@@ -116,6 +116,7 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 		return
 	}
 
+	// Route the bundle to an available operator.
 	operatorName, err := h.scheduler.LaunchAnalysis(ctx, bundle)
 	if err != nil {
 		log.Errorf("async launch %s: failed to launch analysis: %v", job.ID, err)
