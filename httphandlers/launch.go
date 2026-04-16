@@ -368,14 +368,15 @@ type AnalysisInClusterResponse struct {
 	Found bool `json:"found"`
 }
 
-// AdminAnalysisInClusterByExternalID returns whether the provided external ID is
-// associated with any Deployments in the cluster, regardless of state. Does
-// not check for any other resource types. Does not check if the requesting user
+// AdminAnalysisInClusterByExternalID returns whether any operator claims to
+// be running the analysis for the provided external ID. It translates the
+// external ID to an analysis ID, then asks the scheduler; no cluster
+// resources are inspected directly. Does not check if the requesting user
 // has access to the analysis.
 //
 //	@ID				admin-analysis-in-cluster-by-external-id
-//	@Summary		Returns whether a deployment for an analysis is in the cluster
-//	@Description	Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state
+//	@Summary		Returns whether any operator is running the analysis
+//	@Description	Returns whether any operator claims to be running the analysis for the provided external ID, regardless of its state
 //	@Produces		json
 //	@Param			external-id	path		string	true	"external id"
 //	@Success		200			{object}	AnalysisInClusterResponse
@@ -402,14 +403,14 @@ func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error 
 	return c.JSON(http.StatusOK, AnalysisInClusterResponse{Found: client != nil})
 }
 
-// AdminAnalysisInClusterByID returns whether the provided analysis ID is
-// associated with any Deployments in the cluster, regardless of state. Does
-// not check for any other resource types. Does not check if the requesting user
-// has access to the analysis.
+// AdminAnalysisInClusterByID returns whether any operator claims to be
+// running the analysis with the provided analysis ID. It asks the
+// scheduler; no cluster resources are inspected directly. Does not check
+// if the requesting user has access to the analysis.
 //
 //	@ID				admin-analysis-in-cluster-by-id
-//	@Summary		Returns whether a deployment for an analysis is in the cluster
-//	@Description	Returns whether a deployment for the analysis with the provided analysis ID is present in the cluster, regardless of its state
+//	@Summary		Returns whether any operator is running the analysis
+//	@Description	Returns whether any operator claims to be running the analysis for the provided analysis ID, regardless of its state
 //	@Produces		json
 //	@Param			analysis-id	path		string	true	"analysis id"
 //	@Success		200			{object}	AnalysisInClusterResponse

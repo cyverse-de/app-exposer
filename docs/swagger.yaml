@@ -11412,7 +11412,7 @@ paths:
   /vice/{analysis-id}/logs:
     get:
       description: |-
-        Handlers requests to access the container logs for a pod in a running
+        Handles requests to access the container logs for a pod in a running
         VICE app.
       operationId: logs
       parameters:
@@ -12041,8 +12041,8 @@ paths:
       summary: Updates the time limit on an analysis without requiring user information
   /vice/admin/is-deployed/analysis-id/{analysis-id}:
     get:
-      description: Returns whether a deployment for the analysis with the provided
-        analysis ID is present in the cluster, regardless of its state
+      description: Returns whether any operator claims to be running the analysis
+        for the provided analysis ID, regardless of its state
       operationId: admin-analysis-in-cluster-by-id
       parameters:
       - description: analysis id
@@ -12063,11 +12063,11 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Returns whether a deployment for an analysis is in the cluster
+      summary: Returns whether any operator is running the analysis
   /vice/admin/is-deployed/external-id/{external-id}:
     get:
-      description: Returns whether a deployment for the analysis with the provided
-        external ID is present in the cluster, regardless of its state
+      description: Returns whether any operator claims to be running the analysis
+        for the provided external ID, regardless of its state
       operationId: admin-analysis-in-cluster-by-external-id
       parameters:
       - description: external id
@@ -12088,7 +12088,7 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Returns whether a deployment for an analysis is in the cluster
+      summary: Returns whether any operator is running the analysis
   /vice/admin/listing:
     get:
       description: |-

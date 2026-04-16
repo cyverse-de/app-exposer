@@ -386,8 +386,8 @@ const docTemplate = `{
         },
         "/vice/admin/is-deployed/analysis-id/{analysis-id}": {
             "get": {
-                "description": "Returns whether a deployment for the analysis with the provided analysis ID is present in the cluster, regardless of its state",
-                "summary": "Returns whether a deployment for an analysis is in the cluster",
+                "description": "Returns whether any operator claims to be running the analysis for the provided analysis ID, regardless of its state",
+                "summary": "Returns whether any operator is running the analysis",
                 "operationId": "admin-analysis-in-cluster-by-id",
                 "parameters": [
                     {
@@ -422,8 +422,8 @@ const docTemplate = `{
         },
         "/vice/admin/is-deployed/external-id/{external-id}": {
             "get": {
-                "description": "Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state",
-                "summary": "Returns whether a deployment for an analysis is in the cluster",
+                "description": "Returns whether any operator claims to be running the analysis for the provided external ID, regardless of its state",
+                "summary": "Returns whether any operator is running the analysis",
                 "operationId": "admin-analysis-in-cluster-by-external-id",
                 "parameters": [
                     {
@@ -1088,7 +1088,7 @@ const docTemplate = `{
         },
         "/vice/{analysis-id}/logs": {
             "get": {
-                "description": "Handlers requests to access the container logs for a pod in a running\nVICE app.",
+                "description": "Handles requests to access the container logs for a pod in a running\nVICE app.",
                 "produces": [
                     "application/json"
                 ],

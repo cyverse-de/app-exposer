@@ -12,7 +12,7 @@ import (
 //
 //	@ID				logs
 //	@Summary		Return the logs for a running analysis
-//	@Description	Handlers requests to access the container logs for a pod in a running
+//	@Description	Handles requests to access the container logs for a pod in a running
 //	@Description	VICE app.
 //	@Produce		json
 //	@Param			previous	query		bool	false	"Whether to return previously terminated container logs"

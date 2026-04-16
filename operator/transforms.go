@@ -21,8 +21,12 @@ const (
 	nvidiaGPUResource    apiv1.ResourceName = "nvidia.com/gpu"
 	amdGPUResource       apiv1.ResourceName = "amd.com/gpu"
 	nvidiaModelAffinityK                    = "nvidia.com/gpu.product"
-	// amdModelAffinityK mirrors the NVIDIA convention; verify against actual
-	// AMD device plugin labels in the target cluster.
+	// amdModelAffinityK is the node label a bundle's nodeAffinity rules
+	// target when TransformGPUVendor flips the vendor to AMD. If a cluster
+	// uses a different key, that cluster's GPU-model-specific affinity
+	// rules will fail to match and analyses will land on any AMD node
+	// rather than a specific model — loud enough to notice in scheduling
+	// events, so there's no need to defend against it here.
 	amdModelAffinityK = "amd.com/gpu.product"
 )
 
@@ -257,9 +261,10 @@ func TransformViceProxyArgs(deployment *appsv1.Deployment, analysisID, clusterCo
 }
 
 // EnsurePermissionsConfigMap adds a permissions ConfigMap to the bundle if one
-// isn't already present. This handles bundles created before app-exposer added
-// the permissions ConfigMap at build time. The ConfigMap is seeded with the
-// owner username from the deployment's "username" label.
+// isn't already present, so every analysis has a consistent permissions
+// surface regardless of how the bundle was assembled upstream. The
+// ConfigMap is seeded with the owner username from the deployment's
+// "username" label.
 func EnsurePermissionsConfigMap(bundle *operatorclient.AnalysisBundle, userSuffix string) {
 	if bundle == nil || bundle.Deployment == nil {
 		return
@@ -300,8 +305,8 @@ func EnsurePermissionsConfigMap(bundle *operatorclient.AnalysisBundle, userSuffi
 
 // ensurePermissionsVolume adds the permissions ConfigMap volume to the pod
 // spec if it isn't already present. The ConfigMap name is derived from the
-// deployment name (which is the invocation ID). This handles bundles that
-// were created before the permissions volume was added at the app-exposer level.
+// deployment name (which is the invocation ID). This keeps the volume
+// attached even for bundles that arrive without one.
 func ensurePermissionsVolume(deployment *appsv1.Deployment) {
 	volumes := deployment.Spec.Template.Spec.Volumes
 	for _, v := range volumes {
@@ -323,8 +328,8 @@ func ensurePermissionsVolume(deployment *appsv1.Deployment) {
 }
 
 // ensurePermissionsVolumeMount adds the permissions volume mount to the
-// container if it isn't already present. This handles bundles created before
-// the mount was added at the app-exposer level.
+// container if it isn't already present, pairing with ensurePermissionsVolume
+// to keep the permissions file visible inside the analysis container.
 func ensurePermissionsVolumeMount(container *apiv1.Container) {
 	for _, vm := range container.VolumeMounts {
 		if vm.Name == constants.PermissionsVolumeName {
