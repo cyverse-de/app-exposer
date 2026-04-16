@@ -1,10 +1,16 @@
 package operator
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/fake"
+	ktesting "k8s.io/client-go/testing"
 )
 
 func TestBuildAnalysisEgressPolicy(t *testing.T) {
@@ -111,4 +117,112 @@ func TestBuildAnalysisEgressPolicy(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestEnsureNamespacePoliciesHappyPath verifies all three policies land
+// in the target namespace with the expected names and PolicyTypes.
+func TestEnsureNamespacePoliciesHappyPath(t *testing.T) {
+	cs := fake.NewSimpleClientset()
+	cfg := NetworkPolicyConfig{
+		Namespace:      "vice-apps",
+		OperatorLabels: map[string]string{"app": "vice-operator-local"},
+	}
+	require.NoError(t, EnsureNamespacePolicies(context.Background(), cs, cfg))
+
+	got, err := cs.NetworkingV1().NetworkPolicies("vice-apps").List(context.Background(), metav1.ListOptions{})
+	require.NoError(t, err)
+	require.Len(t, got.Items, 3, "should create exactly three policies")
+
+	byName := map[string]int{}
+	for _, np := range got.Items {
+		byName[np.Name]++
+	}
+	assert.Equal(t, 1, byName["vice-operator-egress"], "operator egress policy must exist")
+	assert.Equal(t, 1, byName["vice-default-deny-egress"], "deny egress policy must exist")
+	assert.Equal(t, 1, byName["vice-default-deny-ingress"], "default-deny ingress policy must exist")
+}
+
+// TestEnsureNamespacePoliciesOrderAllowBeforeDeny guards the load-bearing
+// invariant: the operator-egress (allow) policy must be created before
+// vice-default-deny-egress. If the deny policy landed first and a later
+// upsert failed, the namespace would be deny-all-egress with no
+// exceptions — breaking every running analysis until the operator
+// successfully retried.
+func TestEnsureNamespacePoliciesOrderAllowBeforeDeny(t *testing.T) {
+	cs := fake.NewSimpleClientset()
+
+	// Record the order in which NetworkPolicies hit the clientset. The
+	// fake's reactor chain fires the prepended reactor first for every
+	// matching action; returning (false, nil, nil) lets the default
+	// tracker handle the actual storage so the test still observes real
+	// list/get behavior.
+	var createOrder []string
+	cs.PrependReactor("create", "networkpolicies", func(action ktesting.Action) (bool, runtime.Object, error) {
+		createAction, ok := action.(ktesting.CreateAction)
+		if !ok {
+			return false, nil, nil
+		}
+		obj, ok := createAction.GetObject().(metav1.Object)
+		if ok {
+			createOrder = append(createOrder, obj.GetName())
+		}
+		return false, nil, nil
+	})
+
+	cfg := NetworkPolicyConfig{
+		Namespace:      "vice-apps",
+		OperatorLabels: map[string]string{"app": "vice-operator-local"},
+	}
+	require.NoError(t, EnsureNamespacePolicies(context.Background(), cs, cfg))
+
+	require.GreaterOrEqual(t, len(createOrder), 2, "expected at least the two egress policies to be created")
+	// Find the indices of the two egress policies and assert the allow
+	// policy was created before the deny policy.
+	operatorIdx, denyIdx := -1, -1
+	for i, name := range createOrder {
+		switch name {
+		case "vice-operator-egress":
+			operatorIdx = i
+		case "vice-default-deny-egress":
+			denyIdx = i
+		}
+	}
+	require.NotEqual(t, -1, operatorIdx, "operator-egress policy never created")
+	require.NotEqual(t, -1, denyIdx, "deny-egress policy never created")
+	assert.Less(t, operatorIdx, denyIdx, "allow policy must be created before deny policy")
+}
+
+// TestEnsureNamespacePoliciesBailsOnAllowFailure confirms that when the
+// first (allow) policy fails to apply, EnsureNamespacePolicies returns
+// the error without attempting to create the default-deny policy. A
+// partial success that leaves deny-all in place without the allow
+// policy would break all cluster traffic.
+func TestEnsureNamespacePoliciesBailsOnAllowFailure(t *testing.T) {
+	cs := fake.NewSimpleClientset()
+	cs.PrependReactor("create", "networkpolicies", func(action ktesting.Action) (bool, runtime.Object, error) {
+		createAction, ok := action.(ktesting.CreateAction)
+		if !ok {
+			return false, nil, nil
+		}
+		obj, ok := createAction.GetObject().(metav1.Object)
+		if !ok {
+			return false, nil, nil
+		}
+		if obj.GetName() == "vice-operator-egress" {
+			return true, nil, errors.New("simulated API failure")
+		}
+		return false, nil, nil
+	})
+
+	cfg := NetworkPolicyConfig{
+		Namespace:      "vice-apps",
+		OperatorLabels: map[string]string{"app": "vice-operator-local"},
+	}
+	err := EnsureNamespacePolicies(context.Background(), cs, cfg)
+	require.Error(t, err)
+
+	// Confirm the deny policy was never created — the allow-before-deny
+	// invariant must hold even on partial failure.
+	_, err = cs.NetworkingV1().NetworkPolicies("vice-apps").Get(context.Background(), "vice-default-deny-egress", metav1.GetOptions{})
+	require.Error(t, err, "deny-egress policy must not exist after an allow-policy failure")
 }
