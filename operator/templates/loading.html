@@ -277,7 +277,10 @@
         function poll() {
             // Check client-side timeout.
             if (timeoutMs > 0 && (Date.now() - startTime) > timeoutMs) {
-                showError("Launch timed out. Please contact support.");
+                showError("Launch timed out. Please contact support.", {
+                    stage: "client-timeout",
+                    error: "client-side timeout after " + timeoutMs + "ms"
+                });
                 return;
             }
 
@@ -292,7 +295,16 @@
                     progress.style.width = pct + "%";
 
                     if (data.stage === "error") {
-                        showError(data.error || stageMessages.error);
+                        // Show a friendly message; the raw error goes into the
+                        // details panel and the Contact Support mailto body so
+                        // the user isn't confronted with Kubernetes jargon.
+                        showError(
+                            "We couldn't bring your analysis online. " +
+                            "Please terminate it from the analyses page and " +
+                            "try launching again, or contact support if this " +
+                            "keeps happening.",
+                            data
+                        );
                         updateDetails(data);
                         return;
                     }
@@ -332,19 +344,55 @@
                 });
         }
 
-        function showError(msg) {
+        function showError(msg, data) {
             status.textContent = msg;
             status.className = "status-msg error";
             progress.className = "progress-fill error";
             support.style.display = "inline-block";
+            // Rebuild the Contact Support mailto with the specifics support
+            // needs to triage: analysis ID, stage at failure, raw error,
+            // and the moment the failure was observed. Saves the user from
+            // copying fields out of the Details panel and saves support a
+            // round-trip asking for logs.
+            if (data) {
+                updateSupportLink(data);
+            }
+        }
+
+        function updateSupportLink(data) {
+            var rawError = (data && data.error) ? data.error : "unknown";
+            var stage    = (data && data.stage) ? data.stage : "unknown";
+            var body =
+                "Analysis: " + analysisID + "\n" +
+                "Stage at failure: " + stage + "\n" +
+                "Error: " + rawError + "\n" +
+                "Time: " + new Date().toISOString() + "\n\n" +
+                "(Please describe what you were trying to do.)";
+            support.href =
+                "mailto:support@cyverse.org" +
+                "?subject=" + encodeURIComponent("VICE Launch Failure - " + analysisID) +
+                "&body=" + encodeURIComponent(body);
         }
 
         function updateDetails(data) {
+            var lines = [];
+            // Surface the raw error at the top of the details panel when
+            // present. The friendly status message above hides it from
+            // casual users; operators expanding details want to see the
+            // underlying cause first, pod state second.
+            if (data.error) {
+                lines.push("Error: " + data.error);
+                lines.push("");
+            }
             if (!data.pods || data.pods.length === 0) {
-                detailsContent.textContent = "No pods found yet.";
+                if (lines.length === 0) {
+                    detailsContent.textContent = "No pods found yet.";
+                    return;
+                }
+                lines.push("No pods found yet.");
+                detailsContent.textContent = lines.join("\n");
                 return;
             }
-            var lines = [];
             data.pods.forEach(function(pod) {
                 lines.push("Pod: " + pod.name + " (" + pod.phase + ", ready=" + pod.ready + ")");
                 if (pod.containerStatuses) {
