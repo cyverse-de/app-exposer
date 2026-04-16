@@ -441,7 +441,8 @@ func (h *HTTPHandlers) PodsHandler(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	// The operator returns []operator.PodInfo. app-exposer PodsHandler
-	// originally returned {"pods": []incluster.RetPod}. We need to wrap it.
+	// The operator responds with a bare JSON array; wrap it in
+	// {"pods": [...]} to keep the response shape stable for existing UI
+	// clients that expect this envelope.
 	return c.Blob(http.StatusOK, "application/json", []byte(fmt.Sprintf(`{"pods":%s}`, string(rawPods))))
 }

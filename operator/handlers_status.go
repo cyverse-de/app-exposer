@@ -19,22 +19,30 @@ import (
 
 // StatusResponse describes the state of an analysis's K8s resources.
 type StatusResponse struct {
-	AnalysisID  string           `json:"analysisID"`
-	Deployments []DeploymentInfo `json:"deployments"`
-	Pods        []PodInfo        `json:"pods"`
-	Services    []string         `json:"services"`
-	Routes      []string         `json:"routes,omitempty"`
+	AnalysisID  string             `json:"analysisID"`
+	Deployments []StatusDeployment `json:"deployments"`
+	Pods        []StatusPod        `json:"pods"`
+	Services    []string           `json:"services"`
+	Routes      []string           `json:"routes,omitempty"`
 }
 
-// DeploymentInfo holds basic deployment status.
-type DeploymentInfo struct {
+// StatusDeployment holds the minimal deployment status reported by the
+// /analyses/{id}/status endpoint. Named distinctly from
+// reporting.DeploymentInfo (which carries richer audit-level fields)
+// because both types are visible in files that import the reporting
+// package, and identical names would force local aliases at every call
+// site.
+type StatusDeployment struct {
 	Name            string `json:"name"`
 	ReadyReplicas   int32  `json:"readyReplicas"`
 	DesiredReplicas int32  `json:"desiredReplicas"`
 }
 
-// PodInfo holds basic pod status.
-type PodInfo struct {
+// StatusPod holds the minimal pod status reported by the
+// /analyses/{id}/status and /analyses/{id}/pods endpoints. Named
+// distinctly from reporting.PodInfo for the reason described on
+// StatusDeployment.
+type StatusPod struct {
 	Name  string `json:"name"`
 	Phase string `json:"phase"`
 	Ready bool   `json:"ready"`
@@ -73,7 +81,7 @@ func (o *Operator) HandleStatus(c echo.Context) error {
 		if d.Spec.Replicas != nil {
 			desired = *d.Spec.Replicas
 		}
-		resp.Deployments = append(resp.Deployments, DeploymentInfo{
+		resp.Deployments = append(resp.Deployments, StatusDeployment{
 			Name:            d.Name,
 			ReadyReplicas:   d.Status.ReadyReplicas,
 			DesiredReplicas: desired,
@@ -86,7 +94,7 @@ func (o *Operator) HandleStatus(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	for _, p := range pods.Items {
-		resp.Pods = append(resp.Pods, PodInfo{
+		resp.Pods = append(resp.Pods, StatusPod{
 			Name:  p.Name,
 			Phase: string(p.Status.Phase),
 			Ready: isPodReady(p),
@@ -186,7 +194,7 @@ func (o *Operator) HandleURLReady(c echo.Context) error {
 //	@Tags			analyses
 //	@Produce		json
 //	@Param			analysis-id	path		string	true	"The analysis ID"
-//	@Success		200			{array}		PodInfo
+//	@Success		200			{array}		StatusPod
 //	@Failure		400			{object}	common.ErrorResponse
 //	@Failure		500			{object}	common.ErrorResponse
 //	@Router			/analyses/{analysis-id}/pods [get]
@@ -204,9 +212,9 @@ func (o *Operator) HandlePods(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	var podInfos []PodInfo
+	var podInfos []StatusPod
 	for _, p := range pods.Items {
-		podInfos = append(podInfos, PodInfo{
+		podInfos = append(podInfos, StatusPod{
 			Name:  p.Name,
 			Phase: string(p.Status.Phase),
 			Ready: isPodReady(p),

@@ -464,7 +464,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/operator.PodInfo"
+                                "$ref": "#/definitions/operator.StatusPod"
                             }
                         }
                     },
@@ -926,7 +926,7 @@ const docTemplate = `{
         },
         "/regenerate-network-policies": {
             "post": {
-                "description": "Rebuilds egress NetworkPolicies for all running analyses to\nmatch the operator's current configuration.",
+                "description": "Rebuilds egress NetworkPolicies for all running analyses to\nmatch the operator's current configuration. Returns 207\nMulti-Status when some analyses failed to regenerate; the\nErrors field lists them.",
                 "produces": [
                     "application/json"
                 ],
@@ -936,7 +936,13 @@ const docTemplate = `{
                 "summary": "Regenerate per-analysis network policies",
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "All regenerated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/operator.RegenerateResponse"
+                        }
+                    },
+                    "207": {
+                        "description": "Partial success",
                         "schema": {
                             "$ref": "#/definitions/operator.RegenerateResponse"
                         }
@@ -1095,20 +1101,6 @@ const docTemplate = `{
                 "ConditionUnknown"
             ]
         },
-        "operator.DeploymentInfo": {
-            "type": "object",
-            "properties": {
-                "desiredReplicas": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "readyReplicas": {
-                    "type": "integer"
-                }
-            }
-        },
         "operator.ImageCacheBulkResponse": {
             "type": "object",
             "properties": {
@@ -1190,20 +1182,6 @@ const docTemplate = `{
                 }
             }
         },
-        "operator.PodInfo": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "phase": {
-                    "type": "string"
-                },
-                "ready": {
-                    "type": "boolean"
-                }
-            }
-        },
         "operator.RegenerateResponse": {
             "type": "object",
             "properties": {
@@ -1218,6 +1196,34 @@ const docTemplate = `{
                 }
             }
         },
+        "operator.StatusDeployment": {
+            "type": "object",
+            "properties": {
+                "desiredReplicas": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "readyReplicas": {
+                    "type": "integer"
+                }
+            }
+        },
+        "operator.StatusPod": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "phase": {
+                    "type": "string"
+                },
+                "ready": {
+                    "type": "boolean"
+                }
+            }
+        },
         "operator.StatusResponse": {
             "type": "object",
             "properties": {
@@ -1227,13 +1233,13 @@ const docTemplate = `{
                 "deployments": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/operator.DeploymentInfo"
+                        "$ref": "#/definitions/operator.StatusDeployment"
                     }
                 },
                 "pods": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/operator.PodInfo"
+                        "$ref": "#/definitions/operator.StatusPod"
                     }
                 },
                 "routes": {

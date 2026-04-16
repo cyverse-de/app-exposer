@@ -457,7 +457,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/operator.PodInfo"
+                                "$ref": "#/definitions/operator.StatusPod"
                             }
                         }
                     },
@@ -919,7 +919,7 @@
         },
         "/regenerate-network-policies": {
             "post": {
-                "description": "Rebuilds egress NetworkPolicies for all running analyses to\nmatch the operator's current configuration.",
+                "description": "Rebuilds egress NetworkPolicies for all running analyses to\nmatch the operator's current configuration. Returns 207\nMulti-Status when some analyses failed to regenerate; the\nErrors field lists them.",
                 "produces": [
                     "application/json"
                 ],
@@ -929,7 +929,13 @@
                 "summary": "Regenerate per-analysis network policies",
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "All regenerated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/operator.RegenerateResponse"
+                        }
+                    },
+                    "207": {
+                        "description": "Partial success",
                         "schema": {
                             "$ref": "#/definitions/operator.RegenerateResponse"
                         }
@@ -1088,20 +1094,6 @@
                 "ConditionUnknown"
             ]
         },
-        "operator.DeploymentInfo": {
-            "type": "object",
-            "properties": {
-                "desiredReplicas": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "readyReplicas": {
-                    "type": "integer"
-                }
-            }
-        },
         "operator.ImageCacheBulkResponse": {
             "type": "object",
             "properties": {
@@ -1183,20 +1175,6 @@
                 }
             }
         },
-        "operator.PodInfo": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "phase": {
-                    "type": "string"
-                },
-                "ready": {
-                    "type": "boolean"
-                }
-            }
-        },
         "operator.RegenerateResponse": {
             "type": "object",
             "properties": {
@@ -1211,6 +1189,34 @@
                 }
             }
         },
+        "operator.StatusDeployment": {
+            "type": "object",
+            "properties": {
+                "desiredReplicas": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "readyReplicas": {
+                    "type": "integer"
+                }
+            }
+        },
+        "operator.StatusPod": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "phase": {
+                    "type": "string"
+                },
+                "ready": {
+                    "type": "boolean"
+                }
+            }
+        },
         "operator.StatusResponse": {
             "type": "object",
             "properties": {
@@ -1220,13 +1226,13 @@
                 "deployments": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/operator.DeploymentInfo"
+                        "$ref": "#/definitions/operator.StatusDeployment"
                     }
                 },
                 "pods": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/operator.PodInfo"
+                        "$ref": "#/definitions/operator.StatusPod"
                     }
                 },
                 "routes": {

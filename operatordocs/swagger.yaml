@@ -147,15 +147,6 @@ definitions:
     - ConditionTrue
     - ConditionFalse
     - ConditionUnknown
-  operator.DeploymentInfo:
-    properties:
-      desiredReplicas:
-        type: integer
-      name:
-        type: string
-      readyReplicas:
-        type: integer
-    type: object
   operator.ImageCacheBulkResponse:
     properties:
       results:
@@ -209,15 +200,6 @@ definitions:
           type: string
         type: array
     type: object
-  operator.PodInfo:
-    properties:
-      name:
-        type: string
-      phase:
-        type: string
-      ready:
-        type: boolean
-    type: object
   operator.RegenerateResponse:
     properties:
       errors:
@@ -227,17 +209,35 @@ definitions:
       updated:
         type: integer
     type: object
+  operator.StatusDeployment:
+    properties:
+      desiredReplicas:
+        type: integer
+      name:
+        type: string
+      readyReplicas:
+        type: integer
+    type: object
+  operator.StatusPod:
+    properties:
+      name:
+        type: string
+      phase:
+        type: string
+      ready:
+        type: boolean
+    type: object
   operator.StatusResponse:
     properties:
       analysisID:
         type: string
       deployments:
         items:
-          $ref: '#/definitions/operator.DeploymentInfo'
+          $ref: '#/definitions/operator.StatusDeployment'
         type: array
       pods:
         items:
-          $ref: '#/definitions/operator.PodInfo'
+          $ref: '#/definitions/operator.StatusPod'
         type: array
       routes:
         items:
@@ -11055,7 +11055,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/operator.PodInfo'
+              $ref: '#/definitions/operator.StatusPod'
             type: array
         "400":
           description: Bad Request
@@ -11391,12 +11391,18 @@ paths:
     post:
       description: |-
         Rebuilds egress NetworkPolicies for all running analyses to
-        match the operator's current configuration.
+        match the operator's current configuration. Returns 207
+        Multi-Status when some analyses failed to regenerate; the
+        Errors field lists them.
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: All regenerated successfully
+          schema:
+            $ref: '#/definitions/operator.RegenerateResponse'
+        "207":
+          description: Partial success
           schema:
             $ref: '#/definitions/operator.RegenerateResponse'
         "500":
