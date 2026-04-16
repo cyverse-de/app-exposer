@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -23,6 +24,11 @@ const (
 	stateCookieName   = "vice-operator-oauth-state"
 	stateMaxAge       = 300 // 5 minutes for the CSRF state cookie.
 )
+
+// swaggerAuthHTTPClient is used for OAuth token-endpoint calls. The default
+// http.Client has no timeout, which allows an unresponsive identity provider
+// to hang the callback goroutine indefinitely.
+var swaggerAuthHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // SwaggerAuthConfig holds the OAuth2/OIDC settings for the Swagger UI login flow.
 type SwaggerAuthConfig struct {
@@ -193,7 +199,7 @@ func handleCallback(cfg *SwaggerAuthConfig, verifier *oidc.IDTokenVerifier) echo
 
 		// Exchange the code for tokens.
 		redirectURI := buildRedirectURI(c)
-		tokenResp, err := exchangeCode(cfg, code, redirectURI)
+		tokenResp, err := exchangeCode(c.Request().Context(), cfg, code, redirectURI)
 		if err != nil {
 			log.Errorf("token exchange failed: %v", err)
 			return echo.NewHTTPError(http.StatusInternalServerError, "token exchange failed")
@@ -255,8 +261,10 @@ type tokenResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
-// exchangeCode performs the OAuth2 authorization code exchange.
-func exchangeCode(cfg *SwaggerAuthConfig, code, redirectURI string) (*tokenResponse, error) {
+// exchangeCode performs the OAuth2 authorization code exchange. The caller
+// provides the request context so cancellation composes with the package-level
+// client timeout on swaggerAuthHTTPClient.
+func exchangeCode(ctx context.Context, cfg *SwaggerAuthConfig, code, redirectURI string) (*tokenResponse, error) {
 	data := url.Values{
 		"grant_type":   {"authorization_code"},
 		"code":         {code},
@@ -267,7 +275,13 @@ func exchangeCode(cfg *SwaggerAuthConfig, code, redirectURI string) (*tokenRespo
 		data.Set("client_secret", cfg.ClientSecret)
 	}
 
-	resp, err := http.PostForm(cfg.tokenURL(), data)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.tokenURL(), strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("building token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := swaggerAuthHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("POST to token endpoint: %w", err)
 	}
