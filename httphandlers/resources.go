@@ -209,8 +209,8 @@ func (h *HTTPHandlers) AdminDescribeAnalysisHandler(c echo.Context) error {
 //	@Description	with the host/subdomain passed in as 'host' from the URL.
 //	@Description	The user passed in must have access to the VICE analysis.
 //	@Produce		json
-//	@Param			user	query		string	true	constants.UsernameLabel
-//	@Param			host	path		string	true	constants.SubdomainLabel
+//	@Param			user	query		string	true	"username"
+//	@Param			host	path		string	true	"subdomain"
 //	@Success		200		{object}	reporting.ResourceInfo
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		403		{object}	common.ErrorResponse
@@ -289,7 +289,7 @@ func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 //	@Description	to access the resource. The rest of the query map is used to filter
 //	@Description	resources returned from the handler.
 //	@Produce		json
-//	@Param			user	query		string	true	constants.UsernameLabel
+//	@Param			user	query		string	true	"username"
 //	@Success		200		{object}	reporting.ResourceInfo
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		403		{object}	common.ErrorResponse
