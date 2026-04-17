@@ -262,7 +262,7 @@ func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 			BaseURL: h.incluster.PermissionsURL,
 		}
 
-		allowed, err := p.IsAllowed(ctx, user, analysisID)
+		allowed, err := p.IsAllowed(ctx, user, string(analysisID))
 		if err != nil {
 			return err
 		}
@@ -410,7 +410,7 @@ type ListPodsResponse struct {
 func (h *HTTPHandlers) PodsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	analysisID := c.Param(constants.AnalysisIDLabel)
+	analysisID := constants.AnalysisID(c.Param(constants.AnalysisIDLabel))
 	user := c.QueryParam("user")
 
 	if user == "" {
@@ -421,7 +421,7 @@ func (h *HTTPHandlers) PodsHandler(c echo.Context) error {
 	p := &permissions.Permissions{
 		BaseURL: h.incluster.PermissionsURL,
 	}
-	allowed, err := p.IsAllowed(ctx, user, analysisID)
+	allowed, err := p.IsAllowed(ctx, user, string(analysisID))
 	if err != nil {
 		return err
 	}

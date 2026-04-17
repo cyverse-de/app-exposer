@@ -8,6 +8,7 @@ import (
 	"cmp"
 	"slices"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -15,16 +16,16 @@ import (
 
 // MetaInfo contains useful information provided by multiple resource types.
 type MetaInfo struct {
-	Name              string `json:"name"`
-	Namespace         string `json:"namespace"`
-	AnalysisID        string `json:"analysisID"`
-	AnalysisName      string `json:"analysisName"`
-	AppName           string `json:"appName"`
-	AppID             string `json:"appID"`
-	ExternalID        string `json:"externalID"`
-	UserID            string `json:"userID"`
-	Username          string `json:"username"`
-	CreationTimestamp string `json:"creationTimestamp"`
+	Name              string               `json:"name"`
+	Namespace         string               `json:"namespace"`
+	AnalysisID        constants.AnalysisID `json:"analysisID"`
+	AnalysisName      string               `json:"analysisName"`
+	AppName           string               `json:"appName"`
+	AppID             string               `json:"appID"`
+	ExternalID        constants.ExternalID `json:"externalID"`
+	UserID            string               `json:"userID"`
+	Username          string               `json:"username"`
+	CreationTimestamp string               `json:"creationTimestamp"`
 }
 
 // DeploymentInfo contains information returned about a Deployment.

@@ -23,7 +23,7 @@ import (
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/{id}/exit [post]
 func (h *HTTPHandlers) ExitHandler(c echo.Context) error {
-	return h.routeOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+	return h.routeOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID constants.AnalysisID) error {
 		log.Infof("routing exit for analysis %s to operator %s", analysisID, client.Name())
 		return client.Exit(ctx, analysisID)
 	})
@@ -43,7 +43,7 @@ func (h *HTTPHandlers) ExitHandler(c echo.Context) error {
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/admin/analyses/{analysis-id}/exit [post]
 func (h *HTTPHandlers) AdminExitHandler(c echo.Context) error {
-	return h.routeAdminOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+	return h.routeAdminOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID constants.AnalysisID) error {
 		log.Infof("routing admin exit for analysis %s to operator %s", analysisID, client.Name())
 		return client.Exit(ctx, analysisID)
 	})
@@ -64,7 +64,7 @@ func (h *HTTPHandlers) AdminExitHandler(c echo.Context) error {
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/{id}/save-and-exit [post]
 func (h *HTTPHandlers) SaveAndExitHandler(c echo.Context) error {
-	return h.routeOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+	return h.routeOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID constants.AnalysisID) error {
 		log.Infof("routing save-and-exit for analysis %s to operator %s", analysisID, client.Name())
 		return client.SaveAndExit(ctx, analysisID)
 	})
@@ -85,7 +85,7 @@ func (h *HTTPHandlers) SaveAndExitHandler(c echo.Context) error {
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/admin/analyses/{analysis-id}/save-and-exit [post]
 func (h *HTTPHandlers) AdminSaveAndExitHandler(c echo.Context) error {
-	return h.routeAdminOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+	return h.routeAdminOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID constants.AnalysisID) error {
 		log.Infof("routing admin save-and-exit for analysis %s to operator %s", analysisID, client.Name())
 		return client.SaveAndExit(ctx, analysisID)
 	})
@@ -140,7 +140,7 @@ func (h *HTTPHandlers) TerminateAllAnalysesHandler(c echo.Context) error {
 	for _, id := range interactiveIDs {
 		log.Infof("stopping VICE analysis %s", id)
 
-		analysisID, lookupErr := h.apps.GetAnalysisIDByExternalID(ctx, id)
+		analysisID, lookupErr := h.apps.GetAnalysisIDByExternalID(ctx, constants.ExternalID(id))
 		if lookupErr != nil {
 			log.Errorf("failed to look up analysis ID for external ID %s: %v", id, lookupErr)
 			failedVICE = append(failedVICE, id)

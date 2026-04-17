@@ -11,6 +11,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/db"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
@@ -366,7 +367,7 @@ func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 // logged but never propagate — a failed back-fill just means the next
 // reconciliation cycle will try again, and the fan-out fallback in
 // operatorClientForAnalysis continues to work in the meantime.
-func (r *Reconciler) backfillOperatorName(ctx context.Context, analysisID, operatorName string) {
+func (r *Reconciler) backfillOperatorName(ctx context.Context, analysisID constants.AnalysisID, operatorName string) {
 	if r.apps == nil || analysisID == "" {
 		return
 	}
@@ -437,7 +438,7 @@ func mapPodPhaseToStatus(phase string) messaging.JobState {
 	}
 }
 
-func (r *Reconciler) recordStatusUpdate(ctx context.Context, tx *sqlx.Tx, externalID string, status messaging.JobState, message string) error {
+func (r *Reconciler) recordStatusUpdate(ctx context.Context, tx *sqlx.Tx, externalID constants.ExternalID, status messaging.JobState, message string) error {
 	if message == "" {
 		message = fmt.Sprintf("Status changed to %s", status)
 	}

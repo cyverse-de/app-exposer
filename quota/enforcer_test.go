@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/stretchr/testify/assert"
@@ -18,11 +19,11 @@ import (
 // fakeAnalysisStatusLookup implements apps.AnalysisStatusLookup for unit
 // tests. Per-analysis status and error results are configurable.
 type fakeAnalysisStatusLookup struct {
-	statuses map[string]string // analysisID -> status
-	err      error             // returned for any lookup when non-nil
+	statuses map[constants.AnalysisID]string // analysisID -> status
+	err      error                           // returned for any lookup when non-nil
 }
 
-func (f *fakeAnalysisStatusLookup) GetAnalysisStatus(_ context.Context, analysisID string) (string, error) {
+func (f *fakeAnalysisStatusLookup) GetAnalysisStatus(_ context.Context, analysisID constants.AnalysisID) (string, error) {
 	if f.err != nil {
 		return "", f.err
 	}
@@ -40,7 +41,7 @@ func newListingResponse(analysisIDs ...string) []byte {
 	for _, id := range analysisIDs {
 		info.Deployments = append(info.Deployments, reporting.DeploymentInfo{
 			MetaInfo: reporting.MetaInfo{
-				AnalysisID: id,
+				AnalysisID: constants.AnalysisID(id),
 				Name:       "dep-" + id,
 			},
 		})
@@ -110,7 +111,7 @@ func TestCountJobsForUserAllOperatorsRespond(t *testing.T) {
 	)
 
 	lookup := &fakeAnalysisStatusLookup{
-		statuses: map[string]string{
+		statuses: map[constants.AnalysisID]string{
 			"an-a1": "Running",
 			"an-a2": "Completed", // skipped by shouldCountStatus
 			"an-b1": "Running",
@@ -136,7 +137,7 @@ func TestCountJobsForUserOperatorListingFailure(t *testing.T) {
 	)
 
 	lookup := &fakeAnalysisStatusLookup{
-		statuses: map[string]string{
+		statuses: map[constants.AnalysisID]string{
 			"an-b1": "Running",
 		},
 	}
@@ -153,7 +154,7 @@ func TestCountJobsForUserSkipsErrNoRows(t *testing.T) {
 	srv := newListingServer(t, http.StatusOK, newListingResponse("an-orphan"))
 
 	sched := newTestScheduler(t, operatorclient.OperatorConfig{Name: "op-a", URL: srv.URL})
-	lookup := &fakeAnalysisStatusLookup{statuses: map[string]string{}} // no statuses → ErrNoRows
+	lookup := &fakeAnalysisStatusLookup{statuses: map[constants.AnalysisID]string{}} // no statuses → ErrNoRows
 	e := newTestEnforcer(t, sched, lookup)
 
 	count, degraded, err := e.countJobsForUser(context.Background(), "user-1")
@@ -194,7 +195,7 @@ func TestCountJobsForUserCountSurvivingBelowLimit(t *testing.T) {
 	)
 
 	lookup := &fakeAnalysisStatusLookup{
-		statuses: map[string]string{
+		statuses: map[constants.AnalysisID]string{
 			"an-a1": "Running",
 			"an-a2": "Submitted",
 		},

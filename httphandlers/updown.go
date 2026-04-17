@@ -3,6 +3,7 @@ package httphandlers
 import (
 	"context"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/labstack/echo/v4"
 )
@@ -21,7 +22,7 @@ import (
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/{id}/download-input-files [post]
 func (h *HTTPHandlers) TriggerDownloadsHandler(c echo.Context) error {
-	return h.routeOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+	return h.routeOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID constants.AnalysisID) error {
 		log.Infof("routing download-input-files for analysis %s to operator %s", analysisID, client.Name())
 		return client.DownloadInputFiles(ctx, analysisID)
 	})
@@ -41,7 +42,7 @@ func (h *HTTPHandlers) TriggerDownloadsHandler(c echo.Context) error {
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/{id}/save-output-files [post]
 func (h *HTTPHandlers) TriggerUploadsHandler(c echo.Context) error {
-	return h.routeOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+	return h.routeOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID constants.AnalysisID) error {
 		log.Infof("routing save-output-files for analysis %s to operator %s", analysisID, client.Name())
 		return client.SaveOutputFiles(ctx, analysisID)
 	})
@@ -61,7 +62,7 @@ func (h *HTTPHandlers) TriggerUploadsHandler(c echo.Context) error {
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/admin/analyses/{analysis-id}/download-input-files [post]
 func (h *HTTPHandlers) AdminTriggerDownloadsHandler(c echo.Context) error {
-	return h.routeAdminOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+	return h.routeAdminOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID constants.AnalysisID) error {
 		log.Infof("routing admin download-input-files for analysis %s to operator %s", analysisID, client.Name())
 		return client.DownloadInputFiles(ctx, analysisID)
 	})
@@ -81,7 +82,7 @@ func (h *HTTPHandlers) AdminTriggerDownloadsHandler(c echo.Context) error {
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/admin/analyses/{analysis-id}/save-output-files [post]
 func (h *HTTPHandlers) AdminTriggerUploadsHandler(c echo.Context) error {
-	return h.routeAdminOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID string) error {
+	return h.routeAdminOperatorAction(c, func(ctx context.Context, client *operatorclient.Client, analysisID constants.AnalysisID) error {
 		log.Infof("routing admin save-output-files for analysis %s to operator %s", analysisID, client.Name())
 		return client.SaveOutputFiles(ctx, analysisID)
 	})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/messaging/v12"
 	"github.com/google/uuid"
@@ -29,12 +30,12 @@ type Operator struct {
 // package already defines it; adopting the upstream type avoids a
 // parallel enum here).
 type JobStatusUpdate struct {
-	ExternalID       string             `db:"external_id"`
-	Message          string             `db:"message"`
-	Status           messaging.JobState `db:"status"`
-	SentFrom         string             `db:"sent_from"`
-	SentFromHostname string             `db:"sent_from_hostname"`
-	SentOn           int64              `db:"sent_on"`
+	ExternalID       constants.ExternalID `db:"external_id"`
+	Message          string               `db:"message"`
+	Status           messaging.JobState   `db:"status"`
+	SentFrom         string               `db:"sent_from"`
+	SentFromHostname string               `db:"sent_from_hostname"`
+	SentOn           int64                `db:"sent_on"`
 }
 
 // ToOperatorConfig projects the DB's full Operator row down to the public
@@ -175,7 +176,7 @@ func (d *Database) InsertJobStatusUpdate(ctx context.Context, tx *sqlx.Tx, updat
 }
 
 // GetAnalysisStatus returns the current status of an analysis from the jobs table.
-func (d *Database) GetAnalysisStatus(ctx context.Context, tx *sqlx.Tx, analysisID string) (string, error) {
+func (d *Database) GetAnalysisStatus(ctx context.Context, tx *sqlx.Tx, analysisID constants.AnalysisID) (string, error) {
 	var status string
 	const query = "SELECT status FROM jobs WHERE id = $1"
 	err := tx.GetContext(ctx, &status, query, analysisID)
@@ -186,7 +187,7 @@ func (d *Database) GetAnalysisStatus(ctx context.Context, tx *sqlx.Tx, analysisI
 // job_status_updates table for the given external ID. This is more accurate
 // than querying the jobs table directly because there can be lag between
 // when a status update is recorded and when the jobs table is updated.
-func (d *Database) GetLatestStatusByExternalID(ctx context.Context, tx *sqlx.Tx, externalID string) (messaging.JobState, error) {
+func (d *Database) GetLatestStatusByExternalID(ctx context.Context, tx *sqlx.Tx, externalID constants.ExternalID) (messaging.JobState, error) {
 	var status messaging.JobState
 	const query = `
 		SELECT status FROM job_status_updates

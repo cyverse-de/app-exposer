@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/db"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
@@ -76,7 +77,7 @@ func TestMapPodPhaseToStatus(t *testing.T) {
 // produces, and per-method errors can be injected to exercise failure paths.
 type fakeReconcilerDB struct {
 	operators []db.Operator
-	statuses  map[string]messaging.JobState // externalID -> latest status
+	statuses  map[constants.ExternalID]messaging.JobState // externalID -> latest status
 
 	// Injected errors (nil by default).
 	listErr   error
@@ -122,7 +123,7 @@ func (f *fakeReconcilerDB) ClaimAndReconcile(_ context.Context, _ string, _ time
 	return fn(nil, f.claimOp)
 }
 
-func (f *fakeReconcilerDB) GetLatestStatusByExternalID(_ context.Context, _ *sqlx.Tx, externalID string) (messaging.JobState, error) {
+func (f *fakeReconcilerDB) GetLatestStatusByExternalID(_ context.Context, _ *sqlx.Tx, externalID constants.ExternalID) (messaging.JobState, error) {
 	if f.statusErr != nil {
 		return "", f.statusErr
 	}
@@ -296,7 +297,7 @@ func TestReconcileAnalysis(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := &fakeReconcilerDB{
-				statuses:  map[string]messaging.JobState{},
+				statuses:  map[constants.ExternalID]messaging.JobState{},
 				statusErr: tt.statusErr,
 				insertErr: tt.insertErr,
 			}
@@ -326,7 +327,7 @@ func TestReconcileAnalysis(t *testing.T) {
 func TestRecordStatusUpdate(t *testing.T) {
 	tests := []struct {
 		name        string
-		externalID  string
+		externalID  constants.ExternalID
 		status      messaging.JobState
 		message     string
 		wantMessage string
@@ -410,7 +411,7 @@ func TestReconcileNext(t *testing.T) {
 		srv := newListingServer(t, info)
 
 		fake := &fakeReconcilerDB{
-			statuses: map[string]messaging.JobState{
+			statuses: map[constants.ExternalID]messaging.JobState{
 				"ext-1": messaging.SubmittedState, // transition Submitted -> Running
 				"ext-2": messaging.RunningState,   // transition Running -> Failed
 			},
@@ -427,7 +428,7 @@ func TestReconcileNext(t *testing.T) {
 		assert.Equal(t, 1, fake.claimHits)
 		require.Len(t, fake.inserts, 2, "only labeled pods with status changes should insert")
 
-		byExternal := map[string]messaging.JobState{}
+		byExternal := map[constants.ExternalID]messaging.JobState{}
 		for _, ins := range fake.inserts {
 			byExternal[ins.ExternalID] = ins.Status
 		}

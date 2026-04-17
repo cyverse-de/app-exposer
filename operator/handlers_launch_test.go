@@ -151,10 +151,10 @@ func TestHandleLaunch(t *testing.T) {
 				// deployment metadata labels (which include analysis-id), not pod
 				// template labels (which may not). Verify the NP has the analysis-id
 				// label so deleteAnalysisResources can find it during cleanup.
-				np, err := clientset.NetworkingV1().NetworkPolicies("vice-apps").Get(ctx, "vice-egress-"+tt.bundle.AnalysisID, metav1.GetOptions{})
+				np, err := clientset.NetworkingV1().NetworkPolicies("vice-apps").Get(ctx, "vice-egress-"+string(tt.bundle.AnalysisID), metav1.GetOptions{})
 				assert.NoError(t, err, "per-analysis egress NetworkPolicy should exist")
 				if np != nil {
-					assert.Equal(t, tt.bundle.AnalysisID, np.Labels[constants.AnalysisIDLabel],
+					assert.Equal(t, string(tt.bundle.AnalysisID), np.Labels[constants.AnalysisIDLabel],
 						"NetworkPolicy should have analysis-id label from deployment metadata")
 				}
 			}
@@ -234,8 +234,8 @@ func TestHandleLaunchGPUVendorAMD(t *testing.T) {
 func TestHandleLaunchFullBundle(t *testing.T) {
 	op, clientset, gwClientset := newTestOperator(t, 10)
 
-	analysisID := "full-bundle-test"
-	labels := map[string]string{constants.AnalysisIDLabel: analysisID, constants.AppTypeLabel: "interactive", constants.UsernameLabel: "testuser"}
+	analysisID := operatorclient.AnalysisID("full-bundle-test")
+	labels := map[string]string{constants.AnalysisIDLabel: string(analysisID), constants.AppTypeLabel: "interactive", constants.UsernameLabel: "testuser"}
 	port := gatewayv1.PortNumber(60000)
 
 	bundle := operatorclient.AnalysisBundle{

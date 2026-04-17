@@ -93,6 +93,19 @@ const (
 	SubdomainLabel  = "subdomain"
 )
 
+// AnalysisID is the app-exposer/DE analysis identifier — the "id" column
+// on the jobs table. ExternalID is the invocation identifier used by
+// upstream messaging and reporting — the "external_id" carried on
+// job_status_updates and on pod labels. They're stored and transmitted
+// as strings; the domain types exist so the compiler catches accidental
+// swaps and so function signatures advertise which identifier they
+// expect. Both are transparent to sqlx, encoding/json, and fmt because
+// their underlying kind is string.
+type (
+	AnalysisID string
+	ExternalID string
+)
+
 type AnalysisStatus string
 
 const (

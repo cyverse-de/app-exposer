@@ -155,13 +155,13 @@ func (c *Client) Launch(ctx context.Context, bundle *AnalysisBundle) error {
 }
 
 // analysisURL builds a URL for an analysis-scoped endpoint.
-func (c *Client) analysisURL(analysisID, subpath string) string {
-	return c.baseURL.JoinPath("analyses", analysisID, subpath).String()
+func (c *Client) analysisURL(analysisID AnalysisID, subpath string) string {
+	return c.baseURL.JoinPath("analyses", string(analysisID), subpath).String()
 }
 
 // Exit tells the operator to delete all resources for an analysis.
-func (c *Client) Exit(ctx context.Context, analysisID string) error {
-	u := c.baseURL.JoinPath("analyses", analysisID).String()
+func (c *Client) Exit(ctx context.Context, analysisID AnalysisID) error {
+	u := c.baseURL.JoinPath("analyses", string(analysisID)).String()
 	log.Infof("operator %s: DELETE %s (analysis %s)", c.name, u, analysisID)
 
 	resp, err := c.doRequest(ctx, http.MethodDelete, u, nil)
@@ -180,22 +180,22 @@ func (c *Client) Exit(ctx context.Context, analysisID string) error {
 }
 
 // SaveAndExit tells the operator to save output files and then exit.
-func (c *Client) SaveAndExit(ctx context.Context, analysisID string) error {
+func (c *Client) SaveAndExit(ctx context.Context, analysisID AnalysisID) error {
 	return c.postAnalysisAction(ctx, analysisID, "save-and-exit")
 }
 
 // DownloadInputFiles tells the operator to trigger input file downloads.
-func (c *Client) DownloadInputFiles(ctx context.Context, analysisID string) error {
+func (c *Client) DownloadInputFiles(ctx context.Context, analysisID AnalysisID) error {
 	return c.postAnalysisAction(ctx, analysisID, "download-input-files")
 }
 
 // SaveOutputFiles tells the operator to trigger output file uploads.
-func (c *Client) SaveOutputFiles(ctx context.Context, analysisID string) error {
+func (c *Client) SaveOutputFiles(ctx context.Context, analysisID AnalysisID) error {
 	return c.postAnalysisAction(ctx, analysisID, "save-output-files")
 }
 
 // postAnalysisAction POSTs to an analysis sub-endpoint.
-func (c *Client) postAnalysisAction(ctx context.Context, analysisID, action string) error {
+func (c *Client) postAnalysisAction(ctx context.Context, analysisID AnalysisID, action string) error {
 	reqURL := c.analysisURL(analysisID, action)
 
 	log.Infof("operator %s: POST %s (analysis %s, action %s)", c.name, reqURL, analysisID, action)
@@ -217,7 +217,7 @@ func (c *Client) postAnalysisAction(ctx context.Context, analysisID, action stri
 
 // UpdatePermissions pushes a new allowed-users list to the operator's
 // permissions ConfigMap for the given analysis.
-func (c *Client) UpdatePermissions(ctx context.Context, analysisID string, users []string) error {
+func (c *Client) UpdatePermissions(ctx context.Context, analysisID AnalysisID, users []string) error {
 	reqURL := c.analysisURL(analysisID, "permissions")
 
 	log.Infof("operator %s: PUT %s (analysis %s, %d users)", c.name, reqURL, analysisID, len(users))
@@ -243,7 +243,7 @@ func (c *Client) UpdatePermissions(ctx context.Context, analysisID string, users
 }
 
 // ActiveSessions returns the list of currently active user sessions for an analysis.
-func (c *Client) ActiveSessions(ctx context.Context, analysisID string) (*ActiveSessionsResponse, error) {
+func (c *Client) ActiveSessions(ctx context.Context, analysisID AnalysisID) (*ActiveSessionsResponse, error) {
 	raw, err := c.getAnalysisJSON(ctx, analysisID, "active-sessions")
 	if err != nil {
 		return nil, err
@@ -257,7 +257,7 @@ func (c *Client) ActiveSessions(ctx context.Context, analysisID string) (*Active
 }
 
 // LogoutUser invalidates all sessions for the given username in an analysis.
-func (c *Client) LogoutUser(ctx context.Context, analysisID, username string) error {
+func (c *Client) LogoutUser(ctx context.Context, analysisID AnalysisID, username string) error {
 	reqURL := c.analysisURL(analysisID, "logout-user")
 
 	log.Infof("operator %s: POST %s (analysis %s, logout-user %s)", c.name, reqURL, analysisID, username)
@@ -315,7 +315,7 @@ func (c *Client) Listing(ctx context.Context, params url.Values) (*reporting.Res
 
 // HasAnalysis checks whether this operator's cluster has the given analysis
 // by calling the status endpoint and checking for deployments.
-func (c *Client) HasAnalysis(ctx context.Context, analysisID string) (bool, error) {
+func (c *Client) HasAnalysis(ctx context.Context, analysisID AnalysisID) (bool, error) {
 	resp, err := c.Status(ctx, analysisID)
 	if err != nil {
 		return false, err
@@ -324,7 +324,7 @@ func (c *Client) HasAnalysis(ctx context.Context, analysisID string) (bool, erro
 }
 
 // Status queries the resource status for an analysis from the operator.
-func (c *Client) Status(ctx context.Context, analysisID string) (*StatusResponse, error) {
+func (c *Client) Status(ctx context.Context, analysisID AnalysisID) (*StatusResponse, error) {
 	raw, err := c.getAnalysisJSON(ctx, analysisID, "status")
 	if err != nil {
 		return nil, err
@@ -337,7 +337,7 @@ func (c *Client) Status(ctx context.Context, analysisID string) (*StatusResponse
 }
 
 // URLReady checks whether the analysis is ready for user access.
-func (c *Client) URLReady(ctx context.Context, analysisID string) (*URLReadyResponse, error) {
+func (c *Client) URLReady(ctx context.Context, analysisID AnalysisID) (*URLReadyResponse, error) {
 	raw, err := c.getAnalysisJSON(ctx, analysisID, "url-ready")
 	if err != nil {
 		return nil, err
@@ -350,7 +350,7 @@ func (c *Client) URLReady(ctx context.Context, analysisID string) (*URLReadyResp
 }
 
 // Pods returns pod info for an analysis from the operator.
-func (c *Client) Pods(ctx context.Context, analysisID string) ([]StatusPod, error) {
+func (c *Client) Pods(ctx context.Context, analysisID AnalysisID) ([]StatusPod, error) {
 	raw, err := c.getAnalysisJSON(ctx, analysisID, "pods")
 	if err != nil {
 		return nil, err
@@ -365,7 +365,7 @@ func (c *Client) Pods(ctx context.Context, analysisID string) ([]StatusPod, erro
 // Logs returns container logs for an analysis from the operator. The
 // operator returns a single reporting.VICELogEntry (the first pod's
 // logs) — see HandleLogs for the reasoning.
-func (c *Client) Logs(ctx context.Context, analysisID string, params url.Values) (*reporting.VICELogEntry, error) {
+func (c *Client) Logs(ctx context.Context, analysisID AnalysisID, params url.Values) (*reporting.VICELogEntry, error) {
 	reqURL, err := url.Parse(c.analysisURL(analysisID, "logs"))
 	if err != nil {
 		return nil, err
@@ -399,7 +399,7 @@ func (c *Client) Logs(ctx context.Context, analysisID string, params url.Values)
 }
 
 // getAnalysisJSON GETs a JSON response from an analysis sub-endpoint.
-func (c *Client) getAnalysisJSON(ctx context.Context, analysisID, subpath string) (json.RawMessage, error) {
+func (c *Client) getAnalysisJSON(ctx context.Context, analysisID AnalysisID, subpath string) (json.RawMessage, error) {
 	reqURL := c.analysisURL(analysisID, subpath)
 	log.Debugf("operator %s: GET %s (analysis %s, query %s)", c.name, reqURL, analysisID, subpath)
 

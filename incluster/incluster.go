@@ -232,7 +232,7 @@ type TimeLimit struct {
 
 // GetTimeLimit returns the planned end date (as a Unix epoch string) for the
 // analysis with the given ID, run by the given user.
-func (i *Incluster) GetTimeLimit(ctx context.Context, userID, id string) (*TimeLimit, error) {
+func (i *Incluster) GetTimeLimit(ctx context.Context, userID string, id constants.AnalysisID) (*TimeLimit, error) {
 	var err error
 
 	var epoch sql.NullInt64
@@ -252,7 +252,7 @@ func (i *Incluster) GetTimeLimit(ctx context.Context, userID, id string) (*TimeL
 
 // UpdateTimeLimit extends the planned end date for the given analysis by the
 // configured time limit extension duration and returns the new epoch value.
-func (i *Incluster) UpdateTimeLimit(ctx context.Context, user, id string) (*TimeLimit, error) {
+func (i *Incluster) UpdateTimeLimit(ctx context.Context, user string, id constants.AnalysisID) (*TimeLimit, error) {
 	var (
 		err    error
 		userID string

@@ -3,6 +3,7 @@ package incluster
 import (
 	"context"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/incluster/httproutes"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/model/v10"
@@ -10,7 +11,7 @@ import (
 
 // BuildAnalysisBundle assembles all K8s resource objects for a VICE analysis
 // into a serializable bundle ready to be sent to an operator.
-func (i *Incluster) BuildAnalysisBundle(ctx context.Context, job *model.Job, analysisID string) (*operatorclient.AnalysisBundle, error) {
+func (i *Incluster) BuildAnalysisBundle(ctx context.Context, job *model.Job, analysisID constants.AnalysisID) (*operatorclient.AnalysisBundle, error) {
 	bundle := &operatorclient.AnalysisBundle{
 		AnalysisID: analysisID,
 	}

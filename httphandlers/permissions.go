@@ -25,7 +25,7 @@ import (
 //	@Router			/vice/{analysis-id}/permissions [put]
 func (h *HTTPHandlers) UpdatePermissionsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param(constants.AnalysisIDLabel)
+	analysisID := constants.AnalysisID(c.Param(constants.AnalysisIDLabel))
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
 	}

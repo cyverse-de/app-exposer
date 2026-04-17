@@ -56,7 +56,7 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	// here is a real DB fault. Treating it as "not running" would silently
 	// drop the idempotency guard and can cause double-launches during
 	// concurrent-launch bursts when the DB briefly blips.
-	name, err := h.apps.GetOperatorName(ctx, job.ID)
+	name, err := h.apps.GetOperatorName(ctx, constants.AnalysisID(job.ID))
 	if err != nil {
 		log.Errorf("idempotency lookup failed for analysis %s: %v", job.ID, err)
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "idempotency check unavailable")
@@ -119,7 +119,7 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 
 	// Build a bundle and route to an operator. Uses job.ID directly because
 	// job_steps rows don't exist yet at launch time.
-	bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, job.ID)
+	bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, constants.AnalysisID(job.ID))
 	if err != nil {
 		log.Errorf("async launch %s: failed to build analysis bundle: %v", job.ID, err)
 		h.failLaunch(ctx, job, fmt.Sprintf("failed to build analysis bundle: %v", err))
@@ -140,7 +140,7 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 	// amplify a brief DB blip into sustained load on every operator. Retry
 	// a few times to ride out transient blips before giving up; the
 	// reconciler's per-pod back-fill closes any hole that remains.
-	if err := h.setOperatorNameWithRetry(ctx, job.ID, operatorName); err != nil {
+	if err := h.setOperatorNameWithRetry(ctx, constants.AnalysisID(job.ID), operatorName); err != nil {
 		log.Errorf("async launch %s: failed to set operator name after retries: %v", job.ID, err)
 	}
 
@@ -154,7 +154,7 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 // to handle connection-level failures that bypass the inner loop. When
 // the outer retry also exhausts, the reconciler's back-fill will
 // eventually close the hole within ~30 s.
-func (h *HTTPHandlers) setOperatorNameWithRetry(ctx context.Context, analysisID, operatorName string) error {
+func (h *HTTPHandlers) setOperatorNameWithRetry(ctx context.Context, analysisID constants.AnalysisID, operatorName string) error {
 	const attempts = 3
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
@@ -222,7 +222,7 @@ func (h *HTTPHandlers) DryRunBundleHandler(c echo.Context) error {
 		}
 	}
 
-	bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, job.ID)
+	bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, constants.AnalysisID(job.ID))
 	if err != nil {
 		return err
 	}
@@ -235,7 +235,7 @@ func (h *HTTPHandlers) DryRunBundleHandler(c echo.Context) error {
 // if the deployment, service, and routing are fully live. A non-nil error
 // means the operator could not be located (e.g. DB lookup failed) and the
 // caller should surface that rather than reporting "not ready".
-func (h *HTTPHandlers) checkURLReady(ctx context.Context, analysisID string) (operatorclient.URLReadyResponse, error) {
+func (h *HTTPHandlers) checkURLReady(ctx context.Context, analysisID constants.AnalysisID) (operatorclient.URLReadyResponse, error) {
 	client, err := h.operatorClientForAnalysis(ctx, analysisID)
 	if err != nil {
 		return operatorclient.URLReadyResponse{Ready: false}, err
@@ -319,7 +319,7 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 		BaseURL: h.incluster.PermissionsURL,
 	}
 
-	allowed, err := p.IsAllowed(ctx, user, analysisID)
+	allowed, err := p.IsAllowed(ctx, user, string(analysisID))
 	if err != nil {
 		return err
 	}
@@ -410,7 +410,7 @@ type AnalysisInClusterResponse struct {
 //	@Router			/vice/admin/is-deployed/external-id/{external-id} [get]
 func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error {
 	ctx := c.Request().Context()
-	externalID := c.Param(constants.ExternalIDLabel)
+	externalID := constants.ExternalID(c.Param(constants.ExternalIDLabel))
 	if externalID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "external-id is not set")
 	}
@@ -444,7 +444,7 @@ func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error 
 //	@Router			/vice/admin/is-deployed/analysis-id/{analysis-id} [get]
 func (h *HTTPHandlers) AdminAnalysisInClusterByID(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param(constants.AnalysisIDLabel)
+	analysisID := constants.AnalysisID(c.Param(constants.AnalysisIDLabel))
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is not set")
 	}

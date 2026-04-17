@@ -74,7 +74,7 @@ func (h *HTTPHandlers) GetScheduler() *operatorclient.Scheduler {
 // than treat the analysis as missing. Callers requiring a live client must
 // treat nil-client-with-nil-error as "not found". Callers answering an
 // "exists?" question may use nil-with-nil-error as "no".
-func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID string) (*operatorclient.Client, error) {
+func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID constants.AnalysisID) (*operatorclient.Client, error) {
 	// Fast path: check the DB for a recorded operator name. GetOperatorName
 	// normalizes sql.ErrNoRows to ("", nil); a non-nil error here signals a
 	// real DB fault, which we must surface instead of silently falling through
@@ -127,7 +127,7 @@ func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID
 // cannot distinguish "not running anywhere" from "hiding on a degraded
 // cluster", so the caller should surface the ambiguity (typically as 502)
 // rather than return 404.
-func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisID string) (*operatorclient.Client, error) {
+func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisID constants.AnalysisID) (*operatorclient.Client, error) {
 	type result struct {
 		client *operatorclient.Client
 		found  bool
@@ -274,14 +274,14 @@ type ResourceInfoResponse struct {
 // operatorAction is a function that performs an operation on an operator client
 // for a given analysis. Used by routeOperatorAction and routeAdminOperatorAction
 // to eliminate boilerplate in handlers that resolve an ID and forward to an operator.
-type operatorAction func(ctx context.Context, client *operatorclient.Client, analysisID string) error
+type operatorAction func(ctx context.Context, client *operatorclient.Client, analysisID constants.AnalysisID) error
 
 // routeOperatorAction resolves an external ID to an analysis ID, finds the
 // operator running it, and invokes fn. Intended for user-facing handlers that
 // receive an external ID via path param "id".
 func (h *HTTPHandlers) routeOperatorAction(c echo.Context, fn operatorAction) error {
 	ctx := c.Request().Context()
-	externalID := c.Param("id")
+	externalID := constants.ExternalID(c.Param("id"))
 
 	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
 	if err != nil {
@@ -309,7 +309,7 @@ func (h *HTTPHandlers) routeOperatorAction(c echo.Context, fn operatorAction) er
 // that receive an analysis ID directly.
 func (h *HTTPHandlers) routeAdminOperatorAction(c echo.Context, fn operatorAction) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param(constants.AnalysisIDLabel)
+	analysisID := constants.AnalysisID(c.Param(constants.AnalysisIDLabel))
 
 	client, err := h.operatorClientForAnalysis(ctx, analysisID)
 	if err != nil {
@@ -344,7 +344,7 @@ type ExternalIDResp struct {
 func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	analysisID := c.Param(constants.AnalysisIDLabel)
+	analysisID := constants.AnalysisID(c.Param(constants.AnalysisIDLabel))
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}
@@ -354,7 +354,7 @@ func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, ExternalIDResp{ExternalID: externalID})
+	return c.JSON(http.StatusOK, ExternalIDResp{ExternalID: string(externalID)})
 }
 
 // AsyncData contains metadata that is computed asynchronously after job launch:
@@ -378,7 +378,7 @@ type AsyncData struct {
 //	@Router			/vice/async-data [get]
 func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	externalID := c.QueryParam(constants.ExternalIDLabel)
+	externalID := constants.ExternalID(c.QueryParam(constants.ExternalIDLabel))
 	if externalID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "external-id not set")
 	}
@@ -419,7 +419,7 @@ func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "user-id not found for analysis")
 	}
 
-	subdomain := common.Subdomain(userID, externalID)
+	subdomain := common.Subdomain(userID, string(externalID))
 	ipAddr, err := h.apps.GetUserIP(ctx, userID)
 	if err != nil {
 		log.Error(err)
@@ -427,7 +427,7 @@ func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, AsyncData{
-		AnalysisID: analysisID,
+		AnalysisID: string(analysisID),
 		Subdomain:  subdomain,
 		IPAddr:     ipAddr,
 	})

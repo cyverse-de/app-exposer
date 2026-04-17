@@ -16,11 +16,11 @@ func MetaInfoFromLabels(name, namespace, creationTimestamp string, labels map[st
 	return MetaInfo{
 		Name:              name,
 		Namespace:         namespace,
-		AnalysisID:        labels[constants.AnalysisIDLabel],
+		AnalysisID:        constants.AnalysisID(labels[constants.AnalysisIDLabel]),
 		AnalysisName:      labels["analysis-name"],
 		AppName:           labels[constants.AppNameLabel],
 		AppID:             labels[constants.AppIDLabel],
-		ExternalID:        labels[constants.ExternalIDLabel],
+		ExternalID:        constants.ExternalID(labels[constants.ExternalIDLabel]),
 		UserID:            labels[constants.UserIDLabel],
 		Username:          labels[constants.UsernameLabel],
 		CreationTimestamp: creationTimestamp,

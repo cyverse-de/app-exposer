@@ -93,8 +93,8 @@ const analysisIDByExternalIDQuery = `
 
 // GetAnalysisIDByExternalID returns the analysis ID based on the external ID
 // passed in.
-func (a *Apps) GetAnalysisIDByExternalID(ctx context.Context, externalID string) (string, error) {
-	var analysisID string
+func (a *Apps) GetAnalysisIDByExternalID(ctx context.Context, externalID constants.ExternalID) (constants.AnalysisID, error) {
+	var analysisID constants.AnalysisID
 	err := a.DB.QueryRowContext(ctx, analysisIDByExternalIDQuery, externalID).Scan(&analysisID)
 	if err != nil {
 		return "", err
@@ -110,8 +110,8 @@ const analysisIDBySubdomainQuery = `
 
 // GetAnalysisIDBySubdomain returns the analysis ID based on the subdomain
 // generated for it.
-func (a *Apps) GetAnalysisIDBySubdomain(ctx context.Context, subdomain string) (string, error) {
-	var analysisID string
+func (a *Apps) GetAnalysisIDBySubdomain(ctx context.Context, subdomain string) (constants.AnalysisID, error) {
+	var analysisID constants.AnalysisID
 	err := a.DB.QueryRowContext(ctx, analysisIDBySubdomainQuery, subdomain).Scan(&analysisID)
 	if err != nil {
 		return "", err
@@ -149,7 +149,7 @@ const getAnalysisStatusQuery = `
 `
 
 // GetAnalysisStatus gets the current status of the overall Analysis/Job in the database.
-func (a *Apps) GetAnalysisStatus(ctx context.Context, analysisID string) (string, error) {
+func (a *Apps) GetAnalysisStatus(ctx context.Context, analysisID constants.AnalysisID) (string, error) {
 	var status string
 	err := a.DB.QueryRowContext(ctx, getAnalysisStatusQuery, analysisID).Scan(&status)
 	if err != nil {
@@ -167,7 +167,7 @@ const userByAnalysisIDQuery = `
 `
 
 // GetUserByAnalysisID returns the username and id of the user that launched the analysis.
-func (a *Apps) GetUserByAnalysisID(ctx context.Context, analysisID string) (string, string, error) {
+func (a *Apps) GetUserByAnalysisID(ctx context.Context, analysisID constants.AnalysisID) (string, string, error) {
 	var username, id string
 	err := a.DB.QueryRowContext(ctx, userByAnalysisIDQuery, analysisID).Scan(&username, &id)
 	if err != nil {
@@ -196,7 +196,7 @@ const setMillicoresStmt = `
 	WHERE id = $1;
 `
 
-func (a *Apps) setMillicoresReserved(ctx context.Context, analysisID string, millicores *apd.Decimal) error {
+func (a *Apps) setMillicoresReserved(ctx context.Context, analysisID constants.AnalysisID, millicores *apd.Decimal) error {
 	milliInt, err := millicores.Int64()
 	if err != nil {
 		return err
@@ -205,9 +205,9 @@ func (a *Apps) setMillicoresReserved(ctx context.Context, analysisID string, mil
 	return err
 }
 
-func (a *Apps) tryForAnalysisID(ctx context.Context, job *model.Job, maxAttempts int) (string, error) {
+func (a *Apps) tryForAnalysisID(ctx context.Context, job *model.Job, maxAttempts int) (constants.AnalysisID, error) {
 	for range maxAttempts {
-		analysisID, err := a.GetAnalysisIDByExternalID(ctx, job.InvocationID)
+		analysisID, err := a.GetAnalysisIDByExternalID(ctx, constants.ExternalID(job.InvocationID))
 		if err != nil {
 			time.Sleep(1 * time.Second)
 		} else {
@@ -218,11 +218,11 @@ func (a *Apps) tryForAnalysisID(ctx context.Context, job *model.Job, maxAttempts
 }
 
 func (a *Apps) storeMillicoresInternal(ctx context.Context, job *model.Job, millicores *apd.Decimal) error {
-	var analysisID string
+	var analysisID constants.AnalysisID
 
 	// Prefer job.ID if available (new vice-proxy provides this directly).
 	if job.ID != "" {
-		analysisID = job.ID
+		analysisID = constants.AnalysisID(job.ID)
 	} else {
 		// Fallback to lookup by external ID for backward compatibility.
 		var err error
@@ -265,7 +265,7 @@ func (a *Apps) GetOperatorIDByName(ctx context.Context, name string) (uuid.UUID,
 // the jobs row may not be visible yet if the caller's database transaction
 // hasn't committed. The launch handler returns early to unblock that commit,
 // so the row typically appears within a few seconds.
-func (a *Apps) SetOperatorName(ctx context.Context, analysisID, operatorName string) error {
+func (a *Apps) SetOperatorName(ctx context.Context, analysisID constants.AnalysisID, operatorName string) error {
 	const maxRetries = 10
 	const retryDelay = 1 * time.Second
 
@@ -319,7 +319,7 @@ const getJobDebugInfoQuery = `
 
 // GetJobDebugInfo returns diagnostic fields for a job by its analysis ID,
 // or nil if no row exists.
-func (a *Apps) GetJobDebugInfo(ctx context.Context, analysisID string) (*JobDebugInfo, error) {
+func (a *Apps) GetJobDebugInfo(ctx context.Context, analysisID constants.AnalysisID) (*JobDebugInfo, error) {
 	var info JobDebugInfo
 	err := a.DB.QueryRowContext(ctx, getJobDebugInfoQuery, analysisID).Scan(
 		&info.ID, &info.OperatorID, &info.Status, &info.AppID,
@@ -342,7 +342,7 @@ const getOperatorNameQuery = `
 
 // GetOperatorName returns the name of the operator running an analysis,
 // or an empty string if none is set or no row exists.
-func (a *Apps) GetOperatorName(ctx context.Context, analysisID string) (string, error) {
+func (a *Apps) GetOperatorName(ctx context.Context, analysisID constants.AnalysisID) (string, error) {
 	var name sql.NullString
 	err := a.DB.QueryRowContext(ctx, getOperatorNameQuery, analysisID).Scan(&name)
 	if err == sql.ErrNoRows {

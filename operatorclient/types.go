@@ -12,13 +12,20 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
+// Re-export domain ID types at the operatorclient boundary so callers
+// don't have to import constants just to hold a method argument.
+type (
+	AnalysisID = constants.AnalysisID
+	ExternalID = constants.ExternalID
+)
+
 // AnalysisBundle contains all pre-built K8s resource objects for a VICE
 // analysis. App-exposer assembles this using its existing builder functions
 // and sends it to an operator, which applies the resources to its local cluster.
 // HTTPRoute is the canonical networking resource (Gateway API).
 type AnalysisBundle struct {
 	// AnalysisID is the unique identifier for the analysis.
-	AnalysisID string `json:"analysisID"`
+	AnalysisID AnalysisID `json:"analysisID"`
 	// Deployment is the Kubernetes Deployment object for the analysis.
 	Deployment *appsv1.Deployment `json:"deployment"`
 	// Service is the Kubernetes Service object for the analysis.
@@ -121,8 +128,8 @@ func (b *AnalysisBundle) Validate() error {
 // checkAnalysisIDLabel returns an error when labels[analysis-id] does
 // not match the expected wantID. A missing label is reported as an
 // empty-string mismatch so the error message points at the problem.
-func checkAnalysisIDLabel(kind string, labels map[string]string, wantID string) error {
-	if got := labels[constants.AnalysisIDLabel]; got != wantID {
+func checkAnalysisIDLabel(kind string, labels map[string]string, wantID AnalysisID) error {
+	if got := labels[constants.AnalysisIDLabel]; got != string(wantID) {
 		return fmt.Errorf("%s has analysis-id label %q, want %q", kind, got, wantID)
 	}
 	return nil

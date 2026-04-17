@@ -145,13 +145,15 @@ func TestOperatorOptionsValidate(t *testing.T) {
 }
 
 func TestAnalysisBundleValidate(t *testing.T) {
-	labels := func(id string) map[string]string { return map[string]string{constants.AnalysisIDLabel: id} }
+	labels := func(id operatorclient.AnalysisID) map[string]string {
+		return map[string]string{constants.AnalysisIDLabel: string(id)}
+	}
 
 	// withLabels returns a shallow bundle wired with a Deployment and a
 	// Service both labeled with the given analysis-id, so each test row
 	// can focus on the invariant it's exercising without restating the
 	// valid-skeleton boilerplate.
-	withLabels := func(id string) operatorclient.AnalysisBundle {
+	withLabels := func(id operatorclient.AnalysisID) operatorclient.AnalysisBundle {
 		return operatorclient.AnalysisBundle{
 			AnalysisID: id,
 			Deployment: &appsv1.Deployment{

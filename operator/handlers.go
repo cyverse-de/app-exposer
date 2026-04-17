@@ -256,7 +256,7 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 
 	// Inject per-analysis vice-proxy args and ensure the cluster config secret
 	// is referenced as envFrom so vice-proxy gets cluster-level env vars.
-	TransformViceProxyArgs(bundle.Deployment, bundle.AnalysisID, o.clusterConfigSecret)
+	TransformViceProxyArgs(bundle.Deployment, string(bundle.AnalysisID), o.clusterConfigSecret)
 
 	// Rewrite GPU resource names to match the cluster's GPU vendor.
 	TransformGPUVendor(bundle.Deployment, o.gpuVendor)
@@ -274,7 +274,7 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 	// used (not pod template labels) because they always include analysis-id,
 	// which deleteAnalysisResources uses for label-based cleanup.
 	bundleLabels := bundle.Deployment.Labels
-	np := buildAnalysisEgressPolicy(bundle.AnalysisID, o.namespace, bundleLabels, o.egressConfig)
+	np := buildAnalysisEgressPolicy(string(bundle.AnalysisID), o.namespace, bundleLabels, o.egressConfig)
 	if len(np.Spec.Egress) == 0 {
 		log.Warnf("analysis %s egress policy has no allow rules; pods will have DNS-only egress", bundle.AnalysisID)
 	}
@@ -285,7 +285,7 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 	}
 
 	log.Infof("launch succeeded for analysis %s", bundle.AnalysisID)
-	return c.JSON(http.StatusCreated, map[string]string{"analysisID": bundle.AnalysisID})
+	return c.JSON(http.StatusCreated, map[string]string{"analysisID": string(bundle.AnalysisID)})
 }
 
 // HandleExit deletes all K8s resources associated with an analysis by its

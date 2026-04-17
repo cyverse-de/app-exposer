@@ -28,7 +28,7 @@ type frontendURLResponse struct {
 // GetAccessURL contacts the vice-proxy sidecar for the given external-id
 // through its in-cluster Service and returns the full frontend URL. Returns
 // an empty string and error if vice-proxy is unreachable.
-func (i *Incluster) GetAccessURL(ctx context.Context, externalID string) (string, error) {
+func (i *Incluster) GetAccessURL(ctx context.Context, externalID constants.ExternalID) (string, error) {
 	svcName := fmt.Sprintf("vice-%s", externalID)
 	endpoint := fmt.Sprintf(
 		"http://%s.%s.svc.cluster.local:%d/frontend-url",
