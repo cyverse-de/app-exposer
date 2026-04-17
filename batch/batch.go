@@ -753,9 +753,9 @@ func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOp
 			GenerateName: "batch-analysis-", // TODO: Make this configurable
 			Namespace:    "argo",
 			Labels: map[string]string{
-				"job-uuid":    w.analysis.InvocationID,
-				"external-id": w.analysis.InvocationID,
-				"username":    w.analysis.Submitter,
+				"job-uuid":                w.analysis.InvocationID,
+				constants.ExternalIDLabel: w.analysis.InvocationID,
+				constants.UsernameLabel:   w.analysis.Submitter,
 			},
 		},
 		Spec: v1alpha1.WorkflowSpec{
@@ -803,7 +803,7 @@ func (w *WorkflowMaker) NewWorkflow(ctx context.Context, opts *BatchSubmissionOp
 			Arguments: v1alpha1.Arguments{
 				Parameters: []v1alpha1.Parameter{
 					{
-						Name:  "username",
+						Name:  constants.UsernameLabel,
 						Value: v1alpha1.AnyStringPtr(w.analysis.Submitter),
 					},
 					{

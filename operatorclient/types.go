@@ -5,6 +5,7 @@ package operatorclient
 import (
 	"fmt"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -121,7 +122,7 @@ func (b *AnalysisBundle) Validate() error {
 // not match the expected wantID. A missing label is reported as an
 // empty-string mismatch so the error message points at the problem.
 func checkAnalysisIDLabel(kind string, labels map[string]string, wantID string) error {
-	if got := labels["analysis-id"]; got != wantID {
+	if got := labels[constants.AnalysisIDLabel]; got != wantID {
 		return fmt.Errorf("%s has analysis-id label %q, want %q", kind, got, wantID)
 	}
 	return nil

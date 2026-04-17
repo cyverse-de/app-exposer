@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/labstack/echo/v4"
 )
 
@@ -77,7 +78,7 @@ func (a *App) DeleteLatestDefaultsHandler(c echo.Context) error {
 // caller to add a new version of the default instant launch mapping to the db.
 func (a *App) AddLatestDefaultsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	addedBy := c.QueryParam("username")
+	addedBy := c.QueryParam(constants.UsernameLabel)
 	if addedBy == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing username in query parameters")
 	}

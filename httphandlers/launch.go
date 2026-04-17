@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/permissions"
@@ -296,7 +297,7 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 	host := c.Param("host")
 
 	params := url.Values{}
-	params.Set("subdomain", host)
+	params.Set(constants.SubdomainLabel, host)
 
 	// Search all operators for the analysis with this subdomain.
 	listing, opErrs, err := h.aggregateListing(ctx, params)
@@ -364,7 +365,7 @@ func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
 	host := c.Param("host")
 
 	params := url.Values{}
-	params.Set("subdomain", host)
+	params.Set(constants.SubdomainLabel, host)
 
 	// Search all operators for the analysis with this subdomain.
 	listing, opErrs, err := h.aggregateListing(ctx, params)
@@ -416,7 +417,7 @@ type AnalysisInClusterResponse struct {
 //	@Router			/vice/admin/is-deployed/external-id/{external-id} [get]
 func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error {
 	ctx := c.Request().Context()
-	externalID := c.Param("external-id")
+	externalID := c.Param(constants.ExternalIDLabel)
 	if externalID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "external-id is not set")
 	}
@@ -450,7 +451,7 @@ func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error 
 //	@Router			/vice/admin/is-deployed/analysis-id/{analysis-id} [get]
 func (h *HTTPHandlers) AdminAnalysisInClusterByID(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
+	analysisID := c.Param(constants.AnalysisIDLabel)
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is not set")
 	}

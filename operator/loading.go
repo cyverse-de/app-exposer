@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/labstack/echo/v4"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -322,7 +323,7 @@ func (o *Operator) resolveSubdomain(ctx context.Context, host string) (string, s
 		return "", "", fmt.Errorf("empty subdomain from host %q", host)
 	}
 
-	selector := labels.Set{"subdomain": subdomain}.AsSelector().String()
+	selector := labels.Set{constants.SubdomainLabel: subdomain}.AsSelector().String()
 	deps, err := o.clientset.AppsV1().Deployments(o.namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: selector,
 	})
@@ -334,8 +335,8 @@ func (o *Operator) resolveSubdomain(ctx context.Context, host string) (string, s
 	}
 
 	dep := deps.Items[0]
-	analysisID := dep.Labels["analysis-id"]
-	appName := dep.Labels["app-name"]
+	analysisID := dep.Labels[constants.AnalysisIDLabel]
+	appName := dep.Labels[constants.AppNameLabel]
 
 	return analysisID, appName, nil
 }

@@ -76,6 +76,21 @@ const (
 	DefaultUserSuffix = "@iplantcollaborative.org"
 
 	ShmDevice = "/dev/shm"
+
+	// Labels that identify VICE resources across the cluster. These
+	// travel on Deployments, Services, HTTPRoutes, ConfigMaps, and
+	// PVCs; every listing/deletion/reconciliation path does label-
+	// based matching against them. A typo at any one site silently
+	// breaks matching, so the keys live here rather than as raw
+	// string literals in each package.
+	AnalysisIDLabel = "analysis-id"
+	AppNameLabel    = "app-name"
+	AppTypeLabel    = "app-type"
+	AppIDLabel      = "app-id"
+	ExternalIDLabel = "external-id"
+	UsernameLabel   = "username"
+	UserIDLabel     = "user-id"
+	SubdomainLabel  = "subdomain"
 )
 
 type AnalysisStatus string

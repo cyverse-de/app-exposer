@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/labstack/echo/v4"
 )
 
@@ -14,7 +15,7 @@ import (
 // instant launch mappings.
 func (a *App) UserMappingHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	user := c.Param("username")
+	user := c.Param(constants.UsernameLabel)
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
 	}
@@ -37,7 +38,7 @@ func (a *App) UserMappingHandler(c echo.Context) error {
 // instant launch mapping.
 func (a *App) UpdateUserMappingHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	user := c.Param("username")
+	user := c.Param(constants.UsernameLabel)
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
 	}
@@ -66,7 +67,7 @@ func (a *App) UpdateUserMappingHandler(c echo.Context) error {
 // the latest mapping for the user.
 func (a *App) DeleteUserMappingHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	user := c.Param("username")
+	user := c.Param(constants.UsernameLabel)
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
 	}
@@ -79,7 +80,7 @@ func (a *App) DeleteUserMappingHandler(c echo.Context) error {
 // AddUserMappingHandler is the HTTP handler for adding a new user mapping to the database.
 func (a *App) AddUserMappingHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	user := c.Param("username")
+	user := c.Param(constants.UsernameLabel)
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
 	}
@@ -105,7 +106,7 @@ func (a *App) AddUserMappingHandler(c echo.Context) error {
 // instant launch mappings.
 func (a *App) AllUserMappingsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	user := c.Param("username")
+	user := c.Param(constants.UsernameLabel)
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
 	}
@@ -129,7 +130,7 @@ func (a *App) AllUserMappingsHandler(c echo.Context) error {
 // version of the user's instant launch mappings.
 func (a *App) UserMappingsByVersionHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	user := c.Param("username")
+	user := c.Param(constants.UsernameLabel)
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
 	}
@@ -158,7 +159,7 @@ func (a *App) UserMappingsByVersionHandler(c echo.Context) error {
 // to update a user's instant launches for a specific version.
 func (a *App) UpdateUserMappingsByVersionHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	user := c.Param("username")
+	user := c.Param(constants.UsernameLabel)
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
 	}
@@ -194,7 +195,7 @@ func (a *App) UpdateUserMappingsByVersionHandler(c echo.Context) error {
 // delete a user's instant launch mappings at a specific version.
 func (a *App) DeleteUserMappingsByVersionHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	user := c.Param("username")
+	user := c.Param(constants.UsernameLabel)
 	if user == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "user was not set")
 	}

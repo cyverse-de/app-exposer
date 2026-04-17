@@ -6,6 +6,7 @@ import (
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/batch"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/app-exposer/quota"
@@ -60,7 +61,7 @@ func (j *JEXAdapter) StopWorkflow(ctx context.Context, externalID string) error 
 		return err
 	}
 
-	if _, err = batch.StopWorkflows(ctx, client, j.Namespace, "external-id", externalID); err != nil {
+	if _, err = batch.StopWorkflows(ctx, client, j.Namespace, constants.ExternalIDLabel, externalID); err != nil {
 		return err
 	}
 

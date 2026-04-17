@@ -9,12 +9,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 )
 
 // analysisLabelSelector returns a ListOptions that selects resources by analysis-id.
 func analysisLabelSelector(analysisID string) metav1.ListOptions {
-	set := labels.Set{"analysis-id": analysisID}
+	set := labels.Set{constants.AnalysisIDLabel: analysisID}
 	return metav1.ListOptions{LabelSelector: set.AsSelector().String()}
 }
 

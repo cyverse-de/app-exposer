@@ -75,7 +75,7 @@ func newTestOperator(t *testing.T, maxAnalyses int, vendor ...GPUVendor) (*Opera
 }
 
 func TestAnalysisBundleValidate(t *testing.T) {
-	labels := func(id string) map[string]string { return map[string]string{"analysis-id": id} }
+	labels := func(id string) map[string]string { return map[string]string{constants.AnalysisIDLabel: id} }
 
 	// withLabels returns a shallow bundle wired with a Deployment and a
 	// Service both labeled with the given analysis-id, so each test row

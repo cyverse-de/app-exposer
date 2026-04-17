@@ -13,6 +13,7 @@ import (
 	"github.com/cyverse-de/app-exposer/adapter"
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/db"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/operatorclient"
@@ -304,11 +305,11 @@ func (h *HTTPHandlers) routeOperatorAction(c echo.Context, fn operatorAction) er
 }
 
 // routeAdminOperatorAction finds the operator running the analysis identified
-// by the "analysis-id" path param and invokes fn. Intended for admin handlers
+// by the constants.AnalysisIDLabel path param and invokes fn. Intended for admin handlers
 // that receive an analysis ID directly.
 func (h *HTTPHandlers) routeAdminOperatorAction(c echo.Context, fn operatorAction) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
+	analysisID := c.Param(constants.AnalysisIDLabel)
 
 	client, err := h.operatorClientForAnalysis(ctx, analysisID)
 	if err != nil {
@@ -343,7 +344,7 @@ type ExternalIDResp struct {
 func (h *HTTPHandlers) AdminGetExternalIDHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	analysisID := c.Param("analysis-id")
+	analysisID := c.Param(constants.AnalysisIDLabel)
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}
@@ -377,7 +378,7 @@ type AsyncData struct {
 //	@Router			/vice/async-data [get]
 func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	externalID := c.QueryParam("external-id")
+	externalID := c.QueryParam(constants.ExternalIDLabel)
 	if externalID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "external-id not set")
 	}

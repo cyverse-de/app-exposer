@@ -55,7 +55,7 @@ func (o *Operator) findPermissionsConfigMap(ctx context.Context, analysisID stri
 //	@Router			/analyses/{analysis-id}/permissions [get]
 func (o *Operator) HandleGetPermissions(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID, err := requiredParam(c, "analysis-id")
+	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func (o *Operator) HandleGetPermissions(c echo.Context) error {
 //	@Router			/analyses/{analysis-id}/permissions [put]
 func (o *Operator) HandleUpdatePermissions(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID, err := requiredParam(c, "analysis-id")
+	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func (o *Operator) findAnalysisService(ctx context.Context, analysisID string) (
 //	@Failure		502			{object}	common.ErrorResponse
 //	@Router			/analyses/{analysis-id}/active-sessions [get]
 func (o *Operator) HandleGetActiveSessions(c echo.Context) error {
-	analysisID, err := requiredParam(c, "analysis-id")
+	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
 		return err
 	}
@@ -253,7 +253,7 @@ func (o *Operator) HandleGetActiveSessions(c echo.Context) error {
 //	@Failure		502			{object}	common.ErrorResponse
 //	@Router			/analyses/{analysis-id}/logout-user [post]
 func (o *Operator) HandleLogoutUser(c echo.Context) error {
-	analysisID, err := requiredParam(c, "analysis-id")
+	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
 		return err
 	}

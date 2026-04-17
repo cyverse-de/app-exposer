@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -88,7 +89,7 @@ type RetPod struct {
 
 func (i *Incluster) GetPods(ctx context.Context, externalID string) ([]RetPod, error) {
 	set := labels.Set(map[string]string{
-		"external-id": externalID,
+		constants.ExternalIDLabel: externalID,
 	})
 
 	listoptions := metav1.ListOptions{

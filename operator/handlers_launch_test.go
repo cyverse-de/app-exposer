@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -35,7 +36,7 @@ func TestHandleLaunch(t *testing.T) {
 				Deployment: &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "test-dep",
-						Labels: map[string]string{"analysis-id": "test-analysis-1"},
+						Labels: map[string]string{constants.AnalysisIDLabel: "test-analysis-1"},
 					},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
@@ -54,7 +55,7 @@ func TestHandleLaunch(t *testing.T) {
 				Service: &apiv1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "test-svc",
-						Labels: map[string]string{"analysis-id": "test-analysis-1"},
+						Labels: map[string]string{constants.AnalysisIDLabel: "test-analysis-1"},
 					},
 					Spec: apiv1.ServiceSpec{
 						Ports: []apiv1.ServicePort{{Port: 80}},
@@ -69,7 +70,7 @@ func TestHandleLaunch(t *testing.T) {
 			bundle: operatorclient.AnalysisBundle{
 				AnalysisID: "test-analysis-2",
 				Deployment: &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "dep-2", Labels: map[string]string{"analysis-id": "test-analysis-2"}},
+					ObjectMeta: metav1.ObjectMeta{Name: "dep-2", Labels: map[string]string{constants.AnalysisIDLabel: "test-analysis-2"}},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test2"}},
 						Template: apiv1.PodTemplateSpec{
@@ -79,7 +80,7 @@ func TestHandleLaunch(t *testing.T) {
 					},
 				},
 				Service: &apiv1.Service{
-					ObjectMeta: metav1.ObjectMeta{Name: "svc-2", Labels: map[string]string{"analysis-id": "test-analysis-2"}},
+					ObjectMeta: metav1.ObjectMeta{Name: "svc-2", Labels: map[string]string{constants.AnalysisIDLabel: "test-analysis-2"}},
 					Spec:       apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 80}}},
 				},
 			},
@@ -90,7 +91,7 @@ func TestHandleLaunch(t *testing.T) {
 				_, err := cs.AppsV1().Deployments("vice-apps").Create(context.Background(), &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "existing-dep",
-						Labels: map[string]string{"app-type": "interactive"},
+						Labels: map[string]string{constants.AppTypeLabel: "interactive"},
 					},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "existing"}},
@@ -153,7 +154,7 @@ func TestHandleLaunch(t *testing.T) {
 				np, err := clientset.NetworkingV1().NetworkPolicies("vice-apps").Get(ctx, "vice-egress-"+tt.bundle.AnalysisID, metav1.GetOptions{})
 				assert.NoError(t, err, "per-analysis egress NetworkPolicy should exist")
 				if np != nil {
-					assert.Equal(t, tt.bundle.AnalysisID, np.Labels["analysis-id"],
+					assert.Equal(t, tt.bundle.AnalysisID, np.Labels[constants.AnalysisIDLabel],
 						"NetworkPolicy should have analysis-id label from deployment metadata")
 				}
 			}
@@ -171,7 +172,7 @@ func TestHandleLaunchGPUVendorAMD(t *testing.T) {
 		Deployment: &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   "gpu-dep",
-				Labels: map[string]string{"analysis-id": "gpu-amd-test"},
+				Labels: map[string]string{constants.AnalysisIDLabel: "gpu-amd-test"},
 			},
 			Spec: appsv1.DeploymentSpec{
 				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
@@ -199,7 +200,7 @@ func TestHandleLaunchGPUVendorAMD(t *testing.T) {
 		Service: &apiv1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   "gpu-svc",
-				Labels: map[string]string{"analysis-id": "gpu-amd-test"},
+				Labels: map[string]string{constants.AnalysisIDLabel: "gpu-amd-test"},
 			},
 			Spec: apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 80}}},
 		},
@@ -234,7 +235,7 @@ func TestHandleLaunchFullBundle(t *testing.T) {
 	op, clientset, gwClientset := newTestOperator(t, 10)
 
 	analysisID := "full-bundle-test"
-	labels := map[string]string{"analysis-id": analysisID, "app-type": "interactive", "username": "testuser"}
+	labels := map[string]string{constants.AnalysisIDLabel: analysisID, constants.AppTypeLabel: "interactive", constants.UsernameLabel: "testuser"}
 	port := gatewayv1.PortNumber(60000)
 
 	bundle := operatorclient.AnalysisBundle{

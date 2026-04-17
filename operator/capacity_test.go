@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -148,7 +149,7 @@ func makeVICEDeployment(name, cpu, memory string) appsv1.Deployment {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: "vice-apps",
-			Labels:    map[string]string{"app-type": "interactive"},
+			Labels:    map[string]string{constants.AppTypeLabel: "interactive"},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{

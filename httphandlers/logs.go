@@ -3,6 +3,7 @@ package httphandlers
 import (
 	"net/http"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/labstack/echo/v4"
 )
 
@@ -28,7 +29,7 @@ import (
 //	@Router			/vice/{analysis-id}/logs [get]
 func (h *HTTPHandlers) LogsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID := c.Param("analysis-id")
+	analysisID := c.Param(constants.AnalysisIDLabel)
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}

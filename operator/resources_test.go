@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -24,7 +25,7 @@ import (
 // across every resource kind the function cares about.
 func seedAnalysisResources(t *testing.T, op *Operator, analysisID string) {
 	t.Helper()
-	labels := map[string]string{"analysis-id": analysisID}
+	labels := map[string]string{constants.AnalysisIDLabel: analysisID}
 	ctx := context.Background()
 
 	_, err := op.clientset.CoreV1().Services(op.namespace).Create(ctx, &apiv1.Service{

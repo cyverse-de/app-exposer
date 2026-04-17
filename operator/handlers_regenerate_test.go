@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,8 +39,8 @@ func TestHandleRegenerateNetworkPolicies(t *testing.T) {
 							Name:      "dep-" + id,
 							Namespace: "vice-apps",
 							Labels: map[string]string{
-								"app-type":    "interactive",
-								"analysis-id": id,
+								constants.AppTypeLabel:    "interactive",
+								constants.AnalysisIDLabel: id,
 							},
 						},
 						Spec: appsv1.DeploymentSpec{
@@ -68,7 +69,7 @@ func TestHandleRegenerateNetworkPolicies(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "dep-no-analysis-id",
 						Namespace: "vice-apps",
-						Labels:    map[string]string{"app-type": "interactive"},
+						Labels:    map[string]string{constants.AppTypeLabel: "interactive"},
 					},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "no-id"}},
@@ -86,8 +87,8 @@ func TestHandleRegenerateNetworkPolicies(t *testing.T) {
 						Name:      "dep-with-analysis-id",
 						Namespace: "vice-apps",
 						Labels: map[string]string{
-							"app-type":    "interactive",
-							"analysis-id": "skip-test-analysis",
+							constants.AppTypeLabel:    "interactive",
+							constants.AnalysisIDLabel: "skip-test-analysis",
 						},
 					},
 					Spec: appsv1.DeploymentSpec{
@@ -125,8 +126,8 @@ func TestHandleRegenerateNetworkPolicies(t *testing.T) {
 							Name:      "dep-" + id,
 							Namespace: "vice-apps",
 							Labels: map[string]string{
-								"app-type":    "interactive",
-								"analysis-id": id,
+								constants.AppTypeLabel:    "interactive",
+								constants.AnalysisIDLabel: id,
 							},
 						},
 						Spec: appsv1.DeploymentSpec{
@@ -198,7 +199,7 @@ func TestHandleRegenerateNetworkPolicies(t *testing.T) {
 			deps, err := clientset.AppsV1().Deployments("vice-apps").List(ctx, metav1.ListOptions{})
 			require.NoError(t, err)
 			for _, dep := range deps.Items {
-				analysisID := dep.Labels["analysis-id"]
+				analysisID := dep.Labels[constants.AnalysisIDLabel]
 				if analysisID == "" {
 					continue
 				}

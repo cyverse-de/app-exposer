@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apiv1 "k8s.io/api/core/v1"
@@ -17,7 +18,7 @@ import (
 
 func TestSwapRoute(t *testing.T) {
 	analysisID := "swap-test-1"
-	labels := map[string]string{"analysis-id": analysisID}
+	labels := map[string]string{constants.AnalysisIDLabel: analysisID}
 	targetSvcName := "analysis-svc"
 
 	ctx := context.Background()
@@ -79,7 +80,7 @@ func TestSwapRoute(t *testing.T) {
 // swapped route.
 func TestSwapRouteConflictAlreadySwapped(t *testing.T) {
 	analysisID := "conflict-test-1"
-	labels := map[string]string{"analysis-id": analysisID}
+	labels := map[string]string{constants.AnalysisIDLabel: analysisID}
 	targetSvcName := "analysis-svc"
 
 	ctx := context.Background()
@@ -177,7 +178,7 @@ func TestSwapRouteConflictAlreadySwapped(t *testing.T) {
 // swap succeeded.
 func TestSwapRouteConflictNotYetSwapped(t *testing.T) {
 	analysisID := "conflict-test-2"
-	labels := map[string]string{"analysis-id": analysisID}
+	labels := map[string]string{constants.AnalysisIDLabel: analysisID}
 	targetSvcName := "analysis-svc"
 
 	ctx := context.Background()

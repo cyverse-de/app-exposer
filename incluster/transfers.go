@@ -228,7 +228,7 @@ func (i *Incluster) DoFileTransfer(ctx context.Context, externalID, reqpath, kin
 	// returned. external-id is the job ID assigned by the apps service and is
 	// not the same as the analysis ID.
 	set := labels.Set(map[string]string{
-		"external-id": externalID,
+		constants.ExternalIDLabel: externalID,
 	})
 
 	svclist, err := svcclient.List(ctx, metav1.ListOptions{

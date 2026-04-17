@@ -3,6 +3,7 @@ package reporting
 import (
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -16,12 +17,12 @@ import (
 // testLabels returns a standard set of labels for testing.
 func testLabels() map[string]string {
 	return map[string]string{
-		"analysis-name": "test-analysis",
-		"app-name":      "test-app",
-		"app-id":        "app-123",
-		"external-id":   "ext-456",
-		"user-id":       "user-789",
-		"username":      "testuser",
+		"analysis-name":           "test-analysis",
+		constants.AppNameLabel:    "test-app",
+		constants.AppIDLabel:      "app-123",
+		constants.ExternalIDLabel: "ext-456",
+		constants.UserIDLabel:     "user-789",
+		constants.UsernameLabel:   "testuser",
 	}
 }
 

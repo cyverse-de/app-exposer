@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -373,8 +374,8 @@ func TestListingQueryParams(t *testing.T) {
 	client, _ := newTestClient(t, handler)
 
 	params := url.Values{}
-	params.Set("subdomain", "foo")
-	params.Set("user-id", "u-42")
+	params.Set(constants.SubdomainLabel, "foo")
+	params.Set(constants.UserIDLabel, "u-42")
 	_, err := client.Listing(context.Background(), params)
 	require.NoError(t, err)
 

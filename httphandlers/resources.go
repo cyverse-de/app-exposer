@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/permissions"
 	"github.com/labstack/echo/v4"
@@ -186,7 +187,7 @@ func (h *HTTPHandlers) AdminDescribeAnalysisHandler(c echo.Context) error {
 	host := c.Param("host")
 
 	params := url.Values{}
-	params.Set("subdomain", host)
+	params.Set(constants.SubdomainLabel, host)
 
 	listing, opErrs, err := h.aggregateListing(ctx, params)
 	if err != nil {
@@ -208,8 +209,8 @@ func (h *HTTPHandlers) AdminDescribeAnalysisHandler(c echo.Context) error {
 //	@Description	with the host/subdomain passed in as 'host' from the URL.
 //	@Description	The user passed in must have access to the VICE analysis.
 //	@Produce		json
-//	@Param			user	query		string	true	"username"
-//	@Param			host	path		string	true	"subdomain"
+//	@Param			user	query		string	true	constants.UsernameLabel
+//	@Param			host	path		string	true	constants.SubdomainLabel
 //	@Success		200		{object}	reporting.ResourceInfo
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		403		{object}	common.ErrorResponse
@@ -237,7 +238,7 @@ func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 	}
 
 	params := url.Values{}
-	params.Set("subdomain", host)
+	params.Set(constants.SubdomainLabel, host)
 
 	listing, opErrs, err := h.aggregateListing(ctx, params)
 	if err != nil {
@@ -288,7 +289,7 @@ func (h *HTTPHandlers) DescribeAnalysisHandler(c echo.Context) error {
 //	@Description	to access the resource. The rest of the query map is used to filter
 //	@Description	resources returned from the handler.
 //	@Produce		json
-//	@Param			user	query		string	true	"username"
+//	@Param			user	query		string	true	constants.UsernameLabel
 //	@Success		200		{object}	reporting.ResourceInfo
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		403		{object}	common.ErrorResponse
@@ -315,7 +316,7 @@ func (h *HTTPHandlers) FilterableResourcesHandler(c echo.Context) error {
 
 	params := c.Request().URL.Query()
 	params.Del("user")
-	params.Set("user-id", userID)
+	params.Set(constants.UserIDLabel, userID)
 
 	log.Debugf("user ID is %s", userID)
 
@@ -408,7 +409,7 @@ type ListPodsResponse struct {
 func (h *HTTPHandlers) PodsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	analysisID := c.Param("analysis-id")
+	analysisID := c.Param(constants.AnalysisIDLabel)
 	user := c.QueryParam("user")
 
 	if user == "" {

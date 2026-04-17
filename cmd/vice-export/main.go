@@ -8,12 +8,13 @@ import (
 	"os"
 
 	"github.com/cyverse-de/app-exposer/cmd/vicetools"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
 
 func main() {
-	appID := flag.String("app-id", "", "UUID of the app to export. Required.")
+	appID := flag.String(constants.AppIDLabel, "", "UUID of the app to export. Required.")
 	dbURI := flag.String("db-uri", "", "PostgreSQL connection string. Required.")
 	out := flag.String("out", "", "Output file path. Defaults to stdout.")
 

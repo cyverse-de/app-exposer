@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	apiv1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -337,7 +338,7 @@ func buildAnalysisEgressPolicy(
 		Spec: netv1.NetworkPolicySpec{
 			// Target only this analysis's pods.
 			PodSelector: metav1.LabelSelector{
-				MatchLabels: map[string]string{"analysis-id": analysisID},
+				MatchLabels: map[string]string{constants.AnalysisIDLabel: analysisID},
 			},
 			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeEgress},
 			Egress:      rules,

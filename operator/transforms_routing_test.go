@@ -21,8 +21,8 @@ func makeTestHTTPRoute() *gatewayv1.HTTPRoute {
 			Name:      "test-route",
 			Namespace: "vice-apps",
 			Labels: map[string]string{
-				"external-id": "abc-123",
-				"username":    "testuser",
+				constants.ExternalIDLabel: "abc-123",
+				constants.UsernameLabel:   "testuser",
 			},
 		},
 		Spec: gatewayv1.HTTPRouteSpec{
@@ -456,12 +456,12 @@ func TestEnsurePermissionsConfigMap(t *testing.T) {
 			Deployment: &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "test-dep",
-					Labels: map[string]string{"analysis-id": "test-analysis"},
+					Labels: map[string]string{constants.AnalysisIDLabel: "test-analysis"},
 				},
 			},
 		}
 		if username != "" {
-			b.Deployment.Labels["username"] = username
+			b.Deployment.Labels[constants.UsernameLabel] = username
 		}
 		if existingCM {
 			b.ConfigMaps = append(b.ConfigMaps, &apiv1.ConfigMap{

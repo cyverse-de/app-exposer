@@ -463,7 +463,7 @@ func (i *Incluster) GetDeployment(ctx context.Context, job *model.Job) (*appsv1.
 			Replicas: constants.Int32Ptr(1),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"external-id": job.InvocationID,
+					constants.ExternalIDLabel: job.InvocationID,
 				},
 			},
 			Template: apiv1.PodTemplateSpec{
@@ -492,7 +492,7 @@ func (i *Incluster) GetDeployment(ctx context.Context, job *model.Job) (*appsv1.
 									PodAffinityTerm: apiv1.PodAffinityTerm{
 										LabelSelector: &metav1.LabelSelector{
 											MatchLabels: map[string]string{
-												"app-type": "interactive",
+												constants.AppTypeLabel: "interactive",
 											},
 										},
 										TopologyKey: "kubernetes.io/hostname",
@@ -529,8 +529,8 @@ func (i *Incluster) IsAnalysisInCluster(ctx context.Context, externalID string) 
 		err   error
 	)
 	lbls := labels.Set(map[string]string{
-		"app-type":    "interactive",
-		"external-id": externalID,
+		constants.AppTypeLabel:    "interactive",
+		constants.ExternalIDLabel: externalID,
 	})
 	opts := metav1.ListOptions{
 		LabelSelector: lbls.String(),

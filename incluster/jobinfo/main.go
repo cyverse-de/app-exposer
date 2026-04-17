@@ -6,6 +6,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v10"
 )
 
@@ -35,16 +36,16 @@ func (j *DefaultJobInfo) JobLabels(ctx context.Context, job *model.Job) (map[str
 	}
 
 	return map[string]string{
-		"external-id":   job.InvocationID,
-		"analysis-id":   job.ID,
-		"app-name":      common.LabelValueString(job.AppName),
-		"app-id":        job.AppID,
-		"username":      common.LabelValueString(job.Submitter),
-		"user-id":       job.UserID,
-		"analysis-name": common.LabelValueString(string(name[:stringmax])),
-		"app-type":      "interactive",
-		"subdomain":     common.Subdomain(job.UserID, job.InvocationID),
-		"login-ip":      ipAddr,
+		constants.ExternalIDLabel: job.InvocationID,
+		constants.AnalysisIDLabel: job.ID,
+		constants.AppNameLabel:    common.LabelValueString(job.AppName),
+		constants.AppIDLabel:      job.AppID,
+		constants.UsernameLabel:   common.LabelValueString(job.Submitter),
+		constants.UserIDLabel:     job.UserID,
+		"analysis-name":           common.LabelValueString(string(name[:stringmax])),
+		constants.AppTypeLabel:    "interactive",
+		constants.SubdomainLabel:  common.Subdomain(job.UserID, job.InvocationID),
+		"login-ip":                ipAddr,
 	}, nil
 }
 

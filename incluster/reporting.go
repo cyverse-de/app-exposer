@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/reporting"
 	v1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,7 +17,7 @@ import (
 // label plus any additional labels provided in customLabels.
 func getListSelector(customLabels map[string]string) labels.Selector {
 	allLabels := map[string]string{
-		"app-type": "interactive",
+		constants.AppTypeLabel: "interactive",
 	}
 
 	for k, v := range customLabels {
@@ -78,8 +79,8 @@ type UserDeploymentInfo struct {
 // GetDeploymentsByUserID returns all VICE deployments for a given user ID
 func (i *Incluster) GetDeploymentsByUserID(ctx context.Context, userID string) ([]UserDeploymentInfo, error) {
 	set := labels.Set(map[string]string{
-		"app-type": "interactive",
-		"user-id":  userID,
+		constants.AppTypeLabel: "interactive",
+		constants.UserIDLabel:  userID,
 	})
 
 	opts := metav1.ListOptions{
@@ -93,7 +94,7 @@ func (i *Incluster) GetDeploymentsByUserID(ctx context.Context, userID string) (
 
 	result := make([]UserDeploymentInfo, 0, len(depList.Items))
 	for _, dep := range depList.Items {
-		if extID, ok := dep.Labels["external-id"]; ok {
+		if extID, ok := dep.Labels[constants.ExternalIDLabel]; ok {
 			result = append(result, UserDeploymentInfo{
 				ExternalID: extID,
 				UserID:     userID,

@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 )
 
@@ -71,7 +72,7 @@ func (cc *CapacityCalculator) Calculate(ctx context.Context) (*operatorclient.Ca
 	}
 
 	// Count running VICE deployments by the app-type=interactive label.
-	viceSelector := labels.Set{"app-type": "interactive"}.AsSelector().String()
+	viceSelector := labels.Set{constants.AppTypeLabel: "interactive"}.AsSelector().String()
 	deps, err := cc.clientset.AppsV1().Deployments(cc.namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: viceSelector,
 	})

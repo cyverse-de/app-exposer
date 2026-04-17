@@ -11,6 +11,7 @@ import (
 	"os"
 
 	"github.com/cyverse-de/app-exposer/cmd/vicetools"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v10"
 )
 
@@ -19,7 +20,7 @@ func main() {
 	exportFile := flag.String("export-file", "", "Path to vice-export JSON file (mode 2).")
 	appExposerURL := flag.String("app-exposer-url", "", "Base URL of app-exposer. Required.")
 	user := flag.String("user", "", "Username for the launch (mode 2).")
-	userID := flag.String("user-id", "", "User UUID (mode 2).")
+	userID := flag.String(constants.UserIDLabel, "", "User UUID (mode 2).")
 	outputDir := flag.String("output-dir", "", "iRODS output directory (mode 2).")
 	email := flag.String("email", "", "User email (mode 2, optional).")
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -27,7 +28,7 @@ func TestHandleExit(t *testing.T) {
 
 	// Create some resources with the analysis-id label.
 	analysisID := "exit-test-1"
-	labels := map[string]string{"analysis-id": analysisID}
+	labels := map[string]string{constants.AnalysisIDLabel: analysisID}
 
 	_, err := clientset.AppsV1().Deployments("vice-apps").Create(ctx, &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: "dep1", Labels: labels},
@@ -52,7 +53,7 @@ func TestHandleExit(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/analyses/"+analysisID, nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("analysis-id")
+	c.SetParamNames(constants.AnalysisIDLabel)
 	c.SetParamValues(analysisID)
 
 	err = op.HandleExit(c)
@@ -73,14 +74,14 @@ func TestHandleURLReady(t *testing.T) {
 	op, clientset, gwClientset := newTestOperator(t, 10)
 	ctx := context.Background()
 	analysisID := "ready-test-1"
-	labels := map[string]string{"analysis-id": analysisID}
+	labels := map[string]string{constants.AnalysisIDLabel: analysisID}
 
 	// No resources — should return not ready.
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/analyses/"+analysisID+"/url-ready", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("analysis-id")
+	c.SetParamNames(constants.AnalysisIDLabel)
 	c.SetParamValues(analysisID)
 
 	err := op.HandleURLReady(c)
@@ -131,7 +132,7 @@ func TestHandleURLReady(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/analyses/"+analysisID+"/url-ready", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
-	c.SetParamNames("analysis-id")
+	c.SetParamNames(constants.AnalysisIDLabel)
 	c.SetParamValues(analysisID)
 
 	err = op.HandleURLReady(c)
@@ -145,7 +146,7 @@ func TestHandleURLReady(t *testing.T) {
 
 func TestHandleStatus(t *testing.T) {
 	analysisID := "status-test-1"
-	labels := map[string]string{"analysis-id": analysisID}
+	labels := map[string]string{constants.AnalysisIDLabel: analysisID}
 
 	op, clientset, gwClientset := newTestOperator(t, 10)
 	ctx := context.Background()
@@ -185,7 +186,7 @@ func TestHandleStatus(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("analysis-id")
+	c.SetParamNames(constants.AnalysisIDLabel)
 	c.SetParamValues(analysisID)
 
 	err = op.HandleStatus(c)
@@ -240,7 +241,7 @@ func TestHandleLogs(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "pod-logs-1",
 							Namespace: "vice-apps",
-							Labels:    map[string]string{"analysis-id": "logs-test-1"},
+							Labels:    map[string]string{constants.AnalysisIDLabel: "logs-test-1"},
 						},
 					},
 					metav1.CreateOptions{},
@@ -263,7 +264,7 @@ func TestHandleLogs(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, url, nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
-			c.SetParamNames("analysis-id")
+			c.SetParamNames(constants.AnalysisIDLabel)
 			c.SetParamValues(tt.analysisID)
 
 			err := op.HandleLogs(c)

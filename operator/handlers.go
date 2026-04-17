@@ -280,7 +280,7 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 //	@Router			/analyses/{analysis-id} [delete]
 func (o *Operator) HandleExit(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID, err := requiredParam(c, "analysis-id")
+	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
 		return err
 	}
@@ -310,7 +310,7 @@ func (o *Operator) HandleExit(c echo.Context) error {
 //	@Router			/analyses/{analysis-id}/swap-route [post]
 func (o *Operator) HandleSwapRoute(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID, err := requiredParam(c, "analysis-id")
+	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
 		return err
 	}
@@ -343,7 +343,7 @@ func (o *Operator) HandleListing(c echo.Context) error {
 	log.Debugf("listing interactive resources with filter: %v", filter)
 
 	// Build label selector starting with the mandatory app-type=interactive label.
-	ls := labels.Set{"app-type": "interactive"}
+	ls := labels.Set{constants.AppTypeLabel: "interactive"}
 	for k, v := range filter {
 		ls[k] = v
 	}
@@ -427,7 +427,7 @@ func (o *Operator) HandleRegenerateNetworkPolicies(c echo.Context) error {
 	log.Info("regenerating per-analysis network policies")
 
 	// List all VICE deployments to discover running analyses and their labels.
-	viceSelector := labels.Set{"app-type": "interactive"}.AsSelector().String()
+	viceSelector := labels.Set{constants.AppTypeLabel: "interactive"}.AsSelector().String()
 	deps, err := o.clientset.AppsV1().Deployments(o.namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: viceSelector,
 	})
@@ -440,7 +440,7 @@ func (o *Operator) HandleRegenerateNetworkPolicies(c echo.Context) error {
 	var errs []string
 
 	for _, dep := range deps.Items {
-		analysisID := dep.Labels["analysis-id"]
+		analysisID := dep.Labels[constants.AnalysisIDLabel]
 		if analysisID == "" {
 			log.Warnf("deployment %s has no analysis-id label, skipping", dep.Name)
 			continue

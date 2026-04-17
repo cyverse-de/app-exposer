@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/labstack/echo/v4"
 )
 
@@ -67,7 +68,7 @@ var pollSleep = sleepCtx
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Router			/analyses/{analysis-id}/save-and-exit [post]
 func (o *Operator) HandleSaveAndExit(c echo.Context) error {
-	analysisID, err := requiredParam(c, "analysis-id")
+	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
 		return err
 	}
@@ -139,7 +140,7 @@ func (o *Operator) HandleSaveOutputFiles(c echo.Context) error {
 // in a background goroutine, and returns 200 immediately. The caller (user)
 // does not block on the transfer.
 func (o *Operator) handleAsyncTransfer(c echo.Context, action, transferPath string) error {
-	analysisID, err := requiredParam(c, "analysis-id")
+	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
 		return err
 	}

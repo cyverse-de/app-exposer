@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
@@ -71,7 +72,7 @@ func TestUserMappingHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := router.NewContext(req, rec)
 	c.SetPath("/instantlaunches/:username")
-	c.SetParamNames("username")
+	c.SetParamNames(constants.UsernameLabel)
 	c.SetParamValues("test")
 
 	err = app.UserMappingHandler(c)
@@ -175,7 +176,7 @@ func TestUpdateUserMappingHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := router.NewContext(req, rec)
 	c.SetPath("/instantlaunches/:username")
-	c.SetParamNames("username")
+	c.SetParamNames(constants.UsernameLabel)
 	c.SetParamValues("test")
 
 	err = app.UpdateUserMappingHandler(c)
@@ -228,7 +229,7 @@ func TestDeleteUserMappingHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := router.NewContext(req, rec)
 	c.SetPath("/instantlaunches/:username")
-	c.SetParamNames("username")
+	c.SetParamNames(constants.UsernameLabel)
 	c.SetParamValues("test")
 
 	err = app.DeleteUserMappingHandler(c)
@@ -312,7 +313,7 @@ func TestAddUserMappingHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := router.NewContext(req, rec)
 	c.SetPath("/instantlaunches/:username")
-	c.SetParamNames("username")
+	c.SetParamNames(constants.UsernameLabel)
 	c.SetParamValues("test")
 
 	err = app.AddUserMappingHandler(c)
@@ -420,7 +421,7 @@ func TestAllUserMappingsHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := router.NewContext(req, rec)
 	c.SetPath("/instantlaunches/:username")
-	c.SetParamNames("username")
+	c.SetParamNames(constants.UsernameLabel)
 	c.SetParamValues("test")
 
 	err = app.AllUserMappingsHandler(c)
@@ -524,7 +525,7 @@ func TestUserMappingsByVersionHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := router.NewContext(req, rec)
 	c.SetPath("/instantlaunches/:username/:version")
-	c.SetParamNames("username", "version")
+	c.SetParamNames(constants.UsernameLabel, "version")
 	c.SetParamValues("test", "0")
 
 	err = app.UserMappingsByVersionHandler(c)
@@ -613,7 +614,7 @@ func TestUpdateUserMappingsByVersionHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := router.NewContext(req, rec)
 	c.SetPath("/instantlaunches/:username/:version")
-	c.SetParamNames("username", "version")
+	c.SetParamNames(constants.UsernameLabel, "version")
 	c.SetParamValues("test", "0")
 
 	err = app.UpdateUserMappingsByVersionHandler(c)
@@ -662,7 +663,7 @@ func TestDeleteUserMappingsByVersionHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := router.NewContext(req, rec)
 	c.SetPath("/instantlaunches/:username/:version")
-	c.SetParamNames("username", "version")
+	c.SetParamNames(constants.UsernameLabel, "version")
 	c.SetParamValues("test", "0")
 
 	err = app.DeleteUserMappingsByVersionHandler(c)

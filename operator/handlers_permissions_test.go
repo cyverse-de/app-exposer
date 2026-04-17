@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -33,7 +34,7 @@ func viceProxyForwardContext(e *echo.Echo, method, body, analysisID string) (ech
 	}
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("analysis-id")
+	c.SetParamNames(constants.AnalysisIDLabel)
 	c.SetParamValues(analysisID)
 	return c, rec
 }
@@ -46,7 +47,7 @@ func createAnalysisService(t *testing.T, op *Operator, analysisID, svcName strin
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svcName,
 			Namespace: op.namespace,
-			Labels:    map[string]string{"analysis-id": analysisID},
+			Labels:    map[string]string{constants.AnalysisIDLabel: analysisID},
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -227,7 +228,7 @@ func decodeJSON(data []byte, out any) error {
 }
 func TestHandleGetPermissions(t *testing.T) {
 	analysisID := "perms-test-1"
-	labels := map[string]string{"analysis-id": analysisID}
+	labels := map[string]string{constants.AnalysisIDLabel: analysisID}
 
 	op, clientset, _ := newTestOperator(t, 10)
 	ctx := context.Background()
@@ -249,7 +250,7 @@ func TestHandleGetPermissions(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("analysis-id")
+	c.SetParamNames(constants.AnalysisIDLabel)
 	c.SetParamValues(analysisID)
 
 	err = op.HandleGetPermissions(c)
@@ -268,7 +269,7 @@ func TestHandleGetPermissionsNotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("analysis-id")
+	c.SetParamNames(constants.AnalysisIDLabel)
 	c.SetParamValues("nonexistent")
 
 	err := op.HandleGetPermissions(c)
@@ -280,7 +281,7 @@ func TestHandleGetPermissionsNotFound(t *testing.T) {
 
 func TestHandleUpdatePermissions(t *testing.T) {
 	analysisID := "perms-update-1"
-	labels := map[string]string{"analysis-id": analysisID}
+	labels := map[string]string{constants.AnalysisIDLabel: analysisID}
 
 	op, clientset, _ := newTestOperator(t, 10)
 	ctx := context.Background()
@@ -302,7 +303,7 @@ func TestHandleUpdatePermissions(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("analysis-id")
+	c.SetParamNames(constants.AnalysisIDLabel)
 	c.SetParamValues(analysisID)
 
 	err = op.HandleUpdatePermissions(c)
@@ -324,7 +325,7 @@ func TestHandleUpdatePermissionsEmptyUsers(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("analysis-id")
+	c.SetParamNames(constants.AnalysisIDLabel)
 	c.SetParamValues("any-id")
 
 	err := op.HandleUpdatePermissions(c)

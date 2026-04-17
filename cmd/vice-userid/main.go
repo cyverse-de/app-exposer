@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
@@ -24,7 +25,7 @@ const userByUsername = `
 
 func main() {
 	dbURI := flag.String("db-uri", "", "PostgreSQL connection string. Required.")
-	username := flag.String("username", "", "Username to look up. Required.")
+	username := flag.String(constants.UsernameLabel, "", "Username to look up. Required.")
 	userSuffix := flag.String("user-suffix", "@iplantcollaborative.org", "Domain suffix appended to the username if not already present.")
 	flag.Parse()
 

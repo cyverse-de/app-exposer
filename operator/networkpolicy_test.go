@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,7 +15,7 @@ import (
 )
 
 func TestBuildAnalysisEgressPolicy(t *testing.T) {
-	labels := map[string]string{"analysis-id": "test-123", "app-type": "interactive"}
+	labels := map[string]string{constants.AnalysisIDLabel: "test-123", constants.AppTypeLabel: "interactive"}
 
 	tests := []struct {
 		name              string

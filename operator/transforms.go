@@ -264,7 +264,7 @@ func TransformViceProxyArgs(deployment *appsv1.Deployment, analysisID, clusterCo
 // isn't already present, so every analysis has a consistent permissions
 // surface regardless of how the bundle was assembled upstream. The
 // ConfigMap is seeded with the owner username from the deployment's
-// "username" label.
+// constants.UsernameLabel label.
 func EnsurePermissionsConfigMap(bundle *operatorclient.AnalysisBundle, userSuffix string) {
 	if bundle == nil || bundle.Deployment == nil {
 		return
@@ -281,7 +281,7 @@ func EnsurePermissionsConfigMap(bundle *operatorclient.AnalysisBundle, userSuffi
 	// skip creating the ConfigMap to avoid locking everyone out of the analysis.
 	// The label may arrive unsanitized (with @) or sanitized (with -); only
 	// append the suffix if it's not already present.
-	owner := bundle.Deployment.Labels["username"]
+	owner := bundle.Deployment.Labels[constants.UsernameLabel]
 	if owner == "" {
 		log.Warnf("deployment %s missing username label; skipping permissions ConfigMap creation", bundle.Deployment.Name)
 		return

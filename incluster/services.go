@@ -27,7 +27,7 @@ func (i *Incluster) getService(ctx context.Context, job *model.Job) (*apiv1.Serv
 		},
 		Spec: apiv1.ServiceSpec{
 			Selector: map[string]string{
-				"external-id": job.InvocationID,
+				constants.ExternalIDLabel: job.InvocationID,
 			},
 			Ports: []apiv1.ServicePort{
 				{

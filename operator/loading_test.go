@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -143,9 +144,9 @@ func makeLoadingPageDeployment(analysisID, subdomain, appName string) *appsv1.De
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-dep",
 			Labels: map[string]string{
-				"analysis-id": analysisID,
-				"subdomain":   subdomain,
-				"app-name":    appName,
+				constants.AnalysisIDLabel: analysisID,
+				constants.SubdomainLabel:  subdomain,
+				constants.AppNameLabel:    appName,
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -263,7 +264,7 @@ func TestHandleLoadingStatus(t *testing.T) {
 				require.NoError(t, err)
 
 				_, err = clientset.CoreV1().Services("vice-apps").Create(ctx, &apiv1.Service{
-					ObjectMeta: metav1.ObjectMeta{Name: "analysis-svc", Labels: map[string]string{"analysis-id": analysisID}},
+					ObjectMeta: metav1.ObjectMeta{Name: "analysis-svc", Labels: map[string]string{constants.AnalysisIDLabel: analysisID}},
 					Spec: apiv1.ServiceSpec{Ports: []apiv1.ServicePort{
 						{Name: "tcp-input", Port: 60001},
 						{Name: "tcp-proxy", Port: 60000},
@@ -274,7 +275,7 @@ func TestHandleLoadingStatus(t *testing.T) {
 				_, err = clientset.CoreV1().Pods("vice-apps").Create(ctx, &apiv1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "pod1",
-						Labels: map[string]string{"analysis-id": analysisID},
+						Labels: map[string]string{constants.AnalysisIDLabel: analysisID},
 					},
 					Status: apiv1.PodStatus{
 						Phase: apiv1.PodRunning,
@@ -293,7 +294,7 @@ func TestHandleLoadingStatus(t *testing.T) {
 				_, err = gwClientset.GatewayV1().HTTPRoutes("vice-apps").Create(ctx, &gatewayv1.HTTPRoute{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "test-route",
-						Labels: map[string]string{"analysis-id": analysisID},
+						Labels: map[string]string{constants.AnalysisIDLabel: analysisID},
 					},
 					Spec: gatewayv1.HTTPRouteSpec{
 						Hostnames: []gatewayv1.Hostname{"c9999xyz.cyverse.run"},

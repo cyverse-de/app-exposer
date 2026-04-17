@@ -11,6 +11,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/go-mod/gotelnats"
 	"github.com/cyverse-de/go-mod/pbinit"
@@ -129,7 +130,7 @@ func (e *Enforcer) countJobsForUser(ctx context.Context, username string) (int, 
 			// Filter by username server-side so we don't decode a large
 			// cluster-wide listing just to count one user's jobs.
 			params := url.Values{}
-			params.Set("username", username)
+			params.Set(constants.UsernameLabel, username)
 			info, err := c.Listing(ctx, params)
 			if err != nil {
 				results[idx] = result{listingErr: err}

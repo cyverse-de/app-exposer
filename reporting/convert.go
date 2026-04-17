@@ -3,6 +3,7 @@ package reporting
 import (
 	"fmt"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -15,13 +16,13 @@ func MetaInfoFromLabels(name, namespace, creationTimestamp string, labels map[st
 	return MetaInfo{
 		Name:              name,
 		Namespace:         namespace,
-		AnalysisID:        labels["analysis-id"],
+		AnalysisID:        labels[constants.AnalysisIDLabel],
 		AnalysisName:      labels["analysis-name"],
-		AppName:           labels["app-name"],
-		AppID:             labels["app-id"],
-		ExternalID:        labels["external-id"],
-		UserID:            labels["user-id"],
-		Username:          labels["username"],
+		AppName:           labels[constants.AppNameLabel],
+		AppID:             labels[constants.AppIDLabel],
+		ExternalID:        labels[constants.ExternalIDLabel],
+		UserID:            labels[constants.UserIDLabel],
+		Username:          labels[constants.UsernameLabel],
 		CreationTimestamp: creationTimestamp,
 	}
 }

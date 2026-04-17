@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/labstack/echo/v4"
@@ -62,7 +63,7 @@ type StatusPod struct {
 //	@Router			/analyses/{analysis-id}/status [get]
 func (o *Operator) HandleStatus(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID, err := requiredParam(c, "analysis-id")
+	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
 		return err
 	}
@@ -137,7 +138,7 @@ func (o *Operator) HandleStatus(c echo.Context) error {
 //	@Router			/analyses/{analysis-id}/url-ready [get]
 func (o *Operator) HandleURLReady(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID, err := requiredParam(c, "analysis-id")
+	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
 		return err
 	}
@@ -200,7 +201,7 @@ func (o *Operator) HandleURLReady(c echo.Context) error {
 //	@Router			/analyses/{analysis-id}/pods [get]
 func (o *Operator) HandlePods(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID, err := requiredParam(c, "analysis-id")
+	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
 		return err
 	}
@@ -259,7 +260,7 @@ func isPodReady(p apiv1.Pod) bool {
 //	@Router			/analyses/{analysis-id}/logs [get]
 func (o *Operator) HandleLogs(c echo.Context) error {
 	ctx := c.Request().Context()
-	analysisID, err := requiredParam(c, "analysis-id")
+	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
 		return err
 	}

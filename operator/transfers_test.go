@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,7 +74,7 @@ func createTransferService(t *testing.T, op *Operator, analysisID, svcName strin
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svcName,
 			Namespace: op.namespace,
-			Labels:    map[string]string{"analysis-id": analysisID},
+			Labels:    map[string]string{constants.AnalysisIDLabel: analysisID},
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -237,7 +238,7 @@ func newTransferContext(e *echo.Echo, analysisID string) (echo.Context, *httptes
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	if analysisID != "" {
-		c.SetParamNames("analysis-id")
+		c.SetParamNames(constants.AnalysisIDLabel)
 		c.SetParamValues(analysisID)
 	}
 	return c, rec
@@ -274,7 +275,7 @@ func TestHandleSaveAndExit(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "svc-save-exit",
 							Namespace: "vice-apps",
-							Labels:    map[string]string{"analysis-id": "save-and-exit-test-1"},
+							Labels:    map[string]string{constants.AnalysisIDLabel: "save-and-exit-test-1"},
 						},
 						Spec: apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 60001}}},
 					},
