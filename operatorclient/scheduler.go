@@ -108,8 +108,7 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 			continue
 		}
 
-		// AvailableSlots: >0 = has capacity, 0 = at capacity, -1 = unlimited.
-		if cap.AvailableSlots == 0 {
+		if !cap.HasCapacity() {
 			log.Infof("operator %s at capacity (%d/%d)", op.Name(), cap.RunningAnalyses, cap.MaxAnalyses)
 			continue
 		}

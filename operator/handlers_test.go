@@ -7,6 +7,7 @@ import (
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,31 +75,112 @@ func newTestOperator(t *testing.T, maxAnalyses int, vendor ...GPUVendor) (*Opera
 }
 
 func TestAnalysisBundleValidate(t *testing.T) {
+	labels := func(id string) map[string]string { return map[string]string{"analysis-id": id} }
+
+	// withLabels returns a shallow bundle wired with a Deployment and a
+	// Service both labeled with the given analysis-id, so each test row
+	// can focus on the invariant it's exercising without restating the
+	// valid-skeleton boilerplate.
+	withLabels := func(id string) operatorclient.AnalysisBundle {
+		return operatorclient.AnalysisBundle{
+			AnalysisID: id,
+			Deployment: &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels(id)},
+			},
+			Service: &apiv1.Service{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels(id)},
+			},
+		}
+	}
+
 	tests := []struct {
-		name    string
-		bundle  operatorclient.AnalysisBundle
-		wantErr bool
+		name        string
+		bundle      operatorclient.AnalysisBundle
+		wantErr     bool
+		wantErrPart string // optional substring match on the error message
 	}{
+		{name: "valid minimal bundle", bundle: withLabels("test"), wantErr: false},
 		{
-			name: "valid bundle",
+			name: "valid bundle with every child labeled",
 			bundle: operatorclient.AnalysisBundle{
 				AnalysisID: "test",
-				Deployment: &appsv1.Deployment{},
-				Service:    &apiv1.Service{},
+				Deployment: &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Labels: labels("test")}},
+				Service:    &apiv1.Service{ObjectMeta: metav1.ObjectMeta{Labels: labels("test")}},
+				HTTPRoute:  &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Labels: labels("test")}},
+				ConfigMaps: []*apiv1.ConfigMap{
+					{ObjectMeta: metav1.ObjectMeta{Labels: labels("test")}},
+				},
+				PersistentVolumeClaims: []*apiv1.PersistentVolumeClaim{
+					{ObjectMeta: metav1.ObjectMeta{Labels: labels("test")}},
+				},
 			},
 			wantErr: false,
 		},
-		{name: "missing analysis ID", bundle: operatorclient.AnalysisBundle{Deployment: &appsv1.Deployment{}, Service: &apiv1.Service{}}, wantErr: true},
-		{name: "missing deployment", bundle: operatorclient.AnalysisBundle{AnalysisID: "test", Service: &apiv1.Service{}}, wantErr: true},
-		{name: "missing service", bundle: operatorclient.AnalysisBundle{AnalysisID: "test", Deployment: &appsv1.Deployment{}}, wantErr: true},
+		{name: "missing analysis ID", bundle: operatorclient.AnalysisBundle{Deployment: &appsv1.Deployment{}, Service: &apiv1.Service{}}, wantErr: true, wantErrPart: "analysisID"},
+		{name: "missing deployment", bundle: operatorclient.AnalysisBundle{AnalysisID: "test", Service: &apiv1.Service{}}, wantErr: true, wantErrPart: "deployment"},
+		{name: "missing service", bundle: operatorclient.AnalysisBundle{AnalysisID: "test", Deployment: &appsv1.Deployment{}}, wantErr: true, wantErrPart: "service"},
 		{name: "empty bundle", bundle: operatorclient.AnalysisBundle{}, wantErr: true},
+		{
+			name: "deployment label mismatched",
+			bundle: operatorclient.AnalysisBundle{
+				AnalysisID: "test",
+				Deployment: &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Labels: labels("other")}},
+				Service:    &apiv1.Service{ObjectMeta: metav1.ObjectMeta{Labels: labels("test")}},
+			},
+			wantErr:     true,
+			wantErrPart: "deployment has analysis-id label",
+		},
+		{
+			name: "service label mismatched",
+			bundle: operatorclient.AnalysisBundle{
+				AnalysisID: "test",
+				Deployment: &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Labels: labels("test")}},
+				Service:    &apiv1.Service{ObjectMeta: metav1.ObjectMeta{Labels: labels("other")}},
+			},
+			wantErr:     true,
+			wantErrPart: "service has analysis-id label",
+		},
+		{
+			name: "httpRoute label mismatched",
+			bundle: func() operatorclient.AnalysisBundle {
+				b := withLabels("test")
+				b.HTTPRoute = &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Labels: labels("other")}}
+				return b
+			}(),
+			wantErr:     true,
+			wantErrPart: "httpRoute has analysis-id label",
+		},
+		{
+			name: "configmap label mismatched",
+			bundle: func() operatorclient.AnalysisBundle {
+				b := withLabels("test")
+				b.ConfigMaps = []*apiv1.ConfigMap{
+					{ObjectMeta: metav1.ObjectMeta{Labels: labels("other")}},
+				}
+				return b
+			}(),
+			wantErr:     true,
+			wantErrPart: "configMaps[0] has analysis-id label",
+		},
+		{
+			name: "nil pointer in ConfigMaps is skipped",
+			bundle: func() operatorclient.AnalysisBundle {
+				b := withLabels("test")
+				b.ConfigMaps = []*apiv1.ConfigMap{nil}
+				return b
+			}(),
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.bundle.Validate()
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
+				if tt.wantErrPart != "" {
+					assert.Contains(t, err.Error(), tt.wantErrPart)
+				}
 			} else {
 				assert.NoError(t, err)
 			}

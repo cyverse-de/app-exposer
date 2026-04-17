@@ -226,3 +226,101 @@ func TestEnsureNamespacePoliciesBailsOnAllowFailure(t *testing.T) {
 	_, err = cs.NetworkingV1().NetworkPolicies("vice-apps").Get(context.Background(), "vice-default-deny-egress", metav1.GetOptions{})
 	require.Error(t, err, "deny-egress policy must not exist after an allow-policy failure")
 }
+
+func TestNetworkPolicyConfigValidate(t *testing.T) {
+	validPodSelector := map[string]string{"app": "traefik"}
+	validIngress := IngressException{
+		NamespaceLabels: map[string]string{"kubernetes.io/metadata.name": "kube-system"},
+		PodLabels:       map[string]string{"app": "traefik"},
+	}
+
+	tests := []struct {
+		name        string
+		cfg         NetworkPolicyConfig
+		wantErr     bool
+		wantErrPart string
+	}{
+		{
+			name: "happy path — populated selectors validate",
+			cfg: NetworkPolicyConfig{
+				PodExceptions:     []map[string]string{validPodSelector},
+				IngressExceptions: []IngressException{validIngress},
+			},
+		},
+		{
+			name: "empty PodExceptions entry rejected",
+			cfg: NetworkPolicyConfig{
+				PodExceptions: []map[string]string{{}},
+			},
+			wantErr:     true,
+			wantErrPart: "PodExceptions[0]: empty selector matches every pod",
+		},
+		{
+			name: "PodExceptions entry with namespace-label only rejected when selector map is empty",
+			cfg: NetworkPolicyConfig{
+				PodExceptions: []map[string]string{validPodSelector, {}},
+			},
+			wantErr:     true,
+			wantErrPart: "PodExceptions[1]",
+		},
+		{
+			name: "IngressException with both maps empty rejected",
+			cfg: NetworkPolicyConfig{
+				IngressExceptions: []IngressException{{}},
+			},
+			wantErr:     true,
+			wantErrPart: "IngressExceptions[0]",
+		},
+		{
+			name: "IngressException with only pod labels allowed",
+			cfg: NetworkPolicyConfig{
+				IngressExceptions: []IngressException{{PodLabels: map[string]string{"app": "x"}}},
+			},
+		},
+		{
+			name: "IngressException with only namespace labels allowed",
+			cfg: NetworkPolicyConfig{
+				IngressExceptions: []IngressException{{NamespaceLabels: map[string]string{"kubernetes.io/metadata.name": "x"}}},
+			},
+		},
+		{name: "empty config validates", cfg: NetworkPolicyConfig{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantErrPart != "" {
+					assert.Contains(t, err.Error(), tt.wantErrPart)
+				}
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestIngressExceptionValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		exc     IngressException
+		wantErr bool
+	}{
+		{"both maps populated", IngressException{NamespaceLabels: map[string]string{"ns": "x"}, PodLabels: map[string]string{"app": "y"}}, false},
+		{"namespace labels only", IngressException{NamespaceLabels: map[string]string{"ns": "x"}}, false},
+		{"pod labels only", IngressException{PodLabels: map[string]string{"app": "y"}}, false},
+		{"both maps empty rejected", IngressException{}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.exc.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}

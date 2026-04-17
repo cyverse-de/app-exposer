@@ -35,7 +35,11 @@ type AnalysisBundle struct {
 }
 
 // CapacityResponse describes the current resource capacity and usage
-// reported by an operator's cluster.
+// reported by an operator's cluster. AvailableSlots is three-valued:
+// positive means "has capacity", 0 means "at capacity", and -1 means
+// "unlimited" (autoscaling cluster with no configured cap). Prefer
+// HasCapacity() over direct comparison so the convention lives in one
+// place.
 type CapacityResponse struct {
 	MaxAnalyses       int   `json:"maxAnalyses"`
 	RunningAnalyses   int   `json:"runningAnalyses"`
@@ -46,7 +50,19 @@ type CapacityResponse struct {
 	UsedMemory        int64 `json:"usedMemory"`        // bytes
 }
 
-// Validate checks that the bundle has the minimum required fields.
+// HasCapacity reports whether this operator can accept a new analysis.
+// Encapsulates the three-valued AvailableSlots convention: -1 means
+// unlimited, 0 means exhausted, anything greater is a finite but
+// non-zero slot count.
+func (c *CapacityResponse) HasCapacity() bool {
+	return c.AvailableSlots != 0
+}
+
+// Validate checks the bundle's top-level required fields and then
+// walks each labeled child resource, asserting its analysis-id label
+// matches the bundle's AnalysisID. deleteAnalysisResources relies on
+// that label to find every child at cleanup time, so a mismatch would
+// produce a bundle that launches but can't be cleaned up cleanly.
 func (b *AnalysisBundle) Validate() error {
 	if b.AnalysisID == "" {
 		return fmt.Errorf("analysisID is required")
@@ -56,6 +72,57 @@ func (b *AnalysisBundle) Validate() error {
 	}
 	if b.Service == nil {
 		return fmt.Errorf("service is required")
+	}
+
+	if err := checkAnalysisIDLabel("deployment", b.Deployment.Labels, b.AnalysisID); err != nil {
+		return err
+	}
+	if err := checkAnalysisIDLabel("service", b.Service.Labels, b.AnalysisID); err != nil {
+		return err
+	}
+	if b.HTTPRoute != nil {
+		if err := checkAnalysisIDLabel("httpRoute", b.HTTPRoute.Labels, b.AnalysisID); err != nil {
+			return err
+		}
+	}
+	for i, cm := range b.ConfigMaps {
+		if cm == nil {
+			continue
+		}
+		if err := checkAnalysisIDLabel(fmt.Sprintf("configMaps[%d]", i), cm.Labels, b.AnalysisID); err != nil {
+			return err
+		}
+	}
+	for i, pv := range b.PersistentVolumes {
+		if pv == nil {
+			continue
+		}
+		if err := checkAnalysisIDLabel(fmt.Sprintf("persistentVolumes[%d]", i), pv.Labels, b.AnalysisID); err != nil {
+			return err
+		}
+	}
+	for i, pvc := range b.PersistentVolumeClaims {
+		if pvc == nil {
+			continue
+		}
+		if err := checkAnalysisIDLabel(fmt.Sprintf("persistentVolumeClaims[%d]", i), pvc.Labels, b.AnalysisID); err != nil {
+			return err
+		}
+	}
+	if b.PodDisruptionBudget != nil {
+		if err := checkAnalysisIDLabel("podDisruptionBudget", b.PodDisruptionBudget.Labels, b.AnalysisID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkAnalysisIDLabel returns an error when labels[analysis-id] does
+// not match the expected wantID. A missing label is reported as an
+// empty-string mismatch so the error message points at the problem.
+func checkAnalysisIDLabel(kind string, labels map[string]string, wantID string) error {
+	if got := labels["analysis-id"]; got != wantID {
+		return fmt.Errorf("%s has analysis-id label %q, want %q", kind, got, wantID)
 	}
 	return nil
 }

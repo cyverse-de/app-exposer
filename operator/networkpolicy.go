@@ -47,6 +47,17 @@ type IngressException struct {
 	PodLabels       map[string]string
 }
 
+// Validate rejects an IngressException that would match every pod
+// cluster-wide. Kubernetes treats an empty LabelSelector.MatchLabels
+// as "match all", so an exception with both maps empty silently opens
+// ingress to everything — the opposite of the operator's intent.
+func (e IngressException) Validate() error {
+	if len(e.NamespaceLabels) == 0 && len(e.PodLabels) == 0 {
+		return errors.New("ingress exception has no namespace or pod labels; would match every pod cluster-wide")
+	}
+	return nil
+}
+
 // NetworkPolicyConfig holds all parameters for network policy management.
 type NetworkPolicyConfig struct {
 	Namespace         string
@@ -57,6 +68,24 @@ type NetworkPolicyConfig struct {
 	PodExceptions     []map[string]string // Pod selector labels for egress exceptions.
 	IngressExceptions []IngressException  // Cross-namespace ingress sources.
 	DisableInternet   bool                // Block analysis pods from public internet.
+}
+
+// Validate catches configurations whose selectors would produce
+// cluster-wide "allow everything" behavior due to Kubernetes' empty-
+// selector-means-match-all semantics. Intended to run once at startup
+// against the config built from operator CLI flags.
+func (c NetworkPolicyConfig) Validate() error {
+	for i, sel := range c.PodExceptions {
+		if len(sel) == 0 {
+			return fmt.Errorf("PodExceptions[%d]: empty selector matches every pod", i)
+		}
+	}
+	for i, exc := range c.IngressExceptions {
+		if err := exc.Validate(); err != nil {
+			return fmt.Errorf("IngressExceptions[%d]: %w", i, err)
+		}
+	}
+	return nil
 }
 
 // ResolveHostCIDRs resolves a URL's hostname to /32 CIDRs for use in

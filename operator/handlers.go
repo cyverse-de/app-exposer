@@ -209,8 +209,7 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	// AvailableSlots: >0 = has capacity, 0 = at capacity, -1 = unlimited.
-	if cap.AvailableSlots == 0 {
+	if !cap.HasCapacity() {
 		log.Infof("launch rejected: at capacity (analysis %s)", bundle.AnalysisID)
 		return echo.NewHTTPError(http.StatusConflict, "operator at capacity")
 	}

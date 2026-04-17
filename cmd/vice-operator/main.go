@@ -410,6 +410,9 @@ func main() {
 		IngressExceptions: ingressExceptions,
 		DisableInternet:   disableInternetAccess,
 	}
+	if err := egressConfig.Validate(); err != nil {
+		log.Fatalf("invalid network policy configuration: %v", err)
+	}
 
 	mustEnsure("network policies", func(ctx context.Context) error {
 		return operator.EnsureNamespacePolicies(ctx, clientset, egressConfig)
