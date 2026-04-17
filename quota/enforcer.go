@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"sync"
 
 	"github.com/cyverse-de/app-exposer/apps"
@@ -26,24 +27,18 @@ import (
 
 var log = common.Log
 
+// shouldCountStatus reports whether a job in the given status should
+// count against a user's concurrency quota. Terminal states are
+// excluded because their resources have already been reclaimed.
 func shouldCountStatus(status string) bool {
-	countIt := true
-
-	skipStatuses := []string{
-		"Failed",
-		"Completed",
-		"Canceled",
-	}
-
-	for _, s := range skipStatuses {
-		if status == s {
-			countIt = false
-		}
-	}
-
-	return countIt
+	return !slices.Contains([]string{"Failed", "Completed", "Canceled"}, status)
 }
 
+// Enforcer validates VICE job launches against per-user concurrency
+// quotas and any pending resource overages. Concurrency counts are
+// aggregated across every configured operator cluster via the
+// scheduler — call SetScheduler before ValidateJob runs, otherwise
+// multi-cluster counts fall back to the local clientset only.
 type Enforcer struct {
 	clientset kubernetes.Interface
 	db        *sqlx.DB
@@ -56,6 +51,9 @@ type Enforcer struct {
 	userDomain string
 }
 
+// NewEnforcer constructs an Enforcer with its required dependencies.
+// The scheduler is set separately via SetScheduler because it's wired
+// up after the operator configuration is loaded at startup.
 func NewEnforcer(
 	clientset kubernetes.Interface,
 	db *sqlx.DB,
@@ -332,6 +330,13 @@ func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int
 	}
 }
 
+// ValidateJob determines whether the given interactive job is allowed
+// to launch. It checks concurrency (per-user and global defaults) and
+// any pending resource overages on the submitter's account. The
+// returned int is an HTTP status code that the handler layer returns
+// to the client — 200 means "permitted", 400 means "rejected by
+// policy" (quota exceeded, overages pending), and 500 means the
+// check could not complete because of a dependency failure.
 func (e *Enforcer) ValidateJob(ctx context.Context, job *model.Job, namespace string) (int, error) {
 	// Get the username
 	usernameLabelValue := common.LabelValueString(job.Submitter)
@@ -365,6 +370,12 @@ func (e *Enforcer) ValidateJob(ctx context.Context, job *model.Job, namespace st
 	return validateJobLimits(user, defaultJobLimit, jobCount, jobLimit, overages)
 }
 
+// ValidateBatchJob determines whether the given batch job is allowed
+// to launch. Unlike ValidateJob, batch jobs aren't subject to a
+// concurrent-job limit — HTCondor manages that on its own — so this
+// only checks for pending resource overages. Return semantics match
+// ValidateJob: the int is the HTTP status code to propagate to the
+// client.
 func (e *Enforcer) ValidateBatchJob(ctx context.Context, job *model.Job, namespace string) (int, error) {
 	user := job.Submitter
 
