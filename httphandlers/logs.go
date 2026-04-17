@@ -44,9 +44,9 @@ func (h *HTTPHandlers) LogsHandler(c echo.Context) error {
 	}
 
 	// Pass all query parameters to the operator.
-	rawLogs, err := client.Logs(ctx, analysisID, c.Request().URL.Query())
+	logs, err := client.Logs(ctx, analysisID, c.Request().URL.Query())
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	return c.Blob(http.StatusOK, "application/json", rawLogs)
+	return c.JSON(http.StatusOK, logs)
 }

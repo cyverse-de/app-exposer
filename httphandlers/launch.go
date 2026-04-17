@@ -3,7 +3,6 @@ package httphandlers
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -245,17 +244,11 @@ func (h *HTTPHandlers) checkURLReady(ctx context.Context, analysisID string) (op
 		return operatorclient.URLReadyResponse{Ready: false}, nil
 	}
 
-	raw, err := client.URLReady(ctx, analysisID)
+	resp, err := client.URLReady(ctx, analysisID)
 	if err != nil {
 		return operatorclient.URLReadyResponse{Ready: false}, fmt.Errorf("operator %s url-ready check failed: %w", client.Name(), err)
 	}
-
-	var resp operatorclient.URLReadyResponse
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return operatorclient.URLReadyResponse{Ready: false}, fmt.Errorf("failed to decode url-ready response from operator %s: %w", client.Name(), err)
-	}
-
-	return resp, nil
+	return *resp, nil
 }
 
 // URLReadyHandler checks whether the VICE analysis for the given subdomain is

@@ -2,7 +2,6 @@ package operatorclient
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -207,7 +206,7 @@ func TestClientMethods(t *testing.T) {
 			invoke: func(ctx context.Context, c *Client) (any, error) {
 				return c.Status(ctx, "an-1")
 			},
-			wantResult: json.RawMessage(statusBody),
+			wantResult: &StatusResponse{Deployments: []StatusDeployment{{Name: "d1"}}, Pods: []StatusPod{}},
 		},
 		{
 			name: "URLReady", wantMethod: http.MethodGet, wantPath: "/analyses/an-1/url-ready",
@@ -215,7 +214,7 @@ func TestClientMethods(t *testing.T) {
 			invoke: func(ctx context.Context, c *Client) (any, error) {
 				return c.URLReady(ctx, "an-1")
 			},
-			wantResult: json.RawMessage(urlReadyBody),
+			wantResult: &URLReadyResponse{Ready: true, AccessURL: "https://x.example"},
 		},
 		{
 			name: "Pods", wantMethod: http.MethodGet, wantPath: "/analyses/an-1/pods",
@@ -223,7 +222,7 @@ func TestClientMethods(t *testing.T) {
 			invoke: func(ctx context.Context, c *Client) (any, error) {
 				return c.Pods(ctx, "an-1")
 			},
-			wantResult: json.RawMessage(podsBody),
+			wantResult: []StatusPod{{Name: "p1"}},
 		},
 		{
 			name: "Logs", wantMethod: http.MethodGet, wantPath: "/analyses/an-1/logs",
@@ -231,7 +230,10 @@ func TestClientMethods(t *testing.T) {
 			invoke: func(ctx context.Context, c *Client) (any, error) {
 				return c.Logs(ctx, "an-1", nil)
 			},
-			wantResult: json.RawMessage(logsBody),
+			// logsBody's "logs" / "pod" / "container" fields aren't on VICELogEntry, so
+			// the decoder yields a zero-valued entry. Assert pointer-ness rather than
+			// field equality to keep the table aligned with the other rows.
+			wantResult: &reporting.VICELogEntry{},
 		},
 	}
 
@@ -265,12 +267,6 @@ func TestClientMethods(t *testing.T) {
 			switch want := tt.wantResult.(type) {
 			case bool:
 				assert.Equal(t, want, got)
-			case json.RawMessage:
-				// json.RawMessage is []byte underneath; compare as strings
-				// so diffs are readable if they drift.
-				gotRaw, ok := got.(json.RawMessage)
-				require.True(t, ok, "expected json.RawMessage result, got %T", got)
-				assert.JSONEq(t, string(want), string(gotRaw))
 			case *CapacityResponse:
 				gotCap, ok := got.(*CapacityResponse)
 				require.True(t, ok)
@@ -281,6 +277,23 @@ func TestClientMethods(t *testing.T) {
 				gotAS, ok := got.(*ActiveSessionsResponse)
 				require.True(t, ok)
 				assert.Equal(t, want.Sessions, gotAS.Sessions)
+			case *StatusResponse:
+				gotSR, ok := got.(*StatusResponse)
+				require.True(t, ok)
+				assert.Equal(t, want.Deployments, gotSR.Deployments)
+				assert.Equal(t, want.Pods, gotSR.Pods)
+			case *URLReadyResponse:
+				gotURL, ok := got.(*URLReadyResponse)
+				require.True(t, ok)
+				assert.Equal(t, want.Ready, gotURL.Ready)
+				assert.Equal(t, want.AccessURL, gotURL.AccessURL)
+			case []StatusPod:
+				gotPods, ok := got.([]StatusPod)
+				require.True(t, ok)
+				assert.Equal(t, want, gotPods)
+			case *reporting.VICELogEntry:
+				_, ok := got.(*reporting.VICELogEntry)
+				require.True(t, ok, "expected *reporting.VICELogEntry result, got %T", got)
 			case *reporting.ResourceInfo:
 				gotRI, ok := got.(*reporting.ResourceInfo)
 				require.True(t, ok)

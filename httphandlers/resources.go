@@ -9,6 +9,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/incluster"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/permissions"
 	"github.com/labstack/echo/v4"
 )
@@ -438,12 +439,11 @@ func (h *HTTPHandlers) PodsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "analysis not found on any operator")
 	}
 
-	rawPods, err := client.Pods(ctx, analysisID)
+	pods, err := client.Pods(ctx, analysisID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	// The operator responds with a bare JSON array; wrap it in
-	// {"pods": [...]} to keep the response shape stable for existing UI
-	// clients that expect this envelope.
-	return c.Blob(http.StatusOK, "application/json", []byte(fmt.Sprintf(`{"pods":%s}`, string(rawPods))))
+	// Wrap the operator's bare JSON array in a {"pods": [...]} envelope
+	// to keep the response shape stable for existing UI clients.
+	return c.JSON(http.StatusOK, map[string][]operatorclient.StatusPod{"pods": pods})
 }

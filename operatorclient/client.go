@@ -316,39 +316,56 @@ func (c *Client) Listing(ctx context.Context, params url.Values) (*reporting.Res
 // HasAnalysis checks whether this operator's cluster has the given analysis
 // by calling the status endpoint and checking for deployments.
 func (c *Client) HasAnalysis(ctx context.Context, analysisID string) (bool, error) {
-	raw, err := c.getAnalysisJSON(ctx, analysisID, "status")
+	resp, err := c.Status(ctx, analysisID)
 	if err != nil {
 		return false, err
 	}
-
-	// Decode just enough to check for deployments.
-	var status struct {
-		Deployments []json.RawMessage `json:"deployments"`
-	}
-	if err := json.Unmarshal(raw, &status); err != nil {
-		return false, fmt.Errorf("decoding status response: %w", err)
-	}
-
-	return len(status.Deployments) > 0, nil
+	return len(resp.Deployments) > 0, nil
 }
 
 // Status queries the resource status for an analysis from the operator.
-func (c *Client) Status(ctx context.Context, analysisID string) (json.RawMessage, error) {
-	return c.getAnalysisJSON(ctx, analysisID, "status")
+func (c *Client) Status(ctx context.Context, analysisID string) (*StatusResponse, error) {
+	raw, err := c.getAnalysisJSON(ctx, analysisID, "status")
+	if err != nil {
+		return nil, err
+	}
+	var resp StatusResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("decoding status response for analysis %s: %w", analysisID, err)
+	}
+	return &resp, nil
 }
 
 // URLReady checks whether the analysis is ready for user access.
-func (c *Client) URLReady(ctx context.Context, analysisID string) (json.RawMessage, error) {
-	return c.getAnalysisJSON(ctx, analysisID, "url-ready")
+func (c *Client) URLReady(ctx context.Context, analysisID string) (*URLReadyResponse, error) {
+	raw, err := c.getAnalysisJSON(ctx, analysisID, "url-ready")
+	if err != nil {
+		return nil, err
+	}
+	var resp URLReadyResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("decoding url-ready response for analysis %s: %w", analysisID, err)
+	}
+	return &resp, nil
 }
 
 // Pods returns pod info for an analysis from the operator.
-func (c *Client) Pods(ctx context.Context, analysisID string) (json.RawMessage, error) {
-	return c.getAnalysisJSON(ctx, analysisID, "pods")
+func (c *Client) Pods(ctx context.Context, analysisID string) ([]StatusPod, error) {
+	raw, err := c.getAnalysisJSON(ctx, analysisID, "pods")
+	if err != nil {
+		return nil, err
+	}
+	var pods []StatusPod
+	if err := json.Unmarshal(raw, &pods); err != nil {
+		return nil, fmt.Errorf("decoding pods response for analysis %s: %w", analysisID, err)
+	}
+	return pods, nil
 }
 
-// Logs returns container logs for an analysis from the operator.
-func (c *Client) Logs(ctx context.Context, analysisID string, params url.Values) (json.RawMessage, error) {
+// Logs returns container logs for an analysis from the operator. The
+// operator returns a single reporting.VICELogEntry (the first pod's
+// logs) — see HandleLogs for the reasoning.
+func (c *Client) Logs(ctx context.Context, analysisID string, params url.Values) (*reporting.VICELogEntry, error) {
 	reqURL, err := url.Parse(c.analysisURL(analysisID, "logs"))
 	if err != nil {
 		return nil, err
@@ -374,7 +391,11 @@ func (c *Client) Logs(ctx context.Context, analysisID string, params url.Values)
 		return nil, err
 	}
 
-	return json.RawMessage(body), nil
+	var entry reporting.VICELogEntry
+	if err := json.Unmarshal(body, &entry); err != nil {
+		return nil, fmt.Errorf("decoding logs response for analysis %s: %w", analysisID, err)
+	}
+	return &entry, nil
 }
 
 // getAnalysisJSON GETs a JSON response from an analysis sub-endpoint.
