@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/cyverse-de/app-exposer/operatorclient"
+	"github.com/cyverse-de/messaging/v12"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -22,14 +23,18 @@ type Operator struct {
 	UpdatedAt        time.Time  `db:"updated_at"`
 }
 
-// JobStatusUpdate models a row in the job_status_updates table.
+// JobStatusUpdate models a row in the job_status_updates table. The
+// Status field carries a messaging.JobState so the DE-wide vocabulary
+// is enforced by the compiler at the write boundary (the messaging
+// package already defines it; adopting the upstream type avoids a
+// parallel enum here).
 type JobStatusUpdate struct {
-	ExternalID       string `db:"external_id"`
-	Message          string `db:"message"`
-	Status           string `db:"status"`
-	SentFrom         string `db:"sent_from"`
-	SentFromHostname string `db:"sent_from_hostname"`
-	SentOn           int64  `db:"sent_on"`
+	ExternalID       string             `db:"external_id"`
+	Message          string             `db:"message"`
+	Status           messaging.JobState `db:"status"`
+	SentFrom         string             `db:"sent_from"`
+	SentFromHostname string             `db:"sent_from_hostname"`
+	SentOn           int64              `db:"sent_on"`
 }
 
 // ToOperatorConfig projects the DB's full Operator row down to the public
@@ -181,8 +186,8 @@ func (d *Database) GetAnalysisStatus(ctx context.Context, tx *sqlx.Tx, analysisI
 // job_status_updates table for the given external ID. This is more accurate
 // than querying the jobs table directly because there can be lag between
 // when a status update is recorded and when the jobs table is updated.
-func (d *Database) GetLatestStatusByExternalID(ctx context.Context, tx *sqlx.Tx, externalID string) (string, error) {
-	var status string
+func (d *Database) GetLatestStatusByExternalID(ctx context.Context, tx *sqlx.Tx, externalID string) (messaging.JobState, error) {
+	var status messaging.JobState
 	const query = `
 		SELECT status FROM job_status_updates
 		WHERE external_id = $1

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/cyverse-de/messaging/v12"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -25,7 +26,7 @@ type ReconcilerDB interface {
 	// GetLatestStatusByExternalID returns the most recent status recorded in
 	// job_status_updates for the given external ID. Returns sql.ErrNoRows
 	// when no status has been recorded yet.
-	GetLatestStatusByExternalID(ctx context.Context, tx *sqlx.Tx, externalID string) (string, error)
+	GetLatestStatusByExternalID(ctx context.Context, tx *sqlx.Tx, externalID string) (messaging.JobState, error)
 
 	// InsertJobStatusUpdate appends a new row to job_status_updates.
 	InsertJobStatusUpdate(ctx context.Context, tx *sqlx.Tx, update *JobStatusUpdate) error

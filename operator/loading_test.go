@@ -25,7 +25,7 @@ func TestComputeStage(t *testing.T) {
 		pods      []apiv1.Pod
 		depReady  bool
 		svcExists bool
-		wantStage string
+		wantStage Stage
 		wantError string
 	}{
 		{
@@ -228,7 +228,7 @@ func TestHandleLoadingStatus(t *testing.T) {
 		subdomain  string
 		setup      func(t *testing.T, clientset *fake.Clientset, gwClientset *gatewayfake.Clientset, analysisID string)
 		wantReady  bool
-		wantStage  string
+		wantStage  Stage
 		// verify is called after the handler succeeds to perform extra assertions.
 		verify func(t *testing.T, gwClientset *gatewayfake.Clientset, analysisID string)
 	}{

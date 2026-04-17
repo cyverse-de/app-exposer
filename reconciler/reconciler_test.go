@@ -54,14 +54,14 @@ func TestNewReconciler(t *testing.T) {
 func TestMapPodPhaseToStatus(t *testing.T) {
 	tests := []struct {
 		phase    string
-		expected string
+		expected messaging.JobState
 	}{
-		{"Pending", string(messaging.SubmittedState)},
-		{"Running", string(messaging.RunningState)},
-		{"Succeeded", string(messaging.SucceededState)},
-		{"Failed", string(messaging.FailedState)},
-		{"Unknown", string(messaging.SubmittedState)},
-		{"", string(messaging.SubmittedState)},
+		{"Pending", messaging.SubmittedState},
+		{"Running", messaging.RunningState},
+		{"Succeeded", messaging.SucceededState},
+		{"Failed", messaging.FailedState},
+		{"Unknown", messaging.SubmittedState},
+		{"", messaging.SubmittedState},
 	}
 
 	for _, tt := range tests {
@@ -76,7 +76,7 @@ func TestMapPodPhaseToStatus(t *testing.T) {
 // produces, and per-method errors can be injected to exercise failure paths.
 type fakeReconcilerDB struct {
 	operators []db.Operator
-	statuses  map[string]string // externalID -> latest status
+	statuses  map[string]messaging.JobState // externalID -> latest status
 
 	// Injected errors (nil by default).
 	listErr   error
@@ -122,7 +122,7 @@ func (f *fakeReconcilerDB) ClaimAndReconcile(_ context.Context, _ string, _ time
 	return fn(nil, f.claimOp)
 }
 
-func (f *fakeReconcilerDB) GetLatestStatusByExternalID(_ context.Context, _ *sqlx.Tx, externalID string) (string, error) {
+func (f *fakeReconcilerDB) GetLatestStatusByExternalID(_ context.Context, _ *sqlx.Tx, externalID string) (messaging.JobState, error) {
 	if f.statusErr != nil {
 		return "", f.statusErr
 	}
@@ -205,13 +205,13 @@ func TestReconcileAnalysis(t *testing.T) {
 	tests := []struct {
 		name        string
 		pod         reporting.PodInfo
-		priorStatus string // optional; injected via statuses map
+		priorStatus messaging.JobState // optional; injected via statuses map
 		hasPrior    bool
 		statusErr   error
 		insertErr   error
 		wantInserts int
-		wantStatus  string // only checked when wantInserts == 1
-		wantErrIs   error  // expected errors.Is match; nil means no error
+		wantStatus  messaging.JobState // only checked when wantInserts == 1
+		wantErrIs   error              // expected errors.Is match; nil means no error
 	}{
 		{
 			name: "skips pod without analysis-id",
@@ -244,10 +244,10 @@ func TestReconcileAnalysis(t *testing.T) {
 				MetaInfo: reporting.MetaInfo{AnalysisID: "an-1", ExternalID: "ext-1"},
 				Phase:    "Running",
 			},
-			priorStatus: string(messaging.SubmittedState),
+			priorStatus: messaging.SubmittedState,
 			hasPrior:    true,
 			wantInserts: 1,
-			wantStatus:  string(messaging.RunningState),
+			wantStatus:  messaging.RunningState,
 		},
 		{
 			name: "no-op when cluster matches DB",
@@ -255,7 +255,7 @@ func TestReconcileAnalysis(t *testing.T) {
 				MetaInfo: reporting.MetaInfo{AnalysisID: "an-1", ExternalID: "ext-1"},
 				Phase:    "Running",
 			},
-			priorStatus: string(messaging.RunningState),
+			priorStatus: messaging.RunningState,
 			hasPrior:    true,
 			wantInserts: 0,
 		},
@@ -266,10 +266,10 @@ func TestReconcileAnalysis(t *testing.T) {
 				Phase:    "Failed",
 				Message:  "pod OOMKilled",
 			},
-			priorStatus: string(messaging.RunningState),
+			priorStatus: messaging.RunningState,
 			hasPrior:    true,
 			wantInserts: 1,
-			wantStatus:  string(messaging.FailedState),
+			wantStatus:  messaging.FailedState,
 		},
 		{
 			name: "propagates non-ErrNoRows status lookup error",
@@ -286,7 +286,7 @@ func TestReconcileAnalysis(t *testing.T) {
 				MetaInfo: reporting.MetaInfo{AnalysisID: "an-1", ExternalID: "ext-1"},
 				Phase:    "Running",
 			},
-			priorStatus: string(messaging.SubmittedState),
+			priorStatus: messaging.SubmittedState,
 			hasPrior:    true,
 			insertErr:   errors.New("insert failed"),
 			wantErrIs:   errors.New("insert failed"),
@@ -296,7 +296,7 @@ func TestReconcileAnalysis(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := &fakeReconcilerDB{
-				statuses:  map[string]string{},
+				statuses:  map[string]messaging.JobState{},
 				statusErr: tt.statusErr,
 				insertErr: tt.insertErr,
 			}
@@ -327,21 +327,21 @@ func TestRecordStatusUpdate(t *testing.T) {
 	tests := []struct {
 		name        string
 		externalID  string
-		status      string
+		status      messaging.JobState
 		message     string
 		wantMessage string
 	}{
 		{
 			name:        "empty message gets default formatting",
 			externalID:  "ext-1",
-			status:      string(messaging.RunningState),
+			status:      messaging.RunningState,
 			message:     "",
 			wantMessage: "Status changed to Running",
 		},
 		{
 			name:        "explicit message is preserved verbatim",
 			externalID:  "ext-2",
-			status:      string(messaging.FailedState),
+			status:      messaging.FailedState,
 			message:     "container OOMKilled",
 			wantMessage: "container OOMKilled",
 		},
@@ -410,9 +410,9 @@ func TestReconcileNext(t *testing.T) {
 		srv := newListingServer(t, info)
 
 		fake := &fakeReconcilerDB{
-			statuses: map[string]string{
-				"ext-1": string(messaging.SubmittedState), // transition Submitted -> Running
-				"ext-2": string(messaging.RunningState),   // transition Running -> Failed
+			statuses: map[string]messaging.JobState{
+				"ext-1": messaging.SubmittedState, // transition Submitted -> Running
+				"ext-2": messaging.RunningState,   // transition Running -> Failed
 			},
 			claimOp: &db.Operator{Name: "op-a", URL: srv.URL},
 		}
@@ -427,12 +427,12 @@ func TestReconcileNext(t *testing.T) {
 		assert.Equal(t, 1, fake.claimHits)
 		require.Len(t, fake.inserts, 2, "only labeled pods with status changes should insert")
 
-		byExternal := map[string]string{}
+		byExternal := map[string]messaging.JobState{}
 		for _, ins := range fake.inserts {
 			byExternal[ins.ExternalID] = ins.Status
 		}
-		assert.Equal(t, string(messaging.RunningState), byExternal["ext-1"])
-		assert.Equal(t, string(messaging.FailedState), byExternal["ext-2"])
+		assert.Equal(t, messaging.RunningState, byExternal["ext-1"])
+		assert.Equal(t, messaging.FailedState, byExternal["ext-2"])
 	})
 
 	t.Run("returns descriptive error when operator is not in scheduler", func(t *testing.T) {

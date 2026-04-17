@@ -422,22 +422,22 @@ func (r *Reconciler) reconcileAnalysis(ctx context.Context, tx *sqlx.Tx, pod rep
 	return nil
 }
 
-func mapPodPhaseToStatus(phase string) string {
+func mapPodPhaseToStatus(phase string) messaging.JobState {
 	switch phase {
 	case "Pending":
-		return string(messaging.SubmittedState)
+		return messaging.SubmittedState
 	case "Running":
-		return string(messaging.RunningState)
+		return messaging.RunningState
 	case "Succeeded":
-		return string(messaging.SucceededState)
+		return messaging.SucceededState
 	case "Failed":
-		return string(messaging.FailedState)
+		return messaging.FailedState
 	default:
-		return string(messaging.SubmittedState)
+		return messaging.SubmittedState
 	}
 }
 
-func (r *Reconciler) recordStatusUpdate(ctx context.Context, tx *sqlx.Tx, externalID, status, message string) error {
+func (r *Reconciler) recordStatusUpdate(ctx context.Context, tx *sqlx.Tx, externalID string, status messaging.JobState, message string) error {
 	if message == "" {
 		message = fmt.Sprintf("Status changed to %s", status)
 	}

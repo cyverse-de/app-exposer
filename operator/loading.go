@@ -44,19 +44,23 @@ type waitingPageData struct {
 	RefreshSeconds int
 }
 
-// Stage constants for the loading page status response.
+// Stage names one of the discrete phases a VICE analysis passes
+// through between submit and ready. Typed so the compiler flags typos
+// in comparisons against the StageX constants below.
+type Stage string
+
 const (
-	StageDeploying   = "deploying"
-	StageStarting    = "starting"
-	StageAlmostReady = "almost-ready"
-	StageReady       = "ready"
-	StageError       = "error"
+	StageDeploying   Stage = "deploying"
+	StageStarting    Stage = "starting"
+	StageAlmostReady Stage = "almost-ready"
+	StageReady       Stage = "ready"
+	StageError       Stage = "error"
 )
 
 // LoadingStatusResponse is the JSON response for the loading page status endpoint.
 type LoadingStatusResponse struct {
 	Ready bool             `json:"ready"`
-	Stage string           `json:"stage"`
+	Stage Stage            `json:"stage"`
 	Error string           `json:"error"`
 	Pods  []LoadingPodInfo `json:"pods"`
 }
@@ -87,8 +91,8 @@ type loadingPageData struct {
 }
 
 // computeStage determines the loading stage from pod state and resource readiness.
-// Returns the stage string and an error message (empty if no error).
-func computeStage(pods []apiv1.Pod, depReady, svcExists bool) (string, string) {
+// Returns the stage and an error message (empty if no error).
+func computeStage(pods []apiv1.Pod, depReady, svcExists bool) (Stage, string) {
 	if len(pods) == 0 {
 		return StageDeploying, ""
 	}
