@@ -65,59 +65,80 @@ type Operator struct {
 	userSuffix          string              // Domain suffix for usernames (e.g. "@iplantcollaborative.org").
 }
 
-// NewOperator creates a new Operator. Panics if required dependencies are nil
-// or invalid, since these indicate programmer error in wiring.
-func NewOperator(
-	clientset kubernetes.Interface,
-	gatewayClient gatewayclient.GatewayV1Interface,
-	namespace string,
-	gatewayNamespace string,
-	gatewayName string,
-	gpuVendor GPUVendor,
-	capacityCalc *CapacityCalculator,
-	imageCache *ImageCacheManager,
-	loadingServiceName string,
-	loadingServicePort int32,
-	loadingTimeoutMs int64,
-	baseDomain string,
-	clusterConfigSecret string,
-	egressConfig NetworkPolicyConfig,
-	userSuffix string,
-) *Operator {
-	if clientset == nil {
-		panic("operator: clientset must not be nil")
-	}
-	if gatewayClient == nil {
-		panic("operator: gatewayClient must not be nil")
-	}
-	if namespace == "" {
-		panic("operator: namespace must not be empty")
-	}
-	if capacityCalc == nil {
-		panic("operator: capacityCalc must not be nil")
-	}
-	if imageCache == nil {
-		panic("operator: imageCache must not be nil")
-	}
+// OperatorOptions aggregates everything NewOperator needs. Held as a
+// struct so new fields don't churn every caller, and so Validate()
+// centralizes the required-field checks that were previously open-coded
+// panics inside NewOperator.
+type OperatorOptions struct {
+	Clientset           kubernetes.Interface
+	GatewayClient       gatewayclient.GatewayV1Interface
+	Namespace           string
+	GatewayNamespace    string
+	GatewayName         string
+	GPUVendor           GPUVendor
+	CapacityCalc        *CapacityCalculator
+	ImageCache          *ImageCacheManager
+	LoadingServiceName  string
+	LoadingServicePort  int32
+	LoadingTimeoutMs    int64
+	BaseDomain          string
+	ClusterConfigSecret string              // Name of the Secret holding cluster config for vice-proxy envFrom.
+	EgressConfig        NetworkPolicyConfig // Egress policy config for per-analysis policies.
+	UserSuffix          string              // Domain suffix for usernames (e.g. "@iplantcollaborative.org").
+}
 
-	return &Operator{
-		clientset:           clientset,
-		gatewayClient:       gatewayClient,
-		namespace:           namespace,
-		gatewayNamespace:    gatewayNamespace,
-		gatewayName:         gatewayName,
-		gpuVendor:           gpuVendor,
-		capacityCalc:        capacityCalc,
-		imageCache:          imageCache,
-		loadingServiceName:  loadingServiceName,
-		loadingServicePort:  loadingServicePort,
-		loadingTimeoutMs:    loadingTimeoutMs,
-		baseDomain:          baseDomain,
-		clusterConfigSecret: clusterConfigSecret,
-		egressConfig:        egressConfig,
-		httpClient:          noRedirectHTTPClient,
-		userSuffix:          userSuffix,
+// Validate confirms the wiring-critical fields are present. The caller
+// (cmd/vice-operator/main.go) is expected to log.Fatal on error: these
+// failures indicate a broken startup config, not a recoverable runtime
+// condition. Delegates to EgressConfig.Validate for egress-specific
+// checks so NetworkPolicyConfig remains the single source of truth for
+// its own invariants.
+func (o OperatorOptions) Validate() error {
+	if o.Clientset == nil {
+		return fmt.Errorf("operator: Clientset must not be nil")
 	}
+	if o.GatewayClient == nil {
+		return fmt.Errorf("operator: GatewayClient must not be nil")
+	}
+	if o.Namespace == "" {
+		return fmt.Errorf("operator: Namespace must not be empty")
+	}
+	if o.CapacityCalc == nil {
+		return fmt.Errorf("operator: CapacityCalc must not be nil")
+	}
+	if o.ImageCache == nil {
+		return fmt.Errorf("operator: ImageCache must not be nil")
+	}
+	if err := o.EgressConfig.Validate(); err != nil {
+		return fmt.Errorf("operator: EgressConfig: %w", err)
+	}
+	return nil
+}
+
+// NewOperator creates a new Operator. Returns an error if opts fails
+// validation so the caller can surface a clear startup failure.
+func NewOperator(opts OperatorOptions) (*Operator, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, err
+	}
+	return &Operator{
+		clientset:           opts.Clientset,
+		gatewayClient:       opts.GatewayClient,
+		namespace:           opts.Namespace,
+		gatewayNamespace:    opts.GatewayNamespace,
+		gatewayName:         opts.GatewayName,
+		gpuVendor:           opts.GPUVendor,
+		capacityCalc:        opts.CapacityCalc,
+		imageCache:          opts.ImageCache,
+		loadingServiceName:  opts.LoadingServiceName,
+		loadingServicePort:  opts.LoadingServicePort,
+		loadingTimeoutMs:    opts.LoadingTimeoutMs,
+		baseDomain:          opts.BaseDomain,
+		clusterConfigSecret: opts.ClusterConfigSecret,
+		egressConfig:        opts.EgressConfig,
+		httpClient:          noRedirectHTTPClient,
+		userSuffix:          opts.UserSuffix,
+	}, nil
 }
 
 // getAccessURL contacts the vice-proxy sidecar through its in-cluster Service

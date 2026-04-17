@@ -425,8 +425,26 @@ func main() {
 
 	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
 	imageCache := operator.NewImageCacheManager(clientset, namespace, imagePullSecret)
-	op := operator.NewOperator(clientset, gwClient, namespace, gatewayNamespace, gatewayName, gpuVendor, capacityCalc, imageCache,
-		loadingServiceName, int32(loadingServicePort), loadingTimeoutMs, baseDomain, clusterConfigSecret, egressConfig, userSuffix)
+	op, err := operator.NewOperator(operator.OperatorOptions{
+		Clientset:           clientset,
+		GatewayClient:       gwClient,
+		Namespace:           namespace,
+		GatewayNamespace:    gatewayNamespace,
+		GatewayName:         gatewayName,
+		GPUVendor:           gpuVendor,
+		CapacityCalc:        capacityCalc,
+		ImageCache:          imageCache,
+		LoadingServiceName:  loadingServiceName,
+		LoadingServicePort:  int32(loadingServicePort),
+		LoadingTimeoutMs:    loadingTimeoutMs,
+		BaseDomain:          baseDomain,
+		ClusterConfigSecret: clusterConfigSecret,
+		EgressConfig:        egressConfig,
+		UserSuffix:          userSuffix,
+	})
+	if err != nil {
+		log.Fatalf("failed to construct operator: %v", err)
+	}
 
 	// Set up OIDC JWT verification when API auth is enabled.
 	var verifier *oidc.IDTokenVerifier

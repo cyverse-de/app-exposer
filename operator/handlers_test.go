@@ -70,8 +70,78 @@ func newTestOperator(t *testing.T, maxAnalyses int, vendor ...GPUVendor) (*Opera
 	gwClientset := gatewayfake.NewSimpleClientset()
 	calc := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
 	cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
-	op := NewOperator(clientset, gwClientset.GatewayV1(), "vice-apps", "vice-apps", "vice", gpuVendor, calc, cache, "vice-operator-loading", 80, 600000, "", "cluster-config-secret", NetworkPolicyConfig{}, constants.DefaultUserSuffix)
+	op, err := NewOperator(OperatorOptions{
+		Clientset:           clientset,
+		GatewayClient:       gwClientset.GatewayV1(),
+		Namespace:           "vice-apps",
+		GatewayNamespace:    "vice-apps",
+		GatewayName:         "vice",
+		GPUVendor:           gpuVendor,
+		CapacityCalc:        calc,
+		ImageCache:          cache,
+		LoadingServiceName:  "vice-operator-loading",
+		LoadingServicePort:  80,
+		LoadingTimeoutMs:    600000,
+		ClusterConfigSecret: "cluster-config-secret",
+		UserSuffix:          constants.DefaultUserSuffix,
+	})
+	require.NoError(t, err)
 	return op, clientset, gwClientset
+}
+
+func TestOperatorOptionsValidate(t *testing.T) {
+	// valid is the minimum set of fields that satisfies Validate; each
+	// row below mutates a single field so the assertion can isolate
+	// which required-field check failed.
+	valid := func() OperatorOptions {
+		clientset := fake.NewSimpleClientset()
+		gw := gatewayfake.NewSimpleClientset()
+		return OperatorOptions{
+			Clientset:     clientset,
+			GatewayClient: gw.GatewayV1(),
+			Namespace:     "vice-apps",
+			CapacityCalc:  &CapacityCalculator{},
+			ImageCache:    &ImageCacheManager{},
+		}
+	}
+
+	tests := []struct {
+		name        string
+		mutate      func(*OperatorOptions)
+		wantErr     bool
+		wantErrPart string
+	}{
+		{name: "happy path", mutate: func(*OperatorOptions) {}, wantErr: false},
+		{name: "missing Clientset", mutate: func(o *OperatorOptions) { o.Clientset = nil }, wantErr: true, wantErrPart: "Clientset"},
+		{name: "missing GatewayClient", mutate: func(o *OperatorOptions) { o.GatewayClient = nil }, wantErr: true, wantErrPart: "GatewayClient"},
+		{name: "empty Namespace", mutate: func(o *OperatorOptions) { o.Namespace = "" }, wantErr: true, wantErrPart: "Namespace"},
+		{name: "missing CapacityCalc", mutate: func(o *OperatorOptions) { o.CapacityCalc = nil }, wantErr: true, wantErrPart: "CapacityCalc"},
+		{name: "missing ImageCache", mutate: func(o *OperatorOptions) { o.ImageCache = nil }, wantErr: true, wantErrPart: "ImageCache"},
+		{
+			name: "invalid EgressConfig surfaces inner error",
+			mutate: func(o *OperatorOptions) {
+				o.EgressConfig = NetworkPolicyConfig{PodExceptions: []map[string]string{{}}}
+			},
+			wantErr:     true,
+			wantErrPart: "EgressConfig",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := valid()
+			tt.mutate(&o)
+			err := o.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantErrPart != "" {
+					assert.Contains(t, err.Error(), tt.wantErrPart)
+				}
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
 }
 
 func TestAnalysisBundleValidate(t *testing.T) {
