@@ -195,7 +195,7 @@ func TestHandleStatus(t *testing.T) {
 
 	var resp StatusResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, analysisID, resp.AnalysisID)
+	assert.Equal(t, constants.AnalysisID(analysisID), resp.AnalysisID)
 	assert.Len(t, resp.Deployments, 1)
 	assert.Len(t, resp.Pods, 1)
 	assert.Len(t, resp.Services, 1)

@@ -141,7 +141,7 @@ func checkAnalysisIDLabel(kind string, labels map[string]string, wantID Analysis
 // operator can re-import it — same pattern as UpdatePermissionsRequest
 // and URLReadyResponse.
 type StatusResponse struct {
-	AnalysisID  string             `json:"analysisID"`
+	AnalysisID  AnalysisID         `json:"analysisID"`
 	Deployments []StatusDeployment `json:"deployments"`
 	Pods        []StatusPod        `json:"pods"`
 	Services    []string           `json:"services"`

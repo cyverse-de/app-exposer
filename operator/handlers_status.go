@@ -48,7 +48,7 @@ func (o *Operator) HandleStatus(c echo.Context) error {
 	log.Debugf("status check for analysis %s", analysisID)
 
 	opts := analysisLabelSelector(analysisID)
-	resp := StatusResponse{AnalysisID: analysisID}
+	resp := StatusResponse{AnalysisID: constants.AnalysisID(analysisID)}
 
 	// Deployments
 	deps, err := o.clientset.AppsV1().Deployments(o.namespace).List(ctx, opts)
