@@ -209,15 +209,6 @@ definitions:
       updated:
         type: integer
     type: object
-  operator.StatusDeployment:
-    properties:
-      desiredReplicas:
-        type: integer
-      name:
-        type: string
-      readyReplicas:
-        type: integer
-    type: object
   operator.StatusPod:
     properties:
       name:
@@ -233,11 +224,11 @@ definitions:
         type: string
       deployments:
         items:
-          $ref: '#/definitions/operator.StatusDeployment'
+          $ref: '#/definitions/operatorclient.StatusDeployment'
         type: array
       pods:
         items:
-          $ref: '#/definitions/operator.StatusPod'
+          $ref: '#/definitions/operatorclient.StatusPod'
         type: array
       routes:
         items:
@@ -334,6 +325,24 @@ definitions:
     properties:
       sessions_invalidated:
         type: integer
+    type: object
+  operatorclient.StatusDeployment:
+    properties:
+      desiredReplicas:
+        type: integer
+      name:
+        type: string
+      readyReplicas:
+        type: integer
+    type: object
+  operatorclient.StatusPod:
+    properties:
+      name:
+        type: string
+      phase:
+        type: string
+      ready:
+        type: boolean
     type: object
   operatorclient.URLReadyResponse:
     properties:

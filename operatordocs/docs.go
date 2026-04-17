@@ -1196,20 +1196,6 @@ const docTemplate = `{
                 }
             }
         },
-        "operator.StatusDeployment": {
-            "type": "object",
-            "properties": {
-                "desiredReplicas": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "readyReplicas": {
-                    "type": "integer"
-                }
-            }
-        },
         "operator.StatusPod": {
             "type": "object",
             "properties": {
@@ -1233,13 +1219,13 @@ const docTemplate = `{
                 "deployments": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/operator.StatusDeployment"
+                        "$ref": "#/definitions/operatorclient.StatusDeployment"
                     }
                 },
                 "pods": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/operator.StatusPod"
+                        "$ref": "#/definitions/operatorclient.StatusPod"
                     }
                 },
                 "routes": {
@@ -1383,6 +1369,34 @@ const docTemplate = `{
             "properties": {
                 "sessions_invalidated": {
                     "type": "integer"
+                }
+            }
+        },
+        "operatorclient.StatusDeployment": {
+            "type": "object",
+            "properties": {
+                "desiredReplicas": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "readyReplicas": {
+                    "type": "integer"
+                }
+            }
+        },
+        "operatorclient.StatusPod": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "phase": {
+                    "type": "string"
+                },
+                "ready": {
+                    "type": "boolean"
                 }
             }
         },
