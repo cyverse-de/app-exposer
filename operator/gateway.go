@@ -3,7 +3,6 @@ package operator
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -99,7 +98,13 @@ func EnsureCORSMiddleware(ctx context.Context, clientset kubernetes.Interface, n
 
 	log.Debugf("ensuring CORS middleware %s/%s exists", namespace, middlewareName)
 
-	// Check if the middleware already exists via the REST client.
+	// Traefik's Middleware is a CRD defined by Traefik, not a core K8s
+	// type — there's no typed client in client-go for it, and pulling in
+	// Traefik's Go module for a single resource is dependency bloat.
+	// Touch it through the clientset's REST client with an explicit
+	// AbsPath instead. The error shape is still *apierrors.StatusError,
+	// so apierrors.IsNotFound handles it the same as the typed-client
+	// sites elsewhere in this file.
 	restClient := clientset.CoreV1().RESTClient()
 	getErr := restClient.
 		Get().
@@ -112,9 +117,7 @@ func EnsureCORSMiddleware(ctx context.Context, clientset kubernetes.Interface, n
 		return nil
 	}
 
-	// Only proceed with creation if the error is a genuine "not found".
-	var statusErr *apierrors.StatusError
-	if !errors.As(getErr, &statusErr) || statusErr.ErrStatus.Reason != metav1.StatusReasonNotFound {
+	if !apierrors.IsNotFound(getErr) {
 		return fmt.Errorf("checking for existing CORS middleware %s/%s: %w", namespace, middlewareName, getErr)
 	}
 
