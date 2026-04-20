@@ -3,6 +3,18 @@ run:
   timeout: 5m
 linters:
   settings:
+    errcheck:
+      # Flag `_ = someFunc()` assignments where the discarded value is an
+      # error. The default errcheck behavior treats explicit `_ =` as a
+      # deliberate suppression, which lets error-swallowing patterns like
+      # `defer func() { _ = resp.Body.Close() }()` slide past the lint.
+      # Turning this on forces the author to either handle the error, route
+      # it through common.LogClose / common.CloseBody (defined in
+      # common/closers.go), or annotate with //nolint:errcheck and a
+      # reason. Enabled in response to PR #117 review feedback — see the
+      # corresponding error-swallow sweep commits for the replacement
+      # patterns established across the codebase.
+      check-blank: true
     staticcheck:
       checks:
         - all
@@ -13,3 +25,13 @@ linters:
         - -ST1020
         - -ST1021
         - -ST1022
+  exclusions:
+    # Test files write literal bodies with io.WriteString /
+    # ResponseWriter.Write / json.Marshal over test fixtures; close
+    # test-DB handles in teardown. These are conventional httptest
+    # idioms where a write error means the test harness itself is
+    # broken — not a production code path worth guarding.
+    rules:
+      - path: _test\.go$
+        linters:
+          - errcheck
