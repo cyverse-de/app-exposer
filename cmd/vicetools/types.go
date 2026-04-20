@@ -72,6 +72,7 @@ type ContainerSettingsDef struct {
 	Devices          []DeviceDef       `json:"devices,omitempty"`
 	Volumes          []VolumeDef       `json:"volumes,omitempty"`
 	VolumesFrom      []VolumesFromDef  `json:"volumes_from,omitempty"`
+	GPUModels        []string          `json:"gpu_models,omitempty"`
 	ProxySettings    *ProxySettingsDef `json:"proxy_settings,omitempty"`
 }
 

@@ -130,6 +130,7 @@ func ConvertToJob(export *VICEAppExport, params LaunchParams) (*model.Job, error
 		Volumes:         volumes,
 		Devices:         devices,
 		VolumesFrom:     volumesFrom,
+		GPUModels:       cs.GPUModels,
 		InteractiveApps: interactiveApps,
 		CPUShares:       cs.CPUShares,
 		MemoryLimit:     cs.MemoryLimit,

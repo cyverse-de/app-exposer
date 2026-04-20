@@ -120,6 +120,18 @@ func importAppTx(ctx context.Context, tx *sqlx.Tx, export *VICEAppExport) (*Impo
 			}
 		}
 
+		// Insert container_gpu_models. Matches migration 000046's join-table
+		// shape: one row per (container_settings_id, gpu_model) pair.
+		for _, m := range cs.GPUModels {
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO container_gpu_models (container_settings_id, gpu_model)
+				VALUES ($1, $2)
+			`, settingsID, m)
+			if err != nil {
+				return nil, fmt.Errorf("inserting container_gpu_models: %w", err)
+			}
+		}
+
 		// Insert container_volumes_from (with data_containers)
 		for _, vf := range cs.VolumesFrom {
 			dcImageID, err := findOrCreateContainerImage(ctx, tx, vf.Name, vf.Tag, vf.URL)

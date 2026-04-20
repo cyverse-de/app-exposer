@@ -167,6 +167,12 @@ func ExportApp(ctx context.Context, db *sqlx.DB, appID string) (*VICEAppExport, 
 		return nil, fmt.Errorf("querying container_volumes_from: %w", err)
 	}
 
+	// Get container_gpu_models
+	gpuModels, err := getContainerGPUModels(ctx, db, settings.ID)
+	if err != nil {
+		return nil, fmt.Errorf("querying container_gpu_models: %w", err)
+	}
+
 	// 9. Get interactive_apps_proxy_settings
 	var proxySettings *ProxySettingsDef
 	if settings.ProxySettingsID.Valid {
@@ -244,6 +250,7 @@ func ExportApp(ctx context.Context, db *sqlx.DB, appID string) (*VICEAppExport, 
 				Devices:          devices,
 				Volumes:          volumes,
 				VolumesFrom:      volumesFrom,
+				GPUModels:        gpuModels,
 				ProxySettings:    proxySettings,
 			},
 		},
@@ -355,6 +362,29 @@ func getContainerVolumes(ctx context.Context, db *sqlx.DB, settingsID string) ([
 		})
 	}
 	return volumes, rows.Err()
+}
+
+func getContainerGPUModels(ctx context.Context, db *sqlx.DB, settingsID string) ([]string, error) {
+	rows, err := db.QueryxContext(ctx, `
+		SELECT gpu_model
+		  FROM container_gpu_models
+		 WHERE container_settings_id = $1
+		 ORDER BY gpu_model ASC
+	`, settingsID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var models []string
+	for rows.Next() {
+		var m string
+		if err := rows.Scan(&m); err != nil {
+			return nil, err
+		}
+		models = append(models, m)
+	}
+	return models, rows.Err()
 }
 
 func getContainerVolumesFrom(ctx context.Context, db *sqlx.DB, settingsID string) ([]VolumesFromDef, error) {
