@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,7 +15,9 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	clienttesting "k8s.io/client-go/testing"
 )
 
 func TestSlugifyImage(t *testing.T) {
@@ -259,6 +262,74 @@ func TestRemoveCachedImage(t *testing.T) {
 	}
 }
 
+// TestRefreshCachedImage exercises all four paths:
+//  1. Invalid image ref → validation error, no API calls.
+//  2. Missing DaemonSet → wrapped NotFound error.
+//  3. Update failure → wrapped error from client.Update.
+//  4. Happy path → the pod template carries a fresh restartedAt annotation.
+func TestRefreshCachedImage(t *testing.T) {
+	const (
+		ns     = "vice-apps"
+		secret = "vice-image-pull-secret"
+		image  = "harbor.cyverse.org/de/vice-proxy:latest"
+	)
+	slug := slugifyImage(image)
+	dsName := dsNamePrefix + slug
+
+	t.Run("invalid image ref rejected", func(t *testing.T) {
+		cs := fake.NewSimpleClientset()
+		mgr := NewImageCacheManager(cs, ns, secret)
+
+		err := mgr.RefreshCachedImage(context.Background(), "bad image!")
+		require.Error(t, err)
+	})
+
+	t.Run("missing DaemonSet surfaces not-found", func(t *testing.T) {
+		cs := fake.NewSimpleClientset()
+		mgr := NewImageCacheManager(cs, ns, secret)
+
+		err := mgr.RefreshCachedImage(context.Background(), image)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no cache DaemonSet found")
+	})
+
+	t.Run("update failure is wrapped with DS name", func(t *testing.T) {
+		mgr := NewImageCacheManager(nil, ns, secret)
+		existing := mgr.buildCacheDaemonSet(image, slug)
+		cs := fake.NewSimpleClientset(existing)
+		mgr = NewImageCacheManager(cs, ns, secret)
+
+		// Inject an Update failure via the fake clientset's reactor chain.
+		cs.PrependReactor("update", "daemonsets", func(action clienttesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("injected update failure")
+		})
+
+		err := mgr.RefreshCachedImage(context.Background(), image)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "restarting cache DaemonSet")
+		assert.Contains(t, err.Error(), dsName)
+	})
+
+	t.Run("happy path stamps restartedAt annotation", func(t *testing.T) {
+		mgr := NewImageCacheManager(nil, ns, secret)
+		existing := mgr.buildCacheDaemonSet(image, slug)
+		// Clear any pre-existing template annotations so we can assert
+		// the restartedAt key is created fresh rather than overwritten.
+		existing.Spec.Template.Annotations = nil
+
+		cs := fake.NewSimpleClientset(existing)
+		mgr = NewImageCacheManager(cs, ns, secret)
+
+		err := mgr.RefreshCachedImage(context.Background(), image)
+		require.NoError(t, err)
+
+		updated, err := cs.AppsV1().DaemonSets(ns).Get(context.Background(), dsName, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.NotNil(t, updated.Spec.Template.Annotations)
+		assert.NotEmpty(t, updated.Spec.Template.Annotations["de.cyverse.org/restartedAt"])
+	})
+}
+
 func TestDeriveStatus(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -381,6 +452,88 @@ func TestHandleCacheImages(t *testing.T) {
 			err := op.HandleCacheImages(c)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantStatus, rec.Code)
+		})
+	}
+}
+
+// TestHandleRefreshCachedImages exercises the bulk refresh handler.
+// Cases mirror TestHandleCacheImages for parity:
+//  - all images refreshed → 200
+//  - empty list → 400
+//  - one image exists, one doesn't → 207 with the missing one's error in its result row
+//
+// The refresh path requires a pre-existing DaemonSet per image, so the
+// "successful refresh" case seeds one first via a direct EnsureImageCached
+// call to keep the test focused on handler behavior rather than on how
+// DaemonSets get created.
+func TestHandleRefreshCachedImages(t *testing.T) {
+	tests := []struct {
+		name       string
+		seed       []string // images to EnsureImageCached before invoking the handler
+		body       ImageCacheRequest
+		wantStatus int
+		wantOK     int // expected "ok" rows in the response
+		wantErr    int // expected "error" rows
+	}{
+		{
+			name:       "successful refresh returns 200",
+			seed:       []string{"nginx:latest"},
+			body:       ImageCacheRequest{Images: []string{"nginx:latest"}},
+			wantStatus: http.StatusOK,
+			wantOK:     1,
+			wantErr:    0,
+		},
+		{
+			name:       "empty list returns 400",
+			body:       ImageCacheRequest{Images: []string{}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "partial failure returns 207",
+			seed:       []string{"nginx:latest"}, // exists; the other doesn't
+			body:       ImageCacheRequest{Images: []string{"nginx:latest", "missing-image:v1"}},
+			wantStatus: http.StatusMultiStatus,
+			wantOK:     1,
+			wantErr:    1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, _, _ := newTestOperator(t, 10)
+
+			for _, img := range tt.seed {
+				require.NoError(t, op.imageCache.EnsureImageCached(context.Background(), img))
+			}
+
+			body, _ := json.Marshal(tt.body)
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodPost, "/image-cache/refresh", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			err := op.HandleRefreshCachedImages(c)
+			require.NoError(t, err) // handler writes the response directly
+			assert.Equal(t, tt.wantStatus, rec.Code)
+
+			if tt.wantStatus == http.StatusBadRequest {
+				return
+			}
+
+			var resp ImageCacheBulkResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+			var gotOK, gotErr int
+			for _, r := range resp.Results {
+				switch r.Status {
+				case "ok":
+					gotOK++
+				case "error":
+					gotErr++
+				}
+			}
+			assert.Equal(t, tt.wantOK, gotOK, "unexpected ok count")
+			assert.Equal(t, tt.wantErr, gotErr, "unexpected error count")
 		})
 	}
 }
