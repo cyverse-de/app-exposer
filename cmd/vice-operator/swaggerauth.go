@@ -46,15 +46,23 @@ func (c *SwaggerAuthConfig) Enabled() bool {
 
 // authURL returns the Keycloak authorization endpoint.
 // url.JoinPath handles any trailing slash on IssuerURL transparently.
+// A JoinPath error can only arise from a malformed IssuerURL, which is
+// validated at startup — if it somehow happens later we'd rather see
+// the empty-string fallout than panic in a hot request path.
 func (c *SwaggerAuthConfig) authURL() string {
-	u, _ := url.JoinPath(c.IssuerURL, "protocol", "openid-connect", "auth")
+	u, err := url.JoinPath(c.IssuerURL, "protocol", "openid-connect", "auth")
+	if err != nil {
+		log.Errorf("swaggerauth: joiningauth URL from %q: %v", c.IssuerURL, err)
+	}
 	return u
 }
 
-// tokenURL returns the Keycloak token endpoint.
-// url.JoinPath handles any trailing slash on IssuerURL transparently.
+// tokenURL returns the Keycloak token endpoint. Same caveat as authURL.
 func (c *SwaggerAuthConfig) tokenURL() string {
-	u, _ := url.JoinPath(c.IssuerURL, "protocol", "openid-connect", "token")
+	u, err := url.JoinPath(c.IssuerURL, "protocol", "openid-connect", "token")
+	if err != nil {
+		log.Errorf("swaggerauth: joiningtoken URL from %q: %v", c.IssuerURL, err)
+	}
 	return u
 }
 

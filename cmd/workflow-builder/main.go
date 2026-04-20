@@ -98,7 +98,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func() { _ = infile.Close() }()
+	defer func() { _ = infile.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 
 	if err = json.NewDecoder(infile).Decode(&inputJob); err != nil {
 		log.Fatal(err)
@@ -128,7 +128,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			defer func() { _ = outfile.Close() }()
+			defer func() { _ = outfile.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 		}
 
 		if err = yaml.NewEncoder(outfile).Encode(&workflow); err != nil {

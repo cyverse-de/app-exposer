@@ -12,7 +12,7 @@ import (
 
 // suffixUsername takes a possibly-already-suffixed username, strips any suffix, and adds the provided one, to ensure proper suffixing
 func suffixUsername(username, suffix string) string {
-	re, _ := regexp.Compile(`@.*$`)
+	re, _ := regexp.Compile(`@.*$`) //nolint:errcheck // pre-existing; hard-coded regex can't fail to compile
 	return fmt.Sprintf("%s@%s", re.ReplaceAllString(username, ""), strings.Trim(suffix, "@"))
 }
 

@@ -63,14 +63,16 @@ func main() {
 		return
 	}
 
+	// Writes to tabwriter are buffered in memory, so intermediate write
+	// errors are not practical; Flush below surfaces any real I/O failure.
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "ID\tNAME\tVERSION\tINTEGRATOR\tDESCRIPTION")
+	_, _ = fmt.Fprintln(w, "ID\tNAME\tVERSION\tINTEGRATOR\tDESCRIPTION") //nolint:errcheck // see comment above
 	for _, a := range apps {
 		desc := strings.Join(strings.Fields(a.Description), " ")
 		if len(desc) > 80 {
 			desc = desc[:77] + "..."
 		}
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", a.ID, a.Name, a.Version, a.IntegratorName, desc)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", a.ID, a.Name, a.Version, a.IntegratorName, desc) //nolint:errcheck // see comment above
 	}
 	if err := w.Flush(); err != nil {
 		log.Fatalf("flushing tabwriter: %v", err)

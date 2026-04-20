@@ -77,13 +77,13 @@ func (p *Permissions) GetPermissions(ctx context.Context, lookup *Lookup) (*Perm
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 
 	retval := &PermissionList{}
 	if err = json.Unmarshal(b, retval); err != nil {

@@ -87,7 +87,7 @@ func (j *JSLPublisher) postStatus(ctx context.Context, jobID, msg string, jobSta
 			u.String(),
 		)
 	}
-	defer func() { _ = response.Body.Close() }()
+	defer func() { _ = response.Body.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 	if response.StatusCode < 200 || response.StatusCode > 399 {
 		return errors.Wrapf(
 			err,

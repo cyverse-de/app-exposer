@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	defaultStorageCapacity, _ = resourcev1.ParseQuantity("5Gi")
+	defaultStorageCapacity, _ = resourcev1.ParseQuantity("5Gi") //nolint:errcheck // pre-existing; hard-coded literal can't fail to parse
 	defaultVolumeName         = "workdir"
 	statusRunning             = "running"
 )

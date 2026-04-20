@@ -46,7 +46,7 @@ func (i *Incluster) GetAccessURL(ctx context.Context, externalID constants.Exter
 	if err != nil {
 		return "", fmt.Errorf("contacting vice-proxy at %s: %w", endpoint, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return "", fmt.Errorf("vice-proxy at %s returned status %d", endpoint, resp.StatusCode)
@@ -77,7 +77,7 @@ func (i *Incluster) CheckAccessURL(ctx context.Context, accessURL string) error 
 	if err != nil {
 		return fmt.Errorf("checking access URL %s: %w", accessURL, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("access URL %s returned status %d", accessURL, resp.StatusCode)

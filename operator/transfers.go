@@ -263,7 +263,11 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 		}
 
 		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // inline close: defer inside a loop defers until function return, not loop iteration
+		// Inline close: a `defer` inside the loop would only fire at
+		// function return, leaking bodies for every iteration.
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Warnf("closing transfer-status response body: %v", closeErr)
+		}
 		if err != nil {
 			return fmt.Errorf("reading status response: %w", err)
 		}
