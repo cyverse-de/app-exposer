@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/labstack/echo/v4"
 )
 
@@ -285,7 +286,7 @@ func exchangeCode(ctx context.Context, cfg *SwaggerAuthConfig, code, redirectURI
 	if err != nil {
 		return nil, fmt.Errorf("POST to token endpoint: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

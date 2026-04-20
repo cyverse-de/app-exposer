@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -52,7 +53,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("connecting to database: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer common.LogClose("database", db)
 
 	var id string
 	if err := db.QueryRowContext(context.Background(), userByUsername, name).Scan(&id); err != nil {

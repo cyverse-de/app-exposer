@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
@@ -50,7 +51,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("connecting to database: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer common.LogClose("database", db)
 
 	var apps []viceApp
 	if err := db.SelectContext(context.Background(), &apps, listVICEAppsQuery); err != nil {

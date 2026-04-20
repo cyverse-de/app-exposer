@@ -1,7 +1,6 @@
 package common
 
 import (
-	"database/sql"
 	"io"
 	"net/http"
 )
@@ -25,12 +24,3 @@ func CloseBody(resp *http.Response) {
 	LogClose("response body", resp.Body)
 }
 
-// CloseRows closes a *sql.Rows and logs any error. Meant for
-// `defer common.CloseRows(rows)` in query-iteration paths where swallowing
-// a Close error obscures driver-level problems like broken connections.
-func CloseRows(rows *sql.Rows) {
-	if rows == nil {
-		return
-	}
-	LogClose("sql rows", rows)
-}

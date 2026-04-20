@@ -16,7 +16,7 @@ func ImportApp(ctx context.Context, db *sqlx.DB, export *VICEAppExport) (*Import
 	if err != nil {
 		return nil, fmt.Errorf("beginning transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() { _ = tx.Rollback() }() //nolint:errcheck // rollback-after-commit is a documented no-op; only the Commit error matters
 
 	result, err := importAppTx(ctx, tx, export)
 	if err != nil {

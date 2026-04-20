@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -287,7 +288,7 @@ func getContainerPorts(ctx context.Context, db *sqlx.DB, settingsID string) ([]P
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer common.LogClose("sql rows", rows)
 
 	var ports []PortDef
 	for rows.Next() {
@@ -317,7 +318,7 @@ func getContainerDevices(ctx context.Context, db *sqlx.DB, settingsID string) ([
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer common.LogClose("sql rows", rows)
 
 	var devices []DeviceDef
 	for rows.Next() {
@@ -345,7 +346,7 @@ func getContainerVolumes(ctx context.Context, db *sqlx.DB, settingsID string) ([
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer common.LogClose("sql rows", rows)
 
 	var volumes []VolumeDef
 	for rows.Next() {
@@ -374,7 +375,7 @@ func getContainerGPUModels(ctx context.Context, db *sqlx.DB, settingsID string) 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer common.LogClose("sql rows", rows)
 
 	var models []string
 	for rows.Next() {
@@ -399,7 +400,7 @@ func getContainerVolumesFrom(ctx context.Context, db *sqlx.DB, settingsID string
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer common.LogClose("sql rows", rows)
 
 	var vfs []VolumesFromDef
 	for rows.Next() {
@@ -464,7 +465,7 @@ func getParameterGroups(ctx context.Context, db *sqlx.DB, taskID string) ([]Para
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer common.LogClose("sql rows", rows)
 
 	var groups []ParameterGroupDef
 	for rows.Next() {
@@ -510,7 +511,7 @@ func getParameters(ctx context.Context, db *sqlx.DB, groupID string) ([]Paramete
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer common.LogClose("sql rows", rows)
 
 	var params []ParameterDef
 	for rows.Next() {
@@ -569,7 +570,7 @@ func getParameterValues(ctx context.Context, db *sqlx.DB, paramID string) ([]Par
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer common.LogClose("sql rows", rows)
 
 	var values []ParameterValueDef
 	for rows.Next() {
@@ -606,7 +607,7 @@ func getAppReferences(ctx context.Context, db *sqlx.DB, versionID string) ([]str
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
+	defer common.LogClose("sql rows", rows)
 
 	var refs []string
 	for rows.Next() {

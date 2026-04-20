@@ -11,6 +11,7 @@ import (
 	"os"
 
 	"github.com/cyverse-de/app-exposer/cmd/vicetools"
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v10"
 )
@@ -45,7 +46,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("opening job file: %v", err)
 		}
-		defer func() { _ = f.Close() }()
+		defer common.LogClose("input file", f)
 
 		job = &model.Job{}
 		if err := json.NewDecoder(f).Decode(job); err != nil {
@@ -67,7 +68,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("opening export file: %v", err)
 		}
-		defer func() { _ = f.Close() }()
+		defer common.LogClose("input file", f)
 
 		var export vicetools.VICEAppExport
 		if err := json.NewDecoder(f).Decode(&export); err != nil {
@@ -98,7 +99,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("posting to %s: %v", url, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

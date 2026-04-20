@@ -79,7 +79,7 @@ func runAdd(baseURLStr string, args []string) {
 	tlsSkip := fs.Bool("tls-skip-verify", false, "Skip TLS certificate verification")
 	priority := fs.Int("priority", 0, "Scheduling priority (lower = tried first, default 0)")
 	// ExitOnError means Parse calls os.Exit on failure; it never returns a non-nil error.
-	_ = fs.Parse(args)
+	_ = fs.Parse(args) //nolint:errcheck // see comment above
 
 	if *name == "" || *opURL == "" {
 		fmt.Fprintln(os.Stderr, "error: --name and --url are required")
@@ -108,7 +108,7 @@ func runList(baseURLStr string, args []string) {
 
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	// ExitOnError means Parse calls os.Exit on failure; it never returns a non-nil error.
-	_ = fs.Parse(args)
+	_ = fs.Parse(args) //nolint:errcheck // see comment above
 
 	client := NewOperatorClient(u, http.DefaultClient)
 	ops, err := client.ListOperators(context.Background())
@@ -127,7 +127,9 @@ func runList(baseURLStr string, args []string) {
 	for _, op := range ops {
 		fmt.Fprintf(w, "%s\t%s\t%d\t%v\n", op.Name, op.URL, op.Priority, op.TLSSkipVerify) //nolint:errcheck
 	}
-	_ = w.Flush()
+	if err := w.Flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: flushing tabwriter: %v\n", err)
+	}
 }
 
 func runDelete(baseURLStr string, args []string) {
@@ -135,7 +137,7 @@ func runDelete(baseURLStr string, args []string) {
 
 	fs := flag.NewFlagSet("delete", flag.ExitOnError)
 	// ExitOnError means Parse calls os.Exit on failure; it never returns a non-nil error.
-	_ = fs.Parse(args)
+	_ = fs.Parse(args) //nolint:errcheck // see comment above
 
 	if fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "usage: vice-operator-tool delete <operator-name>")

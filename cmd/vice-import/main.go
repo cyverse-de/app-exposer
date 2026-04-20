@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/cyverse-de/app-exposer/cmd/vicetools"
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
@@ -30,7 +31,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("opening file: %v", err)
 	}
-	defer func() { _ = f.Close() }()
+	defer common.LogClose("input file", f)
 
 	var export vicetools.VICEAppExport
 	if err := json.NewDecoder(f).Decode(&export); err != nil {
@@ -41,7 +42,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("connecting to database: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer common.LogClose("database", db)
 
 	result, err := vicetools.ImportApp(context.Background(), db, &export)
 	if err != nil {
