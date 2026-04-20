@@ -20,6 +20,7 @@ import (
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/db"
+	"github.com/cyverse-de/app-exposer/httphandlers"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/app-exposer/natsconn"
@@ -113,6 +114,7 @@ func main() {
 		logLevel                             = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
 		batchExitHandlerImage                = flag.String("batch-exit-handler-image", "harbor.cyverse.org/de/batch-exit-handler:latest", "The image to use for the exitHandler in batch workflows")
 		clusterConfigSecret                  = flag.String("cluster-config-secret", "cluster-config-secret", "Name of a Secret to inject as env vars into the vice-proxy container via envFrom. Used to provide cluster-specific config for multi-cluster deployments.")
+		maxConcurrentLaunches                = flag.Int("max-concurrent-launches", httphandlers.DefaultMaxConcurrentLaunches, "Upper bound on in-flight VICE launches per app-exposer instance; bursts beyond this return 503 so clients can back off.")
 	)
 
 	var tracerCtx, cancel = context.WithCancel(context.Background())
@@ -381,6 +383,7 @@ func main() {
 		LocalStorageClass:       *localStorageClass,
 		ClusterConfigSecretName: *clusterConfigSecret,
 		BypassUsers:             bypassUsers,
+		MaxConcurrentLaunches:   *maxConcurrentLaunches,
 	}
 
 	// app is the base app-exposer functionality.

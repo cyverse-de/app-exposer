@@ -52,6 +52,7 @@ type ExposerAppInit struct {
 	GatewayClient           *gatewayclient.GatewayV1Client
 	batchadapter            *adapter.JEXAdapter
 	dbase                   *db.Database
+	MaxConcurrentLaunches   int
 	ImagePullSecretName     string
 	LocalStorageClass       string
 	ClusterConfigSecretName string
@@ -140,7 +141,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		clientset:  init.ClientSet,
 		router:     echo.New(),
 		dbase:      init.dbase,
-		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter, init.dbase),
+		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter, init.dbase, init.MaxConcurrentLaunches),
 	}
 
 	// Configure operator scheduler. Try config first for backward compatibility,

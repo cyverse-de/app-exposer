@@ -30,23 +30,40 @@ var log = common.Log
 type AnalysisLaunch model.Analysis
 
 // HTTPHandlers holds the dependencies for all app-exposer HTTP handlers.
+// launchSemaphore caps the number of in-flight launchAsync goroutines so
+// workshop-scale bursts can't exhaust memory, goroutine budget, or flood
+// downstream operators with simultaneous POSTs. Its capacity is set at
+// construction time from the --max-concurrent-launches flag.
 type HTTPHandlers struct {
-	incluster    *incluster.Incluster
-	apps         *apps.Apps
-	clientset    kubernetes.Interface
-	batchadapter *adapter.JEXAdapter
-	scheduler    *operatorclient.Scheduler
-	db           *db.Database
+	incluster       *incluster.Incluster
+	apps            *apps.Apps
+	clientset       kubernetes.Interface
+	batchadapter    *adapter.JEXAdapter
+	scheduler       *operatorclient.Scheduler
+	db              *db.Database
+	launchSemaphore chan struct{}
 }
 
+// DefaultMaxConcurrentLaunches bounds concurrent launchAsync goroutines per
+// app-exposer instance unless --max-concurrent-launches overrides it. Set
+// conservatively to contain workshop bursts without impacting steady-state
+// traffic.
+const DefaultMaxConcurrentLaunches = 50
+
 // New creates an HTTPHandlers with the provided dependencies injected.
-func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface, batchadapter *adapter.JEXAdapter, db *db.Database) *HTTPHandlers {
+// maxConcurrentLaunches caps in-flight launchAsync goroutines; pass 0 to
+// use DefaultMaxConcurrentLaunches.
+func New(incluster *incluster.Incluster, apps *apps.Apps, clientset kubernetes.Interface, batchadapter *adapter.JEXAdapter, db *db.Database, maxConcurrentLaunches int) *HTTPHandlers {
+	if maxConcurrentLaunches <= 0 {
+		maxConcurrentLaunches = DefaultMaxConcurrentLaunches
+	}
 	return &HTTPHandlers{
-		incluster:    incluster,
-		apps:         apps,
-		clientset:    clientset,
-		batchadapter: batchadapter,
-		db:           db,
+		incluster:       incluster,
+		apps:            apps,
+		clientset:       clientset,
+		batchadapter:    batchadapter,
+		db:              db,
+		launchSemaphore: make(chan struct{}, maxConcurrentLaunches),
 	}
 }
 

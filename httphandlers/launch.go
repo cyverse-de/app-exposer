@@ -78,9 +78,45 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	// Validation passed — accept the job and do the heavy lifting in the
 	// background. Returning early lets the caller commit its DB transaction,
 	// which makes the jobs row visible for SetOperatorName below.
-	go h.launchAsync(job)
+	//
+	// Gate the background goroutine on launchSemaphore so a workshop-scale
+	// burst can't spawn thousands of 2-minute-lifetime goroutines each
+	// holding a 30-second HTTP timeout on an operator. If the semaphore is
+	// full after a bounded wait, return 503 so the client can back off
+	// rather than silently queueing behind an unbounded timer.
+	release, ok := h.acquireLaunchSlot()
+	if !ok {
+		log.Warnf("launch semaphore saturated (cap=%d); returning 503 for analysis %s", cap(h.launchSemaphore), job.ID)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "too many launches in flight; retry shortly")
+	}
+	go func() {
+		defer release()
+		h.launchAsync(job)
+	}()
 
 	return c.NoContent(http.StatusOK)
+}
+
+// launchAcquireTimeoutForTest bounds how long LaunchAppHandler will wait
+// for a free launch slot before giving up and returning 503. Short enough
+// that a blocked client can back off, long enough to absorb brief bursts
+// without thrashing. A package-level `var` rather than a `const` so tests
+// can shrink it to keep wall-clock cost down without dynamic injection
+// plumbing; production code never writes to it.
+var launchAcquireTimeoutForTest = 5 * time.Second
+
+// acquireLaunchSlot reserves a slot in the launch semaphore, waiting up to
+// launchAcquireTimeoutForTest. On success, returns a release callback the
+// caller must invoke when its background goroutine finishes. On timeout,
+// returns (nil, false). Isolated from LaunchAppHandler so the gating logic
+// is directly testable without having to spin up a full validation pipeline.
+func (h *HTTPHandlers) acquireLaunchSlot() (release func(), ok bool) {
+	select {
+	case h.launchSemaphore <- struct{}{}:
+		return func() { <-h.launchSemaphore }, true
+	case <-time.After(launchAcquireTimeoutForTest):
+		return nil, false
+	}
 }
 
 // launchAsync performs the resource-intensive parts of a VICE launch in
