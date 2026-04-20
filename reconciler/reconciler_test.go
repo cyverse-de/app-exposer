@@ -42,7 +42,7 @@ func TestNewReconciler(t *testing.T) {
 	scheduler, err := operatorclient.NewScheduler(nil, nil)
 	require.NoError(t, err)
 
-	r := New(nil, nil, scheduler, nil, "")
+	r := New(&fakeReconcilerDB{}, nil, scheduler, nil)
 
 	require.NotNil(t, r)
 	// ip is populated by getLocalIP, which always returns a non-empty string.
@@ -79,6 +79,10 @@ type fakeReconcilerDB struct {
 	operators []db.Operator
 	statuses  map[constants.ExternalID]messaging.JobState // externalID -> latest status
 
+	// uri is what URI() returns. Default ("") exercises the
+	// LISTEN-disabled fast path in startListener.
+	uri string
+
 	// Injected errors (nil by default).
 	listErr   error
 	statusErr error // returned from GetLatestStatusByExternalID
@@ -95,6 +99,8 @@ type fakeReconcilerDB struct {
 	listOperatorsHits int
 	claimHits         int
 }
+
+func (f *fakeReconcilerDB) URI() string { return f.uri }
 
 func (f *fakeReconcilerDB) ListOperators(_ context.Context) ([]db.Operator, error) {
 	f.listOperatorsHits++
@@ -151,7 +157,7 @@ func newTestReconciler(t *testing.T, fake *fakeReconcilerDB) *Reconciler {
 	t.Helper()
 	sched, err := operatorclient.NewScheduler(nil, nil)
 	require.NoError(t, err)
-	return New(fake, nil, sched, nil, "")
+	return New(fake, nil, sched, nil)
 }
 
 func TestSyncOperators(t *testing.T) {
@@ -505,7 +511,7 @@ func TestStartListenerContextAlreadyCanceled(t *testing.T) {
 	// directly without plumbing an injectable listener factory, so we
 	// settle for verifying the channel is returned and no panic occurs.
 	// A real-world test would be an integration test against Postgres.
-	r := &Reconciler{dbURI: "postgres://nobody@127.0.0.1:1/nope"}
+	r := &Reconciler{db: &fakeReconcilerDB{uri: "postgres://nobody@127.0.0.1:1/nope"}}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 

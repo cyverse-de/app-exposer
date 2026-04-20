@@ -13,7 +13,6 @@ import (
 	"github.com/cyverse-de/app-exposer/instantlaunches"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/outcluster"
-	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf"
 	"github.com/nats-io/nats.go"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
@@ -37,7 +36,7 @@ type ExposerApp struct {
 	namespace       string
 	clientset       kubernetes.Interface
 	router          *echo.Echo
-	db              *sqlx.DB
+	dbase           *db.Database
 	instantlaunches *instantlaunches.App
 }
 
@@ -47,7 +46,6 @@ type ExposerAppInit struct {
 	ViceNamespace           string // The namespace containing the running VICE apps.
 	ViceProxyImage          string
 	ViceDomain              string
-	db                      *sqlx.DB
 	UserSuffix              string
 	IRODSZone               string
 	ClientSet               kubernetes.Interface
@@ -133,7 +131,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		TimeLimitExtensionSeconds:     timeLimitExtensionSeconds,
 	}
 
-	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, init.GatewayClient, apps)
+	incluster := incluster.New(inclusterInit, init.dbase.SQLX(), init.ClientSet, init.GatewayClient, apps)
 
 	app := &ExposerApp{
 		outcluster: outcluster.New(init.ClientSet, init.GatewayClient, deNamespace, init.Namespace, init.ViceDomain),
@@ -141,7 +139,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		namespace:  init.Namespace,
 		clientset:  init.ClientSet,
 		router:     echo.New(),
-		db:         init.db,
+		dbase:      init.dbase,
 		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter, init.dbase),
 	}
 
@@ -273,7 +271,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	ilgroup := app.router.Group("/instantlaunches")
 	ilgroup.Use(middleware.Logger())
-	app.instantlaunches = instantlaunches.New(app.db, ilgroup, ilInit)
+	app.instantlaunches = instantlaunches.New(app.dbase.SQLX(), ilgroup, ilInit)
 
 	return app
 }

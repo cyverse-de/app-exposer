@@ -31,4 +31,9 @@ type ReconcilerDB interface {
 
 	// InsertJobStatusUpdate appends a new row to job_status_updates.
 	InsertJobStatusUpdate(ctx context.Context, tx *sqlx.Tx, update *JobStatusUpdate) error
+
+	// URI returns the connection string used to open the database. The
+	// reconciler uses it to open a dedicated LISTEN connection; returning
+	// "" disables NOTIFY-driven syncs and falls back to periodic polling.
+	URI() string
 }

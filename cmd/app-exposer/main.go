@@ -322,8 +322,11 @@ func main() {
 	go a.Run()
 	defer a.Finish()
 
-	// Set up the database abstraction needed for batch functionality.
-	dbase := db.New(dbconn)
+	// Set up the database abstraction needed for batch functionality. dbase
+	// wraps the same connection as dbconn and also carries the URI so the
+	// reconciler can open a dedicated LISTEN connection without having the
+	// URI threaded separately.
+	dbase := db.New(dbconn, dbURI)
 
 	// Create millicores handler needed for batch functionality.
 	detector, err := millicores.New(dbase, *defaultMillicores)
@@ -368,7 +371,6 @@ func main() {
 		ViceNamespace:           *viceNamespace,
 		ViceProxyImage:          proxyImage,
 		ViceDomain:              c.String("vice.domain"),
-		db:                      dbconn,
 		UserSuffix:              *userSuffix,
 		IRODSZone:               zone,
 		ClientSet:               clientset,
@@ -412,7 +414,7 @@ func main() {
 	// Initialize and start the status reconciliation worker. The apps
 	// handle is passed so the reconciler can back-fill missing
 	// operator_name records on each cycle (see r.backfillOperatorName).
-	reconciler := reconciler.New(dbase, a, app.handlers.GetScheduler(), tokenSource, dbURI)
+	reconciler := reconciler.New(dbase, a, app.handlers.GetScheduler(), tokenSource)
 	go reconciler.Run(context.Background())
 
 	log.Printf("listening on port %d", *listenPort)

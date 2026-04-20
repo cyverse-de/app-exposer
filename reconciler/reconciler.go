@@ -31,26 +31,26 @@ type Reconciler struct {
 	apps        apps.OperatorNameLookup
 	scheduler   *operatorclient.Scheduler
 	tokenSource oauth2.TokenSource
-	dbURI       string
 	hostname    string
 	ip          string
 }
 
-// New creates a new Reconciler. The dbURI is used to establish a dedicated
-// LISTEN connection for receiving operator-change notifications from PostgreSQL.
-// The token source is passed through to the scheduler for authenticating
-// requests to operator instances. database and appsLookup are accepted as
-// narrow interfaces so tests can inject fakes; production passes
-// *db.Database and *apps.Apps. appsLookup may be nil — in that case the
-// per-pod operator_name back-fill in ReconcileNext is skipped.
-func New(database db.ReconcilerDB, appsLookup apps.OperatorNameLookup, scheduler *operatorclient.Scheduler, ts oauth2.TokenSource, dbURI string) *Reconciler {
+// New creates a new Reconciler. The database handle supplies both the pooled
+// SQL connection for reconciliation queries and (via ReconcilerDB.URI) the
+// connection string used to open a dedicated PostgreSQL LISTEN channel for
+// operator-change notifications; a URI of "" disables NOTIFY-driven syncs and
+// falls back to periodic polling. The token source is passed through to the
+// scheduler for authenticating requests to operator instances. database and
+// appsLookup are accepted as narrow interfaces so tests can inject fakes;
+// production passes *db.Database and *apps.Apps. appsLookup may be nil — in
+// that case the per-pod operator_name back-fill in ReconcileNext is skipped.
+func New(database db.ReconcilerDB, appsLookup apps.OperatorNameLookup, scheduler *operatorclient.Scheduler, ts oauth2.TokenSource) *Reconciler {
 	hostname, _ := os.Hostname()
 	return &Reconciler{
 		db:          database,
 		apps:        appsLookup,
 		scheduler:   scheduler,
 		tokenSource: ts,
-		dbURI:       dbURI,
 		hostname:    hostname,
 		ip:          getLocalIP(),
 	}
@@ -104,13 +104,13 @@ const (
 // disable NOTIFY-driven syncs for the life of the process.
 //
 // The returned channel never closes; callers should select on it in the
-// same loop that handles ctx.Done(). If dbURI is empty, the channel is
-// returned inert (operator change notifications are disabled and only
-// the periodic syncTicker drives SyncOperators).
+// same loop that handles ctx.Done(). If the database handle reports an
+// empty URI, the channel is returned inert (operator change notifications
+// are disabled and only the periodic syncTicker drives SyncOperators).
 func (r *Reconciler) startListener(ctx context.Context) <-chan struct{} {
 	ch := make(chan struct{}, 1) // buffered so sends never block
 
-	if r.dbURI == "" {
+	if r.db.URI() == "" {
 		log.Warn("no database URI configured; operator change notifications disabled, falling back to periodic sync only")
 		return ch
 	}
@@ -131,7 +131,7 @@ func (r *Reconciler) listenerLoop(ctx context.Context, ch chan<- struct{}) {
 			return
 		}
 
-		listener := pq.NewListener(r.dbURI, 10*time.Second, time.Minute, r.reportListenerProblem(ch))
+		listener := pq.NewListener(r.db.URI(), 10*time.Second, time.Minute, r.reportListenerProblem(ch))
 		if err := listener.Listen("operator_changed"); err != nil {
 			// Usual cause: the NOTIFY channel name is misconfigured or
 			// the role lacks LISTEN privilege. Close so pq.Listener's
