@@ -3,6 +3,7 @@ package apps
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -265,15 +266,23 @@ func (a *Apps) GetOperatorIDByName(ctx context.Context, name string) (uuid.UUID,
 // the jobs row may not be visible yet if the caller's database transaction
 // hasn't committed. The launch handler returns early to unblock that commit,
 // so the row typically appears within a few seconds.
+//
+// The wait between attempts doubles each round, starting at initialBackoff and
+// capping at maxBackoff, so a healthy DB that commits quickly sees nearly no
+// delay while a slow DB sheds load gracefully across the 10-attempt budget.
 func (a *Apps) SetOperatorName(ctx context.Context, analysisID constants.AnalysisID, operatorName string) error {
-	const maxRetries = 10
-	const retryDelay = 1 * time.Second
+	const (
+		maxRetries     = 10
+		initialBackoff = 100 * time.Millisecond
+		maxBackoff     = 5 * time.Second
+	)
 
 	operatorID, err := a.GetOperatorIDByName(ctx, operatorName)
 	if err != nil {
 		return fmt.Errorf("resolving operator %q to ID: %w", operatorName, err)
 	}
 
+	backoff := initialBackoff
 	for attempt := range maxRetries {
 		result, err := a.DB.ExecContext(ctx, setOperatorIDStmt, analysisID, operatorID)
 		if err != nil {
@@ -291,11 +300,15 @@ func (a *Apps) SetOperatorName(ctx context.Context, analysisID constants.Analysi
 		// Row not found yet; wait for the caller's transaction to commit.
 		if attempt < maxRetries-1 {
 			log.Debugf("jobs row not yet visible for analysis %s, retrying in %s (attempt %d/%d)",
-				analysisID, retryDelay, attempt+1, maxRetries)
+				analysisID, backoff, attempt+1, maxRetries)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(retryDelay):
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
 			}
 		}
 	}
@@ -304,11 +317,14 @@ func (a *Apps) SetOperatorName(ctx context.Context, analysisID constants.Analysi
 }
 
 // JobDebugInfo holds key fields from the jobs table for diagnostic logging.
+// OperatorID is a typed uuid.UUID — its Scan implementation tolerates NULL,
+// leaving the value as uuid.Nil, so callers can test with `id != uuid.Nil`
+// rather than juggling a sql.NullString.
 type JobDebugInfo struct {
-	ID         string         `db:"id"`
-	OperatorID sql.NullString `db:"operator_id"`
-	Status     string         `db:"status"`
-	AppID      string         `db:"app_id"`
+	ID         string    `db:"id"`
+	OperatorID uuid.UUID `db:"operator_id"`
+	Status     string    `db:"status"`
+	AppID      string    `db:"app_id"`
 }
 
 const getJobDebugInfoQuery = `
@@ -341,21 +357,20 @@ const getOperatorNameQuery = `
 `
 
 // GetOperatorName returns the name of the operator running an analysis,
-// or an empty string if none is set or no row exists.
+// or an empty string if none is set or no row exists. sql.NullString's zero
+// value has String == "" when the column is NULL, so we can return it
+// directly without checking .Valid.
 func (a *Apps) GetOperatorName(ctx context.Context, analysisID constants.AnalysisID) (string, error) {
 	var name sql.NullString
 	err := a.DB.QueryRowContext(ctx, getOperatorNameQuery, analysisID).Scan(&name)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		// The analysis doesn't exist in the database or has no operator; treat as none.
 		return "", nil
 	}
 	if err != nil {
 		return "", err
 	}
-	if name.Valid {
-		return name.String, nil
-	}
-	return "", nil
+	return name.String, nil
 }
 
 const externalIDsByStatusQuery = `
