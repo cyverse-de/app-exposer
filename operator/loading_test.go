@@ -186,6 +186,57 @@ func TestHandleLoadingPage(t *testing.T) {
 			host:         "unknown.cyverse.run",
 			wantContains: []string{"Waiting for Analysis", "window.location.reload()"},
 		},
+		{
+			// Proxies and in-cluster test harnesses often pass the port
+			// through in the Host header. The subdomain extraction must
+			// strip it; otherwise the label lookup misses.
+			name: "subdomain with port in Host renders loading page",
+			host: "a1234abcd.cyverse.run:8080",
+			setup: func(t *testing.T, clientset *fake.Clientset) {
+				t.Helper()
+				_, err := clientset.AppsV1().Deployments("vice-apps").Create(
+					context.Background(),
+					makeLoadingPageDeployment("loading-port-test", "a1234abcd", "JupyterLab"),
+					metav1.CreateOptions{},
+				)
+				require.NoError(t, err)
+			},
+			wantContains: []string{"JupyterLab", "loading-port-test"},
+		},
+		{
+			// A host without any dots (e.g. reached via `localhost` or a
+			// bare service name) must treat the entire host as the
+			// subdomain rather than falling through empty.
+			name: "host with no dots used as full subdomain",
+			host: "analysis-abc123",
+			setup: func(t *testing.T, clientset *fake.Clientset) {
+				t.Helper()
+				_, err := clientset.AppsV1().Deployments("vice-apps").Create(
+					context.Background(),
+					makeLoadingPageDeployment("loading-no-dot-test", "analysis-abc123", "RStudio"),
+					metav1.CreateOptions{},
+				)
+				require.NoError(t, err)
+			},
+			wantContains: []string{"RStudio", "loading-no-dot-test"},
+		},
+		{
+			// Combined: no dots and with a port (e.g. `analysis-abc:8080`
+			// in curl-from-sidecar scenarios). Both separators must be
+			// stripped.
+			name: "host with no dots and a port still resolves",
+			host: "analysis-abc123:8080",
+			setup: func(t *testing.T, clientset *fake.Clientset) {
+				t.Helper()
+				_, err := clientset.AppsV1().Deployments("vice-apps").Create(
+					context.Background(),
+					makeLoadingPageDeployment("loading-both-test", "analysis-abc123", "JupyterLab"),
+					metav1.CreateOptions{},
+				)
+				require.NoError(t, err)
+			},
+			wantContains: []string{"JupyterLab", "loading-both-test"},
+		},
 	}
 
 	for _, tt := range tests {
