@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
@@ -321,7 +322,7 @@ func (o *Operator) HandleLogs(c echo.Context) error {
 		log.Errorf("error streaming logs for %s/%s: %v", pod.Name, logOpts.Container, err)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	defer func() { _ = stream.Close() }()
+	defer common.LogClose("pod log stream", stream)
 
 	logBytes, err := io.ReadAll(stream)
 	if err != nil {

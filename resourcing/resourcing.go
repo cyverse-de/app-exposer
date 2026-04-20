@@ -14,18 +14,31 @@ import (
 
 var log = common.Log
 
+// mustQuantity parses a hard-coded resource quantity literal; panics if the
+// literal is malformed. Used for the package-level defaults below — the
+// inputs are compile-time constants, so a parse error is a programmer bug
+// and should fail the binary at startup rather than silently producing a
+// zero-valued Quantity.
+func mustQuantity(s string) resourcev1.Quantity {
+	q, err := resourcev1.ParseQuantity(s)
+	if err != nil {
+		panic(fmt.Sprintf("resourcing: malformed quantity literal %q: %v", s, err))
+	}
+	return q
+}
+
 var (
-	defaultCPUResourceRequest, _   = resourcev1.ParseQuantity("1000m")
-	defaultMemResourceRequest, _   = resourcev1.ParseQuantity("2Gi")
-	defaultStorageRequest, _       = resourcev1.ParseQuantity("1Gi")
-	defaultCPUResourceLimit, _     = resourcev1.ParseQuantity("2000m")
-	defaultMemResourceLimit, _     = resourcev1.ParseQuantity("8Gi")
-	viceProxyCPUResourceRequest, _ = resourcev1.ParseQuantity("100m")
-	viceProxyMemResourceRequest, _ = resourcev1.ParseQuantity("100Mi")
-	viceProxyStorageRequest, _     = resourcev1.ParseQuantity("100Mi")
-	viceProxyCPUResourceLimit, _   = resourcev1.ParseQuantity("200m")
-	viceProxyMemResourceLimit, _   = resourcev1.ParseQuantity("200Mi")
-	viceProxyStorageLimit, _       = resourcev1.ParseQuantity("200Mi")
+	defaultCPUResourceRequest   = mustQuantity("1000m")
+	defaultMemResourceRequest   = mustQuantity("2Gi")
+	defaultStorageRequest       = mustQuantity("1Gi")
+	defaultCPUResourceLimit     = mustQuantity("2000m")
+	defaultMemResourceLimit     = mustQuantity("8Gi")
+	viceProxyCPUResourceRequest = mustQuantity("100m")
+	viceProxyMemResourceRequest = mustQuantity("100Mi")
+	viceProxyStorageRequest     = mustQuantity("100Mi")
+	viceProxyCPUResourceLimit   = mustQuantity("200m")
+	viceProxyMemResourceLimit   = mustQuantity("200Mi")
+	viceProxyStorageLimit       = mustQuantity("200Mi")
 
 	doDefaultCPUResourceLimit   = true
 	doDefaultMemResourceLimit   = true

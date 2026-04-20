@@ -107,7 +107,7 @@ func (c *Client) Capacity(ctx context.Context) (*CapacityResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying capacity: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	if err := checkStatus(resp, "capacity"); err != nil {
 		log.Errorf("operator %s: %v", c.name, err)
@@ -140,7 +140,7 @@ func (c *Client) Launch(ctx context.Context, bundle *AnalysisBundle) error {
 	if err != nil {
 		return fmt.Errorf("launch request for analysis %s: %w", bundle.AnalysisID, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	if resp.StatusCode == http.StatusConflict {
 		log.Infof("operator %s: launch returned 409 Conflict for analysis %s", c.name, bundle.AnalysisID)
@@ -168,7 +168,7 @@ func (c *Client) Exit(ctx context.Context, analysisID AnalysisID) error {
 	if err != nil {
 		return fmt.Errorf("exit request for analysis %s: %w", analysisID, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	if err := checkStatus(resp, "exit"); err != nil {
 		log.Errorf("operator %s: %v", c.name, err)
@@ -204,7 +204,7 @@ func (c *Client) postAnalysisAction(ctx context.Context, analysisID AnalysisID, 
 	if err != nil {
 		return fmt.Errorf("%s request for analysis %s: %w", action, analysisID, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	if err := checkStatus(resp, action); err != nil {
 		log.Errorf("operator %s: %v", c.name, err)
@@ -231,7 +231,7 @@ func (c *Client) UpdatePermissions(ctx context.Context, analysisID AnalysisID, u
 	if err != nil {
 		return fmt.Errorf("permissions request for analysis %s: %w", analysisID, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	if err := checkStatus(resp, "permissions"); err != nil {
 		log.Errorf("operator %s: %v", c.name, err)
@@ -271,7 +271,7 @@ func (c *Client) LogoutUser(ctx context.Context, analysisID AnalysisID, username
 	if err != nil {
 		return fmt.Errorf("logout-user request for analysis %s: %w", analysisID, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	if err := checkStatus(resp, "logout-user"); err != nil {
 		log.Errorf("operator %s: %v", c.name, err)
@@ -297,7 +297,7 @@ func (c *Client) Listing(ctx context.Context, params url.Values) (*reporting.Res
 	if err != nil {
 		return nil, fmt.Errorf("listing request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	log.Debugf("after GET %s", reqURL.String())
 
@@ -378,7 +378,7 @@ func (c *Client) Logs(ctx context.Context, analysisID AnalysisID, params url.Val
 	if err != nil {
 		return nil, fmt.Errorf("logs request for analysis %s: %w", analysisID, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -407,7 +407,7 @@ func (c *Client) getAnalysisJSON(ctx context.Context, analysisID AnalysisID, sub
 	if err != nil {
 		return nil, fmt.Errorf("%s request for analysis %s: %w", subpath, analysisID, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

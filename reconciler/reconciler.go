@@ -45,7 +45,12 @@ type Reconciler struct {
 // production passes *db.Database and *apps.Apps. appsLookup may be nil — in
 // that case the per-pod operator_name back-fill in ReconcileNext is skipped.
 func New(database db.ReconcilerDB, appsLookup apps.OperatorNameLookup, scheduler *operatorclient.Scheduler, ts oauth2.TokenSource) *Reconciler {
-	hostname, _ := os.Hostname()
+	hostname, err := os.Hostname()
+	if err != nil {
+		// Fall back to empty hostname — reconciled_by just becomes "",
+		// which still lets reconciliation proceed and is visible in logs.
+		log.Warnf("os.Hostname failed, reconciled_by will be empty: %v", err)
+	}
 	return &Reconciler{
 		db:          database,
 		apps:        appsLookup,
@@ -136,8 +141,11 @@ func (r *Reconciler) listenerLoop(ctx context.Context, ch chan<- struct{}) {
 			// Usual cause: the NOTIFY channel name is misconfigured or
 			// the role lacks LISTEN privilege. Close so pq.Listener's
 			// internal reconnect goroutine stops; otherwise we leak one
-			// goroutine per retry attempt.
-			_ = listener.Close()
+			// goroutine per retry attempt. Any Close error is diagnostic
+			// (the connection is already failing) — log and move on.
+			if closeErr := listener.Close(); closeErr != nil {
+				log.Warnf("closing pq listener after failed Listen: %v", closeErr)
+			}
 			log.Warnf(
 				"LISTEN on operator_changed failed; periodic sync continues, will retry in %s: %v",
 				backoff, err,
@@ -153,7 +161,9 @@ func (r *Reconciler) listenerLoop(ctx context.Context, ch chan<- struct{}) {
 		backoff = initialListenerBackoff // reset after any successful Listen
 
 		r.pumpNotifications(ctx, listener, ch)
-		_ = listener.Close()
+		if closeErr := listener.Close(); closeErr != nil {
+			log.Warnf("closing pq listener after pump exit: %v", closeErr)
+		}
 		if ctx.Err() != nil {
 			return
 		}

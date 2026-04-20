@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/labstack/echo/v4"
 )
@@ -194,7 +195,7 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 	if err != nil {
 		return fmt.Errorf("requesting transfer: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("transfer request returned %d", resp.StatusCode)

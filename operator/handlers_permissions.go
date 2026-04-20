@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/labstack/echo/v4"
@@ -174,7 +175,7 @@ func (o *Operator) forwardToViceProxy(ctx context.Context, analysisID, method, p
 		log.Errorf("%s request to vice-proxy failed for analysis %s: %v", path, analysisID, err)
 		return nil, echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to reach vice-proxy: %v", err))
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

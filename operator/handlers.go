@@ -161,7 +161,7 @@ func (o *Operator) getAccessURL(ctx context.Context, serviceName string) (string
 	if err != nil {
 		return "", fmt.Errorf("failed to contact vice-proxy at %s: %w", endpoint, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer common.CloseBody(resp)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("vice-proxy at %s returned status %d", endpoint, resp.StatusCode)
