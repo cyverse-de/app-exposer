@@ -36,9 +36,15 @@ func main() {
 		log.Fatal("--username must be set.")
 	}
 
-	// Ensure the username has the expected domain suffix.
+	// Ensure the username has the expected domain suffix. If the configured
+	// suffix doesn't start with @, insert one so callers can pass
+	// `--user-suffix iplantcollaborative.org` (without the @) and still get
+	// `user@iplantcollaborative.org`.
 	name := *username
 	if !strings.HasSuffix(name, *userSuffix) {
+		if !strings.HasPrefix(*userSuffix, "@") {
+			name += "@"
+		}
 		name += *userSuffix
 	}
 

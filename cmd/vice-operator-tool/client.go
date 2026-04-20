@@ -8,17 +8,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 
 	"github.com/cyverse-de/app-exposer/operatorclient"
 )
 
-// OperatorClient talks to the app-exposer operator admin API. The JSON
-// payloads it produces and consumes are operatorclient.OperatorConfig,
-// which is the canonical shape for operator metadata on the wire; this
-// package previously carried hand-maintained mirror types that invited
-// drift.
+// closeBody closes an HTTP response body, logging any error. Intended for
+// use in `defer closeBody(resp)` to avoid silently swallowing close errors.
+func closeBody(resp *http.Response) {
+	if err := resp.Body.Close(); err != nil {
+		log.Printf("closing response body: %v", err)
+	}
+}
+
+// OperatorClient talks to the app-exposer operator admin API using
+// operatorclient.OperatorConfig as the canonical on-the-wire shape.
 type OperatorClient struct {
 	baseURL *url.URL
 	http    *http.Client
@@ -51,7 +57,7 @@ func (c *OperatorClient) AddOperator(ctx context.Context, req *operatorclient.Op
 	if err != nil {
 		return nil, fmt.Errorf("sending request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeBody(resp)
 
 	if resp.StatusCode != http.StatusCreated {
 		return nil, readError(resp)
@@ -76,7 +82,7 @@ func (c *OperatorClient) ListOperators(ctx context.Context) ([]operatorclient.Op
 	if err != nil {
 		return nil, fmt.Errorf("sending request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeBody(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, readError(resp)
@@ -101,7 +107,7 @@ func (c *OperatorClient) DeleteOperator(ctx context.Context, name string) error 
 	if err != nil {
 		return fmt.Errorf("sending request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeBody(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return readError(resp)

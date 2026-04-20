@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/cyverse-de/app-exposer/cmd/vicetools"
 	"github.com/cyverse-de/app-exposer/constants"
@@ -115,29 +116,36 @@ func main() {
 	}
 
 	if resp.StatusCode >= 400 {
-		fmt.Fprintf(os.Stderr, "HTTP %d %s\n", resp.StatusCode, resp.Status)
 		if len(respBody) > 0 {
-			fmt.Fprintln(os.Stderr, string(respBody))
+			log.Fatalf("HTTP %d %s: %s", resp.StatusCode, resp.Status, strings.TrimRight(string(respBody), "\n"))
 		}
-		os.Exit(1)
+		log.Fatalf("HTTP %d %s", resp.StatusCode, resp.Status)
 	}
 
-	// Pretty-print the JSON response.
-	var pretty bytes.Buffer
-	if err := json.Indent(&pretty, respBody, "", "  "); err != nil {
-		// Fall back to raw output if indentation fails.
-		pretty.Reset()
-		pretty.Write(respBody)
+	// Decode and re-encode to pretty-print. Matches vice-export's
+	// encoder.SetIndent pattern so the two tools format JSON the same way.
+	var decoded any
+	if err := json.Unmarshal(respBody, &decoded); err != nil {
+		log.Fatalf("decoding response JSON: %v", err)
 	}
-	pretty.WriteByte('\n')
 
-	// Write to file or stdout.
+	out := io.Writer(os.Stdout)
 	if *outFile != "" {
-		if err := os.WriteFile(*outFile, pretty.Bytes(), 0644); err != nil {
-			log.Fatalf("writing output file: %v", err)
+		f, err := os.Create(*outFile)
+		if err != nil {
+			log.Fatalf("creating output file: %v", err)
 		}
+		defer func() { _ = f.Close() }()
+		out = f
+	}
+
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(decoded); err != nil {
+		log.Fatalf("encoding JSON: %v", err)
+	}
+
+	if *outFile != "" {
 		fmt.Fprintf(os.Stderr, "Bundle written to %s\n", *outFile)
-	} else {
-		fmt.Print(pretty.String())
 	}
 }
