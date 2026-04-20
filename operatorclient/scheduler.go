@@ -4,11 +4,48 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"slices"
 	"sync"
 
 	"golang.org/x/oauth2"
 )
+
+// isTransientLaunchError reports whether a launch failure represents a
+// transient operator-side problem (network blip, 5xx) that warrants trying
+// the next operator, rather than a client-side bug that should abort. Used
+// by LaunchAnalysis to extend the 409-fallthrough behavior to the cases
+// where retrying on a peer is likely to succeed.
+func isTransientLaunchError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Our own HTTPStatusError exposes a Transient predicate that returns
+	// true for 5xx; anything 4xx (other than 409, which is ErrCapacityExhausted
+	// above this check) is a request we built wrong and should not be retried.
+	var se *HTTPStatusError
+	if errors.As(err, &se) {
+		return se.Transient()
+	}
+	// Context cancellation is a policy signal from the caller; it means
+	// abandon everything, not try the next operator.
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	// Network-level failures (DNS, connection refused, read/write timeouts)
+	// didn't reach the operator's application code at all — try the next.
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		var netErr net.Error
+		if errors.As(urlErr.Err, &netErr) {
+			return true
+		}
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr)
+}
 
 // Sentinel errors for scheduler failure modes.
 var (
@@ -95,9 +132,14 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 		return "", ErrNoOperators
 	}
 
-	// Track capacity-check errors separately so we can distinguish
-	// "all operators unreachable" from "all operators at capacity."
-	var capacityErrors int
+	// Track capacity-check errors and transient launch failures separately
+	// so we can distinguish "all operators unreachable" from "all operators
+	// at capacity" and preserve the last underlying error for diagnostics.
+	var (
+		capacityErrors  int
+		transientErrors int
+		lastTransient   error
+	)
 
 	for _, op := range clients {
 		// Check capacity first.
@@ -113,11 +155,19 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 			continue
 		}
 
-		// Try to launch on this operator.
+		// Try to launch on this operator. Capacity races and transient
+		// operator-side failures fall through to the next operator; only
+		// errors that look like a bug in the request we built abort.
 		if err := op.Launch(ctx, bundle); err != nil {
 			if errors.Is(err, ErrCapacityExhausted) {
 				// Race condition: capacity was available but filled before our launch.
 				log.Infof("operator %s returned 409, trying next; this usually means it reached capacity after the check but before our job was submitted", op.Name())
+				continue
+			}
+			if isTransientLaunchError(err) {
+				transientErrors++
+				lastTransient = err
+				log.Warnf("operator %s launch failed transiently, trying next: %v", op.Name(), err)
 				continue
 			}
 			return "", fmt.Errorf("launch on operator %s failed: %w", op.Name(), err)
@@ -130,6 +180,13 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 	// Every operator's capacity check failed (all returned errors).
 	if capacityErrors == len(clients) {
 		return "", fmt.Errorf("all %d operators failed capacity check: %w", len(clients), ErrAllOperatorsExhausted)
+	}
+
+	// Every operator that passed capacity check then failed the launch for
+	// transient reasons. Surface the last underlying error so the caller
+	// can distinguish it from a real "all at capacity" situation.
+	if transientErrors > 0 && capacityErrors+transientErrors == len(clients) {
+		return "", fmt.Errorf("all %d operators unhealthy; last error: %w", len(clients), lastTransient)
 	}
 
 	return "", ErrAllOperatorsExhausted

@@ -19,10 +19,23 @@ import (
 // capacitySlots controls how many available slots are reported.
 // rejectLaunch causes the launch endpoint to return 409.
 func mockOperatorServer(capacitySlots int, rejectLaunch bool) *httptest.Server {
+	return mockOperatorServerWithStatuses(capacitySlots, rejectLaunch, 0, 0)
+}
+
+// mockOperatorServerWithStatuses is the explicit variant that also lets a
+// test inject non-2xx responses for the capacity and launch endpoints —
+// used by cases that exercise error-classification paths in the scheduler.
+// A capacityStatus or launchStatus of 0 means "use the default behavior"
+// (respect the slots / rejectLaunch arguments).
+func mockOperatorServerWithStatuses(capacitySlots int, rejectLaunch bool, capacityStatus, launchStatus int) *httptest.Server {
 	var launchCount atomic.Int32
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/capacity", func(w http.ResponseWriter, r *http.Request) {
+		if capacityStatus != 0 {
+			http.Error(w, "injected capacity failure", capacityStatus)
+			return
+		}
 		resp := CapacityResponse{
 			MaxAnalyses:     10,
 			RunningAnalyses: 10 - capacitySlots,
@@ -37,6 +50,10 @@ func mockOperatorServer(capacitySlots int, rejectLaunch bool) *httptest.Server {
 			return
 		}
 		launchCount.Add(1)
+		if launchStatus != 0 {
+			http.Error(w, "injected launch failure", launchStatus)
+			return
+		}
 		if rejectLaunch {
 			http.Error(w, "at capacity", http.StatusConflict)
 			return
@@ -137,6 +154,97 @@ func TestSchedulerLaunchAnalysis(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSchedulerLaunchAllCapacityChecksFail exercises the "every operator
+// errored on capacity check" branch — as distinct from "every operator is
+// at capacity," which the table above already covers. LaunchAnalysis must
+// surface the capacity-failure case rather than falling back to the plain
+// ErrAllOperatorsExhausted shape.
+func TestSchedulerLaunchAllCapacityChecksFail(t *testing.T) {
+	srv0 := mockOperatorServerWithStatuses(0, false, http.StatusInternalServerError, 0)
+	defer srv0.Close()
+	srv1 := mockOperatorServerWithStatuses(0, false, http.StatusInternalServerError, 0)
+	defer srv1.Close()
+
+	scheduler, err := NewScheduler([]OperatorConfig{
+		{Name: "op-0", URL: srv0.URL},
+		{Name: "op-1", URL: srv1.URL},
+	}, nil)
+	require.NoError(t, err)
+
+	_, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrAllOperatorsExhausted)
+	assert.Contains(t, err.Error(), "failed capacity check", "message should distinguish capacity-failure from at-capacity")
+}
+
+// TestSchedulerLaunchTransientErrorFalthrough covers the case added along
+// with isTransientLaunchError: the first operator accepts capacity but then
+// returns a 5xx on Launch. The scheduler should fall through to the next
+// operator rather than aborting the whole launch.
+func TestSchedulerLaunchTransientErrorFalthrough(t *testing.T) {
+	srv0 := mockOperatorServerWithStatuses(5, false, 0, http.StatusBadGateway)
+	defer srv0.Close()
+	srv1 := mockOperatorServer(5, false)
+	defer srv1.Close()
+
+	scheduler, err := NewScheduler([]OperatorConfig{
+		{Name: "op-0", URL: srv0.URL},
+		{Name: "op-1", URL: srv1.URL},
+	}, nil)
+	require.NoError(t, err)
+
+	name, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
+	require.NoError(t, err)
+	assert.Equal(t, "op-1", name, "scheduler must fall through on transient 5xx launch errors")
+}
+
+// TestSchedulerLaunchNonTransientAborts guards the other side of the
+// classification: a 400 from Launch is a request we built wrong, so it must
+// abort the scheduling loop rather than walk every operator producing the
+// same failure.
+func TestSchedulerLaunchNonTransientAborts(t *testing.T) {
+	srv0 := mockOperatorServerWithStatuses(5, false, 0, http.StatusBadRequest)
+	defer srv0.Close()
+	srv1 := mockOperatorServer(5, false) // would succeed if we reached it
+	defer srv1.Close()
+
+	scheduler, err := NewScheduler([]OperatorConfig{
+		{Name: "op-0", URL: srv0.URL},
+		{Name: "op-1", URL: srv1.URL},
+	}, nil)
+	require.NoError(t, err)
+
+	_, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op-0", "error must name the operator that failed")
+	assert.Contains(t, err.Error(), "400", "error must surface the HTTP status")
+}
+
+// TestSchedulerLaunchAllTransient covers the case where every operator is
+// healthy-looking on capacity but fails on Launch with a transient 5xx. The
+// scheduler should surface the last underlying error so the caller can
+// tell the difference from the plain "all at capacity" shape.
+func TestSchedulerLaunchAllTransient(t *testing.T) {
+	srv0 := mockOperatorServerWithStatuses(5, false, 0, http.StatusServiceUnavailable)
+	defer srv0.Close()
+	srv1 := mockOperatorServerWithStatuses(5, false, 0, http.StatusBadGateway)
+	defer srv1.Close()
+
+	scheduler, err := NewScheduler([]OperatorConfig{
+		{Name: "op-0", URL: srv0.URL},
+		{Name: "op-1", URL: srv1.URL},
+	}, nil)
+	require.NoError(t, err)
+
+	_, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unhealthy", "message should distinguish from at-capacity")
+
+	var statusErr *HTTPStatusError
+	require.ErrorAs(t, err, &statusErr, "last transient error must be preserved in the chain")
+	assert.True(t, statusErr.Transient(), "preserved error should be a transient status error")
 }
 
 func TestSchedulerNoOperators(t *testing.T) {

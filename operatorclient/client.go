@@ -24,6 +24,28 @@ var log = common.Log.WithFields(logrus.Fields{"package": "operatorclient"})
 // meaning it has no available slots for new analyses.
 var ErrCapacityExhausted = errors.New("operator at capacity")
 
+// HTTPStatusError is returned when an operator responds with a non-2xx,
+// non-409 status. Carries the status code so callers (e.g. the scheduler)
+// can decide whether the failure is transient and worth trying another
+// operator. The body is captured for logging.
+type HTTPStatusError struct {
+	StatusCode int
+	Body       string
+}
+
+// Error returns a formatted error string including the status and body.
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("operator returned HTTP %d: %s", e.StatusCode, e.Body)
+}
+
+// Transient reports whether the status is in the 5xx range, which typically
+// indicates an unhealthy operator rather than a request our caller built
+// wrong. Scheduler policy uses this to decide whether to try the next
+// operator or abort the whole launch.
+func (e *HTTPStatusError) Transient() bool {
+	return e.StatusCode >= 500 && e.StatusCode <= 599
+}
+
 // Client communicates with a single vice-operator instance via HTTP.
 type Client struct {
 	name    string
@@ -149,7 +171,7 @@ func (c *Client) Launch(ctx context.Context, bundle *AnalysisBundle) error {
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		respBody, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
 		log.Errorf("operator %s: launch returned %d for analysis %s: %s", c.name, resp.StatusCode, bundle.AnalysisID, string(respBody))
-		return fmt.Errorf("launch returned %d: %s", resp.StatusCode, string(respBody))
+		return &HTTPStatusError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
 	return nil
 }
