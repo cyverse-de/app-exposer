@@ -23,4 +23,3 @@ func CloseBody(resp *http.Response) {
 	}
 	LogClose("response body", resp.Body)
 }
-
