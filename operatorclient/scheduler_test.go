@@ -325,9 +325,10 @@ func TestSchedulerSyncAndSetTokenSource(t *testing.T) {
 	srv0 := mockOperatorServer(5, false)
 	defer srv0.Close()
 
-	scheduler, err := NewScheduler([]OperatorConfig{
+	origConfigs := []OperatorConfig{
 		{Name: "original-op", URL: srv0.URL},
-	}, nil)
+	}
+	scheduler, err := NewScheduler(origConfigs, nil)
 	require.NoError(t, err)
 
 	// The original operator must be findable.
@@ -359,9 +360,14 @@ func TestSchedulerSyncAndSetTokenSource(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for range iterations {
-			// Alternate between the two operator lists so that Sync is meaningful.
-			if err := scheduler.Sync(newConfigs); err != nil {
+		for i := range iterations {
+			// Alternate between the two operator lists so Sync exercises a
+			// real list-shape change (1 ↔ 2 operators) under churn.
+			cfgs := newConfigs
+			if i%2 == 1 {
+				cfgs = origConfigs
+			}
+			if err := scheduler.Sync(cfgs); err != nil {
 				t.Errorf("Sync failed during race: %v", err)
 				return
 			}
