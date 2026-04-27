@@ -127,7 +127,8 @@ func TestCapacityCalculator(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			calc := NewCapacityCalculator(clientset, "vice-apps", tt.maxAnalyses, tt.nodeLabelSelector)
+			calc, err := NewCapacityCalculator(clientset, "vice-apps", tt.maxAnalyses, tt.nodeLabelSelector)
+			require.NoError(t, err)
 			cap, err := calc.Calculate(ctx)
 
 			if tt.wantErr {
@@ -192,7 +193,8 @@ func TestCapacityCalculatorUnlimited(t *testing.T) {
 	)
 
 	// maxAnalyses=0 means unlimited.
-	calc := NewCapacityCalculator(cs, "vice-apps", 0, "")
+	calc, err := NewCapacityCalculator(cs, "vice-apps", 0, "")
+	require.NoError(t, err)
 	cap, err := calc.Calculate(context.Background())
 	require.NoError(t, err)
 

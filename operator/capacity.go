@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -20,26 +21,27 @@ type CapacityCalculator struct {
 	nodeLabelSelector string
 }
 
-// NewCapacityCalculator creates a new CapacityCalculator. Panics if required
-// dependencies are nil or invalid, since these indicate programmer error.
+// NewCapacityCalculator creates a new CapacityCalculator. Returns an error
+// if required dependencies are nil or invalid; callers route through
+// goroutines and sync.WaitGroup, so a returned error is safer than a panic.
 func NewCapacityCalculator(
 	clientset kubernetes.Interface,
 	namespace string,
 	maxAnalyses int,
 	nodeLabelSelector string,
-) *CapacityCalculator {
+) (*CapacityCalculator, error) {
 	if clientset == nil {
-		panic("capacity: clientset must not be nil")
+		return nil, fmt.Errorf("capacity: clientset must not be nil")
 	}
 	if namespace == "" {
-		panic("capacity: namespace must not be empty")
+		return nil, fmt.Errorf("capacity: namespace must not be empty")
 	}
 	return &CapacityCalculator{
 		clientset:         clientset,
 		namespace:         namespace,
 		maxAnalyses:       maxAnalyses,
 		nodeLabelSelector: nodeLabelSelector,
-	}
+	}, nil
 }
 
 // Calculate queries K8s for node resources and running VICE deployments,

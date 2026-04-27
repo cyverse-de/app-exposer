@@ -110,7 +110,10 @@ const (
 // empty URI, the channel is returned inert (operator change notifications
 // are disabled and only the periodic syncTicker drives SyncOperators).
 func (r *Reconciler) startListener(ctx context.Context) <-chan struct{} {
-	ch := make(chan struct{}, 1) // buffered so sends never block
+	// ch buffers one pending sync. Sends below use select+default to be
+	// non-blocking, so a burst of NOTIFY events collapses into at most
+	// one queued sync rather than blocking the listener goroutine.
+	ch := make(chan struct{}, 1)
 
 	if r.db.URI() == "" {
 		log.Warn("no database URI configured; operator change notifications disabled, falling back to periodic sync only")
@@ -147,7 +150,7 @@ func (r *Reconciler) listenerLoop(ctx context.Context, ch chan<- struct{}) {
 				"LISTEN on operator_changed failed; periodic sync continues, will retry in %s: %v",
 				backoff, err,
 			)
-			if !sleepCtx(ctx, backoff) {
+			if !common.SleepCtx(ctx, backoff) {
 				return
 			}
 			backoff = nextBackoff(backoff, maxListenerBackoff)
@@ -210,20 +213,6 @@ func (r *Reconciler) pumpNotifications(ctx context.Context, listener *pq.Listene
 			default:
 			}
 		}
-	}
-}
-
-// sleepCtx waits for d or until ctx is canceled. Returns true when the
-// wait completed normally, false when the context canceled — lets callers
-// use it as a loop guard without checking ctx separately.
-func sleepCtx(ctx context.Context, d time.Duration) bool {
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-timer.C:
-		return true
 	}
 }
 

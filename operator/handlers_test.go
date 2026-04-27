@@ -68,7 +68,8 @@ func newTestOperator(t *testing.T, maxAnalyses int, vendor ...GPUVendor) (*Opera
 	}
 	clientset := fake.NewSimpleClientset()
 	gwClientset := gatewayfake.NewSimpleClientset()
-	calc := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
+	calc, err := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
+	require.NoError(t, err)
 	cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
 	op, err := NewOperator(OperatorOptions{
 		Clientset:           clientset,

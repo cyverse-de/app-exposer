@@ -423,7 +423,10 @@ func main() {
 		log.Fatalf("invalid GPU vendor: %v", err)
 	}
 
-	capacityCalc := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
+	capacityCalc, err := operator.NewCapacityCalculator(clientset, namespace, maxAnalyses, nodeLabelSelector)
+	if err != nil {
+		log.Fatalf("creating capacity calculator: %v", err)
+	}
 	imageCache := operator.NewImageCacheManager(clientset, namespace, imagePullSecret)
 	op, err := operator.NewOperator(operator.OperatorOptions{
 		Clientset:           clientset,
