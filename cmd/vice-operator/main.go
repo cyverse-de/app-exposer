@@ -7,22 +7,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net"
 	"net/url"
 	"os"
-	"strings"
-	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operator"
 	"github.com/sirupsen/logrus"
-
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
 var log = common.Log
@@ -162,26 +153,9 @@ func main() {
 	}
 	logrus.SetLevel(level)
 
-	// Build K8s client.
-	var config *rest.Config
-	if kubeconfig != "" {
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-	} else {
-		config, err = rest.InClusterConfig()
-	}
+	clientset, gwClient, err := buildKubeClients(kubeconfig)
 	if err != nil {
-		log.Fatalf("error building kubeconfig: %v", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Fatalf("error creating k8s client: %v", err)
-	}
-
-	// Create Gateway API client.
-	gwClient, err := gatewayclient.NewForConfig(config)
-	if err != nil {
-		log.Fatalf("error creating gateway API client: %v", err)
+		log.Fatalf("%v", err)
 	}
 
 	// Build the cluster config map from flags. All keys are always written so
@@ -284,134 +258,24 @@ func main() {
 		return operator.EnsureCORSMiddleware(ctx, clientset, namespace)
 	})
 
-	// Ensure egress network policies for the namespace.
-	if serviceCIDR == "" {
-		detected, detectErr := operator.DetectServiceCIDR(context.Background(), clientset)
-		if detectErr != nil {
-			log.Fatalf("failed to auto-detect service CIDR (set --service-cidr manually): %v", detectErr)
-		}
-		serviceCIDR = detected
-		log.Infof("auto-detected service CIDR: %s", serviceCIDR)
-		log.Warnf("auto-detected CIDR uses a /8 prefix; use --service-cidr for a narrower range if needed")
-	}
-
-	// Validate all CIDRs before creating network policies.
-	if _, _, cidrErr := net.ParseCIDR(serviceCIDR); cidrErr != nil {
-		log.Fatalf("invalid service CIDR %q: %v", serviceCIDR, cidrErr)
-	}
-	for _, cidr := range blockedCIDRs {
-		if _, _, cidrErr := net.ParseCIDR(cidr); cidrErr != nil {
-			log.Fatalf("invalid --blocked-cidr %q: %v", cidr, cidrErr)
-		}
-	}
-
-	// Parse egress pod exception labels (key=value strings) into label maps.
-	var podExceptions []map[string]string
-	for _, exc := range egressPodExceptions {
-		labels, excErr := parseSelector(exc)
-		if excErr != nil {
-			log.Fatalf("invalid --egress-pod-exception %q: %v", exc, excErr)
-		}
-		podExceptions = append(podExceptions, labels)
-	}
-
-	// Parse ingress pod exceptions. Each value is a comma-separated list of
-	// key=value pairs. The kubernetes.io/metadata.name pair identifies the
-	// source namespace; remaining pairs select pods within it.
-	const nsLabelKey = "kubernetes.io/metadata.name"
-	var ingressExceptions []operator.IngressException
-	for _, exc := range ingressPodExceptions {
-		labels, excErr := parseSelector(exc)
-		if excErr != nil {
-			log.Fatalf("invalid --ingress-pod-exception %q: %v", exc, excErr)
-		}
-
-		// Extract the required namespace label; all remaining labels are
-		// pod selectors.
-		nsName, ok := labels[nsLabelKey]
-		if !ok {
-			log.Fatalf("--ingress-pod-exception %q must include %s=<namespace> to identify the source namespace", exc, nsLabelKey)
-		}
-		delete(labels, nsLabelKey)
-
-		if len(labels) == 0 {
-			log.Warnf("--ingress-pod-exception %q has no pod labels; allows ALL pods in namespace %q to reach VICE pods", exc, nsName)
-		}
-
-		ingressExceptions = append(ingressExceptions, operator.IngressException{
-			NamespaceLabels: map[string]string{nsLabelKey: nsName},
-			PodLabels:       labels,
-		})
-	}
-
-	if len(ingressExceptions) == 0 {
-		log.Warn("no --ingress-pod-exception flags provided; ingress policy will only allow vice-operator — external traffic (e.g. Traefik) will be blocked")
-	}
-
-	if disableInternetAccess {
-		log.Info("internet access disabled for analysis pods (--disable-internet-access)")
-		if keycloakBaseURL == "" && !disableViceProxyAuth {
-			log.Fatal("--disable-internet-access requires --keycloak-base-url (or --disable-vice-proxy-auth); without it vice-proxy cannot reach Keycloak for OIDC auth")
-		}
-	}
-
-	// Resolve hostnames to IPs for egress CIDR exceptions. Keycloak is
-	// included when configured (vice-proxy needs it for OIDC auth);
-	// additional hosts come from --egress-host-exception flags.
-	var allowedCIDRs []string
-	if keycloakBaseURL != "" {
-		cidrs, resolveErr := operator.ResolveHostCIDRs(keycloakBaseURL)
-		if resolveErr != nil {
-			log.Fatalf("resolving Keycloak host for egress exception: %v", resolveErr)
-		}
-		allowedCIDRs = append(allowedCIDRs, cidrs...)
-		log.Infof("allowing egress to Keycloak IPs: %v", cidrs)
-	}
-
-	for _, host := range egressHostExceptions {
-		// Accept both bare hostnames and URLs with a scheme.
-		target := host
-		if !strings.Contains(host, "://") {
-			target = "https://" + host
-		}
-		cidrs, resolveErr := operator.ResolveHostCIDRs(target)
-		if resolveErr != nil {
-			log.Fatalf("resolving --egress-host-exception %q: %v", host, resolveErr)
-		}
-		allowedCIDRs = append(allowedCIDRs, cidrs...)
-		log.Infof("allowing egress to %s: %v", host, cidrs)
-	}
-
-	for _, cidr := range egressCIDRExceptions {
-		if _, _, cidrErr := net.ParseCIDR(cidr); cidrErr != nil {
-			log.Fatalf("invalid --egress-cidr-exception %q: %v", cidr, cidrErr)
-		}
-		allowedCIDRs = append(allowedCIDRs, cidr)
-		log.Infof("allowing egress to CIDR %s", cidr)
-	}
-
-	// Determine operator labels for NetworkPolicy.
-	operatorLabels := map[string]string{"app": "vice-operator"}
-	if operatorPodSelector != "" {
-		selector, selectorErr := parseSelector(operatorPodSelector)
-		if selectorErr != nil {
-			log.Fatalf("invalid --operator-pod-selector: %v", selectorErr)
-		}
-		operatorLabels = selector
-	}
-
-	egressConfig := operator.NetworkPolicyConfig{
-		Namespace:         namespace,
-		OperatorLabels:    operatorLabels,
-		ServiceCIDR:       serviceCIDR,
-		BlockedCIDRs:      blockedCIDRs,
-		AllowedCIDRs:      allowedCIDRs,
-		PodExceptions:     podExceptions,
-		IngressExceptions: ingressExceptions,
-		DisableInternet:   disableInternetAccess,
-	}
-	if err := egressConfig.Validate(); err != nil {
-		log.Fatalf("invalid network policy configuration: %v", err)
+	// Build the egress / network-policy configuration from flags. Auto-
+	// detects service CIDR, parses pod and ingress exceptions, resolves
+	// Keycloak / host-exception CIDRs.
+	egressConfig, err := buildEgressConfig(context.Background(), clientset, egressInputs{
+		namespace:             namespace,
+		serviceCIDR:           serviceCIDR,
+		blockedCIDRs:          blockedCIDRs,
+		egressPodExceptions:   egressPodExceptions,
+		egressHostExceptions:  egressHostExceptions,
+		egressCIDRExceptions:  egressCIDRExceptions,
+		ingressPodExceptions:  ingressPodExceptions,
+		disableInternetAccess: disableInternetAccess,
+		operatorPodSelector:   operatorPodSelector,
+		keycloakBaseURL:       keycloakBaseURL,
+		disableViceProxyAuth:  disableViceProxyAuth,
+	})
+	if err != nil {
+		log.Fatalf("%v", err)
 	}
 
 	mustEnsure("network policies", func(ctx context.Context) error {
@@ -449,44 +313,14 @@ func main() {
 		log.Fatalf("failed to construct operator: %v", err)
 	}
 
-	// Set up OIDC JWT verification when API auth is enabled.
-	var verifier *oidc.IDTokenVerifier
-	if apiAuth {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		provider, providerErr := oidc.NewProvider(ctx, apiAuthIssuerURL)
-		if providerErr != nil {
-			log.Fatalf("failed to discover OIDC provider at %q: %v", apiAuthIssuerURL, providerErr)
-		}
-		// Keycloak client-credentials tokens use azp instead of aud, so
-		// disable the built-in audience check.
-		verifier = provider.Verifier(&oidc.Config{SkipClientIDCheck: true})
-		log.Infof("OIDC API auth enabled (issuer=%s, expected_client_id=%s)", apiAuthIssuerURL, apiAuthClientID)
-	} else {
-		log.Warn("API auth disabled (--api-auth=false); all requests are unauthenticated")
+	verifier, err := buildAPIVerifier(context.Background(), apiAuthIssuerURL, apiAuthClientID, apiAuth)
+	if err != nil {
+		log.Fatalf("%v", err)
 	}
 
-	// Build Swagger UI auth config.
-	var cookieSecret []byte
-	if swaggerClientID != "" {
-		if swaggerCookieSecret != "" {
-			cookieSecret = []byte(swaggerCookieSecret)
-		} else {
-			var genErr error
-			cookieSecret, genErr = GenerateCookieSecret()
-			if genErr != nil {
-				log.Fatalf("failed to generate cookie secret: %v", genErr)
-			}
-			log.Warn("no --swagger-cookie-secret provided; generated an ephemeral key (sessions will not survive restarts)")
-		}
-		log.Infof("Swagger UI login enabled (client_id=%s, issuer=%s)", swaggerClientID, apiAuthIssuerURL)
-	}
-	swaggerCfg := &SwaggerAuthConfig{
-		IssuerURL:    apiAuthIssuerURL,
-		ClientID:     swaggerClientID,
-		ClientSecret: swaggerClientSecret,
-		CookieSecret: cookieSecret,
+	swaggerCfg, err := buildSwaggerAuthConfig(swaggerClientID, swaggerClientSecret, swaggerCookieSecret, apiAuthIssuerURL)
+	if err != nil {
+		log.Fatalf("%v", err)
 	}
 
 	app := NewApp(op, verifier, apiAuthClientID, swaggerCfg)
