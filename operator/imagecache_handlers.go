@@ -13,7 +13,15 @@ import (
 )
 
 // bulkImageOp binds the request, validates it, applies fn to each image,
-// and returns a 200 (all ok) or 207 (partial failure) bulk response.
+// and returns a 200 (all ok) or 207 Multi-Status (partial failure).
+//
+// 207 is most strongly associated with WebDAV but is the only standard
+// status that conveys "the request as a whole was processed; individual
+// sub-operations may have failed independently." Callers can gate on
+// the status alone to detect any per-image failure without deserializing
+// the body. A 200-plus-body-flag scheme was considered and rejected
+// because it forces every caller to parse the body just to know whether
+// anything went wrong.
 func (o *Operator) bulkImageOp(c echo.Context, fn func(ctx context.Context, image string) error) error {
 	ctx := c.Request().Context()
 
