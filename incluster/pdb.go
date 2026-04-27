@@ -3,6 +3,7 @@ package incluster
 import (
 	"context"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v10"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,7 +24,7 @@ func (i *Incluster) createPodDisruptionBudget(ctx context.Context, analysis *mod
 		Spec: policyv1.PodDisruptionBudgetSpec{
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"external-id": analysis.InvocationID,
+					constants.ExternalIDLabel: analysis.InvocationID,
 				},
 			},
 			MaxUnavailable: &intstr.IntOrString{

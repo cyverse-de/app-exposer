@@ -1,0 +1,59 @@
+package httphandlers
+
+import (
+	"net/http"
+
+	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/app-exposer/operatorclient"
+	"github.com/labstack/echo/v4"
+)
+
+// UpdatePermissionsHandler pushes a new allowed-users list to the operator
+// running the given analysis. The full user list is provided (not incremental).
+//
+//	@ID				update-permissions
+//	@Summary		Update VICE analysis permissions
+//	@Description	Pushes an updated list of allowed users to the operator's
+//	@Description	permissions ConfigMap for the given analysis.
+//	@Accept			json
+//	@Param			analysis-id	path	string									true	"The analysis ID"
+//	@Param			request		body	operatorclient.UpdatePermissionsRequest	true	"The new allowed users list"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		404	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/{analysis-id}/permissions [put]
+func (h *HTTPHandlers) UpdatePermissionsHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+	analysisID := constants.AnalysisID(c.Param(constants.AnalysisIDLabel))
+	if analysisID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is required")
+	}
+
+	var req operatorclient.UpdatePermissionsRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	if len(req.AllowedUsers) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "allowedUsers must not be empty")
+	}
+
+	// Find the operator running this analysis.
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
+	if err != nil {
+		log.Errorf("operator routing unavailable for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "operator routing temporarily unavailable")
+	}
+	if client == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "no operator found for analysis "+analysisID)
+	}
+
+	// Push the updated permissions to the operator.
+	if err := client.UpdatePermissions(ctx, analysisID, req.AllowedUsers); err != nil {
+		log.Errorf("failed to update permissions for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.NoContent(http.StatusOK)
+}

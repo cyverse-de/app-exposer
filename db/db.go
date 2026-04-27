@@ -17,14 +17,29 @@ var log = common.Log
 const otelName = "github.com/cyverse-de/jex-adapter/db"
 
 type Database struct {
-	db *sqlx.DB
+	db  *sqlx.DB
+	uri string
 }
 
-func New(db *sqlx.DB) *Database {
-	return &Database{
-		db,
-	}
+// New wraps the given sqlx.DB. The uri is the same connection string used to
+// open db; it's stored so consumers that need a second, dedicated connection
+// (e.g. the reconciler's LISTEN channel) can obtain it without having the
+// caller thread it through separately alongside the wrapped handle.
+func New(db *sqlx.DB, uri string) *Database {
+	return &Database{db: db, uri: uri}
 }
+
+// SQLX returns the underlying sqlx.DB handle. Callers that only need a
+// query-executing abstraction should use *Database's typed methods instead;
+// this accessor exists for code that needs the raw handle (e.g. passing it
+// into a subpackage whose constructor takes *sqlx.DB).
+func (d *Database) SQLX() *sqlx.DB { return d.db }
+
+// URI returns the connection string this Database was opened with. Consumers
+// that need a dedicated connection (distinct from the pooled handle) — most
+// notably pq.NewListener for PostgreSQL LISTEN/NOTIFY — should read it from
+// here rather than re-plumbing the URI through separate parameters.
+func (d *Database) URI() string { return d.uri }
 
 func (d *Database) SetMillicoresReservedByAnalysisID(ctx context.Context, analysisID string, millicoresReserved *apd.Decimal) error {
 	var err error

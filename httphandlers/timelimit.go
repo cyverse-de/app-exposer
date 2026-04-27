@@ -3,6 +3,7 @@ package httphandlers
 import (
 	"net/http"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/labstack/echo/v4"
 )
 
@@ -24,7 +25,7 @@ func (h *HTTPHandlers) TimeLimitUpdateHandler(c echo.Context) error {
 
 	var (
 		err  error
-		id   string
+		id   constants.AnalysisID
 		user string
 	)
 
@@ -35,7 +36,7 @@ func (h *HTTPHandlers) TimeLimitUpdateHandler(c echo.Context) error {
 	}
 
 	// id is required
-	id = c.Param("analysis-id")
+	id = constants.AnalysisID(c.Param(constants.AnalysisIDLabel))
 	if id == "" {
 		idErr := echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 		log.Error(idErr)
@@ -66,11 +67,11 @@ func (h *HTTPHandlers) AdminTimeLimitUpdateHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	var (
 		err  error
-		id   string
+		id   constants.AnalysisID
 		user string
 	)
 	// id is required
-	id = c.Param("analysis-id")
+	id = constants.AnalysisID(c.Param(constants.AnalysisIDLabel))
 	if id == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}
@@ -105,7 +106,7 @@ func (h *HTTPHandlers) GetTimeLimitHandler(c echo.Context) error {
 
 	var (
 		err        error
-		analysisID string
+		analysisID constants.AnalysisID
 		user       string
 		userID     string
 	)
@@ -117,7 +118,7 @@ func (h *HTTPHandlers) GetTimeLimitHandler(c echo.Context) error {
 	}
 
 	// analysisID is required
-	analysisID = c.Param("analysis-id")
+	analysisID = constants.AnalysisID(c.Param(constants.AnalysisIDLabel))
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}
@@ -151,12 +152,12 @@ func (h *HTTPHandlers) AdminGetTimeLimitHandler(c echo.Context) error {
 
 	var (
 		err        error
-		analysisID string
+		analysisID constants.AnalysisID
 		userID     string
 	)
 
 	// analysisID is required
-	analysisID = c.Param("analysis-id")
+	analysisID = constants.AnalysisID(c.Param(constants.AnalysisIDLabel))
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "id parameter is empty")
 	}

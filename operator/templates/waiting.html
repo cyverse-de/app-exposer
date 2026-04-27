@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waiting for Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --cobalt: #0971AB;
+            --cobalt-light: rgba(9, 113, 171, 0.12);
+            --navy: #004471;
+            --dark-navy: #142248;
+            --sky: #99D9EA;
+            --sky-pale: rgba(153, 217, 234, 0.15);
+            --bg: #f4f4f4;
+            --card: #ffffff;
+            --text: #333333;
+            --text-muted: #48515f;
+            --text-faint: #a5a4a4;
+            --border: #e2e2e2;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(9, 113, 171, 0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(20, 34, 72, 0.05) 0%, transparent 60%);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: var(--card);
+            border-radius: 12px;
+            box-shadow:
+                0 1px 3px rgba(0, 0, 0, 0.06),
+                0 8px 24px rgba(20, 34, 72, 0.08);
+            padding: 48px 40px 40px;
+            max-width: 480px;
+            width: 90%;
+            text-align: center;
+            animation: fadeUp 0.4s ease-out;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Orbital spinner: three concentric rings rotating at different speeds. */
+        .spinner-wrap {
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 28px;
+            position: relative;
+        }
+
+        .ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 2.5px solid transparent;
+        }
+
+        .ring-outer {
+            inset: 0;
+            border-top-color: var(--cobalt);
+            border-right-color: var(--cobalt);
+            animation: spin 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        .ring-mid {
+            inset: 8px;
+            border-bottom-color: var(--sky);
+            border-left-color: var(--sky);
+            animation: spin 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite reverse;
+        }
+
+        .ring-inner {
+            inset: 16px;
+            border-top-color: var(--navy);
+            animation: spin 1.2s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* CyVerse leaf mark. */
+        .leaf {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .leaf svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 500;
+            color: var(--dark-navy);
+            margin-bottom: 12px;
+            letter-spacing: -0.01em;
+        }
+
+        .message {
+            font-size: 0.9rem;
+            font-weight: 300;
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .countdown {
+            font-size: 0.8rem;
+            font-weight: 400;
+            color: var(--text-faint);
+            letter-spacing: 0.02em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner-wrap">
+            <div class="ring ring-outer"></div>
+            <div class="ring ring-mid"></div>
+            <div class="ring ring-inner"></div>
+        </div>
+
+        <div class="leaf" aria-hidden="true">
+            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M50 10 C25 25, 10 55, 20 85 C30 70, 45 55, 50 50 C55 55, 70 70, 80 85 C90 55, 75 25, 50 10Z"
+                      fill="var(--cobalt)" opacity="0.85"/>
+                <path d="M50 50 L50 85" stroke="var(--sky)" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+                <path d="M50 60 L38 52" stroke="var(--sky)" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+                <path d="M50 68 L62 58" stroke="var(--sky)" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+            </svg>
+        </div>
+
+        <h1>Waiting for Analysis</h1>
+        <p class="message">
+            Your analysis is being prepared. This page will
+            automatically refresh until your environment is ready.
+        </p>
+        <p class="countdown" id="countdown"></p>
+    </div>
+
+    <script>
+    (function() {
+        var interval = {{.RefreshSeconds}};
+        var remaining = interval;
+        var countdownEl = document.getElementById("countdown");
+
+        function updateCountdown() {
+            countdownEl.textContent = "Refreshing in " + remaining + "s\u2026";
+        }
+
+        function tick() {
+            remaining--;
+            if (remaining <= 0) {
+                countdownEl.textContent = "Refreshing\u2026";
+                window.location.reload();
+                return;
+            }
+            updateCountdown();
+            setTimeout(tick, 1000);
+        }
+
+        updateCountdown();
+        setTimeout(tick, 1000);
+    })();
+    </script>
+</body>
+</html>

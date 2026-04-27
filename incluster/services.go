@@ -27,20 +27,20 @@ func (i *Incluster) getService(ctx context.Context, job *model.Job) (*apiv1.Serv
 		},
 		Spec: apiv1.ServiceSpec{
 			Selector: map[string]string{
-				"external-id": job.InvocationID,
+				constants.ExternalIDLabel: job.InvocationID,
 			},
 			Ports: []apiv1.ServicePort{
 				{
 					Name:       constants.FileTransfersPortName,
 					Protocol:   apiv1.ProtocolTCP,
 					Port:       constants.FileTransfersPort,
-					TargetPort: intstr.FromString(constants.FileTransfersPortName),
+					TargetPort: intstr.FromInt32(constants.FileTransfersPort),
 				},
 				{
 					Name:       constants.VICEProxyPortName,
 					Protocol:   apiv1.ProtocolTCP,
 					Port:       constants.VICEProxyServicePort,
-					TargetPort: intstr.FromString(constants.VICEProxyPortName),
+					TargetPort: intstr.FromInt32(constants.VICEProxyPort),
 				},
 			},
 		},

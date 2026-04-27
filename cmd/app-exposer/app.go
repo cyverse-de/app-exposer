@@ -7,11 +7,12 @@ import (
 	"github.com/cyverse-de/app-exposer/adapter"
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/db"
 	"github.com/cyverse-de/app-exposer/httphandlers"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/instantlaunches"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/outcluster"
-	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf"
 	"github.com/nats-io/nats.go"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
@@ -23,7 +24,6 @@ import (
 
 	_ "github.com/cyverse-de/app-exposer/docs"
 	echoSwagger "github.com/swaggo/echo-swagger"
-	//"github.com/labstack/gommon/log"
 )
 
 // ExposerApp encapsulates the overall application-logic, tying together the
@@ -36,28 +36,27 @@ type ExposerApp struct {
 	namespace       string
 	clientset       kubernetes.Interface
 	router          *echo.Echo
-	db              *sqlx.DB
+	dbase           *db.Database
 	instantlaunches *instantlaunches.App
 }
 
 // ExposerAppInit contains configuration settings for creating a new ExposerApp.
 type ExposerAppInit struct {
-	Namespace                  string // The namespace that the routes settings are added to.
-	ViceNamespace              string // The namespace containing the running VICE apps.
-	ViceProxyImage             string
-	ViceDomain                 string
-	GetAnalysisIDService       string
-	CheckResourceAccessService string
-	db                         *sqlx.DB
-	UserSuffix                 string
-	IRODSZone                  string
-	ClientSet                  kubernetes.Interface
-	GatewayClient              *gatewayclient.GatewayV1Client
-	batchadapter               *adapter.JEXAdapter
-	ImagePullSecretName        string
-	LocalStorageClass          string
-	DisableViceProxyAuth       bool
-	BypassUsers                []string
+	Namespace               string // The namespace that the route settings are added to.
+	ViceNamespace           string // The namespace containing the running VICE apps.
+	ViceProxyImage          string
+	ViceDomain              string
+	UserSuffix              string
+	IRODSZone               string
+	ClientSet               kubernetes.Interface
+	GatewayClient           *gatewayclient.GatewayV1Client
+	batchadapter            *adapter.JEXAdapter
+	dbase                   *db.Database
+	MaxConcurrentLaunches   int
+	ImagePullSecretName     string
+	LocalStorageClass       string
+	ClusterConfigSecretName string
+	BypassUsers             []string
 }
 
 //	@title			app-exposer
@@ -119,27 +118,21 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		ImagePullSecretName:           init.ImagePullSecretName,
 		ViceProxyImage:                init.ViceProxyImage,
 		FrontendBaseURL:               c.String("k8s.frontend.base"),
-		GetAnalysisIDService:          init.GetAnalysisIDService,
-		CheckResourceAccessService:    init.CheckResourceAccessService,
 		VICEBackendNamespace:          deNamespace,
 		AppsServiceBaseURL:            appsServiceBaseURL,
 		JobStatusURL:                  jobStatusURL,
 		UserSuffix:                    init.UserSuffix,
 		PermissionsURL:                permissionsURL,
-		KeycloakBaseURL:               c.String("keycloak.base"),
-		KeycloakRealm:                 c.String("keycloak.realm"),
-		KeycloakClientID:              c.String("keycloak.client-id"),
-		KeycloakClientSecret:          c.String("keycloak.client-secret"),
 		IRODSZone:                     init.IRODSZone,
 		GatewayProvider:               c.String("vice.gateway_provider"),
-		DisableViceProxyAuth:          init.DisableViceProxyAuth,
+		ClusterConfigSecretName:       init.ClusterConfigSecretName,
 		NATSEncodedConn:               conn,
 		LocalStorageClass:             init.LocalStorageClass,
 		BypassUsers:                   init.BypassUsers,
 		TimeLimitExtensionSeconds:     timeLimitExtensionSeconds,
 	}
 
-	incluster := incluster.New(inclusterInit, init.db, init.ClientSet, init.GatewayClient, apps)
+	incluster := incluster.New(inclusterInit, init.dbase.SQLX(), init.ClientSet, init.GatewayClient, apps)
 
 	app := &ExposerApp{
 		outcluster: outcluster.New(init.ClientSet, init.GatewayClient, deNamespace, init.Namespace, init.ViceDomain),
@@ -147,12 +140,25 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		namespace:  init.Namespace,
 		clientset:  init.ClientSet,
 		router:     echo.New(),
-		db:         init.db,
-		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter),
+		dbase:      init.dbase,
+		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter, init.dbase, init.MaxConcurrentLaunches),
 	}
 
+	// Configure operator scheduler. Try config first for backward compatibility,
+	// but the reconciler will later overwrite this from the database.
+	var operatorConfigs []operatorclient.OperatorConfig
+	if err := c.Unmarshal("vice.operators", &operatorConfigs); err != nil {
+		log.Warnf("could not parse operators config: %v", err)
+	}
+
+	scheduler, err := operatorclient.NewScheduler(operatorConfigs, nil)
+	if err != nil {
+		log.Fatalf("error creating operator scheduler: %v", err)
+	}
+	app.handlers.SetScheduler(scheduler)
+	log.Infof("operator scheduler configured with %d operators from config", len(operatorConfigs))
+
 	app.router.Use(otelecho.Middleware("app-exposer"))
-	//app.router.Use(middleware.Logger())
 
 	ilInit := &instantlaunches.Init{
 		UserSuffix:      init.UserSuffix,
@@ -162,7 +168,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	app.router.HTTPErrorHandler = func(err error, c echo.Context) {
 		code := http.StatusInternalServerError
-		var body interface{}
+		var body any
 
 		switch err := err.(type) {
 		case common.ErrorResponse:
@@ -197,7 +203,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	vice := app.router.Group("/vice")
 	vice.Use(middleware.Logger())
 	vice.POST("/launch", app.handlers.LaunchAppHandler)
-	vice.POST("/apply-labels", app.handlers.ApplyAsyncLabelsHandler)
+	vice.POST("/dry-run", app.handlers.DryRunBundleHandler)
 	vice.GET("/async-data", app.handlers.AsyncDataHandler)
 	vice.GET("/listing", app.handlers.FilterableResourcesHandler)
 	vice.POST("/:id/download-input-files", app.handlers.TriggerDownloadsHandler)
@@ -208,6 +214,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	vice.GET("/:analysis-id/logs", app.handlers.LogsHandler)
 	vice.POST("/:analysis-id/time-limit", app.handlers.TimeLimitUpdateHandler)
 	vice.GET("/:analysis-id/time-limit", app.handlers.GetTimeLimitHandler)
+	vice.PUT("/:analysis-id/permissions", app.handlers.UpdatePermissionsHandler)
 	vice.GET("/:host/url-ready", app.handlers.URLReadyHandler)
 	vice.GET("/:host/description", app.handlers.DescribeAnalysisHandler)
 
@@ -220,7 +227,12 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	vicelisting.GET("/routes", app.handlers.FilterableRoutesHandler)
 
 	viceadmin := vice.Group("/admin")
+	viceadmin.GET("/operators", app.handlers.AdminOperatorsHandler)
+	viceadmin.POST("/operators", app.handlers.CreateOperatorHandler)
+	viceadmin.GET("/operators/capacities", app.handlers.AdminOperatorCapacitiesHandler)
+	viceadmin.DELETE("/operators/name/:name", app.handlers.DeleteOperatorHandler)
 	viceadmin.GET("/listing", app.handlers.AdminFilterableResourcesHandler)
+	viceadmin.GET("/operator-listing", app.handlers.AdminOperatorListingHandler)
 	viceadmin.POST("/terminate-all", app.handlers.TerminateAllAnalysesHandler)
 	viceadmin.GET("/:host/description", app.handlers.AdminDescribeAnalysisHandler)
 	viceadmin.GET("/:host/url-ready", app.handlers.AdminURLReadyHandler)
@@ -260,7 +272,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 
 	ilgroup := app.router.Group("/instantlaunches")
 	ilgroup.Use(middleware.Logger())
-	app.instantlaunches = instantlaunches.New(app.db, ilgroup, ilInit)
+	app.instantlaunches = instantlaunches.New(app.dbase.SQLX(), ilgroup, ilInit)
 
 	return app
 }

@@ -1,0 +1,193 @@
+package operator
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/cyverse-de/app-exposer/common"
+	"github.com/labstack/echo/v4"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+// bulkImageOp binds the request, validates it, applies fn to each image,
+// and returns a 200 (all ok) or 207 Multi-Status (partial failure).
+//
+// 207 is most strongly associated with WebDAV but is the only standard
+// status that conveys "the request as a whole was processed; individual
+// sub-operations may have failed independently." Callers can gate on
+// the status alone to detect any per-image failure without deserializing
+// the body. A 200-plus-body-flag scheme was considered and rejected
+// because it forces every caller to parse the body just to know whether
+// anything went wrong.
+func (o *Operator) bulkImageOp(c echo.Context, fn func(ctx context.Context, image string) error) error {
+	ctx := c.Request().Context()
+
+	var req ImageCacheRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, common.ErrorResponse{Message: "invalid request body"})
+	}
+	if len(req.Images) == 0 {
+		return c.JSON(http.StatusBadRequest, common.ErrorResponse{Message: "images list must not be empty"})
+	}
+
+	results := make([]ImageCacheResult, 0, len(req.Images))
+	hasError := false
+	for _, image := range req.Images {
+		if err := fn(ctx, image); err != nil {
+			log.Errorf("image cache operation failed for %s: %v", image, err)
+			results = append(results, ImageCacheResult{Image: image, Status: "error", Error: err.Error()})
+			hasError = true
+		} else {
+			results = append(results, ImageCacheResult{Image: image, Status: "ok"})
+		}
+	}
+
+	status := http.StatusOK
+	if hasError {
+		status = http.StatusMultiStatus
+	}
+	return c.JSON(status, ImageCacheBulkResponse{Results: results})
+}
+
+// HandleCacheImages creates or updates cache DaemonSets for the given images.
+//
+//	@Summary		Cache container images
+//	@Description	Creates a DaemonSet per image to pre-pull it onto every node.
+//	@Description	Each DaemonSet uses an init container with the target image and
+//	@Description	a pause main container. For distroless/scratch images lacking
+//	@Description	"true", the init container will CrashLoopBackOff — this is expected
+//	@Description	and the image is still cached. Status will show "cached-with-errors".
+//	@Tags			image-cache
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		ImageCacheRequest		true	"Images to cache"
+//	@Success		200		{object}	ImageCacheBulkResponse	"All images cached successfully"
+//	@Success		207		{object}	ImageCacheBulkResponse	"Partial success"
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Router			/image-cache [put]
+func (o *Operator) HandleCacheImages(c echo.Context) error {
+	return o.bulkImageOp(c, o.imageCache.EnsureImageCached)
+}
+
+// HandleRemoveCachedImages removes cache DaemonSets for the given images.
+//
+//	@Summary		Remove cached images (bulk)
+//	@Description	Deletes the cache DaemonSets for the specified images.
+//	@Description	Non-existent images are silently ignored (idempotent).
+//	@Description	Note: some HTTP clients drop the body on DELETE requests.
+//	@Description	Use DELETE /image-cache/:id for single-image removal from browsers.
+//	@Tags			image-cache
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		ImageCacheRequest	true	"Images to remove"
+//	@Success		200		{object}	ImageCacheBulkResponse
+//	@Success		207		{object}	ImageCacheBulkResponse	"Partial success"
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Router			/image-cache [delete]
+func (o *Operator) HandleRemoveCachedImages(c echo.Context) error {
+	return o.bulkImageOp(c, o.imageCache.RemoveCachedImage)
+}
+
+// HandleRefreshCachedImages forces cache DaemonSets to re-pull images by
+// restarting their pods. Use this when a new image has been pushed under
+// the same tag.
+//
+//	@Summary		Refresh cached images
+//	@Description	Restarts cache DaemonSet pods to force a fresh pull of images
+//	@Description	that may have been updated under the same tag. The DaemonSet
+//	@Description	init container uses PullAlways, so the restart causes containerd
+//	@Description	to fetch the latest manifest.
+//	@Tags			image-cache
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		ImageCacheRequest		true	"Images to refresh"
+//	@Success		200		{object}	ImageCacheBulkResponse	"All images refreshed"
+//	@Success		207		{object}	ImageCacheBulkResponse	"Partial success"
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Router			/image-cache/refresh [post]
+func (o *Operator) HandleRefreshCachedImages(c echo.Context) error {
+	return o.bulkImageOp(c, o.imageCache.RefreshCachedImage)
+}
+
+// HandleListCachedImages returns the status of all cached images.
+//
+//	@Summary		List cached images
+//	@Description	Returns all image cache DaemonSets with their pull status.
+//	@Tags			image-cache
+//	@Produce		json
+//	@Success		200	{object}	ImageCacheListResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/image-cache [get]
+func (o *Operator) HandleListCachedImages(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	images, err := o.imageCache.ListCachedImages(ctx)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, common.ErrorResponse{Message: err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, ImageCacheListResponse{Images: images})
+}
+
+// HandleGetCachedImage returns the status of a single cached image.
+//
+//	@Summary		Get cached image status
+//	@Description	Returns the cache status for a single image by its slug ID
+//	@Description	(from the "id" field in list responses).
+//	@Tags			image-cache
+//	@Produce		json
+//	@Param			id	path		string	true	"Image cache slug ID"
+//	@Success		200	{object}	ImageCacheStatus
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		404	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/image-cache/{id} [get]
+func (o *Operator) HandleGetCachedImage(c echo.Context) error {
+	ctx := c.Request().Context()
+	id := c.Param("id")
+	if id == "" {
+		return c.JSON(http.StatusBadRequest, common.ErrorResponse{Message: "image cache id is required"})
+	}
+
+	status, err := o.imageCache.GetCachedImageStatus(ctx, id)
+	if err != nil {
+		// GetCachedImageStatus wraps the K8s error with fmt.Errorf(%w), so
+		// unwrap explicitly with errors.As before comparing the reason. This
+		// matches the pattern used in gateway.go for CORS middleware lookups.
+		var statusErr *apierrors.StatusError
+		if errors.As(err, &statusErr) && statusErr.ErrStatus.Reason == metav1.StatusReasonNotFound {
+			return c.JSON(http.StatusNotFound, common.ErrorResponse{Message: fmt.Sprintf("no cached image with id %q", id)})
+		}
+		return c.JSON(http.StatusInternalServerError, common.ErrorResponse{Message: err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, status)
+}
+
+// HandleDeleteCachedImage removes a single cached image by its slug ID.
+//
+//	@Summary		Remove a cached image
+//	@Description	Deletes the cache DaemonSet for the image with the given slug ID.
+//	@Description	Returns success even if already absent (idempotent).
+//	@Tags			image-cache
+//	@Param			id	path	string	true	"Image cache slug ID"
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/image-cache/{id} [delete]
+func (o *Operator) HandleDeleteCachedImage(c echo.Context) error {
+	ctx := c.Request().Context()
+	id := c.Param("id")
+	if id == "" {
+		return c.JSON(http.StatusBadRequest, common.ErrorResponse{Message: "image cache id is required"})
+	}
+
+	if err := o.imageCache.RemoveCachedImageByID(ctx, id); err != nil {
+		return c.JSON(http.StatusInternalServerError, common.ErrorResponse{Message: err.Error()})
+	}
+
+	return c.NoContent(http.StatusOK)
+}

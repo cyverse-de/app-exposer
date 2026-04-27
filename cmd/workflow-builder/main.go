@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/cyverse-de/app-exposer/batch"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/model/v10"
 	"github.com/pkg/errors"
@@ -29,7 +30,7 @@ func main() {
 		transferWorkingDir = flag.String("transfer-working-dir", "/de-app-work", "The working directory within the file transfer image.")
 		transferLogLevel   = flag.String("transfer-log-level", "debug", "The log level of the output of the file transfer tool.")
 		statusSenderImage  = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
-		analysisID         = flag.String("analysis-id", "", "The unique identifier for the analysis.")
+		analysisID         = flag.String(constants.AnalysisIDLabel, "", "The unique identifier for the analysis.")
 		quiet              = flag.Bool("quiet", false, "Whether to turn off printing out the workflow.")
 		doSubmit           = flag.Bool("submit", false, "Whether to submit the workflow to the cluster.")
 		out                = flag.String("out", "", "The file the workflow will be written to.")
@@ -97,7 +98,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func() { _ = infile.Close() }()
+	defer func() { _ = infile.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 
 	if err = json.NewDecoder(infile).Decode(&inputJob); err != nil {
 		log.Fatal(err)
@@ -127,7 +128,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			defer func() { _ = outfile.Close() }()
+			defer func() { _ = outfile.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 		}
 
 		if err = yaml.NewEncoder(outfile).Encode(&workflow); err != nil {
