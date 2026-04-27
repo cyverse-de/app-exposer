@@ -193,8 +193,8 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK"
+                    "202": {
+                        "description": "Accepted"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -462,10 +462,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/operator.StatusPod"
-                            }
+                            "$ref": "#/definitions/operatorclient.PodsResponse"
                         }
                     },
                     "400": {
@@ -500,8 +497,8 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK"
+                    "202": {
+                        "description": "Accepted"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -529,8 +526,8 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK"
+                    "202": {
+                        "description": "Accepted"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -1196,20 +1193,6 @@ const docTemplate = `{
                 }
             }
         },
-        "operator.StatusPod": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "phase": {
-                    "type": "string"
-                },
-                "ready": {
-                    "type": "boolean"
-                }
-            }
-        },
         "operator.StatusResponse": {
             "type": "object",
             "properties": {
@@ -1340,6 +1323,9 @@ const docTemplate = `{
                 "availableSlots": {
                     "type": "integer"
                 },
+                "gpuVendor": {
+                    "type": "string"
+                },
                 "maxAnalyses": {
                     "type": "integer"
                 },
@@ -1369,6 +1355,17 @@ const docTemplate = `{
             "properties": {
                 "sessions_invalidated": {
                     "type": "integer"
+                }
+            }
+        },
+        "operatorclient.PodsResponse": {
+            "type": "object",
+            "properties": {
+                "pods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operatorclient.StatusPod"
+                    }
                 }
             }
         },

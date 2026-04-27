@@ -101,7 +101,7 @@ func TestClientMethods(t *testing.T) {
 	statusBody := `{"deployments":[{"name":"d1"}],"pods":[]}`
 	statusEmptyBody := `{"deployments":[],"pods":[]}`
 	urlReadyBody := `{"ready":true,"access_url":"https://x.example"}`
-	podsBody := `[{"name":"p1"}]`
+	podsBody := `{"pods":[{"name":"p1"}]}`
 	logsBody := `{"pod":"p1","container":"analysis","logs":"hello"}`
 	activeSessionsBody := `{"sessions":[{"session_id":"s1","username":"u1"}]}`
 

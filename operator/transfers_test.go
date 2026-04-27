@@ -239,7 +239,7 @@ func newTransferContext(e *echo.Echo, analysisID string) (echo.Context, *httptes
 	return c, rec
 }
 
-// TestHandleSaveAndExit covers param validation and the immediate 200 response.
+// TestHandleSaveAndExit covers param validation and the immediate 202 response.
 // The background goroutine's outcome is not verified since it runs asynchronously
 // and the file-transfer sidecar is unreachable in tests.
 func TestHandleSaveAndExit(t *testing.T) {
@@ -257,13 +257,13 @@ func TestHandleSaveAndExit(t *testing.T) {
 			wantErr:    true,
 		},
 		{
-			name:       "valid analysis-id returns 200 immediately",
+			name:       "valid analysis-id returns 202 immediately",
 			analysisID: "save-and-exit-test-1",
 			setup: func(t *testing.T, cs *fake.Clientset) {
 				t.Helper()
 				// Create a Service so triggerFileTransfer can find it in the goroutine.
 				// The goroutine will still fail to reach the sidecar, but that happens
-				// after the handler has already returned 200.
+				// after the handler has already returned 202.
 				_, err := cs.CoreV1().Services("vice-apps").Create(
 					context.Background(),
 					&apiv1.Service{
@@ -278,7 +278,7 @@ func TestHandleSaveAndExit(t *testing.T) {
 				)
 				require.NoError(t, err)
 			},
-			wantStatus: http.StatusOK,
+			wantStatus: http.StatusAccepted,
 			wantErr:    false,
 		},
 	}
@@ -308,7 +308,7 @@ func TestHandleSaveAndExit(t *testing.T) {
 	}
 }
 
-// TestHandleDownloadInputFiles covers param validation and the immediate 200 response.
+// TestHandleDownloadInputFiles covers param validation and the immediate 202 response.
 func TestHandleDownloadInputFiles(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -323,9 +323,9 @@ func TestHandleDownloadInputFiles(t *testing.T) {
 			wantErr:    true,
 		},
 		{
-			name:       "valid analysis-id returns 200 immediately",
+			name:       "valid analysis-id returns 202 immediately",
 			analysisID: "download-inputs-test-1",
-			wantStatus: http.StatusOK,
+			wantStatus: http.StatusAccepted,
 			wantErr:    false,
 		},
 	}
@@ -352,7 +352,7 @@ func TestHandleDownloadInputFiles(t *testing.T) {
 	}
 }
 
-// TestHandleSaveOutputFiles covers param validation and the immediate 200 response.
+// TestHandleSaveOutputFiles covers param validation and the immediate 202 response.
 func TestHandleSaveOutputFiles(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -367,9 +367,9 @@ func TestHandleSaveOutputFiles(t *testing.T) {
 			wantErr:    true,
 		},
 		{
-			name:       "valid analysis-id returns 200 immediately",
+			name:       "valid analysis-id returns 202 immediately",
 			analysisID: "save-outputs-test-1",
-			wantStatus: http.StatusOK,
+			wantStatus: http.StatusAccepted,
 			wantErr:    false,
 		},
 	}

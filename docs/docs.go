@@ -2896,6 +2896,9 @@ const docTemplate = `{
                 "availableSlots": {
                     "type": "integer"
                 },
+                "gpuVendor": {
+                    "type": "string"
+                },
                 "maxAnalyses": {
                     "type": "integer"
                 },

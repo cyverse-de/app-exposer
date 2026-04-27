@@ -55,10 +55,10 @@ type CapacityResponse struct {
 	MaxAnalyses       int    `json:"maxAnalyses"`
 	RunningAnalyses   int    `json:"runningAnalyses"`
 	AvailableSlots    int    `json:"availableSlots"`
-	AllocatableCPU    int64  `json:"allocatableCPU"`     // millicores
-	AllocatableMemory int64  `json:"allocatableMemory"`  // bytes
-	UsedCPU           int64  `json:"usedCPU"`            // millicores
-	UsedMemory        int64  `json:"usedMemory"`         // bytes
+	AllocatableCPU    int64  `json:"allocatableCPU"`    // millicores
+	AllocatableMemory int64  `json:"allocatableMemory"` // bytes
+	UsedCPU           int64  `json:"usedCPU"`           // millicores
+	UsedMemory        int64  `json:"usedMemory"`        // bytes
 	GPUVendor         string `json:"gpuVendor,omitempty"`
 }
 
@@ -68,6 +68,15 @@ type CapacityResponse struct {
 // non-zero slot count.
 func (c *CapacityResponse) HasCapacity() bool {
 	return c.AvailableSlots != 0
+}
+
+// PodsResponse wraps the pod-info list returned by the operator's
+// /analyses/{id}/pods endpoint. Wrapping the array in an object lets the
+// response gain new fields (counts, pagination, etc.) without breaking
+// existing clients, and matches the `{"pods": [...]}` shape used by
+// StatusResponse.
+type PodsResponse struct {
+	Pods []StatusPod `json:"pods"`
 }
 
 // GPU resource names used to detect a bundle's requested GPU vendor.

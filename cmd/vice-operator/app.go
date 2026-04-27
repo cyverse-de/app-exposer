@@ -119,6 +119,21 @@ func (a *LoadingApp) Start(addr string) error {
 	return a.router.Start(addr)
 }
 
+// stripBearer extracts the token from an `Authorization: Bearer <token>`
+// header value. RFC 7235 specifies that auth schemes are case-insensitive,
+// so "Bearer", "bearer", "BEARER" all match. Returns ("", false) when the
+// header is empty or doesn't start with the Bearer scheme.
+func stripBearer(auth string) (string, bool) {
+	const prefix = "Bearer "
+	if len(auth) < len(prefix) {
+		return "", false
+	}
+	if !strings.EqualFold(auth[:len(prefix)], prefix) {
+		return "", false
+	}
+	return auth[len(prefix):], true
+}
+
 // bearerAuthMiddleware returns Echo middleware that validates JWT Bearer tokens
 // from Keycloak. It accepts tokens from two sources:
 //  1. Authorization: Bearer <token> header (machine-to-machine).
@@ -134,8 +149,8 @@ func bearerAuthMiddleware(verifier *oidc.IDTokenVerifier, expectedClientID strin
 			var rawToken string
 
 			// Prefer the Authorization header; fall back to the session cookie.
-			if auth := c.Request().Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
-				rawToken = strings.TrimPrefix(auth, "Bearer ")
+			if token, ok := stripBearer(c.Request().Header.Get("Authorization")); ok {
+				rawToken = token
 			} else if swaggerCfg.Enabled() {
 				extracted, err := extractTokenFromCookie(c, swaggerCfg.CookieSecret)
 				if err != nil {

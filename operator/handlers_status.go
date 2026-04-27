@@ -174,7 +174,7 @@ func (o *Operator) HandleURLReady(c echo.Context) error {
 //	@Tags			analyses
 //	@Produce		json
 //	@Param			analysis-id	path		string	true	"The analysis ID"
-//	@Success		200			{array}		StatusPod
+//	@Success		200			{object}	operatorclient.PodsResponse
 //	@Failure		400			{object}	common.ErrorResponse
 //	@Failure		500			{object}	common.ErrorResponse
 //	@Router			/analyses/{analysis-id}/pods [get]
@@ -201,7 +201,7 @@ func (o *Operator) HandlePods(c echo.Context) error {
 		})
 	}
 
-	return c.JSON(http.StatusOK, podInfos)
+	return c.JSON(http.StatusOK, operatorclient.PodsResponse{Pods: podInfos})
 }
 
 // hasReadyDeployment returns true if any deployment in the list has at least

@@ -67,6 +67,30 @@ func routeNamespacesAll() *gatewayv1.FromNamespaces {
 	return &all
 }
 
+// traefikMiddleware mirrors the Traefik v1alpha1 Middleware CRD shape for
+// just the fields we use (headers / CORS). Importing Traefik's Go module
+// would pull the full proxy machinery in for a single resource, so we
+// keep a local type instead. Drift risk is small and contained: any
+// upstream rename of the headers fields would surface as a JSON-shape
+// failure at the next CRD apply, not a silent miscompile.
+type traefikMiddleware struct {
+	APIVersion string                `json:"apiVersion"`
+	Kind       string                `json:"kind"`
+	Metadata   metav1.ObjectMeta     `json:"metadata"`
+	Spec       traefikMiddlewareSpec `json:"spec"`
+}
+
+type traefikMiddlewareSpec struct {
+	Headers *traefikHeaders `json:"headers,omitempty"`
+}
+
+type traefikHeaders struct {
+	AccessControlAllowMethods    []string `json:"accessControlAllowMethods,omitempty"`
+	AccessControlAllowOriginList []string `json:"accessControlAllowOriginList,omitempty"`
+	AccessControlAllowHeaders    []string `json:"accessControlAllowHeaders,omitempty"`
+	AccessControlMaxAge          int      `json:"accessControlMaxAge,omitempty"`
+}
+
 // EnsureCORSMiddleware ensures the Traefik CORS Middleware CRD resource exists
 // in the given namespace. Uses the REST client directly since the Middleware CRD
 // is a Traefik-specific type not in the standard typed client.
@@ -78,20 +102,19 @@ func EnsureCORSMiddleware(ctx context.Context, clientset kubernetes.Interface, n
 		apiResource    = "middlewares"
 	)
 
-	// Build the Middleware object as a plain map (no typed struct needed).
-	obj := map[string]any{
-		"apiVersion": apiGroup + "/" + apiVersion,
-		"kind":       "Middleware",
-		"metadata": map[string]any{
-			"name":      middlewareName,
-			"namespace": namespace,
+	obj := traefikMiddleware{
+		APIVersion: apiGroup + "/" + apiVersion,
+		Kind:       "Middleware",
+		Metadata: metav1.ObjectMeta{
+			Name:      middlewareName,
+			Namespace: namespace,
 		},
-		"spec": map[string]any{
-			"headers": map[string]any{
-				"accessControlAllowMethods":    []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-				"accessControlAllowOriginList": []string{"*"},
-				"accessControlAllowHeaders":    []string{"*"},
-				"accessControlMaxAge":          600,
+		Spec: traefikMiddlewareSpec{
+			Headers: &traefikHeaders{
+				AccessControlAllowMethods:    []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+				AccessControlAllowOriginList: []string{"*"},
+				AccessControlAllowHeaders:    []string{"*"},
+				AccessControlMaxAge:          600,
 			},
 		},
 	}
@@ -99,11 +122,10 @@ func EnsureCORSMiddleware(ctx context.Context, clientset kubernetes.Interface, n
 	log.Debugf("ensuring CORS middleware %s/%s exists", namespace, middlewareName)
 
 	// Traefik's Middleware is a CRD defined by Traefik, not a core K8s
-	// type — there's no typed client in client-go for it, and pulling in
-	// Traefik's Go module for a single resource is dependency bloat.
-	// Touch it through the clientset's REST client with an explicit
-	// AbsPath instead. The error shape is still *apierrors.StatusError,
-	// so apierrors.IsNotFound handles it the same as the typed-client
+	// type — there's no typed client in client-go for it. We touch it
+	// through the clientset's REST client with an explicit AbsPath
+	// instead. The error shape is still *apierrors.StatusError, so
+	// apierrors.IsNotFound handles it the same as the typed-client
 	// sites elsewhere in this file.
 	restClient := clientset.CoreV1().RESTClient()
 	getErr := restClient.

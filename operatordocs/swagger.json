@@ -186,8 +186,8 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK"
+                    "202": {
+                        "description": "Accepted"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -455,10 +455,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/operator.StatusPod"
-                            }
+                            "$ref": "#/definitions/operatorclient.PodsResponse"
                         }
                     },
                     "400": {
@@ -493,8 +490,8 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK"
+                    "202": {
+                        "description": "Accepted"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -522,8 +519,8 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK"
+                    "202": {
+                        "description": "Accepted"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -1189,20 +1186,6 @@
                 }
             }
         },
-        "operator.StatusPod": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "phase": {
-                    "type": "string"
-                },
-                "ready": {
-                    "type": "boolean"
-                }
-            }
-        },
         "operator.StatusResponse": {
             "type": "object",
             "properties": {
@@ -1333,6 +1316,9 @@
                 "availableSlots": {
                     "type": "integer"
                 },
+                "gpuVendor": {
+                    "type": "string"
+                },
                 "maxAnalyses": {
                     "type": "integer"
                 },
@@ -1362,6 +1348,17 @@
             "properties": {
                 "sessions_invalidated": {
                     "type": "integer"
+                }
+            }
+        },
+        "operatorclient.PodsResponse": {
+            "type": "object",
+            "properties": {
+                "pods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operatorclient.StatusPod"
+                    }
                 }
             }
         },

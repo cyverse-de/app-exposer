@@ -209,15 +209,6 @@ definitions:
       updated:
         type: integer
     type: object
-  operator.StatusPod:
-    properties:
-      name:
-        type: string
-      phase:
-        type: string
-      ready:
-        type: boolean
-    type: object
   operator.StatusResponse:
     properties:
       analysisID:
@@ -305,6 +296,8 @@ definitions:
         type: integer
       availableSlots:
         type: integer
+      gpuVendor:
+        type: string
       maxAnalyses:
         type: integer
       runningAnalyses:
@@ -325,6 +318,13 @@ definitions:
     properties:
       sessions_invalidated:
         type: integer
+    type: object
+  operatorclient.PodsResponse:
+    properties:
+      pods:
+        items:
+          $ref: '#/definitions/operatorclient.StatusPod'
+        type: array
     type: object
   operatorclient.StatusDeployment:
     properties:
@@ -10870,8 +10870,8 @@ paths:
         required: true
         type: string
       responses:
-        "200":
-          description: OK
+        "202":
+          description: Accepted
         "400":
           description: Bad Request
           schema:
@@ -11063,9 +11063,7 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/operator.StatusPod'
-            type: array
+            $ref: '#/definitions/operatorclient.PodsResponse'
         "400":
           description: Bad Request
           schema:
@@ -11089,8 +11087,8 @@ paths:
         required: true
         type: string
       responses:
-        "200":
-          description: OK
+        "202":
+          description: Accepted
         "400":
           description: Bad Request
           schema:
@@ -11110,8 +11108,8 @@ paths:
         required: true
         type: string
       responses:
-        "200":
-          description: OK
+        "202":
+          description: Accepted
         "400":
           description: Bad Request
           schema:

@@ -7,6 +7,7 @@ import (
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -17,11 +18,18 @@ func TestBuildAnalysisEgressPolicy(t *testing.T) {
 	labels := map[string]string{constants.AnalysisIDLabel: "test-123", constants.AppTypeLabel: "interactive"}
 
 	tests := []struct {
-		name              string
-		cfg               NetworkPolicyConfig
-		wantRuleCount     int
-		wantExceptCIDRs   []string // expected Except list on the first rule (if present)
-		wantNoExceptEmpty bool     // if true, verify no empty string in Except
+		name string
+		cfg  NetworkPolicyConfig
+		// wantRuleCount is the total number of egress rules expected.
+		wantRuleCount int
+		// wantInternetRule signals that a 0.0.0.0/0 internet-access rule
+		// should be present; wantExceptCIDRs (when set) asserts the Except
+		// list on that rule. Both are independent of wantAllowedCIDRs, which
+		// asserts the allow-CIDRs rule's peer list.
+		wantInternetRule  bool
+		wantExceptCIDRs   []string
+		wantAllowedCIDRs  []string
+		wantNoExceptEmpty bool
 	}{
 		{
 			name: "normal ServiceCIDR included in except list",
@@ -29,8 +37,9 @@ func TestBuildAnalysisEgressPolicy(t *testing.T) {
 				Namespace:   "vice-apps",
 				ServiceCIDR: "10.0.0.0/8",
 			},
-			wantRuleCount:   1,
-			wantExceptCIDRs: []string{"10.0.0.0/8"},
+			wantRuleCount:    1,
+			wantInternetRule: true,
+			wantExceptCIDRs:  []string{"10.0.0.0/8"},
 		},
 		{
 			name: "empty ServiceCIDR excluded from except list",
@@ -39,6 +48,7 @@ func TestBuildAnalysisEgressPolicy(t *testing.T) {
 				ServiceCIDR: "",
 			},
 			wantRuleCount:     1,
+			wantInternetRule:  true,
 			wantNoExceptEmpty: true,
 		},
 		{
@@ -49,6 +59,7 @@ func TestBuildAnalysisEgressPolicy(t *testing.T) {
 				BlockedCIDRs: []string{"172.16.0.0/12"},
 			},
 			wantRuleCount:     1,
+			wantInternetRule:  true,
 			wantExceptCIDRs:   []string{"172.16.0.0/12"},
 			wantNoExceptEmpty: true,
 		},
@@ -59,8 +70,9 @@ func TestBuildAnalysisEgressPolicy(t *testing.T) {
 				ServiceCIDR:  "10.0.0.0/8",
 				BlockedCIDRs: []string{"172.16.0.0/12"},
 			},
-			wantRuleCount:   1,
-			wantExceptCIDRs: []string{"10.0.0.0/8", "172.16.0.0/12"},
+			wantRuleCount:    1,
+			wantInternetRule: true,
+			wantExceptCIDRs:  []string{"10.0.0.0/8", "172.16.0.0/12"},
 		},
 		{
 			name: "DisableInternet omits 0.0.0.0/0 rule",
@@ -79,7 +91,21 @@ func TestBuildAnalysisEgressPolicy(t *testing.T) {
 				DisableInternet: true,
 				AllowedCIDRs:    []string{"192.168.1.0/24"},
 			},
-			wantRuleCount: 1,
+			wantRuleCount:    1,
+			wantAllowedCIDRs: []string{"192.168.1.0/24"},
+		},
+		{
+			name: "internet rule and allow rule coexist",
+			cfg: NetworkPolicyConfig{
+				Namespace:    "vice-apps",
+				ServiceCIDR:  "10.0.0.0/8",
+				BlockedCIDRs: []string{"172.16.0.0/12"},
+				AllowedCIDRs: []string{"192.168.1.0/24", "192.168.2.0/24"},
+			},
+			wantRuleCount:    2,
+			wantInternetRule: true,
+			wantExceptCIDRs:  []string{"10.0.0.0/8", "172.16.0.0/12"},
+			wantAllowedCIDRs: []string{"192.168.1.0/24", "192.168.2.0/24"},
 		},
 	}
 
@@ -93,17 +119,40 @@ func TestBuildAnalysisEgressPolicy(t *testing.T) {
 			assert.Equal(t, labels, np.Labels)
 			assert.Equal(t, tt.wantRuleCount, len(np.Spec.Egress))
 
-			// Check the except list on the internet-access rule (first rule
-			// when DisableInternet is false).
-			if tt.wantExceptCIDRs != nil && len(np.Spec.Egress) > 0 {
-				rule := np.Spec.Egress[0]
-				require.Len(t, rule.To, 1)
-				require.NotNil(t, rule.To[0].IPBlock)
-				assert.Equal(t, "0.0.0.0/0", rule.To[0].IPBlock.CIDR)
-				assert.Equal(t, tt.wantExceptCIDRs, rule.To[0].IPBlock.Except)
+			// Locate the internet-access rule (single peer with CIDR
+			// 0.0.0.0/0) and the allow-CIDRs rule (one peer per CIDR,
+			// no 0.0.0.0/0). Walking by content rather than index keeps
+			// the assertions stable regardless of rule ordering.
+			var internetRule, allowRule *netv1.NetworkPolicyEgressRule
+			for i := range np.Spec.Egress {
+				rule := &np.Spec.Egress[i]
+				if isInternetRule(rule) {
+					internetRule = rule
+				} else if isAllowCIDRsRule(rule) {
+					allowRule = rule
+				}
 			}
 
-			// Verify no empty string sneaks into the except list.
+			if tt.wantInternetRule {
+				require.NotNil(t, internetRule, "expected an internet-access (0.0.0.0/0) rule")
+				if tt.wantExceptCIDRs != nil {
+					assert.Equal(t, tt.wantExceptCIDRs, internetRule.To[0].IPBlock.Except)
+				}
+			} else {
+				assert.Nil(t, internetRule, "did not expect a 0.0.0.0/0 rule")
+			}
+
+			if tt.wantAllowedCIDRs != nil {
+				require.NotNil(t, allowRule, "expected an allow-CIDRs rule")
+				gotCIDRs := make([]string, len(allowRule.To))
+				for i, peer := range allowRule.To {
+					require.NotNil(t, peer.IPBlock, "allow rule peers must be IPBlock")
+					gotCIDRs[i] = peer.IPBlock.CIDR
+				}
+				assert.Equal(t, tt.wantAllowedCIDRs, gotCIDRs)
+			}
+
+			// Verify no empty string sneaks into any Except list.
 			if tt.wantNoExceptEmpty {
 				for _, rule := range np.Spec.Egress {
 					for _, peer := range rule.To {
@@ -117,6 +166,32 @@ func TestBuildAnalysisEgressPolicy(t *testing.T) {
 			}
 		})
 	}
+}
+
+// isInternetRule reports whether r is the open-internet rule (a single
+// IPBlock peer with CIDR 0.0.0.0/0). The Except list may be present.
+func isInternetRule(r *netv1.NetworkPolicyEgressRule) bool {
+	return len(r.To) == 1 && r.To[0].IPBlock != nil && r.To[0].IPBlock.CIDR == "0.0.0.0/0"
+}
+
+// isAllowCIDRsRule reports whether r is an allow-CIDRs rule (every peer
+// is an IPBlock with no Except list and no 0.0.0.0/0 CIDR).
+func isAllowCIDRsRule(r *netv1.NetworkPolicyEgressRule) bool {
+	if len(r.To) == 0 {
+		return false
+	}
+	for _, peer := range r.To {
+		if peer.IPBlock == nil {
+			return false
+		}
+		if peer.IPBlock.CIDR == "0.0.0.0/0" {
+			return false
+		}
+		if len(peer.IPBlock.Except) != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // TestEnsureNamespacePoliciesHappyPath verifies all three policies land

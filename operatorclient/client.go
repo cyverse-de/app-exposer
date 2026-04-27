@@ -377,11 +377,11 @@ func (c *Client) Pods(ctx context.Context, analysisID AnalysisID) ([]StatusPod, 
 	if err != nil {
 		return nil, err
 	}
-	var pods []StatusPod
-	if err := json.Unmarshal(raw, &pods); err != nil {
+	var resp PodsResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil, fmt.Errorf("decoding pods response for analysis %s: %w", analysisID, err)
 	}
-	return pods, nil
+	return resp.Pods, nil
 }
 
 // Logs returns container logs for an analysis from the operator. The

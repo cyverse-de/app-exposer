@@ -909,6 +909,8 @@ definitions:
         type: integer
       availableSlots:
         type: integer
+      gpuVendor:
+        type: string
       maxAnalyses:
         type: integer
       runningAnalyses:

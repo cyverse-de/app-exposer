@@ -2,6 +2,7 @@ package reconciler
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -44,20 +45,36 @@ type Reconciler struct {
 // be nil — in that case the per-pod operator_name back-fill in ReconcileNext
 // is skipped.
 func New(database db.ReconcilerDB, appsLookup apps.OperatorNameLookup, scheduler *operatorclient.Scheduler, ts oauth2.TokenSource) *Reconciler {
-	hostname, err := os.Hostname()
-	if err != nil {
-		// Fall back to empty hostname — reconciled_by just becomes "",
-		// which still lets reconciliation proceed and is visible in logs.
-		log.Warnf("os.Hostname failed, reconciled_by will be empty: %v", err)
-	}
 	return &Reconciler{
 		db:          database,
 		apps:        appsLookup,
 		scheduler:   scheduler,
 		tokenSource: ts,
-		hostname:    hostname,
+		hostname:    resolveHostname(),
 		ip:          getLocalIP(),
 	}
+}
+
+// resolveHostname returns the OS hostname, or a synthesized "unknown-host-XXXX"
+// stand-in when os.Hostname fails. The synthesized value is stable for the
+// process lifetime so all reconciliation rows from one process group
+// together in the audit trail; without it, multiple failing reconcilers
+// would all write reconciled_by="" and become indistinguishable.
+func resolveHostname() string {
+	hostname, err := os.Hostname()
+	if err == nil {
+		return hostname
+	}
+	var buf [4]byte
+	if _, randErr := rand.Read(buf[:]); randErr != nil {
+		// crypto/rand failing is unusual; mirror the prior behavior and
+		// accept an empty hostname rather than inventing a non-unique one.
+		log.Warnf("os.Hostname failed (%v) and crypto/rand failed (%v); reconciled_by will be empty", err, randErr)
+		return ""
+	}
+	synth := fmt.Sprintf("unknown-host-%x", buf[:])
+	log.Warnf("os.Hostname failed (%v); using synthesized hostname %q so reconciler actions still correlate", err, synth)
+	return synth
 }
 
 func getLocalIP() string {

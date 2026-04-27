@@ -44,6 +44,14 @@ var transferHTTPClient = &http.Client{Timeout: 30 * time.Second}
 // out the real initialPollInterval (5s) every time the poll loop runs.
 var pollSleep = common.SleepCtx
 
+// transferStatus is the JSON shape returned by the file-transfer
+// sidecar's POST /upload, /download endpoints (initial response) and
+// GET /{path}/{uuid} status endpoint (subsequent polls).
+type transferStatus struct {
+	UUID   string `json:"uuid"`
+	Status string `json:"status"`
+}
+
 // HandleSaveAndExit triggers the file transfer sidecar to upload outputs,
 // then deletes all analysis resources.
 //
@@ -52,7 +60,7 @@ var pollSleep = common.SleepCtx
 //	@Description	then deletes all K8s resources for the analysis. Runs asynchronously.
 //	@Tags			transfers
 //	@Param			analysis-id	path	string	true	"The analysis ID"
-//	@Success		200
+//	@Success		202
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Router			/analyses/{analysis-id}/save-and-exit [post]
 func (o *Operator) HandleSaveAndExit(c echo.Context) error {
@@ -87,7 +95,7 @@ func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 		}
 	}()
 
-	return c.NoContent(http.StatusOK)
+	return c.NoContent(http.StatusAccepted)
 }
 
 // HandleDownloadInputFiles triggers the file-transfer sidecar to download
@@ -98,7 +106,7 @@ func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 //	@Description	for the analysis. Runs asynchronously.
 //	@Tags			transfers
 //	@Param			analysis-id	path	string	true	"The analysis ID"
-//	@Success		200
+//	@Success		202
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Router			/analyses/{analysis-id}/download-input-files [post]
 func (o *Operator) HandleDownloadInputFiles(c echo.Context) error {
@@ -113,16 +121,16 @@ func (o *Operator) HandleDownloadInputFiles(c echo.Context) error {
 //	@Description	for the analysis. Runs asynchronously.
 //	@Tags			transfers
 //	@Param			analysis-id	path	string	true	"The analysis ID"
-//	@Success		200
+//	@Success		202
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Router			/analyses/{analysis-id}/save-output-files [post]
 func (o *Operator) HandleSaveOutputFiles(c echo.Context) error {
 	return o.handleAsyncTransfer(c, "save-output-files", "/upload")
 }
 
-// handleAsyncTransfer validates the analysis-id param, starts a file transfer
-// in a background goroutine, and returns 200 immediately. The caller (user)
-// does not block on the transfer.
+// handleAsyncTransfer validates the analysis-id param, starts a file
+// transfer in a background goroutine, and returns 202 Accepted immediately.
+// The caller (user) does not block on the transfer.
 func (o *Operator) handleAsyncTransfer(c echo.Context, action, transferPath string) error {
 	analysisID, err := requiredParam(c, constants.AnalysisIDLabel)
 	if err != nil {
@@ -143,7 +151,7 @@ func (o *Operator) handleAsyncTransfer(c echo.Context, action, transferPath stri
 		}
 	}()
 
-	return c.NoContent(http.StatusOK)
+	return c.NoContent(http.StatusAccepted)
 }
 
 // triggerFileTransfer finds the analysis Service by label and POSTs to the
@@ -186,10 +194,7 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 		return fmt.Errorf("reading transfer response: %w", err)
 	}
 
-	var xferResp struct {
-		UUID   string `json:"uuid"`
-		Status string `json:"status"`
-	}
+	var xferResp transferStatus
 	if err := json.Unmarshal(body, &xferResp); err != nil {
 		return fmt.Errorf("unmarshalling transfer response: %w", err)
 	}
@@ -231,36 +236,46 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 		}
 
 		// JoinPath appends the transfer UUID to the base path (e.g. /upload/<uuid>).
-		statusURL := *svcURL.JoinPath(xferResp.UUID)
+		statusURL := svcURL.JoinPath(xferResp.UUID).String()
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL.String(), nil)
+		next, err := pollTransferStatus(ctx, statusURL)
 		if err != nil {
-			return fmt.Errorf("creating status request: %w", err)
+			return err
 		}
-		resp, err := transferHTTPClient.Do(req)
-		if err != nil {
-			return fmt.Errorf("polling transfer status: %w", err)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		// Inline close: a `defer` inside the loop would only fire at
-		// function return, leaking bodies for every iteration.
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Warnf("closing transfer-status response body: %v", closeErr)
-		}
-		if err != nil {
-			return fmt.Errorf("reading status response: %w", err)
-		}
-		if err := json.Unmarshal(body, &xferResp); err != nil {
-			return fmt.Errorf("unmarshalling status response: %w", err)
-		}
+		xferResp = next
 	}
 
 	if xferResp.Status == "failed" {
 		log.Errorf("file transfer failed for analysis %s (uuid %s)", analysisID, xferResp.UUID)
 		return fmt.Errorf("file transfer failed for analysis %s", analysisID)
 	}
-
 	log.Infof("file transfer complete for analysis %s (uuid %s)", analysisID, xferResp.UUID)
 	return nil
+}
+
+// pollTransferStatus issues a single GET against the sidecar's transfer-
+// status endpoint and decodes the response. Extracted from triggerFile-
+// Transfer's poll loop so the response body can `defer` cleanly instead
+// of being closed inline (a `defer` inside the loop would leak each
+// iteration's body until the surrounding function returned).
+func pollTransferStatus(ctx context.Context, statusURL string) (transferStatus, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+	if err != nil {
+		return transferStatus{}, fmt.Errorf("creating status request: %w", err)
+	}
+	resp, err := transferHTTPClient.Do(req)
+	if err != nil {
+		return transferStatus{}, fmt.Errorf("polling transfer status: %w", err)
+	}
+	defer common.CloseBody(resp)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return transferStatus{}, fmt.Errorf("reading status response: %w", err)
+	}
+	var s transferStatus
+	if err := json.Unmarshal(body, &s); err != nil {
+		return transferStatus{}, fmt.Errorf("unmarshalling status response: %w", err)
+	}
+	return s, nil
 }
