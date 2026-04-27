@@ -22,8 +22,9 @@ func isTransientLaunchError(err error) bool {
 		return false
 	}
 	// Our own HTTPStatusError exposes a Transient predicate that returns
-	// true for 5xx; anything 4xx (other than 409, which is ErrCapacityExhausted
-	// above this check) is a request we built wrong and should not be retried.
+	// true for 5xx; anything 4xx (other than 409, which the caller has
+	// already mapped to ErrCapacityExhausted) is a request we built
+	// wrong and should not be retried.
 	var se *HTTPStatusError
 	if errors.As(err, &se) {
 		return se.Transient()

@@ -40,10 +40,9 @@ type Reconciler struct {
 // connection string used to open a dedicated PostgreSQL LISTEN channel for
 // operator-change notifications; a URI of "" disables NOTIFY-driven syncs and
 // falls back to periodic polling. The token source is passed through to the
-// scheduler for authenticating requests to operator instances. database and
-// appsLookup are accepted as narrow interfaces so tests can inject fakes;
-// production passes *db.Database and *apps.Apps. appsLookup may be nil — in
-// that case the per-pod operator_name back-fill in ReconcileNext is skipped.
+// scheduler for authenticating requests to operator instances. appsLookup may
+// be nil — in that case the per-pod operator_name back-fill in ReconcileNext
+// is skipped.
 func New(database db.ReconcilerDB, appsLookup apps.OperatorNameLookup, scheduler *operatorclient.Scheduler, ts oauth2.TokenSource) *Reconciler {
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -86,20 +85,18 @@ const (
 	maxListenerBackoff     = DefaultSyncInterval
 )
 
-// Default intervals for the reconciliation worker. All three were
-// previously inline magic numbers; promoting them to named constants
-// makes the relationships between them visible — the reconcile cadence
-// is tighter than the sync cadence because reconciliation is per-
-// operator (so N operators imply N×cycle wall-clock) while sync just
-// refreshes the operator list from the DB. DefaultClaimTTL is the
-// window after which a previously-reconciled operator is eligible for
-// claim-and-reconcile again; it needs to be comfortably larger than
-// DefaultReconcileInterval so a single operator is reconciled at most
-// once per TTL window.
 const (
-	DefaultSyncInterval      = 5 * time.Minute
+	// DefaultSyncInterval is the periodic-poll cadence used as a fallback
+	// when NOTIFY-driven syncs are unavailable.
+	DefaultSyncInterval = 5 * time.Minute
+	// DefaultReconcileInterval is the per-operator reconciliation cadence;
+	// tighter than the sync cadence because reconciliation runs per
+	// operator while sync just refreshes the operator list.
 	DefaultReconcileInterval = 30 * time.Second
-	DefaultClaimTTL          = 60 * time.Second
+	// DefaultClaimTTL bounds how soon a previously-reconciled operator is
+	// eligible for re-reconciliation; must be comfortably larger than
+	// DefaultReconcileInterval to avoid back-to-back claims on one operator.
+	DefaultClaimTTL = 60 * time.Second
 )
 
 // startListener returns a channel that fires whenever this process should
@@ -312,10 +309,9 @@ func (r *Reconciler) SyncOperators(ctx context.Context) error {
 	return nil
 }
 
-// ReconcileNext claims one operator that is due for reconciliation and
-// processes all analyses in its cluster. The claim and reconciliation
-// timestamp update happen within a single transaction so the FOR UPDATE
-// SKIP LOCKED row lock is held for the entire operation.
+// ReconcileNext claims one operator due for reconciliation and processes
+// all analyses in its cluster. The claim and timestamp update are
+// coordinated atomically by the database.
 func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 	return r.db.ClaimAndReconcile(ctx, r.hostname, DefaultClaimTTL, func(tx *sqlx.Tx, op *db.Operator) error {
 		log.Infof("reconciling operator %q", op.Name)

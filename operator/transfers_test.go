@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -228,10 +227,6 @@ func TestTriggerFileTransferInitialRequestFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "transfer request returned 500")
 }
-
-// Silence the unused-import linter guard for strings if the file is
-// edited in the future to not need it.
-var _ = strings.Builder{}
 
 func newTransferContext(e *echo.Echo, analysisID string) (echo.Context, *httptest.ResponseRecorder) {
 	req := httptest.NewRequest(http.MethodPost, "/analyses/"+analysisID+"/transfer", nil)

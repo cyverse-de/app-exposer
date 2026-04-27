@@ -364,7 +364,7 @@ func (o *Operator) HandleListing(c echo.Context) error {
 	log.Debugf("listing interactive resources with filter: %v", filter)
 
 	// Build label selector starting with the mandatory app-type=interactive label.
-	ls := labels.Set{constants.AppTypeLabel: "interactive"}
+	ls := labels.Set{constants.AppTypeLabel: string(constants.Interactive)}
 	for k, v := range filter {
 		ls[k] = v
 	}
@@ -448,7 +448,7 @@ func (o *Operator) HandleRegenerateNetworkPolicies(c echo.Context) error {
 	log.Info("regenerating per-analysis network policies")
 
 	// List all VICE deployments to discover running analyses and their labels.
-	viceSelector := labels.Set{constants.AppTypeLabel: "interactive"}.AsSelector().String()
+	viceSelector := labels.Set{constants.AppTypeLabel: string(constants.Interactive)}.AsSelector().String()
 	deps, err := o.clientset.AppsV1().Deployments(o.namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: viceSelector,
 	})

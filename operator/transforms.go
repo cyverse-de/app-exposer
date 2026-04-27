@@ -21,21 +21,14 @@ const (
 	nvidiaGPUResource    apiv1.ResourceName = "nvidia.com/gpu"
 	amdGPUResource       apiv1.ResourceName = "amd.com/gpu"
 	nvidiaModelAffinityK                    = "nvidia.com/gpu.product"
-	// amdModelAffinityK is the node label a bundle's nodeAffinity rules
-	// target when TransformGPUVendor flips the vendor to AMD. If a cluster
-	// uses a different key, that cluster's GPU-model-specific affinity
-	// rules will fail to match and analyses will land on any AMD node
-	// rather than a specific model — loud enough to notice in scheduling
-	// events, so there's no need to defend against it here.
-	amdModelAffinityK = "amd.com/gpu.product"
+	amdModelAffinityK                       = "amd.com/gpu.product"
 )
 
 // GPUVendor describes which GPU vendor the operator's cluster uses.
 type GPUVendor string
 
 const (
-	// GPUVendorNvidia represents NVIDIA GPU hardware (the default; bundles
-	// arrive pre-configured for NVIDIA).
+	// GPUVendorNvidia represents NVIDIA GPU hardware (the default).
 	GPUVendorNvidia GPUVendor = "nvidia"
 
 	// GPUVendorAMD represents AMD GPU hardware.

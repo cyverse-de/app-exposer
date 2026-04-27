@@ -97,24 +97,23 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
-// launchAcquireTimeoutForTest bounds how long LaunchAppHandler will wait
-// for a free launch slot before giving up and returning 503. Short enough
-// that a blocked client can back off, long enough to absorb brief bursts
-// without thrashing. A package-level `var` rather than a `const` so tests
-// can shrink it to keep wall-clock cost down without dynamic injection
-// plumbing; production code never writes to it.
-var launchAcquireTimeoutForTest = 5 * time.Second
+// launchAcquireTimeout bounds how long LaunchAppHandler will wait for a
+// free launch slot before giving up and returning 503. Short enough that
+// a blocked client can back off, long enough to absorb brief bursts
+// without thrashing. A `var` rather than a `const` so tests can shrink
+// it without dynamic injection plumbing; production code never writes to it.
+var launchAcquireTimeout = 5 * time.Second
 
 // acquireLaunchSlot reserves a slot in the launch semaphore, waiting up to
-// launchAcquireTimeoutForTest. On success, returns a release callback the
-// caller must invoke when its background goroutine finishes. On timeout,
-// returns (nil, false). Isolated from LaunchAppHandler so the gating logic
-// is directly testable without having to spin up a full validation pipeline.
+// launchAcquireTimeout. On success, returns a release callback the caller
+// must invoke when its background goroutine finishes. On timeout, returns
+// (nil, false). Isolated from LaunchAppHandler so the gating logic is
+// directly testable without having to spin up a full validation pipeline.
 func (h *HTTPHandlers) acquireLaunchSlot() (release func(), ok bool) {
 	select {
 	case h.launchSemaphore <- struct{}{}:
 		return func() { <-h.launchSemaphore }, true
-	case <-time.After(launchAcquireTimeoutForTest):
+	case <-time.After(launchAcquireTimeout):
 		return nil, false
 	}
 }
@@ -185,11 +184,11 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 
 // setOperatorNameWithRetry records which operator is running an analysis,
 // retrying a few times to survive transient DB blips. SetOperatorName
-// already retries internally for the "jobs row not yet visible" case
-// (up to 10 × 1s); this wrapper layers a small additional retry on top
-// to handle connection-level failures that bypass the inner loop. When
-// the outer retry also exhausts, the reconciler's back-fill will
-// eventually close the hole within ~30 s.
+// already retries internally for the "jobs row not yet visible" case;
+// this wrapper layers a small additional retry on top to handle
+// connection-level failures that bypass the inner loop. When the outer
+// retry also exhausts, the reconciler's back-fill will eventually close
+// the hole within ~30 s.
 func (h *HTTPHandlers) setOperatorNameWithRetry(ctx context.Context, analysisID constants.AnalysisID, operatorName string) error {
 	const attempts = 3
 	var lastErr error

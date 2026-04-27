@@ -209,19 +209,11 @@ type URLReadyResponse struct {
 // instance. It is the canonical shape for operator metadata that crosses
 // process boundaries: koanf tags let it be loaded from a config file;
 // json tags let it be marshalled over the HTTP API; db tags let sqlx
-// scan directly from the operators table's SELECT columns. This struct
-// previously had three near-duplicate siblings (db.OperatorSummary,
-// cmd/vice-operator-tool.OperatorSummary, cmd/vice-operator-tool.
-// AddOperatorRequest); they were consolidated here to eliminate drift.
+// scan directly from the operators table's SELECT columns.
 //
 // The internal full-row struct db.Operator continues to exist for DB
 // access that needs the write-only fields (timestamps, reconciliation
 // state, etc.) that don't belong on the wire.
-//
-// Operators are listed in priority order; the scheduler tries them
-// sequentially. Priority is preserved across every serialization form
-// so downstream code does not have to reach back to the DB ordering to
-// know the intended precedence.
 type OperatorConfig struct {
 	Name          string `json:"name"            koanf:"name"            db:"name"`
 	URL           string `json:"url"             koanf:"url"             db:"url"`

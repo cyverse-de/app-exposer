@@ -456,9 +456,8 @@ func main() {
 		if providerErr != nil {
 			log.Fatalf("failed to discover OIDC provider at %q: %v", apiAuthIssuerURL, providerErr)
 		}
-		// Skip the built-in audience check — Keycloak client credentials
-		// tokens use azp (authorized party) instead of aud for the client ID.
-		// The bearerAuthMiddleware verifies azp manually.
+		// Keycloak client-credentials tokens use azp instead of aud, so
+		// disable the built-in audience check.
 		verifier = provider.Verifier(&oidc.Config{SkipClientIDCheck: true})
 		log.Infof("OIDC API auth enabled (issuer=%s, expected_client_id=%s)", apiAuthIssuerURL, apiAuthClientID)
 	} else {

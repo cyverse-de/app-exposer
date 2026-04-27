@@ -7,9 +7,10 @@ import (
 	"time"
 )
 
-// mustEnsure runs fn with a 30-second timeout and fatally exits on error.
-// This eliminates the repetitive context-create / defer-cancel / log.Fatalf
-// boilerplate for each startup ensure call.
+// mustEnsure runs fn — a function intended to ensure that a resource
+// exists in Kubernetes — with a 30-second timeout, and fatally exits on
+// error. This eliminates the repetitive context-create / defer-cancel /
+// log.Fatalf boilerplate at each startup ensure-call site.
 func mustEnsure(resource string, fn func(ctx context.Context) error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

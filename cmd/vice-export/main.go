@@ -22,7 +22,7 @@ func main() {
 	flag.Parse()
 
 	if *appID == "" {
-		log.Fatal("--app-id must be set.")
+		log.Fatalf("--%s must be set.", constants.AppIDLabel)
 	}
 	if *dbURI == "" {
 		log.Fatal("--db-uri must be set.")
@@ -50,9 +50,11 @@ func main() {
 		defer common.LogClose("output file", outFile)
 	}
 
-	enc := json.NewEncoder(outFile)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(export); err != nil {
+	data, err := json.MarshalIndent(export, "", "  ")
+	if err != nil {
 		log.Fatalf("encoding JSON: %v", err)
+	}
+	if _, err := outFile.Write(append(data, '\n')); err != nil {
+		log.Fatalf("writing JSON: %v", err)
 	}
 }

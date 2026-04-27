@@ -150,10 +150,7 @@ func (e *Enforcer) countJobsForUser(ctx context.Context, username string) (int, 
 					// deployment may belong to a different subsystem
 					// that reuses the analysis-id label. We can't count
 					// something we have no authoritative status for, so
-					// skip it. A previous implementation counted these
-					// "to be safe", but that was overly cautious — a
-					// purged or foreign analysis doesn't consume the
-					// user's quota.
+					// skip it.
 					if stderrors.Is(err, sql.ErrNoRows) {
 						log.Debugf("no DB row for analysis %s referenced by deployment %s; not counting", d.AnalysisID, d.Name)
 						continue

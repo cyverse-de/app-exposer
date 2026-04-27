@@ -94,13 +94,22 @@ const (
 )
 
 // AnalysisID is the app-exposer/DE analysis identifier — the "id" column
-// on the jobs table. ExternalID is the invocation identifier used by
-// upstream messaging and reporting — the "external_id" carried on
-// job_status_updates and on pod labels. They're stored and transmitted
-// as strings; the domain types exist so the compiler catches accidental
-// swaps and so function signatures advertise which identifier they
-// expect. Both are transparent to sqlx, encoding/json, and fmt because
-// their underlying kind is string.
+// on the jobs table. The apps service always assigns an AnalysisID to
+// the analysis as a whole, whether it's a single-step job or a pipeline
+// that spans multiple execution systems.
+//
+// ExternalID is the per-step job identifier within a single execution
+// system. The apps service always provides one as well: for systems
+// that assign their own job IDs (e.g. TAPIS) it records that system's
+// ID; for app-exposer, which has no native job ID, apps synthesizes
+// one. ExternalID appears on job_status_updates and on pod labels, and
+// is what callers look up when they hold a single step rather than a
+// whole analysis.
+//
+// Both are stored and transmitted as strings; the domain types exist so
+// the compiler catches accidental swaps and so function signatures
+// advertise which identifier they expect. Both are transparent to sqlx,
+// encoding/json, and fmt because their underlying kind is string.
 type (
 	AnalysisID string
 	ExternalID string

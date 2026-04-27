@@ -54,15 +54,13 @@ func TestAcquireLaunchSlotSucceeds(t *testing.T) {
 
 // TestAcquireLaunchSlotTimesOut covers the saturation case. With the
 // semaphore full, a subsequent acquire must block until launchAcquireTimeout
-// elapses and then return (nil, false). We cap the test's wall-clock by
-// temporarily shrinking launchAcquireTimeout via the exported indirection
-// pattern — can't monkey-patch a const, so swap it with a var on the test
-// instead (see launchAcquireTimeoutForTest).
+// elapses and then return (nil, false). We shrink launchAcquireTimeout in
+// the test to cap wall-clock cost.
 func TestAcquireLaunchSlotTimesOut(t *testing.T) {
 	// Preserve and restore the real timeout so parallel tests aren't affected.
-	orig := launchAcquireTimeoutForTest
-	launchAcquireTimeoutForTest = 50 * time.Millisecond
-	t.Cleanup(func() { launchAcquireTimeoutForTest = orig })
+	orig := launchAcquireTimeout
+	launchAcquireTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { launchAcquireTimeout = orig })
 
 	h := New(nil, nil, nil, nil, nil, 1)
 	h.launchSemaphore <- struct{}{} // saturate

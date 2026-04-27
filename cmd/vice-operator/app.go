@@ -42,7 +42,6 @@ func NewApp(op *operator.Operator, verifier *oidc.IDTokenVerifier, expectedClien
 	// otherwise served openly. These routes are outside the Bearer auth group
 	// so the login page and OAuth callback are always reachable.
 	if verifier != nil && swaggerCfg.Enabled() {
-		// Login, callback, and logout are outside the session middleware.
 		e.GET("/docs/login", handleLogin(swaggerCfg))
 		e.GET("/docs/callback", handleCallback(swaggerCfg, verifier))
 		e.GET("/docs/logout", handleLogout())

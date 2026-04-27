@@ -1,7 +1,6 @@
 package operator
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -128,9 +127,9 @@ func TestEnsureNamespacePoliciesHappyPath(t *testing.T) {
 		Namespace:      "vice-apps",
 		OperatorLabels: map[string]string{"app": "vice-operator-local"},
 	}
-	require.NoError(t, EnsureNamespacePolicies(context.Background(), cs, cfg))
+	require.NoError(t, EnsureNamespacePolicies(t.Context(), cs, cfg))
 
-	got, err := cs.NetworkingV1().NetworkPolicies("vice-apps").List(context.Background(), metav1.ListOptions{})
+	got, err := cs.NetworkingV1().NetworkPolicies("vice-apps").List(t.Context(), metav1.ListOptions{})
 	require.NoError(t, err)
 	require.Len(t, got.Items, 3, "should create exactly three policies")
 
@@ -174,7 +173,7 @@ func TestEnsureNamespacePoliciesOrderAllowBeforeDeny(t *testing.T) {
 		Namespace:      "vice-apps",
 		OperatorLabels: map[string]string{"app": "vice-operator-local"},
 	}
-	require.NoError(t, EnsureNamespacePolicies(context.Background(), cs, cfg))
+	require.NoError(t, EnsureNamespacePolicies(t.Context(), cs, cfg))
 
 	require.GreaterOrEqual(t, len(createOrder), 2, "expected at least the two egress policies to be created")
 	// Find the indices of the two egress policies and assert the allow
@@ -219,12 +218,12 @@ func TestEnsureNamespacePoliciesBailsOnAllowFailure(t *testing.T) {
 		Namespace:      "vice-apps",
 		OperatorLabels: map[string]string{"app": "vice-operator-local"},
 	}
-	err := EnsureNamespacePolicies(context.Background(), cs, cfg)
+	err := EnsureNamespacePolicies(t.Context(), cs, cfg)
 	require.Error(t, err)
 
 	// Confirm the deny policy was never created — the allow-before-deny
 	// invariant must hold even on partial failure.
-	_, err = cs.NetworkingV1().NetworkPolicies("vice-apps").Get(context.Background(), "vice-default-deny-egress", metav1.GetOptions{})
+	_, err = cs.NetworkingV1().NetworkPolicies("vice-apps").Get(t.Context(), "vice-default-deny-egress", metav1.GetOptions{})
 	require.Error(t, err, "deny-egress policy must not exist after an allow-policy failure")
 }
 

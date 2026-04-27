@@ -76,17 +76,13 @@ func (o *Operator) HandleSaveAndExit(c echo.Context) error {
 
 	log.Infof("save-and-exit requested for analysis %s", analysisID)
 
-	// Run file transfer and cleanup asynchronously so the caller doesn't block.
-	// A detached background context is used because the HTTP request context
-	// will be cancelled once this handler returns, which would abort the
-	// transfer; we bound it with a hard lifetime so a stuck sidecar can't
-	// keep the goroutine alive indefinitely.
+	// Run transfer + cleanup asynchronously with a detached, lifetime-bounded
+	// context so the caller doesn't block and a stuck sidecar can't leak the
+	// goroutine.
 	//
-	// TODO: surface upload failures back to analysis status. The handler has
-	// already responded 200 by the time the goroutine runs, so the user has
-	// no visibility into a failed transfer today beyond the log line below.
-	// That's a larger change (separate notification path or analysis-level
-	// status field) and is tracked separately.
+	// TODO: surface upload failures back to analysis status — once the 200
+	// response is sent, the user has no visibility into a failed transfer
+	// today beyond the log line below.
 	go func() {
 		bgCtx, cancel := context.WithTimeout(context.Background(), maxTransferLifetime)
 		defer cancel()
@@ -148,10 +144,7 @@ func (o *Operator) handleAsyncTransfer(c echo.Context, action, transferPath stri
 
 	log.Infof("%s requested for analysis %s", action, analysisID)
 
-	// Same lifetime-bounding rationale as HandleSaveAndExit above: the HTTP
-	// request context is gone once this handler returns, so we need a
-	// fresh context, but it must have an upper bound so a stuck sidecar
-	// can't leak a goroutine for the life of the pod.
+	// Detached, lifetime-bounded context (see HandleSaveAndExit).
 	go func() {
 		bgCtx, cancel := context.WithTimeout(context.Background(), maxTransferLifetime)
 		defer cancel()

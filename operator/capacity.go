@@ -72,7 +72,7 @@ func (cc *CapacityCalculator) Calculate(ctx context.Context) (*operatorclient.Ca
 	}
 
 	// Count running VICE deployments by the app-type=interactive label.
-	viceSelector := labels.Set{constants.AppTypeLabel: "interactive"}.AsSelector().String()
+	viceSelector := labels.Set{constants.AppTypeLabel: string(constants.Interactive)}.AsSelector().String()
 	deps, err := cc.clientset.AppsV1().Deployments(cc.namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: viceSelector,
 	})
