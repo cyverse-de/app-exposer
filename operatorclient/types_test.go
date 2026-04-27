@@ -9,6 +9,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -176,4 +177,66 @@ func TestAnalysisBundleValidate(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.wantSub)
 		})
 	}
+}
+
+// gpuBundle builds a minimal AnalysisBundle whose deployment containers
+// request the given GPU resource name in either Requests, Limits, or as
+// an init-container resource. resourceName == "" means "no GPU."
+// container == "init" places the resource on an init container instead
+// of a regular one. Used to drive RequestedGPUVendor test cases.
+func gpuBundle(resourceName, container, where string) *AnalysisBundle {
+	c := apiv1.Container{Name: "main"}
+	if resourceName != "" {
+		rl := apiv1.ResourceList{apiv1.ResourceName(resourceName): resource.MustParse("1")}
+		switch where {
+		case "limits":
+			c.Resources.Limits = rl
+		default:
+			c.Resources.Requests = rl
+		}
+	}
+
+	dep := &appsv1.Deployment{Spec: appsv1.DeploymentSpec{Template: apiv1.PodTemplateSpec{}}}
+	if container == "init" {
+		dep.Spec.Template.Spec.InitContainers = []apiv1.Container{c}
+		dep.Spec.Template.Spec.Containers = []apiv1.Container{{Name: "main"}}
+	} else {
+		dep.Spec.Template.Spec.Containers = []apiv1.Container{c}
+	}
+	return &AnalysisBundle{AnalysisID: AnalysisID("test"), Deployment: dep}
+}
+
+func TestRequestedGPUVendor(t *testing.T) {
+	tests := []struct {
+		name         string
+		resourceName string
+		container    string // "main" or "init"
+		where        string // "requests" or "limits"
+		want         string
+	}{
+		{"no GPU returns empty", "", "main", "requests", ""},
+		{"nvidia request returns nvidia", "nvidia.com/gpu", "main", "requests", "nvidia"},
+		{"amd request returns amd", "amd.com/gpu", "main", "requests", "amd"},
+		{"nvidia limit returns nvidia", "nvidia.com/gpu", "main", "limits", "nvidia"},
+		{"amd limit returns amd", "amd.com/gpu", "main", "limits", "amd"},
+		{"nvidia on init container returns nvidia", "nvidia.com/gpu", "init", "requests", "nvidia"},
+		{"unknown GPU resource is ignored", "foo.example.com/gpu", "main", "requests", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := gpuBundle(tt.resourceName, tt.container, tt.where)
+			assert.Equal(t, tt.want, b.RequestedGPUVendor())
+		})
+	}
+
+	t.Run("nil bundle returns empty", func(t *testing.T) {
+		var b *AnalysisBundle
+		assert.Equal(t, "", b.RequestedGPUVendor())
+	})
+
+	t.Run("bundle with no deployment returns empty", func(t *testing.T) {
+		b := &AnalysisBundle{AnalysisID: "test"}
+		assert.Equal(t, "", b.RequestedGPUVendor())
+	})
 }

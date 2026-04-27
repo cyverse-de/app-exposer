@@ -47,15 +47,19 @@ type AnalysisBundle struct {
 // positive means "has capacity", 0 means "at capacity", and -1 means
 // "unlimited" (autoscaling cluster with no configured cap). Prefer
 // HasCapacity() over direct comparison so the convention lives in one
-// place.
+// place. GPUVendor is the cluster's configured GPU vendor (e.g.
+// "nvidia", "amd"); empty when the operator has no GPU configured or
+// pre-dates the field, in which case the scheduler treats it as
+// vendor-agnostic for backwards compatibility.
 type CapacityResponse struct {
-	MaxAnalyses       int   `json:"maxAnalyses"`
-	RunningAnalyses   int   `json:"runningAnalyses"`
-	AvailableSlots    int   `json:"availableSlots"`
-	AllocatableCPU    int64 `json:"allocatableCPU"`    // millicores
-	AllocatableMemory int64 `json:"allocatableMemory"` // bytes
-	UsedCPU           int64 `json:"usedCPU"`           // millicores
-	UsedMemory        int64 `json:"usedMemory"`        // bytes
+	MaxAnalyses       int    `json:"maxAnalyses"`
+	RunningAnalyses   int    `json:"runningAnalyses"`
+	AvailableSlots    int    `json:"availableSlots"`
+	AllocatableCPU    int64  `json:"allocatableCPU"`     // millicores
+	AllocatableMemory int64  `json:"allocatableMemory"`  // bytes
+	UsedCPU           int64  `json:"usedCPU"`            // millicores
+	UsedMemory        int64  `json:"usedMemory"`         // bytes
+	GPUVendor         string `json:"gpuVendor,omitempty"`
 }
 
 // HasCapacity reports whether this operator can accept a new analysis.
@@ -64,6 +68,53 @@ type CapacityResponse struct {
 // non-zero slot count.
 func (c *CapacityResponse) HasCapacity() bool {
 	return c.AvailableSlots != 0
+}
+
+// GPU resource names used to detect a bundle's requested GPU vendor.
+// Kept here (rather than imported from operator/) so the operatorclient
+// package can answer the question without a circular dependency.
+const (
+	gpuResourceNvidia = "nvidia.com/gpu"
+	gpuResourceAMD    = "amd.com/gpu"
+
+	gpuVendorNvidia = "nvidia"
+	gpuVendorAMD    = "amd"
+)
+
+// RequestedGPUVendor inspects the bundle's containers (and init
+// containers) for a vendor-specific GPU resource request. Returns
+// "nvidia" or "amd" when one is found, or "" when the bundle has no
+// GPU requirement. The scheduler uses this to skip operators whose
+// reported GPUVendor does not match. A bundle that mixes vendors
+// (which would already be malformed) returns whichever it sees first;
+// downstream Validate will reject anyway.
+func (b *AnalysisBundle) RequestedGPUVendor() string {
+	if b == nil || b.Deployment == nil {
+		return ""
+	}
+	containers := append([]apiv1.Container{}, b.Deployment.Spec.Template.Spec.Containers...)
+	containers = append(containers, b.Deployment.Spec.Template.Spec.InitContainers...)
+	for _, c := range containers {
+		if v := vendorFromResources(c.Resources.Requests); v != "" {
+			return v
+		}
+		if v := vendorFromResources(c.Resources.Limits); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func vendorFromResources(rl apiv1.ResourceList) string {
+	for name := range rl {
+		switch string(name) {
+		case gpuResourceNvidia:
+			return gpuVendorNvidia
+		case gpuResourceAMD:
+			return gpuVendorAMD
+		}
+	}
+	return ""
 }
 
 // Validate checks the bundle's top-level required fields and then

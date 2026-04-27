@@ -193,6 +193,7 @@ func (o *Operator) HandleCapacity(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+	cap.GPUVendor = string(o.gpuVendor)
 	return c.JSON(http.StatusOK, cap)
 }
 

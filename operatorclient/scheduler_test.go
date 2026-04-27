@@ -19,15 +19,23 @@ import (
 // capacitySlots controls how many available slots are reported.
 // rejectLaunch causes the launch endpoint to return 409.
 func mockOperatorServer(capacitySlots int, rejectLaunch bool) *httptest.Server {
-	return mockOperatorServerWithStatuses(capacitySlots, rejectLaunch, 0, 0)
+	return mockOperatorServerWithStatuses(capacitySlots, rejectLaunch, 0, 0, "")
+}
+
+// mockOperatorServerWithVendor is a mock that reports a specific GPU
+// vendor and is otherwise healthy with the given capacity.
+func mockOperatorServerWithVendor(capacitySlots int, vendor string) *httptest.Server {
+	return mockOperatorServerWithStatuses(capacitySlots, false, 0, 0, vendor)
 }
 
 // mockOperatorServerWithStatuses is the explicit variant that also lets a
 // test inject non-2xx responses for the capacity and launch endpoints —
 // used by cases that exercise error-classification paths in the scheduler.
 // A capacityStatus or launchStatus of 0 means "use the default behavior"
-// (respect the slots / rejectLaunch arguments).
-func mockOperatorServerWithStatuses(capacitySlots int, rejectLaunch bool, capacityStatus, launchStatus int) *httptest.Server {
+// (respect the slots / rejectLaunch arguments). vendor populates the
+// CapacityResponse.GPUVendor field; "" means "operator does not report
+// a vendor" (treated as compatible by the scheduler).
+func mockOperatorServerWithStatuses(capacitySlots int, rejectLaunch bool, capacityStatus, launchStatus int, vendor string) *httptest.Server {
 	var launchCount atomic.Int32
 
 	mux := http.NewServeMux()
@@ -40,6 +48,7 @@ func mockOperatorServerWithStatuses(capacitySlots int, rejectLaunch bool, capaci
 			MaxAnalyses:     10,
 			RunningAnalyses: 10 - capacitySlots,
 			AvailableSlots:  capacitySlots,
+			GPUVendor:       vendor,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp) //nolint:errcheck
@@ -162,9 +171,9 @@ func TestSchedulerLaunchAnalysis(t *testing.T) {
 // surface the capacity-failure case rather than falling back to the plain
 // ErrAllOperatorsExhausted shape.
 func TestSchedulerLaunchAllCapacityChecksFail(t *testing.T) {
-	srv0 := mockOperatorServerWithStatuses(0, false, http.StatusInternalServerError, 0)
+	srv0 := mockOperatorServerWithStatuses(0, false, http.StatusInternalServerError, 0, "")
 	defer srv0.Close()
-	srv1 := mockOperatorServerWithStatuses(0, false, http.StatusInternalServerError, 0)
+	srv1 := mockOperatorServerWithStatuses(0, false, http.StatusInternalServerError, 0, "")
 	defer srv1.Close()
 
 	scheduler, err := NewScheduler([]OperatorConfig{
@@ -184,7 +193,7 @@ func TestSchedulerLaunchAllCapacityChecksFail(t *testing.T) {
 // returns a 5xx on Launch. The scheduler should fall through to the next
 // operator rather than aborting the whole launch.
 func TestSchedulerLaunchTransientErrorFalthrough(t *testing.T) {
-	srv0 := mockOperatorServerWithStatuses(5, false, 0, http.StatusBadGateway)
+	srv0 := mockOperatorServerWithStatuses(5, false, 0, http.StatusBadGateway, "")
 	defer srv0.Close()
 	srv1 := mockOperatorServer(5, false)
 	defer srv1.Close()
@@ -205,7 +214,7 @@ func TestSchedulerLaunchTransientErrorFalthrough(t *testing.T) {
 // abort the scheduling loop rather than walk every operator producing the
 // same failure.
 func TestSchedulerLaunchNonTransientAborts(t *testing.T) {
-	srv0 := mockOperatorServerWithStatuses(5, false, 0, http.StatusBadRequest)
+	srv0 := mockOperatorServerWithStatuses(5, false, 0, http.StatusBadRequest, "")
 	defer srv0.Close()
 	srv1 := mockOperatorServer(5, false) // would succeed if we reached it
 	defer srv1.Close()
@@ -227,9 +236,9 @@ func TestSchedulerLaunchNonTransientAborts(t *testing.T) {
 // scheduler should surface the last underlying error so the caller can
 // tell the difference from the plain "all at capacity" shape.
 func TestSchedulerLaunchAllTransient(t *testing.T) {
-	srv0 := mockOperatorServerWithStatuses(5, false, 0, http.StatusServiceUnavailable)
+	srv0 := mockOperatorServerWithStatuses(5, false, 0, http.StatusServiceUnavailable, "")
 	defer srv0.Close()
-	srv1 := mockOperatorServerWithStatuses(5, false, 0, http.StatusBadGateway)
+	srv1 := mockOperatorServerWithStatuses(5, false, 0, http.StatusBadGateway, "")
 	defer srv1.Close()
 
 	scheduler, err := NewScheduler([]OperatorConfig{
@@ -245,6 +254,96 @@ func TestSchedulerLaunchAllTransient(t *testing.T) {
 	var statusErr *HTTPStatusError
 	require.ErrorAs(t, err, &statusErr, "last transient error must be preserved in the chain")
 	assert.True(t, statusErr.Transient(), "preserved error should be a transient status error")
+}
+
+// TestSchedulerLaunchVendorMismatchAllAMD covers the case where the
+// analysis requests an Nvidia GPU and every available operator reports
+// AMD. The scheduler must surface ErrNoCompatibleOperator rather than
+// silently routing the analysis to a cluster that would mis-transform
+// the bundle's GPU resources.
+func TestSchedulerLaunchVendorMismatchAllAMD(t *testing.T) {
+	srv0 := mockOperatorServerWithVendor(5, "amd")
+	defer srv0.Close()
+	srv1 := mockOperatorServerWithVendor(5, "amd")
+	defer srv1.Close()
+
+	scheduler, err := NewScheduler([]OperatorConfig{
+		{Name: "amd-0", URL: srv0.URL},
+		{Name: "amd-1", URL: srv1.URL},
+	}, nil)
+	require.NoError(t, err)
+
+	bundle := gpuBundle("nvidia.com/gpu", "main", "requests")
+	_, err = scheduler.LaunchAnalysis(context.Background(), bundle)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNoCompatibleOperator)
+	assert.Contains(t, err.Error(), "nvidia", "error must name the requested vendor")
+}
+
+// TestSchedulerLaunchVendorMismatchSkipsToCompatible exercises the
+// "first operator's vendor doesn't match, second one does" path. The
+// scheduler must skip the AMD operator and successfully land on the
+// Nvidia one.
+func TestSchedulerLaunchVendorMismatchSkipsToCompatible(t *testing.T) {
+	srv0 := mockOperatorServerWithVendor(5, "amd")
+	defer srv0.Close()
+	srv1 := mockOperatorServerWithVendor(5, "nvidia")
+	defer srv1.Close()
+
+	scheduler, err := NewScheduler([]OperatorConfig{
+		{Name: "amd-op", URL: srv0.URL},
+		{Name: "nvidia-op", URL: srv1.URL},
+	}, nil)
+	require.NoError(t, err)
+
+	bundle := gpuBundle("nvidia.com/gpu", "main", "requests")
+	name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	require.NoError(t, err)
+	assert.Equal(t, "nvidia-op", name, "must skip AMD operator and land on Nvidia one")
+}
+
+// TestSchedulerLaunchNoGPURequestSkipsVendorCheck covers the common
+// "this analysis has no GPU requirement" case. The scheduler must NOT
+// reject AMD-only operators just because the deployment has no GPU
+// requests at all — vendor filtering applies only when the bundle
+// asks for a specific vendor.
+func TestSchedulerLaunchNoGPURequestSkipsVendorCheck(t *testing.T) {
+	srv0 := mockOperatorServerWithVendor(5, "amd")
+	defer srv0.Close()
+	srv1 := mockOperatorServerWithVendor(5, "amd")
+	defer srv1.Close()
+
+	scheduler, err := NewScheduler([]OperatorConfig{
+		{Name: "amd-0", URL: srv0.URL},
+		{Name: "amd-1", URL: srv1.URL},
+	}, nil)
+	require.NoError(t, err)
+
+	bundle := gpuBundle("", "main", "requests")
+	name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	require.NoError(t, err)
+	assert.Equal(t, "amd-0", name, "no-GPU bundle must accept first capacity-passing operator")
+}
+
+// TestSchedulerLaunchOperatorWithoutVendorIsCompatible covers the
+// backwards-compatibility case: an older operator (or one with no GPU
+// configured) reports GPUVendor="". The scheduler must treat that as
+// compatible regardless of what the bundle requests, since the
+// pre-vendor operator's response is indistinguishable from a vendor-
+// agnostic cluster.
+func TestSchedulerLaunchOperatorWithoutVendorIsCompatible(t *testing.T) {
+	srv0 := mockOperatorServerWithVendor(5, "")
+	defer srv0.Close()
+
+	scheduler, err := NewScheduler([]OperatorConfig{
+		{Name: "no-vendor", URL: srv0.URL},
+	}, nil)
+	require.NoError(t, err)
+
+	bundle := gpuBundle("nvidia.com/gpu", "main", "requests")
+	name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	require.NoError(t, err)
+	assert.Equal(t, "no-vendor", name)
 }
 
 func TestSchedulerNoOperators(t *testing.T) {

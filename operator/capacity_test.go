@@ -2,9 +2,14 @@ package operator
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/app-exposer/operatorclient"
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -202,4 +207,37 @@ func TestCapacityCalculatorUnlimited(t *testing.T) {
 	assert.Equal(t, 0, cap.RunningAnalyses)
 	assert.Equal(t, -1, cap.AvailableSlots, "unlimited mode should report -1 available slots")
 	assert.Greater(t, cap.AllocatableCPU, int64(0), "should still report allocatable CPU")
+}
+
+// TestHandleCapacityIncludesGPUVendor confirms that HandleCapacity copies
+// the operator's configured GPU vendor into the response. Without this,
+// the scheduler can't tell which operators are vendor-compatible at
+// routing time.
+func TestHandleCapacityIncludesGPUVendor(t *testing.T) {
+	tests := []struct {
+		name   string
+		vendor GPUVendor
+		want   string
+	}{
+		{"nvidia operator reports nvidia", GPUVendorNvidia, "nvidia"},
+		{"amd operator reports amd", GPUVendorAMD, "amd"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, _, _ := newTestOperator(t, 10, tt.vendor)
+
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, "/capacity", nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			require.NoError(t, op.HandleCapacity(c))
+			require.Equal(t, http.StatusOK, rec.Code)
+
+			var resp operatorclient.CapacityResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+			assert.Equal(t, tt.want, resp.GPUVendor)
+		})
+	}
 }

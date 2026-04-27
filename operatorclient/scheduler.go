@@ -56,7 +56,25 @@ var (
 	// ErrAllOperatorsExhausted means every operator was either at capacity
 	// or returned a 409 Conflict during the launch attempt.
 	ErrAllOperatorsExhausted = errors.New("all operators at capacity")
+
+	// ErrNoCompatibleOperator means every operator with capacity reported
+	// a GPU vendor incompatible with the analysis's request. Distinct from
+	// ErrAllOperatorsExhausted so callers can tell a routing-policy failure
+	// apart from a capacity failure.
+	ErrNoCompatibleOperator = errors.New("no operator with compatible GPU vendor")
 )
+
+// vendorCompatible reports whether an operator advertising vendor `have`
+// can run a bundle requesting vendor `want`. An empty `want` means the
+// bundle has no GPU requirement (any operator works). An empty `have`
+// means the operator pre-dates the GPUVendor field or has no GPU
+// configured; treated as compatible for backwards compatibility.
+func vendorCompatible(want, have string) bool {
+	if want == "" || have == "" {
+		return true
+	}
+	return want == have
+}
 
 // Scheduler manages a priority-ordered list of operator clients and
 // routes analyses to the first operator with available capacity.
@@ -133,14 +151,18 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 		return "", ErrNoOperators
 	}
 
-	// Track capacity-check errors and transient launch failures separately
-	// so we can distinguish "all operators unreachable" from "all operators
-	// at capacity" and preserve the last underlying error for diagnostics.
+	// Track capacity-check errors, transient launch failures, and vendor
+	// mismatches separately so we can distinguish "all operators
+	// unreachable" / "all operators at capacity" / "no compatible vendor"
+	// and preserve the last underlying error for diagnostics.
 	var (
-		capacityErrors  int
-		transientErrors int
-		lastTransient   error
+		capacityErrors   int
+		transientErrors  int
+		vendorMismatches int
+		lastTransient    error
 	)
+
+	wantVendor := bundle.RequestedGPUVendor()
 
 	for _, op := range clients {
 		// Check capacity first.
@@ -153,6 +175,17 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 
 		if !cap.HasCapacity() {
 			log.Infof("operator %s at capacity (%d/%d)", op.Name(), cap.RunningAnalyses, cap.MaxAnalyses)
+			continue
+		}
+
+		// Skip operators whose GPU vendor doesn't match the bundle's
+		// requested vendor. An empty wantVendor (no GPU requirement)
+		// or empty cap.GPUVendor (operator pre-dates the field or has
+		// no GPU) is treated as compatible.
+		if !vendorCompatible(wantVendor, cap.GPUVendor) {
+			vendorMismatches++
+			log.Infof("operator %s vendor mismatch (analysis needs %s, operator is %s); skipping",
+				op.Name(), wantVendor, cap.GPUVendor)
 			continue
 		}
 
@@ -183,10 +216,18 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 		return "", fmt.Errorf("all %d operators failed capacity check: %w", len(clients), ErrAllOperatorsExhausted)
 	}
 
+	// No operator advertised a compatible GPU vendor. Distinct from the
+	// at-capacity / unhealthy buckets so callers can surface a routing-
+	// policy error rather than a misleading "at capacity" message.
+	if wantVendor != "" && vendorMismatches > 0 && capacityErrors+vendorMismatches == len(clients) {
+		return "", fmt.Errorf("no operator with vendor %s for analysis %s: %w",
+			wantVendor, bundle.AnalysisID, ErrNoCompatibleOperator)
+	}
+
 	// Every operator that passed capacity check then failed the launch for
 	// transient reasons. Surface the last underlying error so the caller
 	// can distinguish it from a real "all at capacity" situation.
-	if transientErrors > 0 && capacityErrors+transientErrors == len(clients) {
+	if transientErrors > 0 && capacityErrors+transientErrors+vendorMismatches == len(clients) {
 		return "", fmt.Errorf("all %d operators unhealthy; last error: %w", len(clients), lastTransient)
 	}
 
