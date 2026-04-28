@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -16,25 +17,25 @@ import (
 // VICEStep contains information about an analysis step associated with a running
 // VICE job.
 type VICEStep struct {
-	Name          string `json:"name"`
-	ExternalID    string `json:"external_id"`
-	StartDate     string `json:"startdate"`
-	EndDate       string `json:"enddate"`
-	Status        string `json:"status"`
-	AppStepNumber int    `json:"app_step_number"`
-	StepType      string `json:"step_type"`
+	Name          string               `json:"name"`
+	ExternalID    constants.ExternalID `json:"external_id"`
+	StartDate     string               `json:"startdate"`
+	EndDate       string               `json:"enddate"`
+	Status        string               `json:"status"`
+	AppStepNumber int                  `json:"app_step_number"`
+	StepType      string               `json:"step_type"`
 }
 
 // VICEAnalysis contains information about an analysis associated with a running
 // VICE job.
 type VICEAnalysis struct {
-	AnalysisID string     `json:"analysis_id"`
-	Steps      []VICEStep `json:"steps"`
-	Timestamp  string     `json:"timestamp"`
-	Total      int        `json:"total"`
+	AnalysisID constants.AnalysisID `json:"analysis_id"`
+	Steps      []VICEStep           `json:"steps"`
+	Timestamp  string               `json:"timestamp"`
+	Total      int                  `json:"total"`
 }
 
-func (i *Incluster) GetExternalIDs(ctx context.Context, user, analysisID string) ([]string, error) {
+func (i *Incluster) GetExternalIDs(ctx context.Context, user string, analysisID constants.AnalysisID) ([]constants.ExternalID, error) {
 	var (
 		err               error
 		analysisLookupURL *url.URL
@@ -44,7 +45,7 @@ func (i *Incluster) GetExternalIDs(ctx context.Context, user, analysisID string)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error parsing url %s", i.AppsServiceBaseURL)
 	}
-	analysisLookupURL.Path = path.Join("/analyses", analysisID, "steps")
+	analysisLookupURL.Path = path.Join("/analyses", string(analysisID), "steps")
 	q := analysisLookupURL.Query()
 	q.Set("user", user)
 	analysisLookupURL.RawQuery = q.Encode()
@@ -72,7 +73,7 @@ func (i *Incluster) GetExternalIDs(ctx context.Context, user, analysisID string)
 		return nil, errors.Wrapf(err, "error unmarshalling JSON from %s", analysisLookupURL.String())
 	}
 
-	retval := []string{}
+	retval := []constants.ExternalID{}
 
 	for _, step := range parsedResponse.Steps {
 		retval = append(retval, step.ExternalID)
@@ -86,9 +87,9 @@ type RetPod struct {
 	Name string `json:"name"`
 }
 
-func (i *Incluster) GetPods(ctx context.Context, externalID string) ([]RetPod, error) {
+func (i *Incluster) GetPods(ctx context.Context, externalID constants.ExternalID) ([]RetPod, error) {
 	set := labels.Set(map[string]string{
-		"external-id": externalID,
+		constants.ExternalIDLabel: string(externalID),
 	})
 
 	listoptions := metav1.ListOptions{

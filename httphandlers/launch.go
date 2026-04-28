@@ -1,53 +1,71 @@
 package httphandlers
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"time"
 
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/incluster"
+	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/permissions"
 	"github.com/cyverse-de/model/v10"
 	"github.com/labstack/echo/v4"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 )
 
-// @ID				launch-app
-// @Summary		Launch a VICE analysis
-// @Description	The HTTP handler that orchestrates the launching of a VICE analysis inside
-// @Description	the k8s cluster. This gets passed to the router to be associated with a route. The Job
-// @Description	is passed in as the body of the request.
-// @Accept			json
-// @Param			request						body	AnalysisLaunch	true	"The request body containing the analysis details"
-// @Param			disable-resource-tracking	query	boolean			false	"Bypass resource tracking"	default(false)
-// @Success		200
-// @Failure		400	{object}	common.ErrorResponse
-// @Failure		500	{object}	common.ErrorResponse
-// @Router			/vice/launch [post]
+// LaunchAppHandler validates a VICE analysis job and, if valid, accepts it for
+// asynchronous launch. Returns 200 immediately after validation passes; the
+// actual resource creation and operator scheduling happen in a background
+// goroutine. This allows the caller's database transaction to commit (making
+// the jobs row visible) before app-exposer attempts to update it.
+//
+// Idempotent — returns 200 if the analysis is already running.
+//
+//	@ID				launch-app
+//	@Summary		Launch a VICE analysis
+//	@Description	Validates the job and accepts it for asynchronous launch.
+//	@Description	A 200 response means the job was accepted, not that it has been
+//	@Description	fully deployed — resource creation and operator scheduling proceed
+//	@Description	in the background.
+//	@Accept			json
+//	@Param			request						body	AnalysisLaunch	true	"The request body containing the analysis details"
+//	@Param			disable-resource-tracking	query	boolean			false	"Bypass resource tracking"	default(false)
+//	@Success		200
+//	@Failure		400	{object}	common.ErrorResponse
+//	@Failure		500	{object}	common.ErrorResponse
+//	@Router			/vice/launch [post]
 func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
-	var (
-		job *model.Job
-		err error
-	)
-
 	ctx := c.Request().Context()
 
-	job = &model.Job{}
-
-	if err = c.Bind(job); err != nil {
+	job := &model.Job{}
+	if err := c.Bind(job); err != nil {
 		return err
 	}
 
-	found, err := h.incluster.IsAnalysisInCluster(ctx, job.InvocationID)
+	// Fast-path idempotency check: only consult the DB, not all operators.
+	// For new launches the DB has no record, so a fan-out search would hit
+	// every operator and get "not found" from all of them — wasted work that
+	// becomes a problem during workshops with many concurrent launches.
+	//
+	// GetOperatorName normalizes sql.ErrNoRows to ("", nil); a non-nil error
+	// here is a real DB fault. Treating it as "not running" would silently
+	// drop the idempotency guard and can cause double-launches during
+	// concurrent-launch bursts when the DB briefly blips.
+	name, err := h.apps.GetOperatorName(ctx, constants.AnalysisID(job.ID))
 	if err != nil {
-		return err
+		log.Errorf("idempotency lookup failed for analysis %s: %v", job.ID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "idempotency check unavailable")
 	}
-
-	// If the deployment for this invocation ID is already in the cluster, there's nothing to do.
-	if found {
-		return c.NoContent(http.StatusOK)
+	if name != "" {
+		if client := h.scheduler.ClientByName(name); client != nil {
+			log.Infof("analysis %s already running on operator %s, returning success", job.ID, client.Name())
+			return c.NoContent(http.StatusOK)
+		}
 	}
 
 	if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
@@ -57,63 +75,235 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 		return echo.NewHTTPError(status, err.Error())
 	}
 
-	// Create the excludes file ConfigMap for the job.
-	if err = h.incluster.UpsertExcludesConfigMap(ctx, job); err != nil {
-		return err
+	// Validation passed — accept the job and do the heavy lifting in the
+	// background. Returning early lets the caller commit its DB transaction,
+	// which makes the jobs row visible for SetOperatorName below.
+	//
+	// Gate the background goroutine on launchSemaphore so a workshop-scale
+	// burst can't spawn thousands of 2-minute-lifetime goroutines each
+	// holding a 30-second HTTP timeout on an operator. If the semaphore is
+	// full after a bounded wait, return 503 so the client can back off
+	// rather than silently queueing behind an unbounded timer.
+	release, ok := h.acquireLaunchSlot()
+	if !ok {
+		log.Warnf("launch semaphore saturated (cap=%d); returning 503 for analysis %s", cap(h.launchSemaphore), job.ID)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "too many launches in flight; retry shortly")
 	}
-
-	// Create the input path list config map
-	if err = h.incluster.UpsertInputPathListConfigMap(ctx, job); err != nil {
-		return err
-	}
-
-	deployment, err := h.incluster.GetDeployment(ctx, job)
-	if err != nil {
-		return err
-	}
-
-	millicores, err := incluster.GetMillicoresFromDeployment(deployment)
-	if err != nil {
-		return err
-	}
-
-	if err = h.apps.SetMillicoresReserved(job, millicores); err != nil {
-		return err
-	}
-
-	// Create the deployment for the job.
-	if err = h.incluster.UpsertDeployment(ctx, deployment, job); err != nil {
-		return err
-	}
+	go func() {
+		defer release()
+		h.launchAsync(job)
+	}()
 
 	return c.NoContent(http.StatusOK)
 }
 
-type URLReadyResponse struct {
-	Ready bool `json:"ready"`
+// launchAcquireTimeout bounds how long LaunchAppHandler will wait for a
+// free launch slot before giving up and returning 503. Short enough that
+// a blocked client can back off, long enough to absorb brief bursts
+// without thrashing. A `var` rather than a `const` so tests can shrink
+// it without dynamic injection plumbing; production code never writes to it.
+var launchAcquireTimeout = 5 * time.Second
+
+// acquireLaunchSlot reserves a slot in the launch semaphore, waiting up to
+// launchAcquireTimeout. On success, returns a release callback the caller
+// must invoke when its background goroutine finishes. On timeout, returns
+// (nil, false). Isolated from LaunchAppHandler so the gating logic is
+// directly testable without having to spin up a full validation pipeline.
+func (h *HTTPHandlers) acquireLaunchSlot() (release func(), ok bool) {
+	select {
+	case h.launchSemaphore <- struct{}{}:
+		return func() { <-h.launchSemaphore }, true
+	case <-time.After(launchAcquireTimeout):
+		return nil, false
+	}
 }
 
-// @ID				url-ready
-// @Summary		Check if a VICE app is ready for users to access it.
-// @Description	Returns whether or not a VICE app is ready
-// @Description	for users to access it. This version will check the user's permissions
-// @Description	and return an error if they aren't allowed to access the running app.
-// @Produce		json
-// @Param			user	query		string	true	"A user's username"
-// @Param			host	path		string	true	"The subdomain of the analysis. AKA the HTTP route name"
-// @Success		200		{object}	URLReadyResponse
-// @Failure		400		{object}	common.ErrorResponse
-// @Failure		403		{object}	common.ErrorResponse
-// @Failure		404		{object}	common.ErrorResponse
-// @Failure		500		{object}	common.ErrorResponse
-// @Router			/vice/{host}/url-ready [get]
-func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
-	var (
-		routeExists   bool
-		serviceExists bool
-		podReady      bool
-	)
+// launchAsync performs the resource-intensive parts of a VICE launch in
+// the background: builds the deployment spec, reserves millicores, assembles
+// the analysis bundle, schedules it on an operator, and records the operator
+// assignment. Uses a background context with a timeout since the originating
+// HTTP request has already completed.
+//
+// On failure, publishes a failure status update so the analysis transitions
+// to "Failed" instead of staying stuck in "Submitted" indefinitely.
+func (h *HTTPHandlers) launchAsync(job *model.Job) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
+	// Pre-build the deployment locally to calculate millicores reservation
+	// and validate resource requirements.
+	deployment, err := h.incluster.GetDeployment(ctx, job)
+	if err != nil {
+		log.Errorf("async launch %s: failed to get deployment: %v", job.ID, err)
+		h.failLaunch(ctx, job, fmt.Sprintf("failed to build deployment: %v", err))
+		return
+	}
+
+	millicores, err := incluster.GetMillicoresFromDeployment(deployment)
+	if err != nil {
+		log.Errorf("async launch %s: failed to get millicores: %v", job.ID, err)
+		h.failLaunch(ctx, job, fmt.Sprintf("failed to get millicores: %v", err))
+		return
+	}
+
+	if err = h.apps.SetMillicoresReserved(job, millicores); err != nil {
+		log.Errorf("async launch %s: failed to set millicores reserved: %v", job.ID, err)
+		h.failLaunch(ctx, job, fmt.Sprintf("failed to reserve millicores: %v", err))
+		return
+	}
+
+	// Build a bundle and route to an operator. Uses job.ID directly because
+	// job_steps rows don't exist yet at launch time.
+	bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, constants.AnalysisID(job.ID))
+	if err != nil {
+		log.Errorf("async launch %s: failed to build analysis bundle: %v", job.ID, err)
+		h.failLaunch(ctx, job, fmt.Sprintf("failed to build analysis bundle: %v", err))
+		return
+	}
+
+	// Route the bundle to an available operator.
+	operatorName, err := h.scheduler.LaunchAnalysis(ctx, bundle)
+	if err != nil {
+		log.Errorf("async launch %s: failed to launch analysis: %v", job.ID, err)
+		h.failLaunch(ctx, job, fmt.Sprintf("failed to schedule analysis on operator: %v", err))
+		return
+	}
+
+	// Record which operator is running this analysis. Without this record,
+	// every subsequent request for the analysis falls through to the
+	// operator fan-out search, which under burst traffic (workshops) can
+	// amplify a brief DB blip into sustained load on every operator. Retry
+	// a few times to ride out transient blips before giving up; the
+	// reconciler's per-pod back-fill closes any hole that remains.
+	if err := h.setOperatorNameWithRetry(ctx, constants.AnalysisID(job.ID), operatorName); err != nil {
+		log.Errorf("async launch %s: failed to set operator name after retries: %v", job.ID, err)
+	}
+
+	log.Infof("async launch %s: successfully launched on operator %s", job.ID, operatorName)
+}
+
+// setOperatorNameWithRetry records which operator is running an analysis,
+// retrying a few times to survive transient DB blips. SetOperatorName
+// already retries internally for the "jobs row not yet visible" case;
+// this wrapper layers a small additional retry on top to handle
+// connection-level failures that bypass the inner loop. When the outer
+// retry also exhausts, the reconciler's back-fill will eventually close
+// the hole within ~30 s.
+func (h *HTTPHandlers) setOperatorNameWithRetry(ctx context.Context, analysisID constants.AnalysisID, operatorName string) error {
+	const attempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		lastErr = h.apps.SetOperatorName(ctx, analysisID, operatorName)
+		if lastErr == nil {
+			return nil
+		}
+		if attempt < attempts {
+			log.Warnf("async launch %s: SetOperatorName attempt %d/%d failed, retrying: %v", analysisID, attempt, attempts, lastErr)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Duration(attempt) * time.Second):
+			}
+		}
+	}
+	return lastErr
+}
+
+// failLaunch publishes a failure status update for a launch that failed in the
+// background goroutine. Uses the job's InvocationID (external ID) since the
+// status publisher expects external IDs.
+func (h *HTTPHandlers) failLaunch(ctx context.Context, job *model.Job, msg string) {
+	if job.InvocationID == "" {
+		log.Errorf("async launch %s: cannot publish failure status — no invocation ID", job.ID)
+		return
+	}
+	if err := h.incluster.PublishFailure(ctx, job.InvocationID, msg); err != nil {
+		log.Errorf("async launch %s: failed to publish failure status: %v", job.ID, err)
+	}
+}
+
+// DryRunBundleHandler builds the AnalysisBundle for a job without launching it.
+// Useful for debugging, testing, and inspecting what would be sent to a
+// vice-operator without any side effects.
+//
+//	@ID				dry-run-bundle
+//	@Summary		Build an AnalysisBundle without launching
+//	@Description	Accepts the same model.Job body as /vice/launch but returns the
+//	@Description	assembled AnalysisBundle JSON instead of dispatching it to an operator.
+//	@Description	No side effects (no ConfigMaps, no scheduling, no DB writes).
+//	@Accept			json
+//	@Produce		json
+//	@Param			request		body		AnalysisLaunch	true	"The job to build a bundle for"
+//	@Param			validate	query		boolean			false	"Run validation checks on the job"	default(false)
+//	@Success		200			{object}	operatorclient.AnalysisBundle
+//	@Failure		400			{object}	common.ErrorResponse
+//	@Failure		500			{object}	common.ErrorResponse
+//	@Router			/vice/dry-run [post]
+func (h *HTTPHandlers) DryRunBundleHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	job := &model.Job{}
+	if err := c.Bind(job); err != nil {
+		return err
+	}
+
+	// Opt-in validation via query parameter.
+	if c.QueryParam("validate") == "true" {
+		if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
+			if validationErr, ok := err.(common.ErrorResponse); ok {
+				return validationErr
+			}
+			return echo.NewHTTPError(status, err.Error())
+		}
+	}
+
+	bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, constants.AnalysisID(job.ID))
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, bundle)
+}
+
+// checkURLReady verifies K8s resource readiness by delegating to the
+// operator running the analysis. It returns a URLReadyResponse indicating
+// if the deployment, service, and routing are fully live. A non-nil error
+// means the operator could not be located (e.g. DB lookup failed) and the
+// caller should surface that rather than reporting "not ready".
+func (h *HTTPHandlers) checkURLReady(ctx context.Context, analysisID constants.AnalysisID) (operatorclient.URLReadyResponse, error) {
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
+	if err != nil {
+		return operatorclient.URLReadyResponse{Ready: false}, err
+	}
+	if client == nil {
+		return operatorclient.URLReadyResponse{Ready: false}, nil
+	}
+
+	resp, err := client.URLReady(ctx, analysisID)
+	if err != nil {
+		return operatorclient.URLReadyResponse{Ready: false}, fmt.Errorf("operator %s url-ready check failed: %w", client.Name(), err)
+	}
+	return *resp, nil
+}
+
+// URLReadyHandler checks whether the VICE analysis for the given subdomain is
+// accessible, verifying user permissions before performing the check.
+//
+//	@ID				url-ready
+//	@Summary		Check if a VICE app is ready for users to access it.
+//	@Description	Returns whether or not a VICE app is ready
+//	@Description	for users to access it. This version will check the user's permissions
+//	@Description	and return an error if they aren't allowed to access the running app.
+//	@Produce		json
+//	@Param			user	query		string	true	"A user's username"
+//	@Param			host	path		string	true	"The subdomain of the analysis. AKA the ingress name"
+//	@Success		200		{object}	operatorclient.URLReadyResponse
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		403		{object}	common.ErrorResponse
+//	@Failure		404		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Router			/vice/{host}/url-ready [get]
+func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	user := c.QueryParam("user")
@@ -126,7 +316,7 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 	fixedUser := common.FixUsername(user, h.incluster.UserSuffix)
 	_, err := h.apps.GetUserID(ctx, fixedUser)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("user %s not found", fixedUser))
 		}
 		return err
@@ -134,51 +324,27 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 
 	host := c.Param("host")
 
-	// Use the name of the route to retrieve the externalID
-	id, err := h.incluster.GetIDFromHost(ctx, host)
+	params := url.Values{}
+	params.Set(constants.SubdomainLabel, host)
+
+	// Search all operators for the analysis with this subdomain.
+	listing, opErrs, err := h.aggregateListing(ctx, params)
 	if err != nil {
 		return err
 	}
-
-	// If getIDFromHost returns without an error, then the route exists since the route is used to look up the
-	// ID using the host.
-	routeExists = true
-
-	set := labels.Set(map[string]string{
-		"external-id": id,
-	})
-
-	listoptions := metav1.ListOptions{
-		LabelSelector: set.AsSelector().String(),
-	}
-
-	// check the service existence
-	svcclient := h.clientset.CoreV1().Services(h.incluster.ViceNamespace)
-	svclist, err := svcclient.List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-	if len(svclist.Items) > 0 {
-		serviceExists = true
-	}
-
-	// Check pod status through the deployment
-	depclient := h.clientset.AppsV1().Deployments(h.incluster.ViceNamespace)
-	deplist, err := depclient.List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-	for _, dep := range deplist.Items {
-		if dep.Status.ReadyReplicas > 0 {
-			podReady = true
+	if len(listing.Deployments) == 0 {
+		// Distinguish "truly missing" from "all operators unreachable": a 404
+		// for a still-running analysis whose operator is down would have users
+		// staring at a misleading error.
+		if len(opErrs) > 0 {
+			log.Errorf("url-ready lookup degraded for subdomain %s: %+v", host, opErrs)
+			return echo.NewHTTPError(http.StatusBadGateway, "operator listing unavailable")
 		}
+		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no deployment found for subdomain %s", host))
 	}
 
-	data := URLReadyResponse{
-		Ready: routeExists && serviceExists && podReady,
-	}
-
-	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, id)
+	externalID := listing.Deployments[0].ExternalID
+	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
 	if err != nil {
 		return err
 	}
@@ -188,7 +354,7 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 		BaseURL: h.incluster.PermissionsURL,
 	}
 
-	allowed, err := p.IsAllowed(ctx, user, analysisID)
+	allowed, err := p.IsAllowed(ctx, user, string(analysisID))
 	if err != nil {
 		return err
 	}
@@ -197,91 +363,80 @@ func (h *HTTPHandlers) URLReadyHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("user %s cannot access analysis %s", user, analysisID))
 	}
 
+	data, err := h.checkURLReady(ctx, analysisID)
+	if err != nil {
+		log.Errorf("url-ready check failed for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "url-ready check unavailable")
+	}
+
 	return c.JSON(http.StatusOK, data)
 }
 
-// @ID				admin-url-ready
-// @Summary		Checks the status of a running VICE app in K8s
-// @Description	Handles requests to check the status of a running VICE app in K8s.
-// @Description	This will return an overall status and status for the individual containers in
-// @Description	the app's pod. Uses the state of the readiness checks in K8s, along with the
-// @Description	existence of the various resources created for the app.
-// @Produce		json
-// @Param			host	path		string	true	"The subdomain of the analysis"
-// @Success		200		{object}	URLReadyResponse
-// @Failure		400		{object}	common.ErrorResponse
-// @Failure		404		{object}	common.ErrorResponse
-// @Failure		500		{object}	common.ErrorResponse
-// @Router			/vice/admin/{host}/url-ready [get]
+// AdminURLReadyHandler checks K8s resource readiness for the given subdomain
+// without user permission checks.
+//
+//	@ID				admin-url-ready
+//	@Summary		Checks the status of a running VICE app in K8s
+//	@Description	Handles requests to check the status of a running VICE app in K8s.
+//	@Description	This will return an overall status and status for the individual containers in
+//	@Description	the app's pod. Uses the state of the readiness checks in K8s, along with the
+//	@Description	existence of the various resources created for the app.
+//	@Produce		json
+//	@Param			host	path		string	true	"The subdomain of the analysis"
+//	@Success		200		{object}	operatorclient.URLReadyResponse
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		404		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Router			/vice/admin/{host}/url-ready [get]
 func (h *HTTPHandlers) AdminURLReadyHandler(c echo.Context) error {
-	var (
-		routeExists   bool
-		serviceExists bool
-		podReady      bool
-	)
-
 	ctx := c.Request().Context()
 	host := c.Param("host")
 
-	// Use the name of the route to retrieve the externalID
-	id, err := h.incluster.GetIDFromHost(ctx, host)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
-	}
+	params := url.Values{}
+	params.Set(constants.SubdomainLabel, host)
 
-	// If getIDFromHost returns without an error, then the route exists since the route is used to look up the
-	// ID using the host.
-	routeExists = true
-
-	set := labels.Set(map[string]string{
-		"external-id": id,
-	})
-
-	listoptions := metav1.ListOptions{
-		LabelSelector: set.AsSelector().String(),
-	}
-
-	// check the service existence
-	svcclient := h.clientset.CoreV1().Services(h.incluster.ViceNamespace)
-	svclist, err := svcclient.List(ctx, listoptions)
+	// Search all operators for the analysis with this subdomain.
+	listing, opErrs, err := h.aggregateListing(ctx, params)
 	if err != nil {
 		return err
 	}
-	if len(svclist.Items) > 0 {
-		serviceExists = true
-	}
-
-	// Check pod status through the deployment
-	depclient := h.clientset.AppsV1().Deployments(h.incluster.ViceNamespace)
-	deplist, err := depclient.List(ctx, listoptions)
-	if err != nil {
-		return err
-	}
-	for _, dep := range deplist.Items {
-		if dep.Status.ReadyReplicas > 0 {
-			podReady = true
+	if len(listing.Deployments) == 0 {
+		if len(opErrs) > 0 {
+			log.Errorf("admin url-ready lookup degraded for subdomain %s: %+v", host, opErrs)
+			return echo.NewHTTPError(http.StatusBadGateway, "operator listing unavailable")
 		}
+		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no deployment found for subdomain %s", host))
 	}
 
-	data := URLReadyResponse{
-		Ready: routeExists && serviceExists && podReady,
+	externalID := listing.Deployments[0].ExternalID
+	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
+	if err != nil {
+		return err
+	}
+
+	data, err := h.checkURLReady(ctx, analysisID)
+	if err != nil {
+		log.Errorf("url-ready check failed for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "url-ready check unavailable")
 	}
 
 	return c.JSON(http.StatusOK, data)
 }
 
+// AnalysisInClusterResponse is the response body for the in-cluster check endpoints.
 type AnalysisInClusterResponse struct {
 	Found bool `json:"found"`
 }
 
-// AdminAnalysisInClusterByExternalID returns whether the provided external ID is
-// associated with any Deployments in the cluster, regardless of state. Does
-// not check for any other resource types. Does not check if the requesting user
+// AdminAnalysisInClusterByExternalID returns whether any operator claims to
+// be running the analysis for the provided external ID. It translates the
+// external ID to an analysis ID, then asks the scheduler; no cluster
+// resources are inspected directly. Does not check if the requesting user
 // has access to the analysis.
 //
 //	@ID				admin-analysis-in-cluster-by-external-id
-//	@Summary		Returns whether a deployment for an analysis is in the cluster
-//	@Description	Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state
+//	@Summary		Returns whether any operator is running the analysis
+//	@Description	Returns whether any operator claims to be running the analysis for the provided external ID, regardless of its state
 //	@Produces		json
 //	@Param			external-id	path		string	true	"external id"
 //	@Success		200			{object}	AnalysisInClusterResponse
@@ -290,29 +445,32 @@ type AnalysisInClusterResponse struct {
 //	@Router			/vice/admin/is-deployed/external-id/{external-id} [get]
 func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error {
 	ctx := c.Request().Context()
-	externalID := c.Param("external-id")
+	externalID := constants.ExternalID(c.Param(constants.ExternalIDLabel))
 	if externalID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "external-id is not set")
 	}
 
-	found, err := h.incluster.IsAnalysisInCluster(ctx, externalID)
+	analysisID, err := h.apps.GetAnalysisIDByExternalID(ctx, externalID)
 	if err != nil {
 		return err
 	}
-	retval := AnalysisInClusterResponse{
-		Found: found,
+
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
+	if err != nil {
+		log.Errorf("operator routing unavailable for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "operator routing temporarily unavailable")
 	}
-	return c.JSON(http.StatusOK, retval)
+	return c.JSON(http.StatusOK, AnalysisInClusterResponse{Found: client != nil})
 }
 
-// AdminAnalysisInClusterByID returns whether the provided analysis ID is
-// associated with any Deployments in the cluster, regardless of state. Does
-// not check for any other resource types. Does not check if the requesting user
-// has access to the analysis.
+// AdminAnalysisInClusterByID returns whether any operator claims to be
+// running the analysis with the provided analysis ID. It asks the
+// scheduler; no cluster resources are inspected directly. Does not check
+// if the requesting user has access to the analysis.
 //
 //	@ID				admin-analysis-in-cluster-by-id
-//	@Summary		Returns whether a deployment for an analysis is in the cluster
-//	@Description	Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state
+//	@Summary		Returns whether any operator is running the analysis
+//	@Description	Returns whether any operator claims to be running the analysis for the provided analysis ID, regardless of its state
 //	@Produces		json
 //	@Param			analysis-id	path		string	true	"analysis id"
 //	@Success		200			{object}	AnalysisInClusterResponse
@@ -320,27 +478,16 @@ func (h *HTTPHandlers) AdminAnalysisInClusterByExternalID(c echo.Context) error 
 //	@Failure		500			{object}	common.ErrorResponse
 //	@Router			/vice/admin/is-deployed/analysis-id/{analysis-id} [get]
 func (h *HTTPHandlers) AdminAnalysisInClusterByID(c echo.Context) error {
-	var (
-		externalID string
-		analysisID string
-		found      bool
-		err        error
-	)
 	ctx := c.Request().Context()
-	analysisID = c.Param("analysis-id")
+	analysisID := constants.AnalysisID(c.Param(constants.AnalysisIDLabel))
 	if analysisID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "analysis-id is not set")
 	}
-	externalID, err = h.incluster.GetExternalIDByAnalysisID(ctx, analysisID)
+
+	client, err := h.operatorClientForAnalysis(ctx, analysisID)
 	if err != nil {
-		return err
+		log.Errorf("operator routing unavailable for analysis %s: %v", analysisID, err)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "operator routing temporarily unavailable")
 	}
-	found, err = h.incluster.IsAnalysisInCluster(ctx, externalID)
-	if err != nil {
-		return err
-	}
-	retval := AnalysisInClusterResponse{
-		Found: found,
-	}
-	return c.JSON(http.StatusOK, retval)
+	return c.JSON(http.StatusOK, AnalysisInClusterResponse{Found: client != nil})
 }

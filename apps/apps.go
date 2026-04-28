@@ -3,6 +3,7 @@ package apps
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -93,8 +94,8 @@ const analysisIDByExternalIDQuery = `
 
 // GetAnalysisIDByExternalID returns the analysis ID based on the external ID
 // passed in.
-func (a *Apps) GetAnalysisIDByExternalID(ctx context.Context, externalID string) (string, error) {
-	var analysisID string
+func (a *Apps) GetAnalysisIDByExternalID(ctx context.Context, externalID constants.ExternalID) (constants.AnalysisID, error) {
+	var analysisID constants.AnalysisID
 	err := a.DB.QueryRowContext(ctx, analysisIDByExternalIDQuery, externalID).Scan(&analysisID)
 	if err != nil {
 		return "", err
@@ -110,8 +111,8 @@ const analysisIDBySubdomainQuery = `
 
 // GetAnalysisIDBySubdomain returns the analysis ID based on the subdomain
 // generated for it.
-func (a *Apps) GetAnalysisIDBySubdomain(ctx context.Context, subdomain string) (string, error) {
-	var analysisID string
+func (a *Apps) GetAnalysisIDBySubdomain(ctx context.Context, subdomain string) (constants.AnalysisID, error) {
+	var analysisID constants.AnalysisID
 	err := a.DB.QueryRowContext(ctx, analysisIDBySubdomainQuery, subdomain).Scan(&analysisID)
 	if err != nil {
 		return "", err
@@ -128,13 +129,9 @@ const getUserIPQuery = `
      LIMIT 1
 `
 
-// GetUserIP returns the latest login ip address for the given user ID.
+// GetUserIP returns the latest login IP address for the given user ID.
 func (a *Apps) GetUserIP(ctx context.Context, userID string) (string, error) {
-	var (
-		ipAddr sql.NullString
-		retval string
-	)
-
+	var ipAddr sql.NullString
 	err := a.DB.QueryRowContext(ctx, getUserIPQuery, userID).Scan(&ipAddr)
 	if err == sql.ErrNoRows {
 		log.Errorf("no logins recorded for %s; please check admin Keycloak settings", userID)
@@ -143,14 +140,7 @@ func (a *Apps) GetUserIP(ctx context.Context, userID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	if ipAddr.Valid {
-		retval = ipAddr.String
-	} else {
-		retval = ""
-	}
-
-	return retval, nil
+	return ipAddr.String, nil
 }
 
 const getAnalysisStatusQuery = `
@@ -160,7 +150,7 @@ const getAnalysisStatusQuery = `
 `
 
 // GetAnalysisStatus gets the current status of the overall Analysis/Job in the database.
-func (a *Apps) GetAnalysisStatus(ctx context.Context, analysisID string) (string, error) {
+func (a *Apps) GetAnalysisStatus(ctx context.Context, analysisID constants.AnalysisID) (string, error) {
 	var status string
 	err := a.DB.QueryRowContext(ctx, getAnalysisStatusQuery, analysisID).Scan(&status)
 	if err != nil {
@@ -178,7 +168,7 @@ const userByAnalysisIDQuery = `
 `
 
 // GetUserByAnalysisID returns the username and id of the user that launched the analysis.
-func (a *Apps) GetUserByAnalysisID(ctx context.Context, analysisID string) (string, string, error) {
+func (a *Apps) GetUserByAnalysisID(ctx context.Context, analysisID constants.AnalysisID) (string, string, error) {
 	var username, id string
 	err := a.DB.QueryRowContext(ctx, userByAnalysisIDQuery, analysisID).Scan(&username, &id)
 	if err != nil {
@@ -207,7 +197,7 @@ const setMillicoresStmt = `
 	WHERE id = $1;
 `
 
-func (a *Apps) setMillicoresReserved(ctx context.Context, analysisID string, millicores *apd.Decimal) error {
+func (a *Apps) setMillicoresReserved(ctx context.Context, analysisID constants.AnalysisID, millicores *apd.Decimal) error {
 	milliInt, err := millicores.Int64()
 	if err != nil {
 		return err
@@ -216,9 +206,9 @@ func (a *Apps) setMillicoresReserved(ctx context.Context, analysisID string, mil
 	return err
 }
 
-func (a *Apps) tryForAnalysisID(ctx context.Context, job *model.Job, maxAttempts int) (string, error) {
-	for i := 0; i < maxAttempts; i++ {
-		analysisID, err := a.GetAnalysisIDByExternalID(ctx, job.InvocationID)
+func (a *Apps) tryForAnalysisID(ctx context.Context, job *model.Job, maxAttempts int) (constants.AnalysisID, error) {
+	for range maxAttempts {
+		analysisID, err := a.GetAnalysisIDByExternalID(ctx, constants.ExternalID(job.InvocationID))
 		if err != nil {
 			time.Sleep(1 * time.Second)
 		} else {
@@ -229,29 +219,158 @@ func (a *Apps) tryForAnalysisID(ctx context.Context, job *model.Job, maxAttempts
 }
 
 func (a *Apps) storeMillicoresInternal(ctx context.Context, job *model.Job, millicores *apd.Decimal) error {
-	analysisID, err := a.tryForAnalysisID(ctx, job, 30)
-	if err != nil {
-		return err
+	var analysisID constants.AnalysisID
+
+	// Prefer job.ID if available (new vice-proxy provides this directly).
+	if job.ID != "" {
+		analysisID = constants.AnalysisID(job.ID)
+	} else {
+		// Fallback to lookup by external ID for backward compatibility.
+		var err error
+		analysisID, err = a.tryForAnalysisID(ctx, job, 30)
+		if err != nil {
+			return err
+		}
 	}
 
-	if err = a.setMillicoresReserved(ctx, analysisID, millicores); err != nil {
-		return err
-	}
-
-	return err
+	return a.setMillicoresReserved(ctx, analysisID, millicores)
 }
 
-// SetMillicoresReserved updates the number of millicores reserved for a single job.
+// SetMillicoresReserved enqueues a job to asynchronously update the millicores
+// reserved for the given analysis.
 func (a *Apps) SetMillicoresReserved(job *model.Job, millicores *apd.Decimal) error {
-	newjob := millicoresJob{
+	a.addJob <- millicoresJob{
 		ID:                 uuid.New(),
 		Job:                *job,
 		MillicoresReserved: millicores,
 	}
-
-	a.addJob <- newjob
-
 	return nil
+}
+
+const setOperatorIDStmt = `
+	UPDATE jobs
+	SET operator_id = $2
+	WHERE id = $1;
+`
+
+// GetOperatorIDByName returns the UUID for an operator by its unique name.
+func (a *Apps) GetOperatorIDByName(ctx context.Context, name string) (uuid.UUID, error) {
+	var id uuid.UUID
+	const query = "SELECT id FROM operators WHERE name = $1"
+	err := a.DB.GetContext(ctx, &id, query, name)
+	return id, err
+}
+
+// SetOperatorName records which operator is running an analysis by mapping its
+// name to an operator_id and updating the jobs row. It retries briefly because
+// the jobs row may not be visible yet if the caller's database transaction
+// hasn't committed. The launch handler returns early to unblock that commit,
+// so the row typically appears within a few seconds.
+//
+// The wait between attempts doubles each round, starting at initialBackoff and
+// capping at maxBackoff, so a healthy DB that commits quickly sees nearly no
+// delay while a slow DB sheds load gracefully across the 10-attempt budget.
+func (a *Apps) SetOperatorName(ctx context.Context, analysisID constants.AnalysisID, operatorName string) error {
+	const (
+		maxRetries     = 10
+		initialBackoff = 100 * time.Millisecond
+		maxBackoff     = 5 * time.Second
+	)
+
+	operatorID, err := a.GetOperatorIDByName(ctx, operatorName)
+	if err != nil {
+		return fmt.Errorf("resolving operator %q to ID: %w", operatorName, err)
+	}
+
+	backoff := initialBackoff
+	for attempt := range maxRetries {
+		result, err := a.DB.ExecContext(ctx, setOperatorIDStmt, analysisID, operatorID)
+		if err != nil {
+			return err
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows > 0 {
+			log.Infof("set operator_id %s (name %q) for analysis %s (attempt %d)", operatorID, operatorName, analysisID, attempt+1)
+			return nil
+		}
+
+		// Row not found yet; wait for the caller's transaction to commit.
+		if attempt < maxRetries-1 {
+			log.Debugf("jobs row not yet visible for analysis %s, retrying in %s (attempt %d/%d)",
+				analysisID, backoff, attempt+1, maxRetries)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
+	}
+
+	return fmt.Errorf("no jobs row found for analysis %s after %d attempts", analysisID, maxRetries)
+}
+
+// JobDebugInfo holds key fields from the jobs table for diagnostic logging.
+// OperatorID is a typed uuid.UUID — its Scan implementation tolerates NULL,
+// leaving the value as uuid.Nil, so callers can test with `id != uuid.Nil`
+// rather than juggling a sql.NullString.
+type JobDebugInfo struct {
+	ID         string    `db:"id"`
+	OperatorID uuid.UUID `db:"operator_id"`
+	Status     string    `db:"status"`
+	AppID      string    `db:"app_id"`
+}
+
+const getJobDebugInfoQuery = `
+	SELECT j.id, j.operator_id, j.status, j.app_id
+	FROM jobs j
+	WHERE j.id = $1
+`
+
+// GetJobDebugInfo returns diagnostic fields for a job by its analysis ID,
+// or nil if no row exists.
+func (a *Apps) GetJobDebugInfo(ctx context.Context, analysisID constants.AnalysisID) (*JobDebugInfo, error) {
+	var info JobDebugInfo
+	err := a.DB.QueryRowContext(ctx, getJobDebugInfoQuery, analysisID).Scan(
+		&info.ID, &info.OperatorID, &info.Status, &info.AppID,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
+const getOperatorNameQuery = `
+	SELECT o.name
+	FROM jobs j
+	JOIN operators o ON j.operator_id = o.id
+	WHERE j.id = $1
+`
+
+// GetOperatorName returns the name of the operator running an analysis,
+// or an empty string if none is set or no row exists. sql.NullString's zero
+// value has String == "" when the column is NULL, so we can return it
+// directly without checking .Valid.
+func (a *Apps) GetOperatorName(ctx context.Context, analysisID constants.AnalysisID) (string, error) {
+	var name sql.NullString
+	err := a.DB.QueryRowContext(ctx, getOperatorNameQuery, analysisID).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		// The analysis doesn't exist in the database or has no operator; treat as none.
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return name.String, nil
 }
 
 const externalIDsByStatusQuery = `
@@ -263,20 +382,11 @@ const externalIDsByStatusQuery = `
        AND jt.system_id = $2;
 `
 
-type ExternalID struct {
-	ExternalID string `db:"external_id"`
-}
-
-// ListExternalIDsByStatus lists the external IDs of analyses based on their status.
+// ListExternalIDs lists the external IDs of analyses filtered by status and kind.
 func (a *Apps) ListExternalIDs(ctx context.Context, status constants.AnalysisStatus, kind constants.AnalysisKind) ([]string, error) {
-	var (
-		err error
-		ids []string
-	)
-
-	if err = a.DB.Select(&ids, externalIDsByStatusQuery, status, constants.Interactive); err != nil {
+	var ids []string
+	if err := a.DB.SelectContext(ctx, &ids, externalIDsByStatusQuery, status, kind); err != nil {
 		return ids, err
 	}
-
 	return ids, nil
 }

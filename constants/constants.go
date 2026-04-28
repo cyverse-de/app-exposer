@@ -40,6 +40,11 @@ const (
 	ExcludesFileName   = "excludes-file"
 	ExcludesVolumeName = "excludes-file"
 
+	PermissionsConfigMapPrefix = "permissions"
+	PermissionsVolumeName      = "vice-permissions"
+	PermissionsMountPath       = "/etc/vice-permissions"
+	PermissionsFileName        = "allowed-users"
+
 	InputPathListMountPath  = "/input-paths"
 	InputPathListFileName   = "input-path-list"
 	InputPathListVolumeName = "input-path-list"
@@ -68,9 +73,46 @@ const (
 	GPUModelAffinityKey      = "nvidia.com/gpu.product"
 	GPUModelAffinityOperator = "In"
 
-	UserSuffix = "@iplantcollaborative.org"
+	DefaultUserSuffix = "@iplantcollaborative.org"
 
 	ShmDevice = "/dev/shm"
+
+	// Labels that identify VICE resources across the cluster. These
+	// travel on Deployments, Services, HTTPRoutes, ConfigMaps, and
+	// PVCs; every listing/deletion/reconciliation path does label-
+	// based matching against them. A typo at any one site silently
+	// breaks matching, so the keys live here rather than as raw
+	// string literals in each package.
+	AnalysisIDLabel = "analysis-id"
+	AppNameLabel    = "app-name"
+	AppTypeLabel    = "app-type"
+	AppIDLabel      = "app-id"
+	ExternalIDLabel = "external-id"
+	UsernameLabel   = "username"
+	UserIDLabel     = "user-id"
+	SubdomainLabel  = "subdomain"
+)
+
+// AnalysisID is the app-exposer/DE analysis identifier — the "id" column
+// on the jobs table. The apps service always assigns an AnalysisID to
+// the analysis as a whole, whether it's a single-step job or a pipeline
+// that spans multiple execution systems.
+//
+// ExternalID is the per-step job identifier within a single execution
+// system. The apps service always provides one as well: for systems
+// that assign their own job IDs (e.g. TAPIS) it records that system's
+// ID; for app-exposer, which has no native job ID, apps synthesizes
+// one. ExternalID appears on job_status_updates and on pod labels, and
+// is what callers look up when they hold a single step rather than a
+// whole analysis.
+//
+// Both are stored and transmitted as strings; the domain types exist so
+// the compiler catches accidental swaps and so function signatures
+// advertise which identifier they expect. Both are transparent to sqlx,
+// encoding/json, and fmt because their underlying kind is string.
+type (
+	AnalysisID string
+	ExternalID string
 )
 
 type AnalysisStatus string
@@ -96,5 +138,10 @@ const (
 	Executable AnalysisKind = "executable"
 )
 
+// Int32Ptr returns a pointer to the given int32 value. Useful when a K8s
+// struct field requires a *int32 (e.g. Deployment.Spec.Replicas).
 func Int32Ptr(i int32) *int32 { return &i }
+
+// Int64Ptr returns a pointer to the given int64 value. Useful when a K8s
+// struct field requires a *int64 (e.g. SecurityContext.RunAsUser).
 func Int64Ptr(i int64) *int64 { return &i }

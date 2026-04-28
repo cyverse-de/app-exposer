@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -21,10 +20,12 @@ import (
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/db"
+	"github.com/cyverse-de/app-exposer/httphandlers"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/app-exposer/natsconn"
 	"github.com/cyverse-de/app-exposer/quota"
+	"github.com/cyverse-de/app-exposer/reconciler"
 	"github.com/cyverse-de/app-exposer/resourcing"
 	"github.com/cyverse-de/go-mod/cfg"
 	"github.com/cyverse-de/go-mod/gotelnats"
@@ -32,6 +33,7 @@ import (
 	"github.com/cyverse-de/go-mod/otelutils"
 	"github.com/cyverse-de/go-mod/protobufjson"
 	"github.com/pkg/errors"
+	"golang.org/x/oauth2/clientcredentials"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -58,7 +60,7 @@ func init() {
 	klogFlags := flag.NewFlagSet("klog", flag.ExitOnError)
 	klog.InitFlags(klogFlags)
 	logtostderr := klogFlags.Lookup("logtostderr")
-	logtostderr.Value.Set("true") // nolint:errcheck
+	logtostderr.Value.Set("true") //nolint:errcheck
 }
 
 func wrapOtelTransport(rt http.RoundTripper) http.RoundTripper {
@@ -74,17 +76,15 @@ func main() {
 		c          *koanf.Koanf
 		dbconn     *sqlx.DB
 
-		configPath = flag.String("config", cfg.DefaultConfigPath, "Path to the config file")
-		dotEnvPath = flag.String("dotenv-path", cfg.DefaultDotEnvPath, "Path to the dotenv file")
-		tlsCert    = flag.String("tlscert", gotelnats.DefaultTLSCertPath, "Path to the NATS TLS cert file")
-		tlsKey     = flag.String("tlskey", gotelnats.DefaultTLSKeyPath, "Path to the NATS TLS key file")
-		caCert     = flag.String("tlsca", gotelnats.DefaultTLSCAPath, "Path to the NATS TLS CA file")
-		credsPath  = flag.String("creds", gotelnats.DefaultCredsPath, "Path to the NATS creds file")
-		//maxReconnects                 = flag.Int("max-reconnects", gotelnats.DefaultMaxReconnects, "Maximum number of reconnection attempts to NATS")
-		//reconnectWait                 = flag.Int("reconnect-wait", gotelnats.DefaultReconnectWait, "Seconds to wait between reconnection attempts to NATS")
+		configPath                           = flag.String("config", cfg.DefaultConfigPath, "Path to the config file")
+		dotEnvPath                           = flag.String("dotenv-path", cfg.DefaultDotEnvPath, "Path to the dotenv file")
+		tlsCert                              = flag.String("tlscert", gotelnats.DefaultTLSCertPath, "Path to the NATS TLS cert file")
+		tlsKey                               = flag.String("tlskey", gotelnats.DefaultTLSKeyPath, "Path to the NATS TLS key file")
+		caCert                               = flag.String("tlsca", gotelnats.DefaultTLSCAPath, "Path to the NATS TLS CA file")
+		credsPath                            = flag.String("creds", gotelnats.DefaultCredsPath, "Path to the NATS creds file")
 		envPrefix                            = flag.String("env-prefix", cfg.DefaultEnvPrefix, "The prefix for environment variables")
 		namespace                            = flag.String("namespace", "default", "The namespace scope this process operates on for non-VICE calls")
-		viceNamespace                        = flag.String("vice-namespace", "vice-apps", "The namepsace that VICE apps are launched within")
+		viceNamespace                        = flag.String("vice-namespace", "vice-apps", "The namespace that VICE apps are launched within")
 		listenPort                           = flag.Int("port", 60000, "(optional) The port to listen on")
 		localStorageClass                    = flag.String("local-storage-class", "openebs-hostpath", "The storage class to use for the persistent host path volume")
 		viceProxy                            = flag.String("vice-proxy", "harbor.cyverse.org/de/vice-proxy", "The image name of the proxy to use for VICE apps. The image tag is set in the config.")
@@ -92,8 +92,6 @@ func main() {
 		transferWorkingDir                   = flag.String("transfer-working-dir", "/de-app-work", "The working directory within the file transfer image.")
 		transferLogLevel                     = flag.String("transfer-log-level", "debug", "The log level of the output of the file transfer tool.")
 		statusSenderImage                    = flag.String("status-sender-image", "harbor.cyverse.org/de/url-import:latest", "The image used to send status updates. Must container curl.")
-		getAnalysisIDService                 = flag.String("get-analysis-id-service", "get-analysis-id", "The service name for the service that provides analysis ID lookups")
-		checkResourceAccessService           = flag.String("check-resource-access-service", "check-resource-access", "The name of the service that validates whether a user can access a resource")
 		userSuffix                           = flag.String("user-suffix", "@iplantcollaborative.org", "The user suffix for all users in the DE installation")
 		defaultMillicores                    = flag.Float64("default-millicores", 4000.0, "The default number of millicores reserved for an analysis.")
 		argoWorkflowNS                       = flag.String("workflow-namespace", "argo", "The namespace Argo Workflows run in.")
@@ -115,7 +113,8 @@ func main() {
 		disableViceProxyStorageResourceLimit = flag.Bool("disable-vice-proxy-storage-resource-limit", true, "Disable storage resource limit for the vice proxy.")
 		logLevel                             = flag.String("log-level", "warn", "One of trace, debug, info, warn, error, fatal, or panic.")
 		batchExitHandlerImage                = flag.String("batch-exit-handler-image", "harbor.cyverse.org/de/batch-exit-handler:latest", "The image to use for the exitHandler in batch workflows")
-		disableViceProxyAuth                 = flag.Bool("disable-vice-proxy-auth", false, "Disable authentication in the vice-proxy sidecar. When true, allows unauthenticated access to VICE applications.")
+		clusterConfigSecret                  = flag.String("cluster-config-secret", "cluster-config-secret", "Name of a Secret to inject as env vars into the vice-proxy container via envFrom. Used to provide cluster-specific config for multi-cluster deployments.")
+		maxConcurrentLaunches                = flag.Int("max-concurrent-launches", httphandlers.DefaultMaxConcurrentLaunches, "Upper bound on in-flight VICE launches per app-exposer instance; bursts beyond this return 503 so clients can back off.")
 	)
 
 	var tracerCtx, cancel = context.WithCancel(context.Background())
@@ -150,7 +149,7 @@ func main() {
 
 	log.Infof("Reading config from %s", *configPath)
 	if _, err = os.Open(*configPath); err != nil {
-		log.Fatal(*configPath)
+		log.Fatalf("failed to open config file %s: %v", *configPath, err)
 	}
 
 	c, err = cfg.Init(&cfg.Settings{
@@ -325,8 +324,11 @@ func main() {
 	go a.Run()
 	defer a.Finish()
 
-	// Set up the database abstraction needed for batch functionality.
-	dbase := db.New(dbconn)
+	// Set up the database abstraction needed for batch functionality. dbase
+	// wraps the same connection as dbconn and also carries the URI so the
+	// reconciler can open a dedicated LISTEN connection without having the
+	// URI threaded separately.
+	dbase := db.New(dbconn, dbURI)
 
 	// Create millicores handler needed for batch functionality.
 	detector, err := millicores.New(dbase, *defaultMillicores)
@@ -367,22 +369,21 @@ func main() {
 	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer, clientset)
 
 	exposerInit := &ExposerAppInit{
-		Namespace:                  *namespace,
-		ViceNamespace:              *viceNamespace,
-		ViceProxyImage:             proxyImage,
-		ViceDomain:                 c.String("vice.domain"),
-		GetAnalysisIDService:       *getAnalysisIDService,
-		CheckResourceAccessService: *checkResourceAccessService,
-		db:                         dbconn,
-		UserSuffix:                 *userSuffix,
-		IRODSZone:                  zone,
-		ClientSet:                  clientset,
-		GatewayClient:              gatewayClient,
-		batchadapter:               jexAdapter,
-		ImagePullSecretName:        imagePullSecretName,
-		LocalStorageClass:          *localStorageClass,
-		DisableViceProxyAuth:       *disableViceProxyAuth,
-		BypassUsers:                bypassUsers,
+		Namespace:               *namespace,
+		ViceNamespace:           *viceNamespace,
+		ViceProxyImage:          proxyImage,
+		ViceDomain:              c.String("vice.domain"),
+		UserSuffix:              *userSuffix,
+		IRODSZone:               zone,
+		ClientSet:               clientset,
+		GatewayClient:           gatewayClient,
+		batchadapter:            jexAdapter,
+		dbase:                   dbase,
+		ImagePullSecretName:     imagePullSecretName,
+		LocalStorageClass:       *localStorageClass,
+		ClusterConfigSecretName: *clusterConfigSecret,
+		BypassUsers:             bypassUsers,
+		MaxConcurrentLaunches:   *maxConcurrentLaunches,
 	}
 
 	// app is the base app-exposer functionality.
@@ -393,6 +394,32 @@ func main() {
 		c,
 	)
 
+	// Build an OAuth2 token source for authenticating with vice-operator
+	// instances using the Keycloak client credentials grant. Keycloak is
+	// required in every environment we run in (including local dev), so
+	// missing config is a fatal startup error rather than a silent warning.
+	kcBaseURL := c.String("vice.keycloak.base_url")
+	kcRealm := c.String("vice.keycloak.realm")
+	kcClientID := c.String("vice.keycloak.client_id")
+	kcClientSecret := c.String("vice.keycloak.client_secret")
+	if kcBaseURL == "" || kcRealm == "" || kcClientID == "" || kcClientSecret == "" {
+		log.Fatal("vice.keycloak.* settings incomplete; base_url, realm, client_id, and client_secret are all required")
+	}
+	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", kcBaseURL, kcRealm)
+	ccConfig := &clientcredentials.Config{
+		ClientID:     kcClientID,
+		ClientSecret: kcClientSecret,
+		TokenURL:     tokenURL,
+	}
+	tokenSource := ccConfig.TokenSource(context.Background())
+	log.Infof("Keycloak OIDC client credentials configured (client_id=%s, token_url=%s)", kcClientID, tokenURL)
+
+	// Initialize and start the status reconciliation worker. The apps
+	// handle is passed so the reconciler can back-fill missing
+	// operator_name records on each cycle (see r.backfillOperatorName).
+	reconciler := reconciler.New(dbase, a, app.handlers.GetScheduler(), tokenSource)
+	go reconciler.Run(context.Background())
+
 	log.Printf("listening on port %d", *listenPort)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", strconv.Itoa(*listenPort)), app.router))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *listenPort), app.router))
 }

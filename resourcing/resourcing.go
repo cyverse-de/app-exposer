@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v10"
 	apiv1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
@@ -13,18 +14,31 @@ import (
 
 var log = common.Log
 
+// mustQuantity parses a hard-coded resource quantity literal; panics if the
+// literal is malformed. Used for the package-level defaults below — the
+// inputs are compile-time constants, so a parse error is a programmer bug
+// and should fail the binary at startup rather than silently producing a
+// zero-valued Quantity.
+func mustQuantity(s string) resourcev1.Quantity {
+	q, err := resourcev1.ParseQuantity(s)
+	if err != nil {
+		panic(fmt.Sprintf("resourcing: malformed quantity literal %q: %v", s, err))
+	}
+	return q
+}
+
 var (
-	defaultCPUResourceRequest, _   = resourcev1.ParseQuantity("1000m")
-	defaultMemResourceRequest, _   = resourcev1.ParseQuantity("2Gi")
-	defaultStorageRequest, _       = resourcev1.ParseQuantity("1Gi")
-	defaultCPUResourceLimit, _     = resourcev1.ParseQuantity("2000m")
-	defaultMemResourceLimit, _     = resourcev1.ParseQuantity("8Gi")
-	viceProxyCPUResourceRequest, _ = resourcev1.ParseQuantity("100m")
-	viceProxyMemResourceRequest, _ = resourcev1.ParseQuantity("100Mi")
-	viceProxyStorageRequest, _     = resourcev1.ParseQuantity("100Mi")
-	viceProxyCPUResourceLimit, _   = resourcev1.ParseQuantity("200m")
-	viceProxyMemResourceLimit, _   = resourcev1.ParseQuantity("200Mi")
-	viceProxyStorageLimit, _       = resourcev1.ParseQuantity("200Mi")
+	defaultCPUResourceRequest   = mustQuantity("1000m")
+	defaultMemResourceRequest   = mustQuantity("2Gi")
+	defaultStorageRequest       = mustQuantity("1Gi")
+	defaultCPUResourceLimit     = mustQuantity("2000m")
+	defaultMemResourceLimit     = mustQuantity("8Gi")
+	viceProxyCPUResourceRequest = mustQuantity("100m")
+	viceProxyMemResourceRequest = mustQuantity("100Mi")
+	viceProxyStorageRequest     = mustQuantity("100Mi")
+	viceProxyCPUResourceLimit   = mustQuantity("200m")
+	viceProxyMemResourceLimit   = mustQuantity("200Mi")
+	viceProxyStorageLimit       = mustQuantity("200Mi")
 
 	doDefaultCPUResourceLimit   = true
 	doDefaultMemResourceLimit   = true
@@ -33,114 +47,142 @@ var (
 	doVICEProxyStorageLimit     = true
 )
 
-const (
-	ShmDevice = "/dev/shm"
-)
-
+// SetDefaultCPUResourceRequest sets the default CPU resource request for analyses.
 func SetDefaultCPUResourceRequest(value resourcev1.Quantity) {
 	defaultCPUResourceRequest = value
 }
 
+// SetDefaultCPUResourceLimit sets the default CPU resource limit for analyses.
 func SetDefaultCPUResourceLimit(value resourcev1.Quantity) {
 	defaultCPUResourceLimit = value
 }
 
+// SetDoDefaultCPUResourceLimit controls whether a default CPU resource limit
+// is applied to analyses.
 func SetDoDefaultCPUResourceLimit(value bool) {
 	doDefaultCPUResourceLimit = value
 }
 
+// SetDefaultMemResourceRequest sets the default memory resource request for analyses.
 func SetDefaultMemResourceRequest(value resourcev1.Quantity) {
 	defaultMemResourceRequest = value
 }
 
+// SetDefaultMemResourceLimit sets the default memory resource limit for analyses.
 func SetDefaultMemResourceLimit(value resourcev1.Quantity) {
 	defaultMemResourceLimit = value
 }
 
+// SetDoDefaultMemResourceLimit controls whether a default memory resource limit
+// is applied to analyses.
 func SetDoDefaultMemResourceLimit(value bool) {
 	doDefaultMemResourceLimit = value
 }
 
+// SetDefaultStorageRequest sets the default ephemeral storage request for analyses.
 func SetDefaultStorageRequest(value resourcev1.Quantity) {
 	defaultStorageRequest = value
 }
 
+// SetVICEProxyCPUResourceRequest sets the CPU resource request for the VICE proxy sidecar.
 func SetVICEProxyCPUResourceRequest(value resourcev1.Quantity) {
 	viceProxyCPUResourceRequest = value
 }
 
+// SetVICEProxyCPUResourceLimit sets the CPU resource limit for the VICE proxy sidecar.
 func SetVICEProxyCPUResourceLimit(value resourcev1.Quantity) {
 	viceProxyCPUResourceLimit = value
 }
 
+// SetDoVICEProxyCPUResourceLimit controls whether a CPU resource limit is
+// applied to the VICE proxy sidecar.
 func SetDoVICEProxyCPUResourceLimit(value bool) {
 	doVICEProxyCPUResourceLimit = value
 }
 
+// SetVICEProxyMemResourceRequest sets the memory resource request for the VICE proxy sidecar.
 func SetVICEProxyMemResourceRequest(value resourcev1.Quantity) {
 	viceProxyMemResourceRequest = value
 }
 
+// SetVICEProxyMemResourceLimit sets the memory resource limit for the VICE proxy sidecar.
 func SetVICEProxyMemResourceLimit(value resourcev1.Quantity) {
 	viceProxyMemResourceLimit = value
 }
 
+// SetDoVICEProxyMemResourceLimit controls whether a memory resource limit is
+// applied to the VICE proxy sidecar.
 func SetDoVICEProxyMemResourceLimit(value bool) {
 	doVICEProxyMemResourceLimit = value
 }
 
+// SetVICEProxyStorageRequest sets the ephemeral storage request for the VICE proxy sidecar.
 func SetVICEProxyStorageRequest(value resourcev1.Quantity) {
 	viceProxyStorageRequest = value
 }
 
+// SetVICEProxyStorageLimit sets the ephemeral storage limit for the VICE proxy sidecar.
 func SetVICEProxyStorageLimit(value resourcev1.Quantity) {
 	viceProxyStorageLimit = value
 }
 
+// SetDoVICEProxyStorageLimit controls whether an ephemeral storage limit is
+// applied to the VICE proxy sidecar.
 func SetDoVICEProxyStorageLimit(value bool) {
 	doVICEProxyStorageLimit = value
 }
 
+// DefaultCPUResourceRequest returns the default CPU resource request for analyses.
 func DefaultCPUResourceRequest() resourcev1.Quantity {
 	return defaultCPUResourceRequest
 }
 
+// DefaultCPUResourceLimit returns the default CPU resource limit for analyses.
 func DefaultCPUResourceLimit() resourcev1.Quantity {
 	return defaultCPUResourceLimit
 }
 
+// DefaultMemResourceRequest returns the default memory resource request for analyses.
 func DefaultMemResourceRequest() resourcev1.Quantity {
 	return defaultMemResourceRequest
 }
 
+// DefaultMemResourceLimit returns the default memory resource limit for analyses.
 func DefaultMemResourceLimit() resourcev1.Quantity {
 	return defaultMemResourceLimit
 }
 
+// DefaultStorageRequest returns the default ephemeral storage request for analyses.
 func DefaultStorageRequest() resourcev1.Quantity {
 	return defaultStorageRequest
 }
 
+// VICEProxyCPUResourceRequest returns the CPU resource request for the VICE proxy sidecar.
 func VICEProxyCPUResourceRequest() resourcev1.Quantity {
 	return viceProxyCPUResourceRequest
 }
 
+// VICEProxyCPUResourceLimit returns the CPU resource limit for the VICE proxy sidecar.
 func VICEProxyCPUResourceLimit() resourcev1.Quantity {
 	return viceProxyCPUResourceLimit
 }
 
+// VICEProxyMemResourceRequest returns the memory resource request for the VICE proxy sidecar.
 func VICEProxyMemResourceRequest() resourcev1.Quantity {
 	return viceProxyMemResourceRequest
 }
 
+// VICEProxyMemResourceLimit returns the memory resource limit for the VICE proxy sidecar.
 func VICEProxyMemResourceLimit() resourcev1.Quantity {
 	return viceProxyMemResourceLimit
 }
 
+// VICEProxyStorageRequest returns the ephemeral storage request for the VICE proxy sidecar.
 func VICEProxyStorageRequest() resourcev1.Quantity {
 	return viceProxyStorageRequest
 }
 
+// VICEProxyStorageLimit returns the ephemeral storage limit for the VICE proxy sidecar.
 func VICEProxyStorageLimit() resourcev1.Quantity {
 	return viceProxyStorageLimit
 }
@@ -165,9 +207,9 @@ func GPUEnabled(analysis *model.Analysis) bool {
 // getIntField is a small reflection helper to safely read an (exported) integer
 // field by name from a struct value. Returns 0 when the field doesn't exist or
 // can't be converted to an int.
-func getIntField(v interface{}, name string) int {
+func getIntField(v any, name string) int {
 	val := reflect.ValueOf(v)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 	if val.Kind() != reflect.Struct {
@@ -195,9 +237,9 @@ func maxGPUs(c model.Container) int { return getIntField(c, "MaxGPUs") }
 // getStringSliceField is a reflection helper to safely read a string slice field
 // from a struct value. Returns empty slice when the field doesn't exist or
 // can't be converted to a []string.
-func getStringSliceField(v interface{}, name string) []string {
+func getStringSliceField(v any, name string) []string {
 	val := reflect.ValueOf(v)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 	if val.Kind() != reflect.Struct {
@@ -314,7 +356,7 @@ func SharedMemoryAmount(analysis *model.Analysis) *resourcev1.Quantity {
 	var shmAmount resourcev1.Quantity
 	var err error
 	for _, device := range analysis.Steps[0].Component.Container.Devices {
-		if strings.HasPrefix(strings.ToLower(device.HostPath), ShmDevice) {
+		if strings.HasPrefix(strings.ToLower(device.HostPath), constants.ShmDevice) {
 			shmAmount, err = resourcev1.ParseQuantity(device.ContainerPath)
 			if err != nil {
 				log.Warn(err)
@@ -422,17 +464,12 @@ func VICEProxyRequirements(analysis *model.Analysis) *apiv1.ResourceRequirements
 }
 
 // Requirements returns the limits and requests needed for the analysis itself.
+// The resourceLimits function already handles the doDefaultCPUResourceLimit,
+// doDefaultMemResourceLimit, and GPU flags internally, returning an empty
+// ResourceList when no limits are configured.
 func Requirements(analysis *model.Analysis) *apiv1.ResourceRequirements {
-	retval := &apiv1.ResourceRequirements{
+	return &apiv1.ResourceRequirements{
 		Limits:   resourceLimits(analysis),
 		Requests: resourceRequests(analysis),
 	}
-
-	if !doDefaultCPUResourceLimit && !doDefaultMemResourceLimit && !GPUEnabled(analysis) {
-		return retval
-	}
-
-	retval.Limits = resourceLimits(analysis)
-
-	return retval
 }

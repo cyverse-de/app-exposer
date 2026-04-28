@@ -4,20 +4,20 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
-	"github.com/pkg/errors"
+	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/app-exposer/reporting"
 	v1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
+// getListSelector builds a label selector that includes the "app-type=interactive"
+// label plus any additional labels provided in customLabels.
 func getListSelector(customLabels map[string]string) labels.Selector {
 	allLabels := map[string]string{
-		"app-type": "interactive",
+		constants.AppTypeLabel: "interactive",
 	}
 
 	for k, v := range customLabels {
@@ -31,33 +31,36 @@ func getListSelector(customLabels map[string]string) labels.Selector {
 
 // getListOptions returns a ListOptions for listing a resource that has the
 // labels provided in customLabels, but is missing the labels provided in missingLabels.
-func getListOptions(customLabels map[string]string, missingLabels []string) metav1.ListOptions {
-	// Get the selector populated with the labels that should be present
+func getListOptions(customLabels map[string]string, missingLabels []string) (metav1.ListOptions, error) {
+	// Get the selector populated with the labels that should be present.
 	s := getListSelector(customLabels)
 
-	// the list of requirements for labels that should be missing from the objects
-	// in the listing.
-	reqs := []labels.Requirement{}
+	// Accumulate requirements for labels that must be absent from listed objects.
+	var reqs []labels.Requirement
 
-	// populate the requirements
 	for _, missingLabel := range missingLabels {
 		newReq, err := labels.NewRequirement(missingLabel, selection.DoesNotExist, []string{})
 		if err != nil {
-			log.Error(err)
-		} else {
-			reqs = append(reqs, *newReq)
+			return metav1.ListOptions{}, fmt.Errorf("invalid label requirement %q: %w", missingLabel, err)
 		}
+		reqs = append(reqs, *newReq)
 	}
 
 	s = s.Add(reqs...)
 
 	return metav1.ListOptions{
 		LabelSelector: s.String(),
-	}
+	}, nil
 }
 
+// DeploymentList returns all Deployments in namespace matching customLabels
+// and lacking any of the missingLabels. The "app-type=interactive" selector
+// is always applied.
 func (i *Incluster) DeploymentList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*v1.DeploymentList, error) {
-	listOptions := getListOptions(customLabels, missingLabels)
+	listOptions, err := getListOptions(customLabels, missingLabels)
+	if err != nil {
+		return nil, err
+	}
 
 	depList, err := i.clientset.AppsV1().Deployments(namespace).List(ctx, listOptions)
 	if err != nil {
@@ -67,331 +70,53 @@ func (i *Incluster) DeploymentList(ctx context.Context, namespace string, custom
 	return depList, nil
 }
 
-func (i *Incluster) podList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.PodList, error) {
-	listOptions := getListOptions(customLabels, missingLabels)
+// UserDeploymentInfo contains basic deployment info for logout forwarding
+type UserDeploymentInfo struct {
+	ExternalID string
+	UserID     string
+}
 
-	podList, err := i.clientset.CoreV1().Pods(namespace).List(ctx, listOptions)
+// GetDeploymentsByUserID returns all VICE deployments for a given user ID
+func (i *Incluster) GetDeploymentsByUserID(ctx context.Context, userID string) ([]UserDeploymentInfo, error) {
+	set := labels.Set(map[string]string{
+		constants.AppTypeLabel: "interactive",
+		constants.UserIDLabel:  userID,
+	})
+
+	opts := metav1.ListOptions{
+		LabelSelector: set.AsSelector().String(),
+	}
+
+	depList, err := i.clientset.AppsV1().Deployments(i.ViceNamespace).List(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return podList, nil
-}
-
-func (i *Incluster) configmapsList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.ConfigMapList, error) {
-	listOptions := getListOptions(customLabels, missingLabels)
-
-	cfgList, err := i.clientset.CoreV1().ConfigMaps(namespace).List(ctx, listOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	return cfgList, nil
-}
-
-func (i *Incluster) serviceList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*corev1.ServiceList, error) {
-	listOptions := getListOptions(customLabels, missingLabels)
-
-	svcList, err := i.clientset.CoreV1().Services(namespace).List(ctx, listOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	return svcList, nil
-}
-
-func (i *Incluster) routeList(ctx context.Context, namespace string, customLabels map[string]string, missingLabels []string) (*gatewayv1.HTTPRouteList, error) {
-	listOptions := getListOptions(customLabels, missingLabels)
-
-	client := i.gatewayClient.HTTPRoutes(namespace)
-	routeList, err := client.List(ctx, listOptions)
-	if err != nil {
-		return nil, err
-	}
-	return routeList, nil
-}
-
-// MetaInfo contains useful information provided by multiple resource types.
-type MetaInfo struct {
-	Name              string `json:"name"`
-	Namespace         string `json:"namespace"`
-	AnalysisName      string `json:"analysisName"`
-	AppName           string `json:"appName"`
-	AppID             string `json:"appID"`
-	ExternalID        string `json:"externalID"`
-	UserID            string `json:"userID"`
-	Username          string `json:"username"`
-	CreationTimestamp string `json:"creationTimestamp"`
-}
-
-// DeploymentInfo contains information returned about a Deployment.
-type DeploymentInfo struct {
-	MetaInfo
-	Image   string   `json:"image"`
-	Command []string `json:"command"`
-	Port    int32    `json:"port"`
-	User    int64    `json:"user"`
-	Group   int64    `json:"group"`
-}
-
-func deploymentInfo(deployment *v1.Deployment) *DeploymentInfo {
-	var (
-		user    int64
-		group   int64
-		image   string
-		port    int32
-		command []string
-	)
-
-	labels := deployment.GetObjectMeta().GetLabels()
-	containers := deployment.Spec.Template.Spec.Containers
-
-	for _, container := range containers {
-		if container.Name == "analysis" {
-			image = container.Image
-			command = container.Command
-			port = container.Ports[0].ContainerPort
-			user = *container.SecurityContext.RunAsUser
-			group = *container.SecurityContext.RunAsGroup
-		}
-
-	}
-
-	return &DeploymentInfo{
-		MetaInfo: MetaInfo{
-			Name:              deployment.GetName(),
-			Namespace:         deployment.GetNamespace(),
-			AnalysisName:      labels["analysis-name"],
-			AppName:           labels["app-name"],
-			AppID:             labels["app-id"],
-			ExternalID:        labels["external-id"],
-			UserID:            labels["user-id"],
-			Username:          labels["username"],
-			CreationTimestamp: deployment.GetCreationTimestamp().String(),
-		},
-
-		Image:   image,
-		Command: command,
-		Port:    port,
-		User:    user,
-		Group:   group,
-	}
-}
-
-// PodInfo tracks information about the pods for a VICE analysis.
-type PodInfo struct {
-	MetaInfo
-	Phase                 string                   `json:"phase"`
-	Message               string                   `json:"message"`
-	Reason                string                   `json:"reason"`
-	ContainerStatuses     []corev1.ContainerStatus `json:"containerStatuses"`
-	InitContainerStatuses []corev1.ContainerStatus `json:"initContainerStatuses"`
-}
-
-func podInfo(pod *corev1.Pod) *PodInfo {
-	labels := pod.GetObjectMeta().GetLabels()
-
-	return &PodInfo{
-		MetaInfo: MetaInfo{
-			Name:              pod.GetName(),
-			Namespace:         pod.GetNamespace(),
-			AnalysisName:      labels["analysis-name"],
-			AppName:           labels["app-name"],
-			AppID:             labels["app-id"],
-			ExternalID:        labels["external-id"],
-			UserID:            labels["user-id"],
-			Username:          labels["username"],
-			CreationTimestamp: pod.GetCreationTimestamp().String(),
-		},
-		Phase:                 string(pod.Status.Phase),
-		Message:               pod.Status.Message,
-		Reason:                pod.Status.Reason,
-		ContainerStatuses:     pod.Status.ContainerStatuses,
-		InitContainerStatuses: pod.Status.InitContainerStatuses,
-	}
-}
-
-// ConfigMapInfo contains useful info about a config map.
-type ConfigMapInfo struct {
-	MetaInfo
-	Data map[string]string `json:"data"`
-}
-
-func configMapInfo(cm *corev1.ConfigMap) *ConfigMapInfo {
-	labels := cm.GetObjectMeta().GetLabels()
-
-	return &ConfigMapInfo{
-		MetaInfo: MetaInfo{
-			Name:              cm.GetName(),
-			Namespace:         cm.GetNamespace(),
-			AnalysisName:      labels["analysis-name"],
-			AppName:           labels["app-name"],
-			AppID:             labels["app-id"],
-			ExternalID:        labels["external-id"],
-			UserID:            labels["user-id"],
-			Username:          labels["username"],
-			CreationTimestamp: cm.GetCreationTimestamp().String(),
-		},
-		Data: cm.Data,
-	}
-}
-
-// ServiceInfoPort contains information about a service's Port.
-type ServiceInfoPort struct {
-	Name           string `json:"name"`
-	NodePort       int32  `json:"nodePort"`
-	TargetPort     int32  `json:"targetPort"`
-	TargetPortName string `json:"targetPortName"`
-	Port           int32  `json:"port"`
-	Protocol       string `json:"protocol"`
-}
-
-// ServiceInfo contains info about a service
-type ServiceInfo struct {
-	MetaInfo
-	Ports []ServiceInfoPort `json:"ports"`
-}
-
-func serviceInfo(svc *corev1.Service) *ServiceInfo {
-	labels := svc.GetObjectMeta().GetLabels()
-
-	ports := svc.Spec.Ports
-	svcInfoPorts := []ServiceInfoPort{}
-
-	for _, port := range ports {
-		svcInfoPorts = append(svcInfoPorts, ServiceInfoPort{
-			Name:           port.Name,
-			NodePort:       port.NodePort,
-			TargetPort:     port.TargetPort.IntVal,
-			TargetPortName: port.TargetPort.String(),
-			Port:           port.Port,
-			Protocol:       string(port.Protocol),
-		})
-	}
-
-	return &ServiceInfo{
-		MetaInfo: MetaInfo{
-			Name:              svc.GetName(),
-			Namespace:         svc.GetNamespace(),
-			AnalysisName:      labels["analysis-name"],
-			AppName:           labels["app-name"],
-			AppID:             labels["app-id"],
-			ExternalID:        labels["external-id"],
-			UserID:            labels["user-id"],
-			Username:          labels["username"],
-			CreationTimestamp: svc.GetCreationTimestamp().String(),
-		},
-
-		Ports: svcInfoPorts,
-	}
-}
-
-// RouteInfo contains information about HTTP routes used for VICE apps.
-type RouteInfo struct {
-	MetaInfo
-	Rules []gatewayv1.HTTPRouteRule `json:"rules"`
-}
-
-// routeInfo returns an RouteInfo struct for an HTTPRoute.
-func routeInfo(route *gatewayv1.HTTPRoute) *RouteInfo {
-	labels := route.GetObjectMeta().GetLabels()
-
-	return &RouteInfo{
-		MetaInfo: MetaInfo{
-			Name:              route.GetName(),
-			Namespace:         route.GetNamespace(),
-			AnalysisName:      labels["analysis-name"],
-			AppName:           labels["app-name"],
-			AppID:             labels["app-id"],
-			ExternalID:        labels["external-id"],
-			UserID:            labels["user-id"],
-			Username:          labels["username"],
-			CreationTimestamp: route.GetCreationTimestamp().String(),
-		},
-		Rules: route.Spec.Rules,
-	}
-}
-
-func (i *Incluster) GetFilteredDeployments(ctx context.Context, filter map[string]string) ([]DeploymentInfo, error) {
-	depList, err := i.DeploymentList(ctx, i.ViceNamespace, filter, []string{})
-	if err != nil {
-		return nil, err
-	}
-
-	deployments := []DeploymentInfo{}
-
+	result := make([]UserDeploymentInfo, 0, len(depList.Items))
 	for _, dep := range depList.Items {
-		info := deploymentInfo(&dep)
-		deployments = append(deployments, *info)
+		if extID, ok := dep.Labels[constants.ExternalIDLabel]; ok {
+			result = append(result, UserDeploymentInfo{
+				ExternalID: extID,
+				UserID:     userID,
+			})
+		}
 	}
 
-	return deployments, nil
+	return result, nil
 }
 
-func (i *Incluster) GetFilteredPods(ctx context.Context, filter map[string]string) ([]PodInfo, error) {
-	podList, err := i.podList(ctx, i.ViceNamespace, filter, []string{})
-	if err != nil {
-		return nil, err
-	}
+// Type aliases for backward compatibility — canonical types live in reporting/.
+type MetaInfo = reporting.MetaInfo
+type DeploymentInfo = reporting.DeploymentInfo
+type PodInfo = reporting.PodInfo
+type ConfigMapInfo = reporting.ConfigMapInfo
+type ServiceInfoPort = reporting.ServiceInfoPort
+type ServiceInfo = reporting.ServiceInfo
+type IngressInfo = reporting.IngressInfo
+type RouteInfo = reporting.RouteInfo
 
-	pods := []PodInfo{}
-
-	for _, pod := range podList.Items {
-		info := podInfo(&pod)
-		pods = append(pods, *info)
-	}
-
-	return pods, nil
-}
-
-func (i *Incluster) GetFilteredConfigMaps(ctx context.Context, filter map[string]string) ([]ConfigMapInfo, error) {
-	cmList, err := i.configmapsList(ctx, i.ViceNamespace, filter, []string{})
-	if err != nil {
-		return nil, err
-	}
-
-	cms := []ConfigMapInfo{}
-
-	for _, cm := range cmList.Items {
-		info := configMapInfo(&cm)
-		cms = append(cms, *info)
-	}
-
-	return cms, nil
-}
-
-func (i *Incluster) GetFilteredServices(ctx context.Context, filter map[string]string) ([]ServiceInfo, error) {
-	svcList, err := i.serviceList(ctx, i.ViceNamespace, filter, []string{})
-	if err != nil {
-		return nil, err
-	}
-
-	svcs := []ServiceInfo{}
-
-	for _, svc := range svcList.Items {
-		info := serviceInfo(&svc)
-		svcs = append(svcs, *info)
-	}
-
-	return svcs, nil
-}
-
-func (i *Incluster) GetFilteredRoutes(ctx context.Context, filter map[string]string) ([]RouteInfo, error) {
-	routeList, err := i.routeList(ctx, i.ViceNamespace, filter, []string{})
-	if err != nil {
-		return nil, err
-	}
-
-	routes := make([]RouteInfo, len(routeList.Items))
-	for i, route := range routeList.Items {
-		routes[i] = *routeInfo(&route)
-	}
-
-	return routes, nil
-}
-
-// ResourceInfo contains all of the k8s resource information about a running VICE analysis
-// that we know of and care about.
+// ResourceInfo contains all of the K8s resource information about a running
+// VICE analysis that we know of and care about.
 type ResourceInfo struct {
 	Deployments []DeploymentInfo `json:"deployments"`
 	Pods        []PodInfo        `json:"pods"`
@@ -400,229 +125,8 @@ type ResourceInfo struct {
 	Routes      []RouteInfo      `json:"routes"`
 }
 
+// FixUsername normalizes a username by appending the configured user suffix
+// if it is not already present.
 func (i *Incluster) FixUsername(username string) string {
 	return common.FixUsername(username, i.UserSuffix)
-}
-
-func (i *Incluster) DoResourceListing(ctx context.Context, filter map[string]string) (*ResourceInfo, error) {
-	deployments, err := i.GetFilteredDeployments(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	pods, err := i.GetFilteredPods(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	cms, err := i.GetFilteredConfigMaps(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	svcs, err := i.GetFilteredServices(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	routes, err := i.GetFilteredRoutes(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ResourceInfo{
-		Deployments: deployments,
-		Pods:        pods,
-		ConfigMaps:  cms,
-		Services:    svcs,
-		Routes:      routes,
-	}, nil
-}
-
-func populateAnalysisID(ctx context.Context, a *apps.Apps, existingLabels map[string]string) (map[string]string, error) {
-	if _, ok := existingLabels["analysis-id"]; !ok {
-		externalID, ok := existingLabels["external-id"]
-		if !ok {
-			return existingLabels, fmt.Errorf("missing external-id key")
-		}
-		analysisID, err := a.GetAnalysisIDByExternalID(ctx, externalID)
-		if err != nil {
-			log.Debug(errors.Wrapf(err, "error getting analysis id for external id %s", externalID))
-		} else {
-			existingLabels["analysis-id"] = analysisID
-		}
-	}
-	return existingLabels, nil
-}
-
-func populateSubdomain(existingLabels map[string]string) map[string]string {
-	if _, ok := existingLabels["subdomain"]; !ok {
-		if externalID, ok := existingLabels["external-id"]; ok {
-			if userID, ok := existingLabels["user-id"]; ok {
-				existingLabels["subdomain"] = common.Subdomain(userID, externalID)
-			}
-		}
-	}
-
-	return existingLabels
-}
-
-func populateLoginIP(ctx context.Context, a *apps.Apps, existingLabels map[string]string) (map[string]string, error) {
-	if _, ok := existingLabels["login-ip"]; !ok {
-		if userID, ok := existingLabels["user-id"]; ok {
-			ipAddr, err := a.GetUserIP(ctx, userID)
-			if err != nil {
-				return existingLabels, err
-			}
-			existingLabels["login-ip"] = ipAddr
-		}
-	}
-
-	return existingLabels, nil
-}
-
-func (i *Incluster) populateAdditionalLabels(ctx context.Context, existingLabels map[string]string) (map[string]string, []error) {
-	var err error
-	errors := []error{}
-
-	existingLabels = populateSubdomain(existingLabels)
-	existingLabels, err = populateLoginIP(ctx, i.apps, existingLabels)
-	if err != nil {
-		errors = append(errors, err)
-	}
-	existingLabels, err = populateAnalysisID(ctx, i.apps, existingLabels)
-	if err != nil {
-		errors = append(errors, err)
-	}
-
-	return existingLabels, errors
-}
-
-func (i *Incluster) relabelDeployments(ctx context.Context) []error {
-	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
-	errors := []error{}
-
-	deployments, err := i.DeploymentList(ctx, i.ViceNamespace, filter, []string{"subdomain"})
-	if err != nil {
-		errors = append(errors, err)
-		return errors
-	}
-
-	for _, deployment := range deployments.Items {
-		labels, deploymentErrors := i.populateAdditionalLabels(ctx, deployment.GetLabels())
-		if len(deploymentErrors) > 0 {
-			errors = append(errors, deploymentErrors...)
-		}
-		deployment.SetLabels(labels)
-		_, err = i.clientset.AppsV1().Deployments(i.ViceNamespace).Update(ctx, &deployment, metav1.UpdateOptions{})
-		if err != nil {
-			errors = append(errors, err)
-		}
-	}
-
-	return errors
-}
-
-func (i *Incluster) relabelConfigMaps(ctx context.Context) []error {
-	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
-	errors := []error{}
-
-	cms, err := i.configmapsList(ctx, i.ViceNamespace, filter, []string{"subdomain"})
-	if err != nil {
-		errors = append(errors, err)
-		return errors
-	}
-
-	for _, configmap := range cms.Items {
-		labels, configmapErrors := i.populateAdditionalLabels(ctx, configmap.GetLabels())
-		if len(configmapErrors) > 0 {
-			errors = append(errors, configmapErrors...)
-		}
-		configmap.SetLabels(labels)
-		_, err = i.clientset.CoreV1().ConfigMaps(i.ViceNamespace).Update(ctx, &configmap, metav1.UpdateOptions{})
-		if err != nil {
-			errors = append(errors, err)
-		}
-	}
-
-	return errors
-}
-
-func (i *Incluster) relabelServices(ctx context.Context) []error {
-	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
-	errors := []error{}
-
-	svcs, err := i.serviceList(ctx, i.ViceNamespace, filter, []string{"subdomain"})
-	if err != nil {
-		errors = append(errors, err)
-		return errors
-	}
-
-	for _, service := range svcs.Items {
-		labels, serviceErrors := i.populateAdditionalLabels(ctx, service.GetLabels())
-		if len(serviceErrors) > 0 {
-			errors = append(errors, serviceErrors...)
-		}
-		service.SetLabels(labels)
-		_, err = i.clientset.CoreV1().Services(i.ViceNamespace).Update(ctx, &service, metav1.UpdateOptions{})
-		if err != nil {
-			errors = append(errors, err)
-		}
-	}
-
-	return errors
-}
-
-func (i *Incluster) relabelRoutes(ctx context.Context) []error {
-	filter := map[string]string{} // Empty on purpose. Only filter based on interactive label.
-	errors := []error{}
-
-	routes, err := i.routeList(ctx, i.ViceNamespace, filter, []string{"subdomain"})
-	if err != nil {
-		errors = append(errors, err)
-		return errors
-	}
-
-	for _, route := range routes.Items {
-		labels, routeErrors := i.populateAdditionalLabels(ctx, route.GetLabels())
-		if len(routeErrors) > 0 {
-			errors = append(errors, routeErrors...)
-		}
-		route.SetLabels(labels)
-		_, err = i.gatewayClient.HTTPRoutes(i.ViceNamespace).Update(ctx, &route, metav1.UpdateOptions{})
-		if err != nil {
-			errors = append(errors, err)
-		}
-	}
-
-	return errors
-}
-
-// ApplyAsyncLabels ensures that the required labels are applied to all running VICE analyses.
-// This is useful to avoid race conditions between the DE database and the k8s cluster,
-// and also for adding new labels to "old" analyses during an update.
-func (i *Incluster) ApplyAsyncLabels(ctx context.Context) []error {
-	errors := []error{}
-
-	labelDepsErrors := i.relabelDeployments(ctx)
-	if len(labelDepsErrors) > 0 {
-		errors = append(errors, labelDepsErrors...)
-	}
-
-	labelCMErrors := i.relabelConfigMaps(ctx)
-	if len(labelCMErrors) > 0 {
-		errors = append(errors, labelCMErrors...)
-	}
-
-	labelSVCErrors := i.relabelServices(ctx)
-	if len(labelSVCErrors) > 0 {
-		errors = append(errors, labelSVCErrors...)
-	}
-
-	labelRoutesErrors := i.relabelRoutes(ctx)
-	if len(labelRoutesErrors) > 0 {
-		errors = append(errors, labelRoutesErrors...)
-	}
-
-	return errors
 }

@@ -125,7 +125,7 @@ func requestTransfer(ctx context.Context, svc apiv1.Service, reqpath string) (*t
 		return nil, fmt.Errorf("response from %s was nil", svcurl.String())
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 
 	if resp.StatusCode < 200 || resp.StatusCode > 399 {
 		return nil, errors.Wrapf(posterr, "download request to %s returned %d", svcurl.String(), resp.StatusCode)
@@ -171,7 +171,7 @@ func getTransferDetails(ctx context.Context, svc apiv1.Service, reqpath string) 
 		return nil, fmt.Errorf("response from GET %s was nil", svcurl.String())
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 
 	if resp.StatusCode < 200 || resp.StatusCode > 399 {
 		return nil, errors.Wrapf(posterr, "status request to %s returned %d", svcurl.String(), resp.StatusCode)
@@ -228,7 +228,7 @@ func (i *Incluster) DoFileTransfer(ctx context.Context, externalID, reqpath, kin
 	// returned. external-id is the job ID assigned by the apps service and is
 	// not the same as the analysis ID.
 	set := labels.Set(map[string]string{
-		"external-id": externalID,
+		constants.ExternalIDLabel: externalID,
 	})
 
 	svclist, err := svcclient.List(ctx, metav1.ListOptions{

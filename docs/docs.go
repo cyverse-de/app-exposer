@@ -134,7 +134,7 @@ const docTemplate = `{
         },
         "/vice/admin/analyses/{analysis-id}/download-input-files": {
             "post": {
-                "description": "Handles requests to trigger file downloads\nwithout requiring user information in the request and also operates from\nthe analysis UUID rather than the external ID. For use with tools that\nrequire the caller to have administrative privileges.",
+                "description": "Handles requests to trigger file downloads without requiring\nuser information, operating from the analysis UUID.",
                 "produces": [
                     "application/json"
                 ],
@@ -170,13 +170,13 @@ const docTemplate = `{
         },
         "/vice/admin/analyses/{analysis-id}/exit": {
             "post": {
-                "description": "Terminates the VICE analysis based on the analysisID and\nand should not require any user information to be provided. Otherwise, the\ndocumentation for VICEExit applies here as well.",
+                "description": "Terminates the VICE analysis based on the analysisID and\nshould not require any user information to be provided. Otherwise,\nthe documentation for ExitHandler applies here as well.",
                 "summary": "Terminates a VICE analysis",
                 "operationId": "admin-exit",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "The external ID of the VICE analysis",
+                        "description": "The analysis ID of the VICE analysis",
                         "name": "analysis-id",
                         "in": "path",
                         "required": true
@@ -239,9 +239,42 @@ const docTemplate = `{
                 }
             }
         },
+        "/vice/admin/analyses/{analysis-id}/save-and-exit": {
+            "post": {
+                "description": "Handles requests to save the output files in iRODS and\nthen exit. This version of the call operates based on the analysis ID and does\nnot require user information to be required by the caller. Otherwise, the docs\nfor SaveAndExitHandler apply here as well.",
+                "summary": "Admin endpoint to trigger output file transfer and analysis exit",
+                "operationId": "admin-save-and-exit",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/admin/analyses/{analysis-id}/save-output-files": {
             "post": {
-                "description": "Handles requests to trigger file uploads without\nrequiring user information in the request, while also operating from the\nanalysis UUID rather than the external UUID. For use with tools that\nrequire the caller to have administrative privileges.",
+                "description": "Handles requests to trigger file uploads without requiring\nuser information, operating from the analysis UUID.",
                 "produces": [
                     "application/json"
                 ],
@@ -351,43 +384,10 @@ const docTemplate = `{
                 }
             }
         },
-        "/vice/admin/analyses/{}/save-and-exit": {
-            "post": {
-                "description": "Handles requests to save the output files in iRODS and\nthen exit. This version of the call operates based on the analysis ID and does\nnot require user information to be required by the caller. Otherwise, the docs\nfor the VICESaveAndExit function apply here as well.",
-                "summary": "Admin endpoint to trigger output file transfer and analysis exit",
-                "operationId": "admin-save-and-exit",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Analysis ID",
-                        "name": "analysis-id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/vice/admin/is-deployed/analysis-id/{analysis-id}": {
             "get": {
-                "description": "Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state",
-                "summary": "Returns whether a deployment for an analysis is in the cluster",
+                "description": "Returns whether any operator claims to be running the analysis for the provided analysis ID, regardless of its state",
+                "summary": "Returns whether any operator is running the analysis",
                 "operationId": "admin-analysis-in-cluster-by-id",
                 "parameters": [
                     {
@@ -422,8 +422,8 @@ const docTemplate = `{
         },
         "/vice/admin/is-deployed/external-id/{external-id}": {
             "get": {
-                "description": "Returns whether a deployment for the analysis with the provided external ID is present in the cluster, regardless of its state",
-                "summary": "Returns whether a deployment for an analysis is in the cluster",
+                "description": "Returns whether any operator claims to be running the analysis for the provided external ID, regardless of its state",
+                "summary": "Returns whether any operator is running the analysis",
                 "operationId": "admin-analysis-in-cluster-by-external-id",
                 "parameters": [
                     {
@@ -468,8 +468,161 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/incluster.ResourceInfo"
+                            "$ref": "#/definitions/reporting.ResourceInfo"
                         }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/operator-listing": {
+            "get": {
+                "description": "Aggregates the listing endpoints of all configured operators\nand returns combined resource info. Errors for individual\noperators are logged but do not prevent partial results.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists running analyses across all operators",
+                "operationId": "admin-operator-listing",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/reporting.ResourceInfo"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/operators": {
+            "get": {
+                "description": "Returns the name, URL, and tls_skip_verify flag for all operators in the database.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Lists registered operators",
+                "operationId": "admin-list-operators",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/operatorclient.OperatorConfig"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Adds a new operator to the database.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Creates a new operator",
+                "operationId": "admin-create-operator",
+                "parameters": [
+                    {
+                        "description": "Operator to create",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/operatorclient.OperatorConfig"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/operatorclient.OperatorConfig"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/operators/capacities": {
+            "get": {
+                "description": "Queries each configured operator's capacity endpoint in parallel and returns the results.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Returns operator capacities",
+                "operationId": "admin-operator-capacities",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/httphandlers.OperatorCapacity"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/admin/operators/name/{name}": {
+            "delete": {
+                "description": "Removes the named operator from the database. Succeeds silently if the operator does not exist. Fails if jobs still reference the operator.",
+                "summary": "Deletes an operator by name",
+                "operationId": "admin-delete-operator",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Operator name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -488,12 +641,18 @@ const docTemplate = `{
         },
         "/vice/admin/terminate-all": {
             "post": {
-                "description": "Terminates all analyses marked as running in the DE database.\nDoes not check for analyses in the cluster but not marked as running in the database.\nTerminates both VICE and batch analyses.",
+                "description": "Terminates all analyses marked as running in the DE database.\nDoes not check for analyses in the cluster but not marked as running in the database.\nTerminates both VICE and batch analyses. Returns 207\nMulti-Status when any termination failed; the failed_vice\nand failed_batch fields list the external IDs that failed.",
                 "summary": "Terminates all analyses",
                 "operationId": "terminate-all-analyses",
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "All terminated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.TerminateAllResponse"
+                        }
+                    },
+                    "207": {
+                        "description": "Partial success",
                         "schema": {
                             "$ref": "#/definitions/httphandlers.TerminateAllResponse"
                         }
@@ -531,7 +690,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/incluster.ResourceInfo"
+                            "$ref": "#/definitions/reporting.ResourceInfo"
                         }
                     },
                     "400": {
@@ -570,7 +729,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/httphandlers.URLReadyResponse"
+                            "$ref": "#/definitions/operatorclient.URLReadyResponse"
                         }
                     },
                     "400": {
@@ -581,30 +740,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/vice/apply-labels": {
-            "post": {
-                "description": "Asynchronously applies labels to all running VICE analyses.\nThe application of the labels may not be complete by the time the response is returned.",
-                "summary": "Applies labels to running VICE analyses.",
-                "operationId": "apply-async-labels",
-                "responses": {
-                    "200": {
-                        "description": "OK"
-                    },
-                    "400": {
-                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
@@ -654,9 +789,60 @@ const docTemplate = `{
                 }
             }
         },
+        "/vice/dry-run": {
+            "post": {
+                "description": "Accepts the same model.Job body as /vice/launch but returns the\nassembled AnalysisBundle JSON instead of dispatching it to an operator.\nNo side effects (no ConfigMaps, no scheduling, no DB writes).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Build an AnalysisBundle without launching",
+                "operationId": "dry-run-bundle",
+                "parameters": [
+                    {
+                        "description": "The job to build a bundle for",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.AnalysisLaunch"
+                        }
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Run validation checks on the job",
+                        "name": "validate",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/operatorclient.AnalysisBundle"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/launch": {
             "post": {
-                "description": "The HTTP handler that orchestrates the launching of a VICE analysis inside\nthe k8s cluster. This gets passed to the router to be associated with a route. The Job\nis passed in as the body of the request.",
+                "description": "Validates the job and accepts it for asynchronous launch.\nA 200 response means the job was accepted, not that it has been\nfully deployed — resource creation and operator scheduling proceed\nin the background.",
                 "consumes": [
                     "application/json"
                 ],
@@ -720,7 +906,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/incluster.ResourceInfo"
+                            "$ref": "#/definitions/reporting.ResourceInfo"
                         }
                     },
                     "400": {
@@ -902,7 +1088,7 @@ const docTemplate = `{
         },
         "/vice/{analysis-id}/logs": {
             "get": {
-                "description": "Handlers requests to access the container logs for a pod in a running\nVICE app.",
+                "description": "Handles requests to access the container logs for a pod in a running\nVICE app.",
                 "produces": [
                     "application/json"
                 ],
@@ -953,7 +1139,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/httphandlers.VICELogEntry"
+                            "$ref": "#/definitions/reporting.VICELogEntry"
                         }
                     },
                     "400": {
@@ -964,6 +1150,57 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/vice/{analysis-id}/permissions": {
+            "put": {
+                "description": "Pushes an updated list of allowed users to the operator's\npermissions ConfigMap for the given analysis.",
+                "consumes": [
+                    "application/json"
+                ],
+                "summary": "Update VICE analysis permissions",
+                "operationId": "update-permissions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The analysis ID",
+                        "name": "analysis-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The new allowed users list",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/operatorclient.UpdatePermissionsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
@@ -1150,14 +1387,15 @@ const docTemplate = `{
                         "type": "string",
                         "description": "subdomain",
                         "name": "host",
-                        "in": "path"
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/incluster.ResourceInfo"
+                            "$ref": "#/definitions/reporting.ResourceInfo"
                         }
                     },
                     "400": {
@@ -1205,7 +1443,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "The subdomain of the analysis. AKA the HTTP route name",
+                        "description": "The subdomain of the analysis. AKA the ingress name",
                         "name": "host",
                         "in": "path",
                         "required": true
@@ -1215,7 +1453,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/httphandlers.URLReadyResponse"
+                            "$ref": "#/definitions/operatorclient.URLReadyResponse"
                         }
                     },
                     "400": {
@@ -1247,7 +1485,7 @@ const docTemplate = `{
         },
         "/vice/{id}/download-input-files": {
             "post": {
-                "description": "Triggers input downloads for an analysis",
+                "description": "Triggers input downloads for an analysis by routing through\nthe operator running it.",
                 "produces": [
                     "application/json"
                 ],
@@ -1283,7 +1521,7 @@ const docTemplate = `{
         },
         "/vice/{id}/exit": {
             "post": {
-                "description": "Terminates the VICE analysis deployment and cleans up\nresources asscociated with it. Does not save outputs first. Uses\nthe external-id label to find all of the objects in the configured\nnamespace associated with the job. Deletes the following objects:\nHTTP routes, services, deployments, and configmaps.",
+                "description": "Terminates the VICE analysis by routing through the operator\nrunning it. Converts the external ID to an analysis ID and\ndelegates all resource cleanup to the operator.",
                 "summary": "Terminates a VICE analysis",
                 "operationId": "exit",
                 "parameters": [
@@ -1349,7 +1587,7 @@ const docTemplate = `{
         },
         "/vice/{id}/save-output-files": {
             "post": {
-                "description": "Triggers output uploads from a running analysis.",
+                "description": "Triggers output uploads from a running analysis by routing\nthrough the operator running it.",
                 "produces": [
                     "application/json"
                 ],
@@ -1603,6 +1841,12 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/incluster.ConfigMapInfo"
                     }
+                },
+                "operator_errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httphandlers.OperatorError"
+                    }
                 }
             }
         },
@@ -1614,12 +1858,24 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/incluster.DeploymentInfo"
                     }
+                },
+                "operator_errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httphandlers.OperatorError"
+                    }
                 }
             }
         },
         "httphandlers.FilteredPodsResponse": {
             "type": "object",
             "properties": {
+                "operator_errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httphandlers.OperatorError"
+                    }
+                },
                 "pods": {
                     "type": "array",
                     "items": {
@@ -1631,6 +1887,12 @@ const docTemplate = `{
         "httphandlers.FilteredRoutesResponse": {
             "type": "object",
             "properties": {
+                "operator_errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httphandlers.OperatorError"
+                    }
+                },
                 "routes": {
                     "type": "array",
                     "items": {
@@ -1642,6 +1904,12 @@ const docTemplate = `{
         "httphandlers.FilteredServicesResponse": {
             "type": "object",
             "properties": {
+                "operator_errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httphandlers.OperatorError"
+                    }
+                },
                 "services": {
                     "type": "array",
                     "items": {
@@ -1658,6 +1926,31 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/incluster.RetPod"
                     }
+                }
+            }
+        },
+        "httphandlers.OperatorCapacity": {
+            "type": "object",
+            "properties": {
+                "capacity": {
+                    "$ref": "#/definitions/operatorclient.CapacityResponse"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "operator": {
+                    "type": "string"
+                }
+            }
+        },
+        "httphandlers.OperatorError": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "operator": {
+                    "type": "string"
                 }
             }
         },
@@ -1690,28 +1983,6 @@ const docTemplate = `{
                 }
             }
         },
-        "httphandlers.URLReadyResponse": {
-            "type": "object",
-            "properties": {
-                "ready": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "httphandlers.VICELogEntry": {
-            "type": "object",
-            "properties": {
-                "lines": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "since_time": {
-                    "type": "string"
-                }
-            }
-        },
         "httphandlers.uuidBody": {
             "type": "object",
             "properties": {
@@ -1723,6 +1994,9 @@ const docTemplate = `{
         "incluster.ConfigMapInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -1761,6 +2035,9 @@ const docTemplate = `{
         "incluster.DeploymentInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -1811,6 +2088,9 @@ const docTemplate = `{
         "incluster.PodInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -1861,41 +2141,6 @@ const docTemplate = `{
                 }
             }
         },
-        "incluster.ResourceInfo": {
-            "type": "object",
-            "properties": {
-                "configMaps": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/incluster.ConfigMapInfo"
-                    }
-                },
-                "deployments": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/incluster.DeploymentInfo"
-                    }
-                },
-                "pods": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/incluster.PodInfo"
-                    }
-                },
-                "routes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/incluster.RouteInfo"
-                    }
-                },
-                "services": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/incluster.ServiceInfo"
-                    }
-                }
-            }
-        },
         "incluster.RetPod": {
             "type": "object",
             "properties": {
@@ -1907,6 +2152,9 @@ const docTemplate = `{
         "incluster.RouteInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -1921,6 +2169,12 @@ const docTemplate = `{
                 },
                 "externalID": {
                     "type": "string"
+                },
+                "hostnames": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "name": {
                     "type": "string"
@@ -1945,6 +2199,9 @@ const docTemplate = `{
         "incluster.ServiceInfo": {
             "type": "object",
             "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
                 "analysisName": {
                     "type": "string"
                 },
@@ -1969,7 +2226,7 @@ const docTemplate = `{
                 "ports": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/incluster.ServiceInfoPort"
+                        "$ref": "#/definitions/reporting.ServiceInfoPort"
                     }
                 },
                 "userID": {
@@ -1980,33 +2237,112 @@ const docTemplate = `{
                 }
             }
         },
-        "incluster.ServiceInfoPort": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "nodePort": {
-                    "type": "integer"
-                },
-                "port": {
-                    "type": "integer"
-                },
-                "protocol": {
-                    "type": "string"
-                },
-                "targetPort": {
-                    "type": "integer"
-                },
-                "targetPortName": {
-                    "type": "string"
-                }
-            }
-        },
         "incluster.TimeLimit": {
             "type": "object",
             "properties": {
                 "time_limit": {
+                    "type": "string"
+                }
+            }
+        },
+        "intstr.IntOrString": {
+            "type": "object",
+            "properties": {
+                "intVal": {
+                    "type": "integer"
+                },
+                "strVal": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/intstr.Type"
+                }
+            }
+        },
+        "intstr.Type": {
+            "type": "integer",
+            "format": "int64",
+            "enum": [
+                0,
+                1
+            ],
+            "x-enum-comments": {
+                "Int": "The IntOrString holds an int.",
+                "String": "The IntOrString holds a string."
+            },
+            "x-enum-descriptions": [
+                "The IntOrString holds an int.",
+                "The IntOrString holds a string."
+            ],
+            "x-enum-varnames": [
+                "Int",
+                "String"
+            ]
+        },
+        "k8s_io_api_core_v1.ConditionStatus": {
+            "type": "string",
+            "enum": [
+                "True",
+                "False",
+                "Unknown"
+            ],
+            "x-enum-varnames": [
+                "ConditionTrue",
+                "ConditionFalse",
+                "ConditionUnknown"
+            ]
+        },
+        "k8s_io_api_core_v1.HTTPHeader": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "The header field name.\nThis will be canonicalized upon output, so case-variant names will be understood as the same header.",
+                    "type": "string"
+                },
+                "value": {
+                    "description": "The header field value",
+                    "type": "string"
+                }
+            }
+        },
+        "k8s_io_api_core_v1.LocalObjectReference": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names\n+optional\n+default=\"\"\n+kubebuilder:default=\"\"\nTODO: Drop ` + "`" + `kubebuilder:default` + "`" + ` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.",
+                    "type": "string"
+                }
+            }
+        },
+        "k8s_io_api_core_v1.ObjectReference": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "API version of the referent.\n+optional",
+                    "type": "string"
+                },
+                "fieldPath": {
+                    "description": "If referring to a piece of an object instead of an entire object, this string\nshould contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].\nFor example, if the object reference is to a container within a pod, this would take on a value like:\n\"spec.containers{name}\" (where \"name\" refers to the name of the container that triggered\nthe event) or if no container name is specified \"spec.containers[2]\" (container with\nindex 2 in this pod). This syntax is chosen only to have some well-defined way of\nreferencing a part of an object.\nTODO: this design is not final and this field is subject to change in the future.\n+optional",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind of the referent.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name of the referent.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names\n+optional",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "Namespace of the referent.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/\n+optional",
+                    "type": "string"
+                },
+                "resourceVersion": {
+                    "description": "Specific resourceVersion to which this reference is made, if any.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency\n+optional",
+                    "type": "string"
+                },
+                "uid": {
+                    "description": "UID of the referent.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids\n+optional",
                     "type": "string"
                 }
             }
@@ -2023,6 +2359,19 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "k8s_io_apimachinery_pkg_apis_meta_v1.ConditionStatus": {
+            "type": "string",
+            "enum": [
+                "True",
+                "False",
+                "Unknown"
+            ],
+            "x-enum-varnames": [
+                "ConditionTrue",
+                "ConditionFalse",
+                "ConditionUnknown"
+            ]
         },
         "model.Container": {
             "type": "object",
@@ -2471,6 +2820,500 @@ const docTemplate = `{
                 }
             }
         },
+        "operatorclient.AnalysisBundle": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "description": "AnalysisID is the unique identifier for the analysis.",
+                    "type": "string"
+                },
+                "configMaps": {
+                    "description": "ConfigMaps is a list of Kubernetes ConfigMap objects for the analysis.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ConfigMap"
+                    }
+                },
+                "deployment": {
+                    "description": "Deployment is the Kubernetes Deployment object for the analysis.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Deployment"
+                        }
+                    ]
+                },
+                "httpRoute": {
+                    "description": "HTTPRoute is the Gateway API HTTPRoute object for the analysis's routing.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.HTTPRoute"
+                        }
+                    ]
+                },
+                "persistentVolumeClaims": {
+                    "description": "PersistentVolumeClaims is a list of Kubernetes PersistentVolumeClaim objects for the analysis.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PersistentVolumeClaim"
+                    }
+                },
+                "persistentVolumes": {
+                    "description": "PersistentVolumes is a list of Kubernetes PersistentVolume objects for the analysis.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PersistentVolume"
+                    }
+                },
+                "podDisruptionBudget": {
+                    "description": "PodDisruptionBudget is the Kubernetes PodDisruptionBudget object for the analysis.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodDisruptionBudget"
+                        }
+                    ]
+                },
+                "service": {
+                    "description": "Service is the Kubernetes Service object for the analysis.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Service"
+                        }
+                    ]
+                }
+            }
+        },
+        "operatorclient.CapacityResponse": {
+            "type": "object",
+            "properties": {
+                "allocatableCPU": {
+                    "description": "millicores",
+                    "type": "integer"
+                },
+                "allocatableMemory": {
+                    "description": "bytes",
+                    "type": "integer"
+                },
+                "availableSlots": {
+                    "type": "integer"
+                },
+                "gpuVendor": {
+                    "type": "string"
+                },
+                "maxAnalyses": {
+                    "type": "integer"
+                },
+                "runningAnalyses": {
+                    "type": "integer"
+                },
+                "usedCPU": {
+                    "description": "millicores",
+                    "type": "integer"
+                },
+                "usedMemory": {
+                    "description": "bytes",
+                    "type": "integer"
+                }
+            }
+        },
+        "operatorclient.OperatorConfig": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "tls_skip_verify": {
+                    "type": "boolean"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "operatorclient.URLReadyResponse": {
+            "type": "object",
+            "properties": {
+                "access_url": {
+                    "type": "string"
+                },
+                "ready": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "operatorclient.UpdatePermissionsRequest": {
+            "type": "object",
+            "properties": {
+                "allowedUsers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "reporting.ConfigMapInfo": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.DeploymentInfo": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "command": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "group": {
+                    "type": "integer"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "user": {
+                    "type": "integer"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.IngressInfo": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "defaultBackend": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "rules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.IngressRule"
+                    }
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.PodInfo": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "containerStatuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerStatus"
+                    }
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "initContainerStatuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerStatus"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "phase": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.ResourceInfo": {
+            "type": "object",
+            "properties": {
+                "configMaps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.ConfigMapInfo"
+                    }
+                },
+                "deployments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.DeploymentInfo"
+                    }
+                },
+                "ingresses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.IngressInfo"
+                    }
+                },
+                "pods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.PodInfo"
+                    }
+                },
+                "routes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.RouteInfo"
+                    }
+                },
+                "services": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.ServiceInfo"
+                    }
+                }
+            }
+        },
+        "reporting.RouteInfo": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "hostnames": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "rules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.HTTPRouteRule"
+                    }
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.ServiceInfo": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "type": "string"
+                },
+                "analysisName": {
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "creationTimestamp": {
+                    "type": "string"
+                },
+                "externalID": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "ports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/reporting.ServiceInfoPort"
+                    }
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.ServiceInfoPort": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "nodePort": {
+                    "type": "integer"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "protocol": {
+                    "type": "string"
+                },
+                "targetPort": {
+                    "type": "integer"
+                },
+                "targetPortName": {
+                    "type": "string"
+                }
+            }
+        },
+        "reporting.VICELogEntry": {
+            "type": "object",
+            "properties": {
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "since_time": {
+                    "type": "string"
+                }
+            }
+        },
         "resource.Quantity": {
             "type": "object",
             "properties": {
@@ -2529,6 +3372,216 @@ const docTemplate = `{
                 }
             }
         },
+        "sigs_k8s_io_gateway-api_apis_v1.ParentReference": {
+            "type": "object",
+            "properties": {
+                "group": {
+                    "description": "Group is the group of the referent.\nWhen unspecified, \"gateway.networking.k8s.io\" is inferred.\nTo set the core API group (such as for a \"Service\" kind referent),\nGroup must be explicitly set to \"\" (empty string).\n\nSupport: Core\n\n+kubebuilder:default=gateway.networking.k8s.io\n+optional",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind is kind of the referent.\n\nThere are two kinds of parent resources with \"Core\" support:\n\n* Gateway (Gateway conformance profile)\n* Service (Mesh conformance profile, ClusterIP Services only)\n\nSupport for other resources is Implementation-Specific.\n\n+kubebuilder:default=Gateway\n+optional",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is the name of the referent.\n\nSupport: Core\n+required",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "Namespace is the namespace of the referent. When unspecified, this refers\nto the local namespace of the Route.\n\nNote that there are specific rules for ParentRefs which cross namespace\nboundaries. Cross-namespace references are only valid if they are explicitly\nallowed by something in the namespace they are referring to. For example:\nGateway has the AllowedRoutes field, and ReferenceGrant provides a\ngeneric way to enable any other kind of cross-namespace reference.\n\n\u003cgateway:experimental:description\u003e\nParentRefs from a Route to a Service in the same namespace are \"producer\"\nroutes, which apply default routing rules to inbound connections from\nany namespace to the Service.\n\nParentRefs from a Route to a Service in a different namespace are\n\"consumer\" routes, and these routing rules are only applied to outbound\nconnections originating from the same namespace as the Route, for which\nthe intended destination of the connections are a Service targeted as a\nParentRef of the Route.\n\u003c/gateway:experimental:description\u003e\n\nSupport: Core\n\n+optional",
+                    "type": "string"
+                },
+                "port": {
+                    "description": "Port is the network port this Route targets. It can be interpreted\ndifferently based on the type of parent resource.\n\nWhen the parent resource is a Gateway, this targets all listeners\nlistening on the specified port that also support this kind of Route(and\nselect this Route). It's not recommended to set ` + "`" + `Port` + "`" + ` unless the\nnetworking behaviors specified in a Route must apply to a specific port\nas opposed to a listener(s) whose port(s) may be changed. When both Port\nand SectionName are specified, the name and port of the selected listener\nmust match both specified values.\n\n\u003cgateway:experimental:description\u003e\nWhen the parent resource is a Service, this targets a specific port in the\nService spec. When both Port (experimental) and SectionName are specified,\nthe name and port of the selected port must match both specified values.\n\u003c/gateway:experimental:description\u003e\n\nImplementations MAY choose to support other parent resources.\nImplementations supporting other types of parent resources MUST clearly\ndocument how/if Port is interpreted.\n\nFor the purpose of status, an attachment is considered successful as\nlong as the parent resource accepts it partially. For example, Gateway\nlisteners can restrict which Routes can attach to them by Route kind,\nnamespace, or hostname. If 1 of 2 Gateway listeners accept attachment\nfrom the referencing Route, the Route MUST be considered successfully\nattached. If no Gateway listeners accept attachment from this Route,\nthe Route MUST be considered detached from the Gateway.\n\nSupport: Extended\n\n+optional\n\n+kubebuilder:validation:Minimum=1\n+kubebuilder:validation:Maximum=65535",
+                    "type": "integer"
+                },
+                "sectionName": {
+                    "description": "SectionName is the name of a section within the target resource. In the\nfollowing resources, SectionName is interpreted as the following:\n\n* Gateway: Listener name. When both Port (experimental) and SectionName\nare specified, the name and port of the selected listener must match\nboth specified values.\n* Service: Port name. When both Port (experimental) and SectionName\nare specified, the name and port of the selected listener must match\nboth specified values.\n\nImplementations MAY choose to support attaching Routes to other resources.\nIf that is the case, they MUST clearly document how SectionName is\ninterpreted.\n\nWhen unspecified (empty string), this will reference the entire resource.\nFor the purpose of status, an attachment is considered successful if at\nleast one section in the parent resource accepts it. For example, Gateway\nlisteners can restrict which Routes can attach to them by Route kind,\nnamespace, or hostname. If 1 of 2 Gateway listeners accept attachment from\nthe referencing Route, the Route MUST be considered successfully\nattached. If no Gateway listeners accept attachment from this Route, the\nRoute MUST be considered detached from the Gateway.\n\nSupport: Core\n\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.AWSElasticBlockStoreVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is the filesystem type of the volume that you want to mount.\nTip: Ensure that the filesystem type is supported by the host operating system.\nExamples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore\nTODO: how do we prevent errors in the filesystem from compromising the machine\n+optional",
+                    "type": "string"
+                },
+                "partition": {
+                    "description": "partition is the partition in the volume that you want to mount.\nIf omitted, the default is to mount by volume name.\nExamples: For volume /dev/sda1, you specify the partition as \"1\".\nSimilarly, the volume partition for /dev/sda is \"0\" (or you can leave the property empty).\n+optional",
+                    "type": "integer"
+                },
+                "readOnly": {
+                    "description": "readOnly value true will force the readOnly setting in VolumeMounts.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore\n+optional",
+                    "type": "boolean"
+                },
+                "volumeID": {
+                    "description": "volumeID is unique ID of the persistent disk resource in AWS (Amazon EBS volume).\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.Affinity": {
+            "type": "object",
+            "properties": {
+                "nodeAffinity": {
+                    "description": "Describes node affinity scheduling rules for the pod.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.NodeAffinity"
+                        }
+                    ]
+                },
+                "podAffinity": {
+                    "description": "Describes pod affinity scheduling rules (e.g. co-locate this pod in the same node, zone, etc. as some other pod(s)).\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodAffinity"
+                        }
+                    ]
+                },
+                "podAntiAffinity": {
+                    "description": "Describes pod anti-affinity scheduling rules (e.g. avoid putting this pod in the same node, zone, etc. as some other pod(s)).\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodAntiAffinity"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.AppArmorProfile": {
+            "type": "object",
+            "properties": {
+                "localhostProfile": {
+                    "description": "localhostProfile indicates a profile loaded on the node that should be used.\nThe profile must be preconfigured on the node to work.\nMust match the loaded name of the profile.\nMust be set if and only if type is \"Localhost\".\n+optional",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "type indicates which kind of AppArmor profile will be applied.\nValid options are:\n  Localhost - a profile pre-loaded on the node.\n  RuntimeDefault - the container runtime's default profile.\n  Unconfined - no AppArmor enforcement.\n+unionDiscriminator",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.AppArmorProfileType"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.AppArmorProfileType": {
+            "type": "string",
+            "enum": [
+                "Unconfined",
+                "RuntimeDefault",
+                "Localhost"
+            ],
+            "x-enum-varnames": [
+                "AppArmorProfileTypeUnconfined",
+                "AppArmorProfileTypeRuntimeDefault",
+                "AppArmorProfileTypeLocalhost"
+            ]
+        },
+        "v1.AzureDataDiskCachingMode": {
+            "type": "string",
+            "enum": [
+                "None",
+                "ReadOnly",
+                "ReadWrite"
+            ],
+            "x-enum-varnames": [
+                "AzureDataDiskCachingNone",
+                "AzureDataDiskCachingReadOnly",
+                "AzureDataDiskCachingReadWrite"
+            ]
+        },
+        "v1.AzureDataDiskKind": {
+            "type": "string",
+            "enum": [
+                "Shared",
+                "Dedicated",
+                "Managed"
+            ],
+            "x-enum-varnames": [
+                "AzureSharedBlobDisk",
+                "AzureDedicatedBlobDisk",
+                "AzureManagedDisk"
+            ]
+        },
+        "v1.AzureDiskVolumeSource": {
+            "type": "object",
+            "properties": {
+                "cachingMode": {
+                    "description": "cachingMode is the Host Caching mode: None, Read Only, Read Write.\n+optional\n+default=ref(AzureDataDiskCachingReadWrite)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.AzureDataDiskCachingMode"
+                        }
+                    ]
+                },
+                "diskName": {
+                    "description": "diskName is the Name of the data disk in the blob storage",
+                    "type": "string"
+                },
+                "diskURI": {
+                    "description": "diskURI is the URI of data disk in the blob storage",
+                    "type": "string"
+                },
+                "fsType": {
+                    "description": "fsType is Filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\n+optional\n+default=\"ext4\"",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "kind expected values are Shared: multiple blob disks per storage account  Dedicated: single blob disk per storage account  Managed: azure managed data disk (only in managed availability set). defaults to shared\n+default=ref(AzureSharedBlobDisk)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.AzureDataDiskKind"
+                        }
+                    ]
+                },
+                "readOnly": {
+                    "description": "readOnly Defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional\n+default=false",
+                    "type": "boolean"
+                }
+            }
+        },
+        "v1.AzureFilePersistentVolumeSource": {
+            "type": "object",
+            "properties": {
+                "readOnly": {
+                    "description": "readOnly defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
+                    "type": "boolean"
+                },
+                "secretName": {
+                    "description": "secretName is the name of secret that contains Azure Storage Account Name and Key",
+                    "type": "string"
+                },
+                "secretNamespace": {
+                    "description": "secretNamespace is the namespace of the secret that contains Azure Storage Account Name and Key\ndefault is the same as the Pod\n+optional",
+                    "type": "string"
+                },
+                "shareName": {
+                    "description": "shareName is the azure Share Name",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.AzureFileVolumeSource": {
+            "type": "object",
+            "properties": {
+                "readOnly": {
+                    "description": "readOnly defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
+                    "type": "boolean"
+                },
+                "secretName": {
+                    "description": "secretName is the  name of secret that contains Azure Storage Account Name and Key",
+                    "type": "string"
+                },
+                "shareName": {
+                    "description": "shareName is the azure share Name",
+                    "type": "string"
+                }
+            }
+        },
         "v1.BackendObjectReference": {
             "type": "object",
             "properties": {
@@ -2553,6 +3606,744 @@ const docTemplate = `{
                     "type": "integer"
                 }
             }
+        },
+        "v1.CSIPersistentVolumeSource": {
+            "type": "object",
+            "properties": {
+                "controllerExpandSecretRef": {
+                    "description": "controllerExpandSecretRef is a reference to the secret object containing\nsensitive information to pass to the CSI driver to complete the CSI\nControllerExpandVolume call.\nThis field is optional, and may be empty if no secret is required. If the\nsecret object contains more than one secret, all secrets are passed.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretReference"
+                        }
+                    ]
+                },
+                "controllerPublishSecretRef": {
+                    "description": "controllerPublishSecretRef is a reference to the secret object containing\nsensitive information to pass to the CSI driver to complete the CSI\nControllerPublishVolume and ControllerUnpublishVolume calls.\nThis field is optional, and may be empty if no secret is required. If the\nsecret object contains more than one secret, all secrets are passed.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretReference"
+                        }
+                    ]
+                },
+                "driver": {
+                    "description": "driver is the name of the driver to use for this volume.\nRequired.",
+                    "type": "string"
+                },
+                "fsType": {
+                    "description": "fsType to mount. Must be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\".\n+optional",
+                    "type": "string"
+                },
+                "nodeExpandSecretRef": {
+                    "description": "nodeExpandSecretRef is a reference to the secret object containing\nsensitive information to pass to the CSI driver to complete the CSI\nNodeExpandVolume call.\nThis field is optional, may be omitted if no secret is required. If the\nsecret object contains more than one secret, all secrets are passed.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretReference"
+                        }
+                    ]
+                },
+                "nodePublishSecretRef": {
+                    "description": "nodePublishSecretRef is a reference to the secret object containing\nsensitive information to pass to the CSI driver to complete the CSI\nNodePublishVolume and NodeUnpublishVolume calls.\nThis field is optional, and may be empty if no secret is required. If the\nsecret object contains more than one secret, all secrets are passed.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretReference"
+                        }
+                    ]
+                },
+                "nodeStageSecretRef": {
+                    "description": "nodeStageSecretRef is a reference to the secret object containing sensitive\ninformation to pass to the CSI driver to complete the CSI NodeStageVolume\nand NodeStageVolume and NodeUnstageVolume calls.\nThis field is optional, and may be empty if no secret is required. If the\nsecret object contains more than one secret, all secrets are passed.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretReference"
+                        }
+                    ]
+                },
+                "readOnly": {
+                    "description": "readOnly value to pass to ControllerPublishVolumeRequest.\nDefaults to false (read/write).\n+optional",
+                    "type": "boolean"
+                },
+                "volumeAttributes": {
+                    "description": "volumeAttributes of the volume to publish.\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "volumeHandle": {
+                    "description": "volumeHandle is the unique volume name returned by the CSI volume\nplugin’s CreateVolume to refer to the volume on all subsequent calls.\nRequired.",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.CSIVolumeSource": {
+            "type": "object",
+            "properties": {
+                "driver": {
+                    "description": "driver is the name of the CSI driver that handles this volume.\nConsult with your admin for the correct name as registered in the cluster.",
+                    "type": "string"
+                },
+                "fsType": {
+                    "description": "fsType to mount. Ex. \"ext4\", \"xfs\", \"ntfs\".\nIf not provided, the empty value is passed to the associated CSI driver\nwhich will determine the default filesystem to apply.\n+optional",
+                    "type": "string"
+                },
+                "nodePublishSecretRef": {
+                    "description": "nodePublishSecretRef is a reference to the secret object containing\nsensitive information to pass to the CSI driver to complete the CSI\nNodePublishVolume and NodeUnpublishVolume calls.\nThis field is optional, and  may be empty if no secret is required. If the\nsecret object contains more than one secret, all secret references are passed.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_api_core_v1.LocalObjectReference"
+                        }
+                    ]
+                },
+                "readOnly": {
+                    "description": "readOnly specifies a read-only configuration for the volume.\nDefaults to false (read/write).\n+optional",
+                    "type": "boolean"
+                },
+                "volumeAttributes": {
+                    "description": "volumeAttributes stores driver-specific properties that are passed to the CSI\ndriver. Consult your driver's documentation for supported values.\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "v1.Capabilities": {
+            "type": "object",
+            "properties": {
+                "add": {
+                    "description": "Added capabilities\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "drop": {
+                    "description": "Removed capabilities\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "v1.CephFSPersistentVolumeSource": {
+            "type": "object",
+            "properties": {
+                "monitors": {
+                    "description": "monitors is Required: Monitors is a collection of Ceph monitors\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "path": {
+                    "description": "path is Optional: Used as the mounted root, rather than the full Ceph tree, default is /\n+optional",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly is Optional: Defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+optional",
+                    "type": "boolean"
+                },
+                "secretFile": {
+                    "description": "secretFile is Optional: SecretFile is the path to key ring for User, default is /etc/ceph/user.secret\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+optional",
+                    "type": "string"
+                },
+                "secretRef": {
+                    "description": "secretRef is Optional: SecretRef is reference to the authentication secret for User, default is empty.\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretReference"
+                        }
+                    ]
+                },
+                "user": {
+                    "description": "user is Optional: User is the rados user name, default is admin\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.CephFSVolumeSource": {
+            "type": "object",
+            "properties": {
+                "monitors": {
+                    "description": "monitors is Required: Monitors is a collection of Ceph monitors\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "path": {
+                    "description": "path is Optional: Used as the mounted root, rather than the full Ceph tree, default is /\n+optional",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly is Optional: Defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+optional",
+                    "type": "boolean"
+                },
+                "secretFile": {
+                    "description": "secretFile is Optional: SecretFile is the path to key ring for User, default is /etc/ceph/user.secret\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+optional",
+                    "type": "string"
+                },
+                "secretRef": {
+                    "description": "secretRef is Optional: SecretRef is reference to the authentication secret for User, default is empty.\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_api_core_v1.LocalObjectReference"
+                        }
+                    ]
+                },
+                "user": {
+                    "description": "user is optional: User is the rados user name, default is admin\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.CinderPersistentVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType Filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nExamples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\nMore info: https://examples.k8s.io/mysql-cinder-pd/README.md\n+optional",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly is Optional: Defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\nMore info: https://examples.k8s.io/mysql-cinder-pd/README.md\n+optional",
+                    "type": "boolean"
+                },
+                "secretRef": {
+                    "description": "secretRef is Optional: points to a secret object containing parameters used to connect\nto OpenStack.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretReference"
+                        }
+                    ]
+                },
+                "volumeID": {
+                    "description": "volumeID used to identify the volume in cinder.\nMore info: https://examples.k8s.io/mysql-cinder-pd/README.md",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.CinderVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is the filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nExamples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\nMore info: https://examples.k8s.io/mysql-cinder-pd/README.md\n+optional",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\nMore info: https://examples.k8s.io/mysql-cinder-pd/README.md\n+optional",
+                    "type": "boolean"
+                },
+                "secretRef": {
+                    "description": "secretRef is optional: points to a secret object containing parameters used to connect\nto OpenStack.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_api_core_v1.LocalObjectReference"
+                        }
+                    ]
+                },
+                "volumeID": {
+                    "description": "volumeID used to identify the volume in cinder.\nMore info: https://examples.k8s.io/mysql-cinder-pd/README.md",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ClaimResourceStatus": {
+            "type": "string",
+            "enum": [
+                "ControllerResizeInProgress",
+                "ControllerResizeInfeasible",
+                "NodeResizePending",
+                "NodeResizeInProgress",
+                "NodeResizeInfeasible"
+            ],
+            "x-enum-varnames": [
+                "PersistentVolumeClaimControllerResizeInProgress",
+                "PersistentVolumeClaimControllerResizeInfeasible",
+                "PersistentVolumeClaimNodeResizePending",
+                "PersistentVolumeClaimNodeResizeInProgress",
+                "PersistentVolumeClaimNodeResizeInfeasible"
+            ]
+        },
+        "v1.ClientIPConfig": {
+            "type": "object",
+            "properties": {
+                "timeoutSeconds": {
+                    "description": "timeoutSeconds specifies the seconds of ClientIP type session sticky time.\nThe value must be \u003e0 \u0026\u0026 \u003c=86400(for 1 day) if ServiceAffinity == \"ClientIP\".\nDefault value is 10800(for 3 hours).\n+optional",
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.ClusterTrustBundleProjection": {
+            "type": "object",
+            "properties": {
+                "labelSelector": {
+                    "description": "Select all ClusterTrustBundles that match this label selector.  Only has\neffect if signerName is set.  Mutually-exclusive with name.  If unset,\ninterpreted as \"match nothing\".  If set but empty, interpreted as \"match\neverything\".\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LabelSelector"
+                        }
+                    ]
+                },
+                "name": {
+                    "description": "Select a single ClusterTrustBundle by object name.  Mutually-exclusive\nwith signerName and labelSelector.\n+optional",
+                    "type": "string"
+                },
+                "optional": {
+                    "description": "If true, don't block pod startup if the referenced ClusterTrustBundle(s)\naren't available.  If using name, then the named ClusterTrustBundle is\nallowed not to exist.  If using signerName, then the combination of\nsignerName and labelSelector is allowed to match zero\nClusterTrustBundles.\n+optional",
+                    "type": "boolean"
+                },
+                "path": {
+                    "description": "Relative path from the volume root to write the bundle.",
+                    "type": "string"
+                },
+                "signerName": {
+                    "description": "Select all ClusterTrustBundles that match this signer name.\nMutually-exclusive with name.  The contents of all selected\nClusterTrustBundles will be unified and deduplicated.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.Condition": {
+            "type": "object",
+            "properties": {
+                "lastTransitionTime": {
+                    "description": "lastTransitionTime is the last time the condition transitioned from one status to another.\nThis should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.\n+required\n+kubebuilder:validation:Required\n+kubebuilder:validation:Type=string\n+kubebuilder:validation:Format=date-time",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "message is a human readable message indicating details about the transition.\nThis may be an empty string.\n+required\n+kubebuilder:validation:Required\n+kubebuilder:validation:MaxLength=32768",
+                    "type": "string"
+                },
+                "observedGeneration": {
+                    "description": "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.\n+optional\n+kubebuilder:validation:Minimum=0",
+                    "type": "integer"
+                },
+                "reason": {
+                    "description": "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.\n+required\n+kubebuilder:validation:Required\n+kubebuilder:validation:MaxLength=1024\n+kubebuilder:validation:MinLength=1\n+kubebuilder:validation:Pattern=` + "`" + `^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$` + "`" + `",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "status of the condition, one of True, False, Unknown.\n+required\n+kubebuilder:validation:Required\n+kubebuilder:validation:Enum=True;False;Unknown",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_apimachinery_pkg_apis_meta_v1.ConditionStatus"
+                        }
+                    ]
+                },
+                "type": {
+                    "description": "type of condition in CamelCase or in foo.example.com/CamelCase.\n---\nMany .condition.type values are consistent across resources like Available, but because arbitrary conditions can be\nuseful (see .node.status.conditions), the ability to deconflict is important.\nThe regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)\n+required\n+kubebuilder:validation:Required\n+kubebuilder:validation:Pattern=` + "`" + `^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$` + "`" + `\n+kubebuilder:validation:MaxLength=316",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ConfigMap": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
+                    "type": "string"
+                },
+                "binaryData": {
+                    "description": "BinaryData contains the binary data.\nEach key must consist of alphanumeric characters, '-', '_' or '.'.\nBinaryData can contain byte sequences that are not in the UTF-8 range.\nThe keys stored in BinaryData must not overlap with the ones in\nthe Data field, this is enforced during validation process.\nUsing this field will require 1.10+ apiserver and\nkubelet.\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                },
+                "data": {
+                    "description": "Data contains the configuration data.\nEach key must consist of alphanumeric characters, '-', '_' or '.'.\nValues with non-UTF-8 byte sequences must use the BinaryData field.\nThe keys stored in Data must not overlap with the keys in\nthe BinaryData field, this is enforced during validation process.\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "immutable": {
+                    "description": "Immutable, if set to true, ensures that data stored in the ConfigMap cannot\nbe updated (only object metadata can be modified).\nIf not set to true, the field can be modified at any time.\nDefaulted to nil.\n+optional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectMeta"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.ConfigMapEnvSource": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names\n+optional\n+default=\"\"\n+kubebuilder:default=\"\"\nTODO: Drop ` + "`" + `kubebuilder:default` + "`" + ` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.",
+                    "type": "string"
+                },
+                "optional": {
+                    "description": "Specify whether the ConfigMap must be defined\n+optional",
+                    "type": "boolean"
+                }
+            }
+        },
+        "v1.ConfigMapKeySelector": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "description": "The key to select.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names\n+optional\n+default=\"\"\n+kubebuilder:default=\"\"\nTODO: Drop ` + "`" + `kubebuilder:default` + "`" + ` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.",
+                    "type": "string"
+                },
+                "optional": {
+                    "description": "Specify whether the ConfigMap or its key must be defined\n+optional",
+                    "type": "boolean"
+                }
+            }
+        },
+        "v1.ConfigMapProjection": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "items if unspecified, each key-value pair in the Data field of the referenced\nConfigMap will be projected into the volume as a file whose name is the\nkey and content is the value. If specified, the listed keys will be\nprojected into the specified paths, and unlisted keys will not be\npresent. If a key is specified which is not present in the ConfigMap,\nthe volume setup will error unless it is marked optional. Paths must be\nrelative and may not contain the '..' path or start with '..'.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.KeyToPath"
+                    }
+                },
+                "name": {
+                    "description": "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names\n+optional\n+default=\"\"\n+kubebuilder:default=\"\"\nTODO: Drop ` + "`" + `kubebuilder:default` + "`" + ` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.",
+                    "type": "string"
+                },
+                "optional": {
+                    "description": "optional specify whether the ConfigMap or its keys must be defined\n+optional",
+                    "type": "boolean"
+                }
+            }
+        },
+        "v1.ConfigMapVolumeSource": {
+            "type": "object",
+            "properties": {
+                "defaultMode": {
+                    "description": "defaultMode is optional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDefaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.\n+optional",
+                    "type": "integer"
+                },
+                "items": {
+                    "description": "items if unspecified, each key-value pair in the Data field of the referenced\nConfigMap will be projected into the volume as a file whose name is the\nkey and content is the value. If specified, the listed keys will be\nprojected into the specified paths, and unlisted keys will not be\npresent. If a key is specified which is not present in the ConfigMap,\nthe volume setup will error unless it is marked optional. Paths must be\nrelative and may not contain the '..' path or start with '..'.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.KeyToPath"
+                    }
+                },
+                "name": {
+                    "description": "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names\n+optional\n+default=\"\"\n+kubebuilder:default=\"\"\nTODO: Drop ` + "`" + `kubebuilder:default` + "`" + ` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.",
+                    "type": "string"
+                },
+                "optional": {
+                    "description": "optional specify whether the ConfigMap or its keys must be defined\n+optional",
+                    "type": "boolean"
+                }
+            }
+        },
+        "v1.Container": {
+            "type": "object",
+            "properties": {
+                "args": {
+                    "description": "Arguments to the entrypoint.\nThe container image's CMD is used if this is not provided.\nVariable references $(VAR_NAME) are expanded using the container's environment. If a variable\ncannot be resolved, the reference in the input string will be unchanged. Double $$ are reduced\nto a single $, which allows for escaping the $(VAR_NAME) syntax: i.e. \"$$(VAR_NAME)\" will\nproduce the string literal \"$(VAR_NAME)\". Escaped references will never be expanded, regardless\nof whether the variable exists or not. Cannot be updated.\nMore info: https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/#running-a-command-in-a-shell\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "command": {
+                    "description": "Entrypoint array. Not executed within a shell.\nThe container image's ENTRYPOINT is used if this is not provided.\nVariable references $(VAR_NAME) are expanded using the container's environment. If a variable\ncannot be resolved, the reference in the input string will be unchanged. Double $$ are reduced\nto a single $, which allows for escaping the $(VAR_NAME) syntax: i.e. \"$$(VAR_NAME)\" will\nproduce the string literal \"$(VAR_NAME)\". Escaped references will never be expanded, regardless\nof whether the variable exists or not. Cannot be updated.\nMore info: https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/#running-a-command-in-a-shell\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "env": {
+                    "description": "List of environment variables to set in the container.\nCannot be updated.\n+optional\n+patchMergeKey=name\n+patchStrategy=merge\n+listType=map\n+listMapKey=name",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.EnvVar"
+                    }
+                },
+                "envFrom": {
+                    "description": "List of sources to populate environment variables in the container.\nThe keys defined within a source may consist of any printable ASCII characters except '='.\nWhen a key exists in multiple\nsources, the value associated with the last source will take precedence.\nValues defined by an Env with a duplicate key will take precedence.\nCannot be updated.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.EnvFromSource"
+                    }
+                },
+                "image": {
+                    "description": "Container image name.\nMore info: https://kubernetes.io/docs/concepts/containers/images\nThis field is optional to allow higher level config management to default or override\ncontainer images in workload controllers like Deployments and StatefulSets.\n+optional",
+                    "type": "string"
+                },
+                "imagePullPolicy": {
+                    "description": "Image pull policy.\nOne of Always, Never, IfNotPresent.\nDefaults to Always if :latest tag is specified, or IfNotPresent otherwise.\nCannot be updated.\nMore info: https://kubernetes.io/docs/concepts/containers/images#updating-images\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PullPolicy"
+                        }
+                    ]
+                },
+                "lifecycle": {
+                    "description": "Actions that the management system should take in response to container lifecycle events.\nCannot be updated.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Lifecycle"
+                        }
+                    ]
+                },
+                "livenessProbe": {
+                    "description": "Periodic probe of container liveness.\nContainer will be restarted if the probe fails.\nCannot be updated.\nMore info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Probe"
+                        }
+                    ]
+                },
+                "name": {
+                    "description": "Name of the container specified as a DNS_LABEL.\nEach container in a pod must have a unique name (DNS_LABEL).\nCannot be updated.",
+                    "type": "string"
+                },
+                "ports": {
+                    "description": "List of ports to expose from the container. Not specifying a port here\nDOES NOT prevent that port from being exposed. Any port which is\nlistening on the default \"0.0.0.0\" address inside a container will be\naccessible from the network.\nModifying this array with strategic merge patch may corrupt the data.\nFor more information See https://github.com/kubernetes/kubernetes/issues/108255.\nCannot be updated.\n+optional\n+patchMergeKey=containerPort\n+patchStrategy=merge\n+listType=map\n+listMapKey=containerPort\n+listMapKey=protocol",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerPort"
+                    }
+                },
+                "readinessProbe": {
+                    "description": "Periodic probe of container service readiness.\nContainer will be removed from service endpoints if the probe fails.\nCannot be updated.\nMore info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Probe"
+                        }
+                    ]
+                },
+                "resizePolicy": {
+                    "description": "Resources resize policy for the container.\n+featureGate=InPlacePodVerticalScaling\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerResizePolicy"
+                    }
+                },
+                "resources": {
+                    "description": "Compute Resources required by this container.\nCannot be updated.\nMore info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceRequirements"
+                        }
+                    ]
+                },
+                "restartPolicy": {
+                    "description": "RestartPolicy defines the restart behavior of individual containers in a pod.\nThis overrides the pod-level restart policy. When this field is not specified,\nthe restart behavior is defined by the Pod's restart policy and the container type.\nAdditionally, setting the RestartPolicy as \"Always\" for the init container will\nhave the following effect:\nthis init container will be continually restarted on\nexit until all regular containers have terminated. Once all regular\ncontainers have completed, all init containers with restartPolicy \"Always\"\nwill be shut down. This lifecycle differs from normal init containers and\nis often referred to as a \"sidecar\" container. Although this init\ncontainer still starts in the init container sequence, it does not wait\nfor the container to complete before proceeding to the next init\ncontainer. Instead, the next init container starts immediately after this\ninit container is started, or after any startupProbe has successfully\ncompleted.\n+featureGate=SidecarContainers\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ContainerRestartPolicy"
+                        }
+                    ]
+                },
+                "restartPolicyRules": {
+                    "description": "Represents a list of rules to be checked to determine if the\ncontainer should be restarted on exit. The rules are evaluated in\norder. Once a rule matches a container exit condition, the remaining\nrules are ignored. If no rule matches the container exit condition,\nthe Container-level restart policy determines the whether the container\nis restarted or not. Constraints on the rules:\n- At most 20 rules are allowed.\n- Rules can have the same action.\n- Identical rules are not forbidden in validations.\nWhen rules are specified, container MUST set RestartPolicy explicitly\neven it if matches the Pod's RestartPolicy.\n+featureGate=ContainerRestartRules\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerRestartRule"
+                    }
+                },
+                "securityContext": {
+                    "description": "SecurityContext defines the security options the container should be run with.\nIf set, the fields of SecurityContext override the equivalent fields of PodSecurityContext.\nMore info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecurityContext"
+                        }
+                    ]
+                },
+                "startupProbe": {
+                    "description": "StartupProbe indicates that the Pod has successfully initialized.\nIf specified, no other probes are executed until this completes successfully.\nIf this probe fails, the Pod will be restarted, just as if the livenessProbe failed.\nThis can be used to provide different probe parameters at the beginning of a Pod's lifecycle,\nwhen it might take a long time to load data or warm a cache, than during steady-state operation.\nThis cannot be updated.\nMore info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Probe"
+                        }
+                    ]
+                },
+                "stdin": {
+                    "description": "Whether this container should allocate a buffer for stdin in the container runtime. If this\nis not set, reads from stdin in the container will always result in EOF.\nDefault is false.\n+optional",
+                    "type": "boolean"
+                },
+                "stdinOnce": {
+                    "description": "Whether the container runtime should close the stdin channel after it has been opened by\na single attach. When stdin is true the stdin stream will remain open across multiple attach\nsessions. If stdinOnce is set to true, stdin is opened on container start, is empty until the\nfirst client attaches to stdin, and then remains open and accepts data until the client disconnects,\nat which time stdin is closed and remains closed until the container is restarted. If this\nflag is false, a container processes that reads from stdin will never receive an EOF.\nDefault is false\n+optional",
+                    "type": "boolean"
+                },
+                "terminationMessagePath": {
+                    "description": "Optional: Path at which the file to which the container's termination message\nwill be written is mounted into the container's filesystem.\nMessage written is intended to be brief final status, such as an assertion failure message.\nWill be truncated by the node if greater than 4096 bytes. The total message length across\nall containers will be limited to 12kb.\nDefaults to /dev/termination-log.\nCannot be updated.\n+optional",
+                    "type": "string"
+                },
+                "terminationMessagePolicy": {
+                    "description": "Indicate how the termination message should be populated. File will use the contents of\nterminationMessagePath to populate the container status message on both success and failure.\nFallbackToLogsOnError will use the last chunk of container log output if the termination\nmessage file is empty and the container exited with an error.\nThe log output is limited to 2048 bytes or 80 lines, whichever is smaller.\nDefaults to File.\nCannot be updated.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.TerminationMessagePolicy"
+                        }
+                    ]
+                },
+                "tty": {
+                    "description": "Whether this container should allocate a TTY for itself, also requires 'stdin' to be true.\nDefault is false.\n+optional",
+                    "type": "boolean"
+                },
+                "volumeDevices": {
+                    "description": "volumeDevices is the list of block devices to be used by the container.\n+patchMergeKey=devicePath\n+patchStrategy=merge\n+listType=map\n+listMapKey=devicePath\n+optional",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.VolumeDevice"
+                    }
+                },
+                "volumeMounts": {
+                    "description": "Pod volumes to mount into the container's filesystem.\nCannot be updated.\n+optional\n+patchMergeKey=mountPath\n+patchStrategy=merge\n+listType=map\n+listMapKey=mountPath",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.VolumeMount"
+                    }
+                },
+                "workingDir": {
+                    "description": "Container's working directory.\nIf not specified, the container runtime's default will be used, which\nmight be configured in the container image.\nCannot be updated.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ContainerPort": {
+            "type": "object",
+            "properties": {
+                "containerPort": {
+                    "description": "Number of port to expose on the pod's IP address.\nThis must be a valid port number, 0 \u003c x \u003c 65536.",
+                    "type": "integer"
+                },
+                "hostIP": {
+                    "description": "What host IP to bind the external port to.\n+optional",
+                    "type": "string"
+                },
+                "hostPort": {
+                    "description": "Number of port to expose on the host.\nIf specified, this must be a valid port number, 0 \u003c x \u003c 65536.\nIf HostNetwork is specified, this must match ContainerPort.\nMost containers do not need this.\n+optional",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "If specified, this must be an IANA_SVC_NAME and unique within the pod. Each\nnamed port in a pod must have a unique name. Name for the port that can be\nreferred to by services.\n+optional",
+                    "type": "string"
+                },
+                "protocol": {
+                    "description": "Protocol for port. Must be UDP, TCP, or SCTP.\nDefaults to \"TCP\".\n+optional\n+default=\"TCP\"",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Protocol"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.ContainerResizePolicy": {
+            "type": "object",
+            "properties": {
+                "resourceName": {
+                    "description": "Name of the resource to which this resource resize policy applies.\nSupported values: cpu, memory.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceName"
+                        }
+                    ]
+                },
+                "restartPolicy": {
+                    "description": "Restart policy to apply when specified resource is resized.\nIf not specified, it defaults to NotRequired.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceResizeRestartPolicy"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.ContainerRestartPolicy": {
+            "type": "string",
+            "enum": [
+                "Always",
+                "Never",
+                "OnFailure"
+            ],
+            "x-enum-varnames": [
+                "ContainerRestartPolicyAlways",
+                "ContainerRestartPolicyNever",
+                "ContainerRestartPolicyOnFailure"
+            ]
+        },
+        "v1.ContainerRestartRule": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "Specifies the action taken on a container exit if the requirements\nare satisfied. The only possible value is \"Restart\" to restart the\ncontainer.\n+required",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ContainerRestartRuleAction"
+                        }
+                    ]
+                },
+                "exitCodes": {
+                    "description": "Represents the exit codes to check on container exits.\n+optional\n+oneOf=when",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ContainerRestartRuleOnExitCodes"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.ContainerRestartRuleAction": {
+            "type": "string",
+            "enum": [
+                "Restart"
+            ],
+            "x-enum-varnames": [
+                "ContainerRestartRuleActionRestart"
+            ]
+        },
+        "v1.ContainerRestartRuleOnExitCodes": {
+            "type": "object",
+            "properties": {
+                "operator": {
+                    "description": "Represents the relationship between the container exit code(s) and the\nspecified values. Possible values are:\n- In: the requirement is satisfied if the container exit code is in the\n  set of specified values.\n- NotIn: the requirement is satisfied if the container exit code is\n  not in the set of specified values.\n+required",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ContainerRestartRuleOnExitCodesOperator"
+                        }
+                    ]
+                },
+                "values": {
+                    "description": "Specifies the set of values to check for container exit codes.\nAt most 255 elements are allowed.\n+optional\n+listType=set",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "v1.ContainerRestartRuleOnExitCodesOperator": {
+            "type": "string",
+            "enum": [
+                "In",
+                "NotIn"
+            ],
+            "x-enum-varnames": [
+                "ContainerRestartRuleOnExitCodesOpIn",
+                "ContainerRestartRuleOnExitCodesOpNotIn"
+            ]
         },
         "v1.ContainerState": {
             "type": "object",
@@ -2770,6 +4561,731 @@ const docTemplate = `{
                 "PermanentCookieLifetimeType"
             ]
         },
+        "v1.DNSPolicy": {
+            "type": "string",
+            "enum": [
+                "ClusterFirstWithHostNet",
+                "ClusterFirst",
+                "Default",
+                "None"
+            ],
+            "x-enum-varnames": [
+                "DNSClusterFirstWithHostNet",
+                "DNSClusterFirst",
+                "DNSDefault",
+                "DNSNone"
+            ]
+        },
+        "v1.Deployment": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectMeta"
+                        }
+                    ]
+                },
+                "spec": {
+                    "description": "Specification of the desired behavior of the Deployment.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.DeploymentSpec"
+                        }
+                    ]
+                },
+                "status": {
+                    "description": "Most recently observed status of the Deployment.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.DeploymentStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.DeploymentCondition": {
+            "type": "object",
+            "properties": {
+                "lastTransitionTime": {
+                    "description": "Last time the condition transitioned from one status to another.",
+                    "type": "string"
+                },
+                "lastUpdateTime": {
+                    "description": "The last time this condition was updated.",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "A human readable message indicating details about the transition.",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "The reason for the condition's last transition.",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status of the condition, one of True, False, Unknown.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_api_core_v1.ConditionStatus"
+                        }
+                    ]
+                },
+                "type": {
+                    "description": "Type of deployment condition.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.DeploymentConditionType"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.DeploymentConditionType": {
+            "type": "string",
+            "enum": [
+                "Available",
+                "Progressing",
+                "ReplicaFailure"
+            ],
+            "x-enum-varnames": [
+                "DeploymentAvailable",
+                "DeploymentProgressing",
+                "DeploymentReplicaFailure"
+            ]
+        },
+        "v1.DeploymentSpec": {
+            "type": "object",
+            "properties": {
+                "minReadySeconds": {
+                    "description": "Minimum number of seconds for which a newly created pod should be ready\nwithout any of its container crashing, for it to be considered available.\nDefaults to 0 (pod will be considered available as soon as it is ready)\n+optional",
+                    "type": "integer"
+                },
+                "paused": {
+                    "description": "Indicates that the deployment is paused.\n+optional",
+                    "type": "boolean"
+                },
+                "progressDeadlineSeconds": {
+                    "description": "The maximum time in seconds for a deployment to make progress before it\nis considered to be failed. The deployment controller will continue to\nprocess failed deployments and a condition with a ProgressDeadlineExceeded\nreason will be surfaced in the deployment status. Note that progress will\nnot be estimated during the time a deployment is paused. Defaults to 600s.",
+                    "type": "integer"
+                },
+                "replicas": {
+                    "description": "Number of desired pods. This is a pointer to distinguish between explicit\nzero and not specified. Defaults to 1.\n+optional",
+                    "type": "integer"
+                },
+                "revisionHistoryLimit": {
+                    "description": "The number of old ReplicaSets to retain to allow rollback.\nThis is a pointer to distinguish between explicit zero and not specified.\nDefaults to 10.\n+optional",
+                    "type": "integer"
+                },
+                "selector": {
+                    "description": "Label selector for pods. Existing ReplicaSets whose pods are\nselected by this will be the ones affected by this deployment.\nIt must match the pod template's labels.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LabelSelector"
+                        }
+                    ]
+                },
+                "strategy": {
+                    "description": "The deployment strategy to use to replace existing pods with new ones.\n+optional\n+patchStrategy=retainKeys",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.DeploymentStrategy"
+                        }
+                    ]
+                },
+                "template": {
+                    "description": "Template describes the pods that will be created.\nThe only allowed template.spec.restartPolicy value is \"Always\".",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodTemplateSpec"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.DeploymentStatus": {
+            "type": "object",
+            "properties": {
+                "availableReplicas": {
+                    "description": "Total number of available non-terminating pods (ready for at least minReadySeconds) targeted by this deployment.\n+optional",
+                    "type": "integer"
+                },
+                "collisionCount": {
+                    "description": "Count of hash collisions for the Deployment. The Deployment controller uses this\nfield as a collision avoidance mechanism when it needs to create the name for the\nnewest ReplicaSet.\n+optional",
+                    "type": "integer"
+                },
+                "conditions": {
+                    "description": "Represents the latest available observations of a deployment's current state.\n+patchMergeKey=type\n+patchStrategy=merge\n+listType=map\n+listMapKey=type",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.DeploymentCondition"
+                    }
+                },
+                "observedGeneration": {
+                    "description": "The generation observed by the deployment controller.\n+optional",
+                    "type": "integer"
+                },
+                "readyReplicas": {
+                    "description": "Total number of non-terminating pods targeted by this Deployment with a Ready Condition.\n+optional",
+                    "type": "integer"
+                },
+                "replicas": {
+                    "description": "Total number of non-terminating pods targeted by this deployment (their labels match the selector).\n+optional",
+                    "type": "integer"
+                },
+                "terminatingReplicas": {
+                    "description": "Total number of terminating pods targeted by this deployment. Terminating pods have a non-null\n.metadata.deletionTimestamp and have not yet reached the Failed or Succeeded .status.phase.\n\nThis is an alpha field. Enable DeploymentReplicaSetTerminatingReplicas to be able to use this field.\n+optional",
+                    "type": "integer"
+                },
+                "unavailableReplicas": {
+                    "description": "Total number of unavailable pods targeted by this deployment. This is the total number of\npods that are still required for the deployment to have 100% available capacity. They may\neither be pods that are running but not yet available or pods that still have not been created.\n+optional",
+                    "type": "integer"
+                },
+                "updatedReplicas": {
+                    "description": "Total number of non-terminating pods targeted by this deployment that have the desired template spec.\n+optional",
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.DeploymentStrategy": {
+            "type": "object",
+            "properties": {
+                "rollingUpdate": {
+                    "description": "Rolling update config params. Present only if DeploymentStrategyType =\nRollingUpdate.\n---\nTODO: Update this to follow our convention for oneOf, whatever we decide it\nto be.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.RollingUpdateDeployment"
+                        }
+                    ]
+                },
+                "type": {
+                    "description": "Type of deployment. Can be \"Recreate\" or \"RollingUpdate\". Default is RollingUpdate.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.DeploymentStrategyType"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.DeploymentStrategyType": {
+            "type": "string",
+            "enum": [
+                "Recreate",
+                "RollingUpdate"
+            ],
+            "x-enum-varnames": [
+                "RecreateDeploymentStrategyType",
+                "RollingUpdateDeploymentStrategyType"
+            ]
+        },
+        "v1.DownwardAPIProjection": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Items is a list of DownwardAPIVolume file\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.DownwardAPIVolumeFile"
+                    }
+                }
+            }
+        },
+        "v1.DownwardAPIVolumeFile": {
+            "type": "object",
+            "properties": {
+                "fieldRef": {
+                    "description": "Required: Selects a field of the pod: only annotations, labels, name, namespace and uid are supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectFieldSelector"
+                        }
+                    ]
+                },
+                "mode": {
+                    "description": "Optional: mode bits used to set permissions on this file, must be an octal value\nbetween 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nIf not specified, the volume defaultMode will be used.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.\n+optional",
+                    "type": "integer"
+                },
+                "path": {
+                    "description": "Required: Path is  the relative path name of the file to be created. Must not be absolute or contain the '..' path. Must be utf-8 encoded. The first item of the relative path must not start with '..'",
+                    "type": "string"
+                },
+                "resourceFieldRef": {
+                    "description": "Selects a resource of the container: only resources limits and requests\n(limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceFieldSelector"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.DownwardAPIVolumeSource": {
+            "type": "object",
+            "properties": {
+                "defaultMode": {
+                    "description": "Optional: mode bits to use on created files by default. Must be a\nOptional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDefaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.\n+optional",
+                    "type": "integer"
+                },
+                "items": {
+                    "description": "Items is a list of downward API volume file\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.DownwardAPIVolumeFile"
+                    }
+                }
+            }
+        },
+        "v1.EmptyDirVolumeSource": {
+            "type": "object",
+            "properties": {
+                "medium": {
+                    "description": "medium represents what type of storage medium should back this directory.\nThe default is \"\" which means to use the node's default medium.\nMust be an empty string (default) or Memory.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.StorageMedium"
+                        }
+                    ]
+                },
+                "sizeLimit": {
+                    "description": "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/resource.Quantity"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.EnvFromSource": {
+            "type": "object",
+            "properties": {
+                "configMapRef": {
+                    "description": "The ConfigMap to select from\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ConfigMapEnvSource"
+                        }
+                    ]
+                },
+                "prefix": {
+                    "description": "Optional text to prepend to the name of each environment variable.\nMay consist of any printable ASCII characters except '='.\n+optional",
+                    "type": "string"
+                },
+                "secretRef": {
+                    "description": "The Secret to select from\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretEnvSource"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.EnvVar": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name of the environment variable.\nMay consist of any printable ASCII characters except '='.",
+                    "type": "string"
+                },
+                "value": {
+                    "description": "Variable references $(VAR_NAME) are expanded\nusing the previously defined environment variables in the container and\nany service environment variables. If a variable cannot be resolved,\nthe reference in the input string will be unchanged. Double $$ are reduced\nto a single $, which allows for escaping the $(VAR_NAME) syntax: i.e.\n\"$$(VAR_NAME)\" will produce the string literal \"$(VAR_NAME)\".\nEscaped references will never be expanded, regardless of whether the variable\nexists or not.\nDefaults to \"\".\n+optional",
+                    "type": "string"
+                },
+                "valueFrom": {
+                    "description": "Source for the environment variable's value. Cannot be used if value is not empty.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.EnvVarSource"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.EnvVarSource": {
+            "type": "object",
+            "properties": {
+                "configMapKeyRef": {
+                    "description": "Selects a key of a ConfigMap.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ConfigMapKeySelector"
+                        }
+                    ]
+                },
+                "fieldRef": {
+                    "description": "Selects a field of the pod: supports metadata.name, metadata.namespace, ` + "`" + `metadata.labels['\u003cKEY\u003e']` + "`" + `, ` + "`" + `metadata.annotations['\u003cKEY\u003e']` + "`" + `,\nspec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectFieldSelector"
+                        }
+                    ]
+                },
+                "fileKeyRef": {
+                    "description": "FileKeyRef selects a key of the env file.\nRequires the EnvFiles feature gate to be enabled.\n\n+featureGate=EnvFiles\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.FileKeySelector"
+                        }
+                    ]
+                },
+                "resourceFieldRef": {
+                    "description": "Selects a resource of the container: only resources limits and requests\n(limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceFieldSelector"
+                        }
+                    ]
+                },
+                "secretKeyRef": {
+                    "description": "Selects a key of a secret in the pod's namespace\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretKeySelector"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.EphemeralContainer": {
+            "type": "object",
+            "properties": {
+                "args": {
+                    "description": "Arguments to the entrypoint.\nThe image's CMD is used if this is not provided.\nVariable references $(VAR_NAME) are expanded using the container's environment. If a variable\ncannot be resolved, the reference in the input string will be unchanged. Double $$ are reduced\nto a single $, which allows for escaping the $(VAR_NAME) syntax: i.e. \"$$(VAR_NAME)\" will\nproduce the string literal \"$(VAR_NAME)\". Escaped references will never be expanded, regardless\nof whether the variable exists or not. Cannot be updated.\nMore info: https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/#running-a-command-in-a-shell\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "command": {
+                    "description": "Entrypoint array. Not executed within a shell.\nThe image's ENTRYPOINT is used if this is not provided.\nVariable references $(VAR_NAME) are expanded using the container's environment. If a variable\ncannot be resolved, the reference in the input string will be unchanged. Double $$ are reduced\nto a single $, which allows for escaping the $(VAR_NAME) syntax: i.e. \"$$(VAR_NAME)\" will\nproduce the string literal \"$(VAR_NAME)\". Escaped references will never be expanded, regardless\nof whether the variable exists or not. Cannot be updated.\nMore info: https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/#running-a-command-in-a-shell\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "env": {
+                    "description": "List of environment variables to set in the container.\nCannot be updated.\n+optional\n+patchMergeKey=name\n+patchStrategy=merge\n+listType=map\n+listMapKey=name",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.EnvVar"
+                    }
+                },
+                "envFrom": {
+                    "description": "List of sources to populate environment variables in the container.\nThe keys defined within a source may consist of any printable ASCII characters except '='.\nWhen a key exists in multiple\nsources, the value associated with the last source will take precedence.\nValues defined by an Env with a duplicate key will take precedence.\nCannot be updated.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.EnvFromSource"
+                    }
+                },
+                "image": {
+                    "description": "Container image name.\nMore info: https://kubernetes.io/docs/concepts/containers/images",
+                    "type": "string"
+                },
+                "imagePullPolicy": {
+                    "description": "Image pull policy.\nOne of Always, Never, IfNotPresent.\nDefaults to Always if :latest tag is specified, or IfNotPresent otherwise.\nCannot be updated.\nMore info: https://kubernetes.io/docs/concepts/containers/images#updating-images\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PullPolicy"
+                        }
+                    ]
+                },
+                "lifecycle": {
+                    "description": "Lifecycle is not allowed for ephemeral containers.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Lifecycle"
+                        }
+                    ]
+                },
+                "livenessProbe": {
+                    "description": "Probes are not allowed for ephemeral containers.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Probe"
+                        }
+                    ]
+                },
+                "name": {
+                    "description": "Name of the ephemeral container specified as a DNS_LABEL.\nThis name must be unique among all containers, init containers and ephemeral containers.",
+                    "type": "string"
+                },
+                "ports": {
+                    "description": "Ports are not allowed for ephemeral containers.\n+optional\n+patchMergeKey=containerPort\n+patchStrategy=merge\n+listType=map\n+listMapKey=containerPort\n+listMapKey=protocol",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerPort"
+                    }
+                },
+                "readinessProbe": {
+                    "description": "Probes are not allowed for ephemeral containers.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Probe"
+                        }
+                    ]
+                },
+                "resizePolicy": {
+                    "description": "Resources resize policy for the container.\n+featureGate=InPlacePodVerticalScaling\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerResizePolicy"
+                    }
+                },
+                "resources": {
+                    "description": "Resources are not allowed for ephemeral containers. Ephemeral containers use spare resources\nalready allocated to the pod.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceRequirements"
+                        }
+                    ]
+                },
+                "restartPolicy": {
+                    "description": "Restart policy for the container to manage the restart behavior of each\ncontainer within a pod.\nYou cannot set this field on ephemeral containers.\n+featureGate=SidecarContainers\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ContainerRestartPolicy"
+                        }
+                    ]
+                },
+                "restartPolicyRules": {
+                    "description": "Represents a list of rules to be checked to determine if the\ncontainer should be restarted on exit. You cannot set this field on\nephemeral containers.\n+featureGate=ContainerRestartRules\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ContainerRestartRule"
+                    }
+                },
+                "securityContext": {
+                    "description": "Optional: SecurityContext defines the security options the ephemeral container should be run with.\nIf set, the fields of SecurityContext override the equivalent fields of PodSecurityContext.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecurityContext"
+                        }
+                    ]
+                },
+                "startupProbe": {
+                    "description": "Probes are not allowed for ephemeral containers.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Probe"
+                        }
+                    ]
+                },
+                "stdin": {
+                    "description": "Whether this container should allocate a buffer for stdin in the container runtime. If this\nis not set, reads from stdin in the container will always result in EOF.\nDefault is false.\n+optional",
+                    "type": "boolean"
+                },
+                "stdinOnce": {
+                    "description": "Whether the container runtime should close the stdin channel after it has been opened by\na single attach. When stdin is true the stdin stream will remain open across multiple attach\nsessions. If stdinOnce is set to true, stdin is opened on container start, is empty until the\nfirst client attaches to stdin, and then remains open and accepts data until the client disconnects,\nat which time stdin is closed and remains closed until the container is restarted. If this\nflag is false, a container processes that reads from stdin will never receive an EOF.\nDefault is false\n+optional",
+                    "type": "boolean"
+                },
+                "targetContainerName": {
+                    "description": "If set, the name of the container from PodSpec that this ephemeral container targets.\nThe ephemeral container will be run in the namespaces (IPC, PID, etc) of this container.\nIf not set then the ephemeral container uses the namespaces configured in the Pod spec.\n\nThe container runtime must implement support for this feature. If the runtime does not\nsupport namespace targeting then the result of setting this field is undefined.\n+optional",
+                    "type": "string"
+                },
+                "terminationMessagePath": {
+                    "description": "Optional: Path at which the file to which the container's termination message\nwill be written is mounted into the container's filesystem.\nMessage written is intended to be brief final status, such as an assertion failure message.\nWill be truncated by the node if greater than 4096 bytes. The total message length across\nall containers will be limited to 12kb.\nDefaults to /dev/termination-log.\nCannot be updated.\n+optional",
+                    "type": "string"
+                },
+                "terminationMessagePolicy": {
+                    "description": "Indicate how the termination message should be populated. File will use the contents of\nterminationMessagePath to populate the container status message on both success and failure.\nFallbackToLogsOnError will use the last chunk of container log output if the termination\nmessage file is empty and the container exited with an error.\nThe log output is limited to 2048 bytes or 80 lines, whichever is smaller.\nDefaults to File.\nCannot be updated.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.TerminationMessagePolicy"
+                        }
+                    ]
+                },
+                "tty": {
+                    "description": "Whether this container should allocate a TTY for itself, also requires 'stdin' to be true.\nDefault is false.\n+optional",
+                    "type": "boolean"
+                },
+                "volumeDevices": {
+                    "description": "volumeDevices is the list of block devices to be used by the container.\n+patchMergeKey=devicePath\n+patchStrategy=merge\n+listType=map\n+listMapKey=devicePath\n+optional",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.VolumeDevice"
+                    }
+                },
+                "volumeMounts": {
+                    "description": "Pod volumes to mount into the container's filesystem. Subpath mounts are not allowed for ephemeral containers.\nCannot be updated.\n+optional\n+patchMergeKey=mountPath\n+patchStrategy=merge\n+listType=map\n+listMapKey=mountPath",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.VolumeMount"
+                    }
+                },
+                "workingDir": {
+                    "description": "Container's working directory.\nIf not specified, the container runtime's default will be used, which\nmight be configured in the container image.\nCannot be updated.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.EphemeralVolumeSource": {
+            "type": "object",
+            "properties": {
+                "volumeClaimTemplate": {
+                    "description": "Will be used to create a stand-alone PVC to provision the volume.\nThe pod in which this EphemeralVolumeSource is embedded will be the\nowner of the PVC, i.e. the PVC will be deleted together with the\npod.  The name of the PVC will be ` + "`" + `\u003cpod name\u003e-\u003cvolume name\u003e` + "`" + ` where\n` + "`" + `\u003cvolume name\u003e` + "`" + ` is the name from the ` + "`" + `PodSpec.Volumes` + "`" + ` array\nentry. Pod validation will reject the pod if the concatenated name\nis not valid for a PVC (for example, too long).\n\nAn existing PVC with that name that is not owned by the pod\nwill *not* be used for the pod to avoid using an unrelated\nvolume by mistake. Starting the pod is then blocked until\nthe unrelated PVC is removed. If such a pre-created PVC is\nmeant to be used by the pod, the PVC has to updated with an\nowner reference to the pod once the pod exists. Normally\nthis should not be necessary, but it may be useful when\nmanually reconstructing a broken cluster.\n\nThis field is read-only and no changes will be made by Kubernetes\nto the PVC after it has been created.\n\nRequired, must not be nil.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeClaimTemplate"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.ExecAction": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "description": "Command is the command line to execute inside the container, the working directory for the\ncommand  is root ('/') in the container's filesystem. The command is simply exec'd, it is\nnot run inside a shell, so traditional shell instructions ('|', etc) won't work. To use\na shell, you need to explicitly call out to that shell.\nExit status of 0 is treated as live/healthy and non-zero is unhealthy.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "v1.FCVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is the filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\nTODO: how do we prevent errors in the filesystem from compromising the machine\n+optional",
+                    "type": "string"
+                },
+                "lun": {
+                    "description": "lun is Optional: FC target lun number\n+optional",
+                    "type": "integer"
+                },
+                "readOnly": {
+                    "description": "readOnly is Optional: Defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
+                    "type": "boolean"
+                },
+                "targetWWNs": {
+                    "description": "targetWWNs is Optional: FC target worldwide names (WWNs)\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "wwids": {
+                    "description": "wwids Optional: FC volume world wide identifiers (wwids)\nEither wwids or combination of targetWWNs and lun must be set, but not both simultaneously.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "v1.FieldsV1": {
+            "type": "object"
+        },
+        "v1.FileKeySelector": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "description": "The key within the env file. An invalid key will prevent the pod from starting.\nThe keys defined within a source may consist of any printable ASCII characters except '='.\nDuring Alpha stage of the EnvFiles feature gate, the key size is limited to 128 characters.\n+required",
+                    "type": "string"
+                },
+                "optional": {
+                    "description": "Specify whether the file or its key must be defined. If the file or key\ndoes not exist, then the env var is not published.\nIf optional is set to true and the specified key does not exist,\nthe environment variable will not be set in the Pod's containers.\n\nIf optional is set to false and the specified key does not exist,\nan error will be returned during Pod creation.\n+optional\n+default=false",
+                    "type": "boolean"
+                },
+                "path": {
+                    "description": "The path within the volume from which to select the file.\nMust be relative and may not contain the '..' path or start with '..'.\n+required",
+                    "type": "string"
+                },
+                "volumeName": {
+                    "description": "The name of the volume mount containing the env file.\n+required",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.FlexPersistentVolumeSource": {
+            "type": "object",
+            "properties": {
+                "driver": {
+                    "description": "driver is the name of the driver to use for this volume.",
+                    "type": "string"
+                },
+                "fsType": {
+                    "description": "fsType is the Filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\". The default filesystem depends on FlexVolume script.\n+optional",
+                    "type": "string"
+                },
+                "options": {
+                    "description": "options is Optional: this field holds extra command options if any.\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "readOnly": {
+                    "description": "readOnly is Optional: defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
+                    "type": "boolean"
+                },
+                "secretRef": {
+                    "description": "secretRef is Optional: SecretRef is reference to the secret object containing\nsensitive information to pass to the plugin scripts. This may be\nempty if no secret object is specified. If the secret object\ncontains more than one secret, all secrets are passed to the plugin\nscripts.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretReference"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.FlexVolumeSource": {
+            "type": "object",
+            "properties": {
+                "driver": {
+                    "description": "driver is the name of the driver to use for this volume.",
+                    "type": "string"
+                },
+                "fsType": {
+                    "description": "fsType is the filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\". The default filesystem depends on FlexVolume script.\n+optional",
+                    "type": "string"
+                },
+                "options": {
+                    "description": "options is Optional: this field holds extra command options if any.\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "readOnly": {
+                    "description": "readOnly is Optional: defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
+                    "type": "boolean"
+                },
+                "secretRef": {
+                    "description": "secretRef is Optional: secretRef is reference to the secret object containing\nsensitive information to pass to the plugin scripts. This may be\nempty if no secret object is specified. If the secret object\ncontains more than one secret, all secrets are passed to the plugin\nscripts.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_api_core_v1.LocalObjectReference"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.FlockerVolumeSource": {
+            "type": "object",
+            "properties": {
+                "datasetName": {
+                    "description": "datasetName is Name of the dataset stored as metadata -\u003e name on the dataset for Flocker\nshould be considered as deprecated\n+optional",
+                    "type": "string"
+                },
+                "datasetUUID": {
+                    "description": "datasetUUID is the UUID of the dataset. This is unique identifier of a Flocker dataset\n+optional",
+                    "type": "string"
+                }
+            }
+        },
         "v1.ForwardBodyConfig": {
             "type": "object",
             "properties": {
@@ -2792,6 +5308,40 @@ const docTemplate = `{
                 }
             }
         },
+        "v1.GCEPersistentDiskVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is filesystem type of the volume that you want to mount.\nTip: Ensure that the filesystem type is supported by the host operating system.\nExamples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk\nTODO: how do we prevent errors in the filesystem from compromising the machine\n+optional",
+                    "type": "string"
+                },
+                "partition": {
+                    "description": "partition is the partition in the volume that you want to mount.\nIf omitted, the default is to mount by volume name.\nExamples: For volume /dev/sda1, you specify the partition as \"1\".\nSimilarly, the volume partition for /dev/sda is \"0\" (or you can leave the property empty).\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk\n+optional",
+                    "type": "integer"
+                },
+                "pdName": {
+                    "description": "pdName is unique name of the PD resource in GCE. Used to identify the disk in GCE.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly here will force the ReadOnly setting in VolumeMounts.\nDefaults to false.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk\n+optional",
+                    "type": "boolean"
+                }
+            }
+        },
+        "v1.GRPCAction": {
+            "type": "object",
+            "properties": {
+                "port": {
+                    "description": "Port number of the gRPC service. Number must be in the range 1 to 65535.",
+                    "type": "integer"
+                },
+                "service": {
+                    "description": "Service is the name of the service to place in the gRPC HealthCheckRequest\n(see https://github.com/grpc/grpc/blob/master/doc/health-checking.md).\n\nIf this is not specified, the default behavior is defined by gRPC.\n+optional\n+default=\"\"",
+                    "type": "string"
+                }
+            }
+        },
         "v1.GRPCAuthConfig": {
             "type": "object",
             "properties": {
@@ -2801,6 +5351,72 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "v1.GatewayDefaultScope": {
+            "type": "string",
+            "enum": [
+                "All",
+                "None"
+            ],
+            "x-enum-varnames": [
+                "GatewayDefaultScopeAll",
+                "GatewayDefaultScopeNone"
+            ]
+        },
+        "v1.GitRepoVolumeSource": {
+            "type": "object",
+            "properties": {
+                "directory": {
+                    "description": "directory is the target directory name.\nMust not contain or start with '..'.  If '.' is supplied, the volume directory will be the\ngit repository.  Otherwise, if specified, the volume will contain the git repository in\nthe subdirectory with the given name.\n+optional",
+                    "type": "string"
+                },
+                "repository": {
+                    "description": "repository is the URL",
+                    "type": "string"
+                },
+                "revision": {
+                    "description": "revision is the commit hash for the specified revision.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.GlusterfsPersistentVolumeSource": {
+            "type": "object",
+            "properties": {
+                "endpoints": {
+                    "description": "endpoints is the endpoint name that details Glusterfs topology.\nMore info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod",
+                    "type": "string"
+                },
+                "endpointsNamespace": {
+                    "description": "endpointsNamespace is the namespace that contains Glusterfs endpoint.\nIf this field is empty, the EndpointNamespace defaults to the same namespace as the bound PVC.\nMore info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod\n+optional",
+                    "type": "string"
+                },
+                "path": {
+                    "description": "path is the Glusterfs volume path.\nMore info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly here will force the Glusterfs volume to be mounted with read-only permissions.\nDefaults to false.\nMore info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod\n+optional",
+                    "type": "boolean"
+                }
+            }
+        },
+        "v1.GlusterfsVolumeSource": {
+            "type": "object",
+            "properties": {
+                "endpoints": {
+                    "description": "endpoints is the endpoint name that details Glusterfs topology.",
+                    "type": "string"
+                },
+                "path": {
+                    "description": "path is the Glusterfs volume path.\nMore info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly here will force the Glusterfs volume to be mounted with read-only permissions.\nDefaults to false.\nMore info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod\n+optional",
+                    "type": "boolean"
                 }
             }
         },
@@ -2949,6 +5565,42 @@ const docTemplate = `{
                 }
             }
         },
+        "v1.HTTPGetAction": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "description": "Host name to connect to, defaults to the pod IP. You probably want to set\n\"Host\" in httpHeaders instead.\n+optional",
+                    "type": "string"
+                },
+                "httpHeaders": {
+                    "description": "Custom headers to set in the request. HTTP allows repeated headers.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/k8s_io_api_core_v1.HTTPHeader"
+                    }
+                },
+                "path": {
+                    "description": "Path to access on the HTTP server.\n+optional",
+                    "type": "string"
+                },
+                "port": {
+                    "description": "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/intstr.IntOrString"
+                        }
+                    ]
+                },
+                "scheme": {
+                    "description": "Scheme to use for connecting to the host.\nDefaults to HTTP.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.URIScheme"
+                        }
+                    ]
+                }
+            }
+        },
         "v1.HTTPHeaderFilter": {
             "type": "object",
             "properties": {
@@ -2993,6 +5645,43 @@ const docTemplate = `{
                 "value": {
                     "description": "Value is the value of HTTP Header to be matched.\n\n+kubebuilder:validation:MinLength=1\n+kubebuilder:validation:MaxLength=4096\n+required",
                     "type": "string"
+                }
+            }
+        },
+        "v1.HTTPIngressPath": {
+            "type": "object",
+            "properties": {
+                "backend": {
+                    "description": "backend defines the referenced service endpoint to which the traffic\nwill be forwarded to.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.IngressBackend"
+                        }
+                    ]
+                },
+                "path": {
+                    "description": "path is matched against the path of an incoming request. Currently it can\ncontain characters disallowed from the conventional \"path\" part of a URL\nas defined by RFC 3986. Paths must begin with a '/' and must be present\nwhen using PathType with value \"Exact\" or \"Prefix\".\n+optional",
+                    "type": "string"
+                },
+                "pathType": {
+                    "description": "pathType determines the interpretation of the path matching. PathType can\nbe one of the following values:\n* Exact: Matches the URL path exactly.\n* Prefix: Matches based on a URL path prefix split by '/'. Matching is\n  done on a path element by element basis. A path element refers is the\n  list of labels in the path split by the '/' separator. A request is a\n  match for path p if every p is an element-wise prefix of p of the\n  request path. Note that if the last element of the path is a substring\n  of the last element in request path, it is not a match (e.g. /foo/bar\n  matches /foo/bar/baz, but does not match /foo/barbaz).\n* ImplementationSpecific: Interpretation of the Path matching is up to\n  the IngressClass. Implementations can treat this as a separate PathType\n  or treat it identically to Prefix or Exact path types.\nImplementations are required to support all path types.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PathType"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.HTTPIngressRuleValue": {
+            "type": "object",
+            "properties": {
+                "paths": {
+                    "description": "paths is a collection of paths that map requests to backends.\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.HTTPIngressPath"
+                    }
                 }
             }
         },
@@ -3142,6 +5831,43 @@ const docTemplate = `{
                 "statusCode": {
                     "description": "StatusCode is the HTTP status code to be used in response.\n\nNote that values may be added to this enum, implementations\nmust ensure that unknown values will not cause a crash.\n\nUnknown values here must result in the implementation setting the\nAccepted Condition for the Route to ` + "`" + `status: False` + "`" + `, with a\nReason of ` + "`" + `UnsupportedValue` + "`" + `.\n\nSupport: Core\n\n+optional\n+kubebuilder:default=302\n+kubebuilder:validation:Enum=301;302",
                     "type": "integer"
+                }
+            }
+        },
+        "v1.HTTPRoute": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectMeta"
+                        }
+                    ]
+                },
+                "spec": {
+                    "description": "Spec defines the desired state of HTTPRoute.\n+required",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.HTTPRouteSpec"
+                        }
+                    ]
+                },
+                "status": {
+                    "description": "Status defines the current state of HTTPRoute.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.HTTPRouteStatus"
+                        }
+                    ]
                 }
             }
         },
@@ -3365,6 +6091,52 @@ const docTemplate = `{
                 }
             }
         },
+        "v1.HTTPRouteSpec": {
+            "type": "object",
+            "properties": {
+                "hostnames": {
+                    "description": "Hostnames defines a set of hostnames that should match against the HTTP Host\nheader to select a HTTPRoute used to process the request. Implementations\nMUST ignore any port value specified in the HTTP Host header while\nperforming a match and (absent of any applicable header modification\nconfiguration) MUST forward this header unmodified to the backend.\n\nValid values for Hostnames are determined by RFC 1123 definition of a\nhostname with 2 notable exceptions:\n\n1. IPs are not allowed.\n2. A hostname may be prefixed with a wildcard label (` + "`" + `*.` + "`" + `). The wildcard\n   label must appear by itself as the first label.\n\nIf a hostname is specified by both the Listener and HTTPRoute, there\nmust be at least one intersecting hostname for the HTTPRoute to be\nattached to the Listener. For example:\n\n* A Listener with ` + "`" + `test.example.com` + "`" + ` as the hostname matches HTTPRoutes\n  that have either not specified any hostnames, or have specified at\n  least one of ` + "`" + `test.example.com` + "`" + ` or ` + "`" + `*.example.com` + "`" + `.\n* A Listener with ` + "`" + `*.example.com` + "`" + ` as the hostname matches HTTPRoutes\n  that have either not specified any hostnames or have specified at least\n  one hostname that matches the Listener hostname. For example,\n  ` + "`" + `*.example.com` + "`" + `, ` + "`" + `test.example.com` + "`" + `, and ` + "`" + `foo.test.example.com` + "`" + ` would\n  all match. On the other hand, ` + "`" + `example.com` + "`" + ` and ` + "`" + `test.example.net` + "`" + ` would\n  not match.\n\nHostnames that are prefixed with a wildcard label (` + "`" + `*.` + "`" + `) are interpreted\nas a suffix match. That means that a match for ` + "`" + `*.example.com` + "`" + ` would match\nboth ` + "`" + `test.example.com` + "`" + `, and ` + "`" + `foo.test.example.com` + "`" + `, but not ` + "`" + `example.com` + "`" + `.\n\nIf both the Listener and HTTPRoute have specified hostnames, any\nHTTPRoute hostnames that do not match the Listener hostname MUST be\nignored. For example, if a Listener specified ` + "`" + `*.example.com` + "`" + `, and the\nHTTPRoute specified ` + "`" + `test.example.com` + "`" + ` and ` + "`" + `test.example.net` + "`" + `,\n` + "`" + `test.example.net` + "`" + ` must not be considered for a match.\n\nIf both the Listener and HTTPRoute have specified hostnames, and none\nmatch with the criteria above, then the HTTPRoute is not accepted. The\nimplementation must raise an 'Accepted' Condition with a status of\n` + "`" + `False` + "`" + ` in the corresponding RouteParentStatus.\n\nIn the event that multiple HTTPRoutes specify intersecting hostnames (e.g.\noverlapping wildcard matching and exact matching hostnames), precedence must\nbe given to rules from the HTTPRoute with the largest number of:\n\n* Characters in a matching non-wildcard hostname.\n* Characters in a matching hostname.\n\nIf ties exist across multiple Routes, the matching precedence rules for\nHTTPRouteMatches takes over.\n\nSupport: Core\n\n+optional\n+listType=atomic\n+kubebuilder:validation:MaxItems=16",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "parentRefs": {
+                    "description": "ParentRefs references the resources (usually Gateways) that a Route wants\nto be attached to. Note that the referenced parent resource needs to\nallow this for the attachment to be complete. For Gateways, that means\nthe Gateway needs to allow attachment from Routes of this kind and\nnamespace. For Services, that means the Service must either be in the same\nnamespace for a \"producer\" route, or the mesh implementation must support\nand allow \"consumer\" routes for the referenced Service. ReferenceGrant is\nnot applicable for governing ParentRefs to Services - it is not possible to\ncreate a \"producer\" route for a Service in a different namespace from the\nRoute.\n\nThere are two kinds of parent resources with \"Core\" support:\n\n* Gateway (Gateway conformance profile)\n* Service (Mesh conformance profile, ClusterIP Services only)\n\nThis API may be extended in the future to support additional kinds of parent\nresources.\n\nParentRefs must be _distinct_. This means either that:\n\n* They select different objects.  If this is the case, then parentRef\n  entries are distinct. In terms of fields, this means that the\n  multi-part key defined by ` + "`" + `group` + "`" + `, ` + "`" + `kind` + "`" + `, ` + "`" + `namespace` + "`" + `, and ` + "`" + `name` + "`" + ` must\n  be unique across all parentRef entries in the Route.\n* They do not select different objects, but for each optional field used,\n  each ParentRef that selects the same object must set the same set of\n  optional fields to different values. If one ParentRef sets a\n  combination of optional fields, all must set the same combination.\n\nSome examples:\n\n* If one ParentRef sets ` + "`" + `sectionName` + "`" + `, all ParentRefs referencing the\n  same object must also set ` + "`" + `sectionName` + "`" + `.\n* If one ParentRef sets ` + "`" + `port` + "`" + `, all ParentRefs referencing the same\n  object must also set ` + "`" + `port` + "`" + `.\n* If one ParentRef sets ` + "`" + `sectionName` + "`" + ` and ` + "`" + `port` + "`" + `, all ParentRefs\n  referencing the same object must also set ` + "`" + `sectionName` + "`" + ` and ` + "`" + `port` + "`" + `.\n\nIt is possible to separately reference multiple distinct objects that may\nbe collapsed by an implementation. For example, some implementations may\nchoose to merge compatible Gateway Listeners together. If that is the\ncase, the list of routes attached to those resources should also be\nmerged.\n\nNote that for ParentRefs that cross namespace boundaries, there are specific\nrules. Cross-namespace references are only valid if they are explicitly\nallowed by something in the namespace they are referring to. For example,\nGateway has the AllowedRoutes field, and ReferenceGrant provides a\ngeneric way to enable other kinds of cross-namespace reference.\n\n\u003cgateway:experimental:description\u003e\nParentRefs from a Route to a Service in the same namespace are \"producer\"\nroutes, which apply default routing rules to inbound connections from\nany namespace to the Service.\n\nParentRefs from a Route to a Service in a different namespace are\n\"consumer\" routes, and these routing rules are only applied to outbound\nconnections originating from the same namespace as the Route, for which\nthe intended destination of the connections are a Service targeted as a\nParentRef of the Route.\n\u003c/gateway:experimental:description\u003e\n\n+optional\n+listType=atomic\n+kubebuilder:validation:MaxItems=32\n\u003cgateway:standard:validation:XValidation:message=\"sectionName must be specified when parentRefs includes 2 or more references to the same parent\",rule=\"self.all(p1, self.all(p2, p1.group == p2.group \u0026\u0026 p1.kind == p2.kind \u0026\u0026 p1.name == p2.name \u0026\u0026 (((!has(p1.__namespace__) || p1.__namespace__ == '') \u0026\u0026 (!has(p2.__namespace__) || p2.__namespace__ == '')) || (has(p1.__namespace__) \u0026\u0026 has(p2.__namespace__) \u0026\u0026 p1.__namespace__ == p2.__namespace__ )) ? ((!has(p1.sectionName) || p1.sectionName == '') == (!has(p2.sectionName) || p2.sectionName == '')) : true))\"\u003e\n\u003cgateway:standard:validation:XValidation:message=\"sectionName must be unique when parentRefs includes 2 or more references to the same parent\",rule=\"self.all(p1, self.exists_one(p2, p1.group == p2.group \u0026\u0026 p1.kind == p2.kind \u0026\u0026 p1.name == p2.name \u0026\u0026 (((!has(p1.__namespace__) || p1.__namespace__ == '') \u0026\u0026 (!has(p2.__namespace__) || p2.__namespace__ == '')) || (has(p1.__namespace__) \u0026\u0026 has(p2.__namespace__) \u0026\u0026 p1.__namespace__ == p2.__namespace__ )) \u0026\u0026 (((!has(p1.sectionName) || p1.sectionName == '') \u0026\u0026 (!has(p2.sectionName) || p2.sectionName == '')) || (has(p1.sectionName) \u0026\u0026 has(p2.sectionName) \u0026\u0026 p1.sectionName == p2.sectionName))))\"\u003e\n\u003cgateway:experimental:validation:XValidation:message=\"sectionName or port must be specified when parentRefs includes 2 or more references to the same parent\",rule=\"self.all(p1, self.all(p2, p1.group == p2.group \u0026\u0026 p1.kind == p2.kind \u0026\u0026 p1.name == p2.name \u0026\u0026 (((!has(p1.__namespace__) || p1.__namespace__ == '') \u0026\u0026 (!has(p2.__namespace__) || p2.__namespace__ == '')) || (has(p1.__namespace__) \u0026\u0026 has(p2.__namespace__) \u0026\u0026 p1.__namespace__ == p2.__namespace__)) ? ((!has(p1.sectionName) || p1.sectionName == '') == (!has(p2.sectionName) || p2.sectionName == '') \u0026\u0026 (!has(p1.port) || p1.port == 0) == (!has(p2.port) || p2.port == 0)): true))\"\u003e\n\u003cgateway:experimental:validation:XValidation:message=\"sectionName or port must be unique when parentRefs includes 2 or more references to the same parent\",rule=\"self.all(p1, self.exists_one(p2, p1.group == p2.group \u0026\u0026 p1.kind == p2.kind \u0026\u0026 p1.name == p2.name \u0026\u0026 (((!has(p1.__namespace__) || p1.__namespace__ == '') \u0026\u0026 (!has(p2.__namespace__) || p2.__namespace__ == '')) || (has(p1.__namespace__) \u0026\u0026 has(p2.__namespace__) \u0026\u0026 p1.__namespace__ == p2.__namespace__ )) \u0026\u0026 (((!has(p1.sectionName) || p1.sectionName == '') \u0026\u0026 (!has(p2.sectionName) || p2.sectionName == '')) || ( has(p1.sectionName) \u0026\u0026 has(p2.sectionName) \u0026\u0026 p1.sectionName == p2.sectionName)) \u0026\u0026 (((!has(p1.port) || p1.port == 0) \u0026\u0026 (!has(p2.port) || p2.port == 0)) || (has(p1.port) \u0026\u0026 has(p2.port) \u0026\u0026 p1.port == p2.port))))\"\u003e",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sigs_k8s_io_gateway-api_apis_v1.ParentReference"
+                    }
+                },
+                "rules": {
+                    "description": "Rules are a list of HTTP matchers, filters and actions.\n\n+optional\n+listType=atomic\n\u003cgateway:experimental:validation:XValidation:message=\"Rule name must be unique within the route\",rule=\"self.all(l1, !has(l1.name) || self.exists_one(l2, has(l2.name) \u0026\u0026 l1.name == l2.name))\"\u003e\n+kubebuilder:validation:MaxItems=16\n+kubebuilder:default={{matches: {{path: {type: \"PathPrefix\", value: \"/\"}}}}}\n+kubebuilder:validation:XValidation:message=\"While 16 rules and 64 matches per rule are allowed, the total number of matches across all rules in a route must be less than 128\",rule=\"(self.size() \u003e 0 ? self[0].matches.size() : 0) + (self.size() \u003e 1 ? self[1].matches.size() : 0) + (self.size() \u003e 2 ? self[2].matches.size() : 0) + (self.size() \u003e 3 ? self[3].matches.size() : 0) + (self.size() \u003e 4 ? self[4].matches.size() : 0) + (self.size() \u003e 5 ? self[5].matches.size() : 0) + (self.size() \u003e 6 ? self[6].matches.size() : 0) + (self.size() \u003e 7 ? self[7].matches.size() : 0) + (self.size() \u003e 8 ? self[8].matches.size() : 0) + (self.size() \u003e 9 ? self[9].matches.size() : 0) + (self.size() \u003e 10 ? self[10].matches.size() : 0) + (self.size() \u003e 11 ? self[11].matches.size() : 0) + (self.size() \u003e 12 ? self[12].matches.size() : 0) + (self.size() \u003e 13 ? self[13].matches.size() : 0) + (self.size() \u003e 14 ? self[14].matches.size() : 0) + (self.size() \u003e 15 ? self[15].matches.size() : 0) \u003c= 128\"",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.HTTPRouteRule"
+                    }
+                },
+                "useDefaultGateways": {
+                    "description": "UseDefaultGateways indicates the default Gateway scope to use for this\nRoute. If unset (the default) or set to None, the Route will not be\nattached to any default Gateway; if set, it will be attached to any\ndefault Gateway supporting the named scope, subject to the usual rules\nabout which Routes a Gateway is allowed to claim.\n\nThink carefully before using this functionality! The set of default\nGateways supporting the requested scope can change over time without\nany notice to the Route author, and in many situations it will not be\nappropriate to request a default Gateway for a given Route -- for\nexample, a Route with specific security requirements should almost\ncertainly not use a default Gateway.\n\n+optional\n\u003cgateway:experimental\u003e",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.GatewayDefaultScope"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.HTTPRouteStatus": {
+            "type": "object",
+            "properties": {
+                "parents": {
+                    "description": "Parents is a list of parent resources (usually Gateways) that are\nassociated with the route, and the status of the route with respect to\neach parent. When this route attaches to a parent, the controller that\nmanages the parent must add an entry to this list when the controller\nfirst sees the route and should update the entry as appropriate when the\nroute or gateway is modified.\n\nNote that parent references that cannot be resolved by an implementation\nof this API will not be added to this list. Implementations of this API\ncan only populate Route status for the Gateways/parent resources they are\nresponsible for.\n\nA maximum of 32 Gateways will be represented in this list. An empty list\nmeans the route has not been attached to any Gateway.\n\n\u003cgateway:util:excludeFromCRD\u003e\nNotes for implementors:\n\nWhile parents is not a listType ` + "`" + `map` + "`" + `, this is due to the fact that the\nlist key is not scalar, and Kubernetes is unable to represent this.\n\nParent status MUST be considered to be namespaced by the combination of\nthe parentRef and controllerName fields, and implementations should keep\nthe following rules in mind when updating this status:\n\n* Implementations MUST update only entries that have a matching value of\n  ` + "`" + `controllerName` + "`" + ` for that implementation.\n* Implementations MUST NOT update entries with non-matching ` + "`" + `controllerName` + "`" + `\n  fields.\n* Implementations MUST treat each ` + "`" + `parentRef` + "`" + `` + "`" + ` in the Route separately and\n  update its status based on the relationship with that parent.\n* Implementations MUST perform a read-modify-write cycle on this field\n  before modifying it. That is, when modifying this field, implementations\n  must be confident they have fetched the most recent version of this field,\n  and ensure that changes they make are on that recent version.\n\n\u003c/gateway:util:excludeFromCRD\u003e\n\n+required\n+listType=atomic\n+kubebuilder:validation:MaxItems=32",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.RouteParentStatus"
+                    }
+                }
+            }
+        },
         "v1.HTTPRouteTimeouts": {
             "type": "object",
             "properties": {
@@ -3406,6 +6178,413 @@ const docTemplate = `{
                 "HeaderMatchRegularExpression"
             ]
         },
+        "v1.HostAlias": {
+            "type": "object",
+            "properties": {
+                "hostnames": {
+                    "description": "Hostnames for the above IP address.\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ip": {
+                    "description": "IP address of the host file entry.\n+required",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.HostPathType": {
+            "type": "string",
+            "enum": [
+                "",
+                "DirectoryOrCreate",
+                "Directory",
+                "FileOrCreate",
+                "File",
+                "Socket",
+                "CharDevice",
+                "BlockDevice"
+            ],
+            "x-enum-varnames": [
+                "HostPathUnset",
+                "HostPathDirectoryOrCreate",
+                "HostPathDirectory",
+                "HostPathFileOrCreate",
+                "HostPathFile",
+                "HostPathSocket",
+                "HostPathCharDev",
+                "HostPathBlockDev"
+            ]
+        },
+        "v1.HostPathVolumeSource": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "description": "path of the directory on the host.\nIf the path is a symlink, it will follow the link to the real path.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "type for HostPath Volume\nDefaults to \"\"\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.HostPathType"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.IPFamily": {
+            "type": "string",
+            "enum": [
+                "IPv4",
+                "IPv6",
+                ""
+            ],
+            "x-enum-varnames": [
+                "IPv4Protocol",
+                "IPv6Protocol",
+                "IPFamilyUnknown"
+            ]
+        },
+        "v1.IPFamilyPolicy": {
+            "type": "string",
+            "enum": [
+                "SingleStack",
+                "PreferDualStack",
+                "RequireDualStack"
+            ],
+            "x-enum-varnames": [
+                "IPFamilyPolicySingleStack",
+                "IPFamilyPolicyPreferDualStack",
+                "IPFamilyPolicyRequireDualStack"
+            ]
+        },
+        "v1.ISCSIPersistentVolumeSource": {
+            "type": "object",
+            "properties": {
+                "chapAuthDiscovery": {
+                    "description": "chapAuthDiscovery defines whether support iSCSI Discovery CHAP authentication\n+optional",
+                    "type": "boolean"
+                },
+                "chapAuthSession": {
+                    "description": "chapAuthSession defines whether support iSCSI Session CHAP authentication\n+optional",
+                    "type": "boolean"
+                },
+                "fsType": {
+                    "description": "fsType is the filesystem type of the volume that you want to mount.\nTip: Ensure that the filesystem type is supported by the host operating system.\nExamples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#iscsi\nTODO: how do we prevent errors in the filesystem from compromising the machine\n+optional",
+                    "type": "string"
+                },
+                "initiatorName": {
+                    "description": "initiatorName is the custom iSCSI Initiator Name.\nIf initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface\n\u003ctarget portal\u003e:\u003cvolume name\u003e will be created for the connection.\n+optional",
+                    "type": "string"
+                },
+                "iqn": {
+                    "description": "iqn is Target iSCSI Qualified Name.",
+                    "type": "string"
+                },
+                "iscsiInterface": {
+                    "description": "iscsiInterface is the interface Name that uses an iSCSI transport.\nDefaults to 'default' (tcp).\n+optional\n+default=\"default\"",
+                    "type": "string"
+                },
+                "lun": {
+                    "description": "lun is iSCSI Target Lun number.",
+                    "type": "integer"
+                },
+                "portals": {
+                    "description": "portals is the iSCSI Target Portal List. The Portal is either an IP or ip_addr:port if the port\nis other than default (typically TCP ports 860 and 3260).\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "readOnly": {
+                    "description": "readOnly here will force the ReadOnly setting in VolumeMounts.\nDefaults to false.\n+optional",
+                    "type": "boolean"
+                },
+                "secretRef": {
+                    "description": "secretRef is the CHAP Secret for iSCSI target and initiator authentication\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretReference"
+                        }
+                    ]
+                },
+                "targetPortal": {
+                    "description": "targetPortal is iSCSI Target Portal. The Portal is either an IP or ip_addr:port if the port\nis other than default (typically TCP ports 860 and 3260).",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ISCSIVolumeSource": {
+            "type": "object",
+            "properties": {
+                "chapAuthDiscovery": {
+                    "description": "chapAuthDiscovery defines whether support iSCSI Discovery CHAP authentication\n+optional",
+                    "type": "boolean"
+                },
+                "chapAuthSession": {
+                    "description": "chapAuthSession defines whether support iSCSI Session CHAP authentication\n+optional",
+                    "type": "boolean"
+                },
+                "fsType": {
+                    "description": "fsType is the filesystem type of the volume that you want to mount.\nTip: Ensure that the filesystem type is supported by the host operating system.\nExamples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#iscsi\nTODO: how do we prevent errors in the filesystem from compromising the machine\n+optional",
+                    "type": "string"
+                },
+                "initiatorName": {
+                    "description": "initiatorName is the custom iSCSI Initiator Name.\nIf initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface\n\u003ctarget portal\u003e:\u003cvolume name\u003e will be created for the connection.\n+optional",
+                    "type": "string"
+                },
+                "iqn": {
+                    "description": "iqn is the target iSCSI Qualified Name.",
+                    "type": "string"
+                },
+                "iscsiInterface": {
+                    "description": "iscsiInterface is the interface Name that uses an iSCSI transport.\nDefaults to 'default' (tcp).\n+optional\n+default=\"default\"",
+                    "type": "string"
+                },
+                "lun": {
+                    "description": "lun represents iSCSI Target Lun number.",
+                    "type": "integer"
+                },
+                "portals": {
+                    "description": "portals is the iSCSI Target Portal List. The portal is either an IP or ip_addr:port if the port\nis other than default (typically TCP ports 860 and 3260).\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "readOnly": {
+                    "description": "readOnly here will force the ReadOnly setting in VolumeMounts.\nDefaults to false.\n+optional",
+                    "type": "boolean"
+                },
+                "secretRef": {
+                    "description": "secretRef is the CHAP Secret for iSCSI target and initiator authentication\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_api_core_v1.LocalObjectReference"
+                        }
+                    ]
+                },
+                "targetPortal": {
+                    "description": "targetPortal is iSCSI Target Portal. The Portal is either an IP or ip_addr:port if the port\nis other than default (typically TCP ports 860 and 3260).",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ImageVolumeSource": {
+            "type": "object",
+            "properties": {
+                "pullPolicy": {
+                    "description": "Policy for pulling OCI objects. Possible values are:\nAlways: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.\nNever: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.\nIfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\nDefaults to Always if :latest tag is specified, or IfNotPresent otherwise.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PullPolicy"
+                        }
+                    ]
+                },
+                "reference": {
+                    "description": "Required: Image or artifact reference to be used.\nBehaves in the same way as pod.spec.containers[*].image.\nPull secrets will be assembled in the same way as for the container image by looking up node credentials, SA image pull secrets, and pod spec image pull secrets.\nMore info: https://kubernetes.io/docs/concepts/containers/images\nThis field is optional to allow higher level config management to default or override\ncontainer images in workload controllers like Deployments and StatefulSets.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.IngressBackend": {
+            "type": "object",
+            "properties": {
+                "resource": {
+                    "description": "resource is an ObjectRef to another Kubernetes resource in the namespace\nof the Ingress object. If resource is specified, a service.Name and\nservice.Port must not be specified.\nThis is a mutually exclusive setting with \"Service\".\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.TypedLocalObjectReference"
+                        }
+                    ]
+                },
+                "service": {
+                    "description": "service references a service as a backend.\nThis is a mutually exclusive setting with \"Resource\".\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.IngressServiceBackend"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.IngressRule": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "description": "host is the fully qualified domain name of a network host, as defined by RFC 3986.\nNote the following deviations from the \"host\" part of the\nURI as defined in RFC 3986:\n1. IPs are not allowed. Currently an IngressRuleValue can only apply to\n   the IP in the Spec of the parent Ingress.\n2. The ` + "`" + `:` + "`" + ` delimiter is not respected because ports are not allowed.\n\t  Currently the port of an Ingress is implicitly :80 for http and\n\t  :443 for https.\nBoth these may change in the future.\nIncoming requests are matched against the host before the\nIngressRuleValue. If the host is unspecified, the Ingress routes all\ntraffic based on the specified IngressRuleValue.\n\nhost can be \"precise\" which is a domain name without the terminating dot of\na network host (e.g. \"foo.bar.com\") or \"wildcard\", which is a domain name\nprefixed with a single wildcard label (e.g. \"*.foo.com\").\nThe wildcard character '*' must appear by itself as the first DNS label and\nmatches only a single label. You cannot have a wildcard label by itself (e.g. Host == \"*\").\nRequests will be matched against the Host field in the following way:\n1. If host is precise, the request matches this rule if the http host header is equal to Host.\n2. If host is a wildcard, then the request matches this rule if the http host header\nis to equal to the suffix (removing the first label) of the wildcard rule.\n+optional",
+                    "type": "string"
+                },
+                "http": {
+                    "description": "+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.HTTPIngressRuleValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.IngressServiceBackend": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "name is the referenced service. The service must exist in\nthe same namespace as the Ingress object.",
+                    "type": "string"
+                },
+                "port": {
+                    "description": "port of the referenced service. A port name or port number\nis required for a IngressServiceBackend.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ServiceBackendPort"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.KeyToPath": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "description": "key is the key to project.",
+                    "type": "string"
+                },
+                "mode": {
+                    "description": "mode is Optional: mode bits used to set permissions on this file.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nIf not specified, the volume defaultMode will be used.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.\n+optional",
+                    "type": "integer"
+                },
+                "path": {
+                    "description": "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.LabelSelector": {
+            "type": "object",
+            "properties": {
+                "matchExpressions": {
+                    "description": "matchExpressions is a list of label selector requirements. The requirements are ANDed.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.LabelSelectorRequirement"
+                    }
+                },
+                "matchLabels": {
+                    "description": "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "v1.LabelSelectorOperator": {
+            "type": "string",
+            "enum": [
+                "In",
+                "NotIn",
+                "Exists",
+                "DoesNotExist"
+            ],
+            "x-enum-varnames": [
+                "LabelSelectorOpIn",
+                "LabelSelectorOpNotIn",
+                "LabelSelectorOpExists",
+                "LabelSelectorOpDoesNotExist"
+            ]
+        },
+        "v1.LabelSelectorRequirement": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "description": "key is the label key that the selector applies to.",
+                    "type": "string"
+                },
+                "operator": {
+                    "description": "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LabelSelectorOperator"
+                        }
+                    ]
+                },
+                "values": {
+                    "description": "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "v1.Lifecycle": {
+            "type": "object",
+            "properties": {
+                "postStart": {
+                    "description": "PostStart is called immediately after a container is created. If the handler fails,\nthe container is terminated and restarted according to its restart policy.\nOther management of the container blocks until the hook completes.\nMore info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LifecycleHandler"
+                        }
+                    ]
+                },
+                "preStop": {
+                    "description": "PreStop is called immediately before a container is terminated due to an\nAPI request or management event such as liveness/startup probe failure,\npreemption, resource contention, etc. The handler is not called if the\ncontainer crashes or exits. The Pod's termination grace period countdown begins before the\nPreStop hook is executed. Regardless of the outcome of the handler, the\ncontainer will eventually terminate within the Pod's termination grace\nperiod (unless delayed by finalizers). Other management of the container blocks until the hook completes\nor until the termination grace period is reached.\nMore info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LifecycleHandler"
+                        }
+                    ]
+                },
+                "stopSignal": {
+                    "description": "StopSignal defines which signal will be sent to a container when it is being stopped.\nIf not specified, the default is defined by the container runtime in use.\nStopSignal can only be set for Pods with a non-empty .spec.os.name\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Signal"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.LifecycleHandler": {
+            "type": "object",
+            "properties": {
+                "exec": {
+                    "description": "Exec specifies a command to execute in the container.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ExecAction"
+                        }
+                    ]
+                },
+                "httpGet": {
+                    "description": "HTTPGet specifies an HTTP GET request to perform.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.HTTPGetAction"
+                        }
+                    ]
+                },
+                "sleep": {
+                    "description": "Sleep represents a duration that the container should sleep.\n+featureGate=PodLifecycleSleepAction\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SleepAction"
+                        }
+                    ]
+                },
+                "tcpSocket": {
+                    "description": "Deprecated. TCPSocket is NOT supported as a LifecycleHandler and kept\nfor backward compatibility. There is no validation of this field and\nlifecycle hooks will fail at runtime when it is specified.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.TCPSocketAction"
+                        }
+                    ]
+                }
+            }
+        },
         "v1.LinuxContainerUser": {
             "type": "object",
             "properties": {
@@ -3426,6 +6605,407 @@ const docTemplate = `{
                 }
             }
         },
+        "v1.LoadBalancerIPMode": {
+            "type": "string",
+            "enum": [
+                "VIP",
+                "Proxy"
+            ],
+            "x-enum-varnames": [
+                "LoadBalancerIPModeVIP",
+                "LoadBalancerIPModeProxy"
+            ]
+        },
+        "v1.LoadBalancerIngress": {
+            "type": "object",
+            "properties": {
+                "hostname": {
+                    "description": "Hostname is set for load-balancer ingress points that are DNS based\n(typically AWS load-balancers)\n+optional",
+                    "type": "string"
+                },
+                "ip": {
+                    "description": "IP is set for load-balancer ingress points that are IP based\n(typically GCE or OpenStack load-balancers)\n+optional",
+                    "type": "string"
+                },
+                "ipMode": {
+                    "description": "IPMode specifies how the load-balancer IP behaves, and may only be specified when the ip field is specified.\nSetting this to \"VIP\" indicates that traffic is delivered to the node with\nthe destination set to the load-balancer's IP and port.\nSetting this to \"Proxy\" indicates that traffic is delivered to the node or pod with\nthe destination set to the node's IP and node port or the pod's IP and port.\nService implementations may use this information to adjust traffic routing.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LoadBalancerIPMode"
+                        }
+                    ]
+                },
+                "ports": {
+                    "description": "Ports is a list of records of service ports\nIf used, every port defined in the service should have an entry in it\n+listType=atomic\n+optional",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PortStatus"
+                    }
+                }
+            }
+        },
+        "v1.LoadBalancerStatus": {
+            "type": "object",
+            "properties": {
+                "ingress": {
+                    "description": "Ingress is a list containing ingress points for the load-balancer.\nTraffic intended for the service should be sent to these ingress points.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.LoadBalancerIngress"
+                    }
+                }
+            }
+        },
+        "v1.LocalVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is the filesystem type to mount.\nIt applies only when the Path is a block device.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\". The default value is to auto-select a filesystem if unspecified.\n+optional",
+                    "type": "string"
+                },
+                "path": {
+                    "description": "path of the full path to the volume on the node.\nIt can be either a directory or block device (disk, partition, ...).",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ManagedFieldsEntry": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "APIVersion defines the version of this resource that this field set\napplies to. The format is \"group/version\" just like the top-level\nAPIVersion field. It is necessary to track the version of a field\nset because it cannot be automatically converted.",
+                    "type": "string"
+                },
+                "fieldsType": {
+                    "description": "FieldsType is the discriminator for the different fields format and version.\nThere is currently only one possible value: \"FieldsV1\"",
+                    "type": "string"
+                },
+                "fieldsV1": {
+                    "description": "FieldsV1 holds the first JSON version format as described in the \"FieldsV1\" type.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.FieldsV1"
+                        }
+                    ]
+                },
+                "manager": {
+                    "description": "Manager is an identifier of the workflow managing these fields.",
+                    "type": "string"
+                },
+                "operation": {
+                    "description": "Operation is the type of operation which lead to this ManagedFieldsEntry being created.\nThe only valid values for this field are 'Apply' and 'Update'.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ManagedFieldsOperationType"
+                        }
+                    ]
+                },
+                "subresource": {
+                    "description": "Subresource is the name of the subresource used to update that object, or\nempty string if the object was updated through the main resource. The\nvalue of this field is used to distinguish between managers, even if they\nshare the same name. For example, a status update will be distinct from a\nregular update using the same manager name.\nNote that the APIVersion field is not related to the Subresource field and\nit always corresponds to the version of the main resource.",
+                    "type": "string"
+                },
+                "time": {
+                    "description": "Time is the timestamp of when the ManagedFields entry was added. The\ntimestamp will also be updated if a field is added, the manager\nchanges any of the owned fields value or removes a field. The\ntimestamp does not update when a field is removed from the entry\nbecause another manager took it over.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ManagedFieldsOperationType": {
+            "type": "string",
+            "enum": [
+                "Apply",
+                "Update"
+            ],
+            "x-enum-varnames": [
+                "ManagedFieldsOperationApply",
+                "ManagedFieldsOperationUpdate"
+            ]
+        },
+        "v1.ModifyVolumeStatus": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "description": "status is the status of the ControllerModifyVolume operation. It can be in any of following states:\n - Pending\n   Pending indicates that the PersistentVolumeClaim cannot be modified due to unmet requirements, such as\n   the specified VolumeAttributesClass not existing.\n - InProgress\n   InProgress indicates that the volume is being modified.\n - Infeasible\n  Infeasible indicates that the request has been rejected as invalid by the CSI driver. To\n\t  resolve the error, a valid VolumeAttributesClass needs to be specified.\nNote: New statuses can be added in the future. Consumers should check for unknown statuses and fail appropriately.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeClaimModifyVolumeStatus"
+                        }
+                    ]
+                },
+                "targetVolumeAttributesClassName": {
+                    "description": "targetVolumeAttributesClassName is the name of the VolumeAttributesClass the PVC currently being reconciled",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.MountPropagationMode": {
+            "type": "string",
+            "enum": [
+                "None",
+                "HostToContainer",
+                "Bidirectional"
+            ],
+            "x-enum-varnames": [
+                "MountPropagationNone",
+                "MountPropagationHostToContainer",
+                "MountPropagationBidirectional"
+            ]
+        },
+        "v1.NFSVolumeSource": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "description": "path that is exported by the NFS server.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#nfs",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly here will force the NFS export to be mounted with read-only permissions.\nDefaults to false.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#nfs\n+optional",
+                    "type": "boolean"
+                },
+                "server": {
+                    "description": "server is the hostname or IP address of the NFS server.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#nfs",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.NodeAffinity": {
+            "type": "object",
+            "properties": {
+                "preferredDuringSchedulingIgnoredDuringExecution": {
+                    "description": "The scheduler will prefer to schedule pods to nodes that satisfy\nthe affinity expressions specified by this field, but it may choose\na node that violates one or more of the expressions. The node that is\nmost preferred is the one with the greatest sum of weights, i.e.\nfor each node that meets all of the scheduling requirements (resource\nrequest, requiredDuringScheduling affinity expressions, etc.),\ncompute a sum by iterating through the elements of this field and adding\n\"weight\" to the sum if the node matches the corresponding matchExpressions; the\nnode(s) with the highest sum are the most preferred.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PreferredSchedulingTerm"
+                    }
+                },
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                    "description": "If the affinity requirements specified by this field are not met at\nscheduling time, the pod will not be scheduled onto the node.\nIf the affinity requirements specified by this field cease to be met\nat some point during pod execution (e.g. due to an update), the system\nmay or may not try to eventually evict the pod from its node.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.NodeSelector"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.NodeInclusionPolicy": {
+            "type": "string",
+            "enum": [
+                "Ignore",
+                "Honor"
+            ],
+            "x-enum-varnames": [
+                "NodeInclusionPolicyIgnore",
+                "NodeInclusionPolicyHonor"
+            ]
+        },
+        "v1.NodeSelector": {
+            "type": "object",
+            "properties": {
+                "nodeSelectorTerms": {
+                    "description": "Required. A list of node selector terms. The terms are ORed.\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.NodeSelectorTerm"
+                    }
+                }
+            }
+        },
+        "v1.NodeSelectorOperator": {
+            "type": "string",
+            "enum": [
+                "In",
+                "NotIn",
+                "Exists",
+                "DoesNotExist",
+                "Gt",
+                "Lt"
+            ],
+            "x-enum-varnames": [
+                "NodeSelectorOpIn",
+                "NodeSelectorOpNotIn",
+                "NodeSelectorOpExists",
+                "NodeSelectorOpDoesNotExist",
+                "NodeSelectorOpGt",
+                "NodeSelectorOpLt"
+            ]
+        },
+        "v1.NodeSelectorRequirement": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "description": "The label key that the selector applies to.",
+                    "type": "string"
+                },
+                "operator": {
+                    "description": "Represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.NodeSelectorOperator"
+                        }
+                    ]
+                },
+                "values": {
+                    "description": "An array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. If the operator is Gt or Lt, the values\narray must have a single element, which will be interpreted as an integer.\nThis array is replaced during a strategic merge patch.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "v1.NodeSelectorTerm": {
+            "type": "object",
+            "properties": {
+                "matchExpressions": {
+                    "description": "A list of node selector requirements by node's labels.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.NodeSelectorRequirement"
+                    }
+                },
+                "matchFields": {
+                    "description": "A list of node selector requirements by node's fields.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.NodeSelectorRequirement"
+                    }
+                }
+            }
+        },
+        "v1.OSName": {
+            "type": "string",
+            "enum": [
+                "linux",
+                "windows"
+            ],
+            "x-enum-varnames": [
+                "Linux",
+                "Windows"
+            ]
+        },
+        "v1.ObjectFieldSelector": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "Version of the schema the FieldPath is written in terms of, defaults to \"v1\".\n+optional",
+                    "type": "string"
+                },
+                "fieldPath": {
+                    "description": "Path of the field to select in the specified API version.",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ObjectMeta": {
+            "type": "object",
+            "properties": {
+                "annotations": {
+                    "description": "Annotations is an unstructured key value map stored with a resource that may be\nset by external tools to store and retrieve arbitrary metadata. They are not\nqueryable and should be preserved when modifying objects.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "creationTimestamp": {
+                    "description": "CreationTimestamp is a timestamp representing the server time when this object was\ncreated. It is not guaranteed to be set in happens-before order across separate operations.\nClients may not set this value. It is represented in RFC3339 form and is in UTC.\n\nPopulated by the system.\nRead-only.\nNull for lists.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
+                    "type": "string"
+                },
+                "deletionGracePeriodSeconds": {
+                    "description": "Number of seconds allowed for this object to gracefully terminate before\nit will be removed from the system. Only set when deletionTimestamp is also set.\nMay only be shortened.\nRead-only.\n+optional",
+                    "type": "integer"
+                },
+                "deletionTimestamp": {
+                    "description": "DeletionTimestamp is RFC 3339 date and time at which this resource will be deleted. This\nfield is set by the server when a graceful deletion is requested by the user, and is not\ndirectly settable by a client. The resource is expected to be deleted (no longer visible\nfrom resource lists, and not reachable by name) after the time in this field, once the\nfinalizers list is empty. As long as the finalizers list contains items, deletion is blocked.\nOnce the deletionTimestamp is set, this value may not be unset or be set further into the\nfuture, although it may be shortened or the resource may be deleted prior to this time.\nFor example, a user may request that a pod is deleted in 30 seconds. The Kubelet will react\nby sending a graceful termination signal to the containers in the pod. After that 30 seconds,\nthe Kubelet will send a hard termination signal (SIGKILL) to the container and after cleanup,\nremove the pod from the API. In the presence of network partitions, this object may still\nexist after this timestamp, until an administrator or automated process can determine the\nresource is fully terminated.\nIf not set, graceful deletion of the object has not been requested.\n\nPopulated by the system when a graceful deletion is requested.\nRead-only.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
+                    "type": "string"
+                },
+                "finalizers": {
+                    "description": "Must be empty before the object is deleted from the registry. Each entry\nis an identifier for the responsible component that will remove the entry\nfrom the list. If the deletionTimestamp of the object is non-nil, entries\nin this list can only be removed.\nFinalizers may be processed and removed in any order.  Order is NOT enforced\nbecause it introduces significant risk of stuck finalizers.\nfinalizers is a shared field, any actor with permission can reorder it.\nIf the finalizer list is processed in order, then this can lead to a situation\nin which the component responsible for the first finalizer in the list is\nwaiting for a signal (field value, external system, or other) produced by a\ncomponent responsible for a finalizer later in the list, resulting in a deadlock.\nWithout enforced ordering finalizers are free to order amongst themselves and\nare not vulnerable to ordering changes in the list.\n+optional\n+patchStrategy=merge\n+listType=set",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "generateName": {
+                    "description": "GenerateName is an optional prefix, used by the server, to generate a unique\nname ONLY IF the Name field has not been provided.\nIf this field is used, the name returned to the client will be different\nthan the name passed. This value will also be combined with a unique suffix.\nThe provided value has the same validation rules as the Name field,\nand may be truncated by the length of the suffix required to make the value\nunique on the server.\n\nIf this field is specified and the generated name exists, the server will return a 409.\n\nApplied only if Name is not specified.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#idempotency\n+optional",
+                    "type": "string"
+                },
+                "generation": {
+                    "description": "A sequence number representing a specific generation of the desired state.\nPopulated by the system. Read-only.\n+optional",
+                    "type": "integer"
+                },
+                "labels": {
+                    "description": "Map of string keys and values that can be used to organize and categorize\n(scope and select) objects. May match selectors of replication controllers\nand services.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "managedFields": {
+                    "description": "ManagedFields maps workflow-id and version to the set of fields\nthat are managed by that workflow. This is mostly for internal\nhousekeeping, and users typically shouldn't need to set or\nunderstand this field. A workflow can be the user's name, a\ncontroller's name, or the name of a specific apply path like\n\"ci-cd\". The set of fields is always in the version that the\nworkflow used when modifying the object.\n\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ManagedFieldsEntry"
+                    }
+                },
+                "name": {
+                    "description": "Name must be unique within a namespace. Is required when creating resources, although\nsome resources may allow a client to request the generation of an appropriate name\nautomatically. Name is primarily intended for creation idempotence and configuration\ndefinition.\nCannot be updated.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names\n+optional",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "Namespace defines the space within which each name must be unique. An empty namespace is\nequivalent to the \"default\" namespace, but \"default\" is the canonical representation.\nNot all objects are required to be scoped to a namespace - the value of this field for\nthose objects will be empty.\n\nMust be a DNS_LABEL.\nCannot be updated.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces\n+optional",
+                    "type": "string"
+                },
+                "ownerReferences": {
+                    "description": "List of objects depended by this object. If ALL objects in the list have\nbeen deleted, this object will be garbage collected. If this object is managed by a controller,\nthen an entry in this list will point to this controller, with the controller field set to true.\nThere cannot be more than one managing controller.\n+optional\n+patchMergeKey=uid\n+patchStrategy=merge\n+listType=map\n+listMapKey=uid",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.OwnerReference"
+                    }
+                },
+                "resourceVersion": {
+                    "description": "An opaque value that represents the internal version of this object that can\nbe used by clients to determine when objects have changed. May be used for optimistic\nconcurrency, change detection, and the watch operation on a resource or set of resources.\nClients must treat these values as opaque and passed unmodified back to the server.\nThey may only be valid for a particular resource or set of resources.\n\nPopulated by the system.\nRead-only.\nValue must be treated as opaque by clients and .\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency\n+optional",
+                    "type": "string"
+                },
+                "selfLink": {
+                    "description": "Deprecated: selfLink is a legacy read-only field that is no longer populated by the system.\n+optional",
+                    "type": "string"
+                },
+                "uid": {
+                    "description": "UID is the unique in time and space value for this object. It is typically generated by\nthe server on successful creation of a resource and is not allowed to change on PUT\noperations.\n\nPopulated by the system.\nRead-only.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#uids\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.OwnerReference": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "API version of the referent.",
+                    "type": "string"
+                },
+                "blockOwnerDeletion": {
+                    "description": "If true, AND if the owner has the \"foregroundDeletion\" finalizer, then\nthe owner cannot be deleted from the key-value store until this\nreference is removed.\nSee https://kubernetes.io/docs/concepts/architecture/garbage-collection/#foreground-deletion\nfor how the garbage collector interacts with this field and enforces the foreground deletion.\nDefaults to false.\nTo set this field, a user needs \"delete\" permission of the owner,\notherwise 422 (Unprocessable Entity) will be returned.\n+optional",
+                    "type": "boolean"
+                },
+                "controller": {
+                    "description": "If true, this reference points to the managing controller.\n+optional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "description": "Kind of the referent.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name of the referent.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names",
+                    "type": "string"
+                },
+                "uid": {
+                    "description": "UID of the referent.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#uids",
+                    "type": "string"
+                }
+            }
+        },
         "v1.PathMatchType": {
             "type": "string",
             "enum": [
@@ -3439,6 +7019,1567 @@ const docTemplate = `{
                 "PathMatchRegularExpression"
             ]
         },
+        "v1.PathType": {
+            "type": "string",
+            "enum": [
+                "Exact",
+                "Prefix",
+                "ImplementationSpecific"
+            ],
+            "x-enum-varnames": [
+                "PathTypeExact",
+                "PathTypePrefix",
+                "PathTypeImplementationSpecific"
+            ]
+        },
+        "v1.PersistentVolume": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectMeta"
+                        }
+                    ]
+                },
+                "spec": {
+                    "description": "spec defines a specification of a persistent volume owned by the cluster.\nProvisioned by an administrator.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistent-volumes\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeSpec"
+                        }
+                    ]
+                },
+                "status": {
+                    "description": "status represents the current information/status for the persistent volume.\nPopulated by the system.\nRead-only.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistent-volumes\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PersistentVolumeAccessMode": {
+            "type": "string",
+            "enum": [
+                "ReadWriteOnce",
+                "ReadOnlyMany",
+                "ReadWriteMany",
+                "ReadWriteOncePod"
+            ],
+            "x-enum-varnames": [
+                "ReadWriteOnce",
+                "ReadOnlyMany",
+                "ReadWriteMany",
+                "ReadWriteOncePod"
+            ]
+        },
+        "v1.PersistentVolumeClaim": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectMeta"
+                        }
+                    ]
+                },
+                "spec": {
+                    "description": "spec defines the desired characteristics of a volume requested by a pod author.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeClaimSpec"
+                        }
+                    ]
+                },
+                "status": {
+                    "description": "status represents the current information/status of a persistent volume claim.\nRead-only.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeClaimStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PersistentVolumeClaimCondition": {
+            "type": "object",
+            "properties": {
+                "lastProbeTime": {
+                    "description": "lastProbeTime is the time we probed the condition.\n+optional",
+                    "type": "string"
+                },
+                "lastTransitionTime": {
+                    "description": "lastTransitionTime is the time the condition transitioned from one status to another.\n+optional",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "message is the human-readable message indicating details about last transition.\n+optional",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "reason is a unique, this should be a short, machine understandable string that gives the reason\nfor condition's last transition. If it reports \"Resizing\" that means the underlying\npersistent volume is being resized.\n+optional",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status is the status of the condition.\nCan be True, False, Unknown.\nMore info: https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources/persistent-volume-claim-v1/#:~:text=state%20of%20pvc-,conditions.status,-(string)%2C%20required",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_api_core_v1.ConditionStatus"
+                        }
+                    ]
+                },
+                "type": {
+                    "description": "Type is the type of the condition.\nMore info: https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources/persistent-volume-claim-v1/#:~:text=set%20to%20%27ResizeStarted%27.-,PersistentVolumeClaimCondition,-contains%20details%20about",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeClaimConditionType"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PersistentVolumeClaimConditionType": {
+            "type": "string",
+            "enum": [
+                "Resizing",
+                "FileSystemResizePending",
+                "ControllerResizeError",
+                "NodeResizeError",
+                "ModifyVolumeError",
+                "ModifyingVolume"
+            ],
+            "x-enum-varnames": [
+                "PersistentVolumeClaimResizing",
+                "PersistentVolumeClaimFileSystemResizePending",
+                "PersistentVolumeClaimControllerResizeError",
+                "PersistentVolumeClaimNodeResizeError",
+                "PersistentVolumeClaimVolumeModifyVolumeError",
+                "PersistentVolumeClaimVolumeModifyingVolume"
+            ]
+        },
+        "v1.PersistentVolumeClaimModifyVolumeStatus": {
+            "type": "string",
+            "enum": [
+                "Pending",
+                "InProgress",
+                "Infeasible"
+            ],
+            "x-enum-varnames": [
+                "PersistentVolumeClaimModifyVolumePending",
+                "PersistentVolumeClaimModifyVolumeInProgress",
+                "PersistentVolumeClaimModifyVolumeInfeasible"
+            ]
+        },
+        "v1.PersistentVolumeClaimPhase": {
+            "type": "string",
+            "enum": [
+                "Pending",
+                "Bound",
+                "Lost"
+            ],
+            "x-enum-varnames": [
+                "ClaimPending",
+                "ClaimBound",
+                "ClaimLost"
+            ]
+        },
+        "v1.PersistentVolumeClaimSpec": {
+            "type": "object",
+            "properties": {
+                "accessModes": {
+                    "description": "accessModes contains the desired access modes the volume should have.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#access-modes-1\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PersistentVolumeAccessMode"
+                    }
+                },
+                "dataSource": {
+                    "description": "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.TypedLocalObjectReference"
+                        }
+                    ]
+                },
+                "dataSourceRef": {
+                    "description": "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.TypedObjectReference"
+                        }
+                    ]
+                },
+                "resources": {
+                    "description": "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.VolumeResourceRequirements"
+                        }
+                    ]
+                },
+                "selector": {
+                    "description": "selector is a label query over volumes to consider for binding.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LabelSelector"
+                        }
+                    ]
+                },
+                "storageClassName": {
+                    "description": "storageClassName is the name of the StorageClass required by the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1\n+optional",
+                    "type": "string"
+                },
+                "volumeAttributesClassName": {
+                    "description": "volumeAttributesClassName may be used to set the VolumeAttributesClass used by this claim.\nIf specified, the CSI driver will create or update the volume with the attributes defined\nin the corresponding VolumeAttributesClass. This has a different purpose than storageClassName,\nit can be changed after the claim is created. An empty string or nil value indicates that no\nVolumeAttributesClass will be applied to the claim. If the claim enters an Infeasible error state,\nthis field can be reset to its previous value (including nil) to cancel the modification.\nIf the resource referred to by volumeAttributesClass does not exist, this PersistentVolumeClaim will be\nset to a Pending state, as reflected by the modifyVolumeStatus field, until such as a resource\nexists.\nMore info: https://kubernetes.io/docs/concepts/storage/volume-attributes-classes/\n+featureGate=VolumeAttributesClass\n+optional",
+                    "type": "string"
+                },
+                "volumeMode": {
+                    "description": "volumeMode defines what type of volume is required by the claim.\nValue of Filesystem is implied when not included in claim spec.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeMode"
+                        }
+                    ]
+                },
+                "volumeName": {
+                    "description": "volumeName is the binding reference to the PersistentVolume backing this claim.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.PersistentVolumeClaimStatus": {
+            "type": "object",
+            "properties": {
+                "accessModes": {
+                    "description": "accessModes contains the actual access modes the volume backing the PVC has.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#access-modes-1\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PersistentVolumeAccessMode"
+                    }
+                },
+                "allocatedResourceStatuses": {
+                    "description": "allocatedResourceStatuses stores status of resource being resized for the given PVC.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nClaimResourceStatus can be in any of following states:\n\t- ControllerResizeInProgress:\n\t\tState set when resize controller starts resizing the volume in control-plane.\n\t- ControllerResizeFailed:\n\t\tState set when resize has failed in resize controller with a terminal error.\n\t- NodeResizePending:\n\t\tState set when resize controller has finished resizing the volume but further resizing of\n\t\tvolume is needed on the node.\n\t- NodeResizeInProgress:\n\t\tState set when kubelet starts resizing the volume.\n\t- NodeResizeFailed:\n\t\tState set when resizing has failed in kubelet with a terminal error. Transient errors don't set\n\t\tNodeResizeFailed.\nFor example: if expanding a PVC for more capacity - this field can be one of the following states:\n\t- pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeFailed\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizePending\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeFailed\"\nWhen this field is not set, it means that no resize operation is in progress for the given PVC.\n\nA controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.\n+featureGate=RecoverVolumeExpansionFailure\n+mapType=granular\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/v1.ClaimResourceStatus"
+                    }
+                },
+                "allocatedResources": {
+                    "description": "allocatedResources tracks the resources allocated to a PVC including its capacity.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nCapacity reported here may be larger than the actual capacity when a volume expansion operation\nis requested.\nFor storage quota, the larger value from allocatedResources and PVC.spec.resources is used.\nIf allocatedResources is not set, PVC.spec.resources alone is used for quota calculation.\nIf a volume expansion capacity request is lowered, allocatedResources is only\nlowered if there are no expansion operations in progress and if the actual volume capacity\nis equal or lower than the requested capacity.\n\nA controller that receives PVC update with previously unknown resourceName\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.\n+featureGate=RecoverVolumeExpansionFailure\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceList"
+                        }
+                    ]
+                },
+                "capacity": {
+                    "description": "capacity represents the actual resources of the underlying volume.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceList"
+                        }
+                    ]
+                },
+                "conditions": {
+                    "description": "conditions is the current Condition of persistent volume claim. If underlying persistent volume is being\nresized then the Condition will be set to 'Resizing'.\n+optional\n+patchMergeKey=type\n+patchStrategy=merge\n+listType=map\n+listMapKey=type",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PersistentVolumeClaimCondition"
+                    }
+                },
+                "currentVolumeAttributesClassName": {
+                    "description": "currentVolumeAttributesClassName is the current name of the VolumeAttributesClass the PVC is using.\nWhen unset, there is no VolumeAttributeClass applied to this PersistentVolumeClaim\n+featureGate=VolumeAttributesClass\n+optional",
+                    "type": "string"
+                },
+                "modifyVolumeStatus": {
+                    "description": "ModifyVolumeStatus represents the status object of ControllerModifyVolume operation.\nWhen this is unset, there is no ModifyVolume operation being attempted.\n+featureGate=VolumeAttributesClass\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ModifyVolumeStatus"
+                        }
+                    ]
+                },
+                "phase": {
+                    "description": "phase represents the current phase of PersistentVolumeClaim.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeClaimPhase"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PersistentVolumeClaimTemplate": {
+            "type": "object",
+            "properties": {
+                "metadata": {
+                    "description": "May contain labels and annotations that will be copied into the PVC\nwhen creating it. No other fields are allowed and will be rejected during\nvalidation.\n\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectMeta"
+                        }
+                    ]
+                },
+                "spec": {
+                    "description": "The specification for the PersistentVolumeClaim. The entire content is\ncopied unchanged into the PVC that gets created from this\ntemplate. The same fields as in a PersistentVolumeClaim\nare also valid here.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeClaimSpec"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PersistentVolumeClaimVolumeSource": {
+            "type": "object",
+            "properties": {
+                "claimName": {
+                    "description": "claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly Will force the ReadOnly setting in VolumeMounts.\nDefault false.\n+optional",
+                    "type": "boolean"
+                }
+            }
+        },
+        "v1.PersistentVolumeMode": {
+            "type": "string",
+            "enum": [
+                "Block",
+                "Filesystem"
+            ],
+            "x-enum-varnames": [
+                "PersistentVolumeBlock",
+                "PersistentVolumeFilesystem"
+            ]
+        },
+        "v1.PersistentVolumePhase": {
+            "type": "string",
+            "enum": [
+                "Pending",
+                "Available",
+                "Bound",
+                "Released",
+                "Failed"
+            ],
+            "x-enum-varnames": [
+                "VolumePending",
+                "VolumeAvailable",
+                "VolumeBound",
+                "VolumeReleased",
+                "VolumeFailed"
+            ]
+        },
+        "v1.PersistentVolumeReclaimPolicy": {
+            "type": "string",
+            "enum": [
+                "Recycle",
+                "Delete",
+                "Retain"
+            ],
+            "x-enum-varnames": [
+                "PersistentVolumeReclaimRecycle",
+                "PersistentVolumeReclaimDelete",
+                "PersistentVolumeReclaimRetain"
+            ]
+        },
+        "v1.PersistentVolumeSpec": {
+            "type": "object",
+            "properties": {
+                "accessModes": {
+                    "description": "accessModes contains all ways the volume can be mounted.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#access-modes\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PersistentVolumeAccessMode"
+                    }
+                },
+                "awsElasticBlockStore": {
+                    "description": "awsElasticBlockStore represents an AWS Disk resource that is attached to a\nkubelet's host machine and then exposed to the pod.\nDeprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree\nawsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.AWSElasticBlockStoreVolumeSource"
+                        }
+                    ]
+                },
+                "azureDisk": {
+                    "description": "azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod.\nDeprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type\nare redirected to the disk.csi.azure.com CSI driver.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.AzureDiskVolumeSource"
+                        }
+                    ]
+                },
+                "azureFile": {
+                    "description": "azureFile represents an Azure File Service mount on the host and bind mount to the pod.\nDeprecated: AzureFile is deprecated. All operations for the in-tree azureFile type\nare redirected to the file.csi.azure.com CSI driver.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.AzureFilePersistentVolumeSource"
+                        }
+                    ]
+                },
+                "capacity": {
+                    "description": "capacity is the description of the persistent volume's resources and capacity.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#capacity\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceList"
+                        }
+                    ]
+                },
+                "cephfs": {
+                    "description": "cephFS represents a Ceph FS mount on the host that shares a pod's lifetime.\nDeprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.CephFSPersistentVolumeSource"
+                        }
+                    ]
+                },
+                "cinder": {
+                    "description": "cinder represents a cinder volume attached and mounted on kubelets host machine.\nDeprecated: Cinder is deprecated. All operations for the in-tree cinder type\nare redirected to the cinder.csi.openstack.org CSI driver.\nMore info: https://examples.k8s.io/mysql-cinder-pd/README.md\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.CinderPersistentVolumeSource"
+                        }
+                    ]
+                },
+                "claimRef": {
+                    "description": "claimRef is part of a bi-directional binding between PersistentVolume and PersistentVolumeClaim.\nExpected to be non-nil when bound.\nclaim.VolumeName is the authoritative bind between PV and PVC.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#binding\n+optional\n+structType=granular",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_api_core_v1.ObjectReference"
+                        }
+                    ]
+                },
+                "csi": {
+                    "description": "csi represents storage that is handled by an external CSI driver.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.CSIPersistentVolumeSource"
+                        }
+                    ]
+                },
+                "fc": {
+                    "description": "fc represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.FCVolumeSource"
+                        }
+                    ]
+                },
+                "flexVolume": {
+                    "description": "flexVolume represents a generic volume resource that is\nprovisioned/attached using an exec based plugin.\nDeprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.FlexPersistentVolumeSource"
+                        }
+                    ]
+                },
+                "flocker": {
+                    "description": "flocker represents a Flocker volume attached to a kubelet's host machine and exposed to the pod for its usage. This depends on the Flocker control service being running.\nDeprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.FlockerVolumeSource"
+                        }
+                    ]
+                },
+                "gcePersistentDisk": {
+                    "description": "gcePersistentDisk represents a GCE Disk resource that is attached to a\nkubelet's host machine and then exposed to the pod. Provisioned by an admin.\nDeprecated: GCEPersistentDisk is deprecated. All operations for the in-tree\ngcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.GCEPersistentDiskVolumeSource"
+                        }
+                    ]
+                },
+                "glusterfs": {
+                    "description": "glusterfs represents a Glusterfs volume that is attached to a host and\nexposed to the pod. Provisioned by an admin.\nDeprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported.\nMore info: https://examples.k8s.io/volumes/glusterfs/README.md\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.GlusterfsPersistentVolumeSource"
+                        }
+                    ]
+                },
+                "hostPath": {
+                    "description": "hostPath represents a directory on the host.\nProvisioned by a developer or tester.\nThis is useful for single-node development and testing only!\nOn-host storage is not supported in any way and WILL NOT WORK in a multi-node cluster.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.HostPathVolumeSource"
+                        }
+                    ]
+                },
+                "iscsi": {
+                    "description": "iscsi represents an ISCSI Disk resource that is attached to a\nkubelet's host machine and then exposed to the pod. Provisioned by an admin.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ISCSIPersistentVolumeSource"
+                        }
+                    ]
+                },
+                "local": {
+                    "description": "local represents directly-attached storage with node affinity\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LocalVolumeSource"
+                        }
+                    ]
+                },
+                "mountOptions": {
+                    "description": "mountOptions is the list of mount options, e.g. [\"ro\", \"soft\"]. Not validated - mount will\nsimply fail if one is invalid.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#mount-options\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "nfs": {
+                    "description": "nfs represents an NFS mount on the host. Provisioned by an admin.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#nfs\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.NFSVolumeSource"
+                        }
+                    ]
+                },
+                "nodeAffinity": {
+                    "description": "nodeAffinity defines constraints that limit what nodes this volume can be accessed from.\nThis field influences the scheduling of pods that use this volume.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.VolumeNodeAffinity"
+                        }
+                    ]
+                },
+                "persistentVolumeReclaimPolicy": {
+                    "description": "persistentVolumeReclaimPolicy defines what happens to a persistent volume when released from its claim.\nValid options are Retain (default for manually created PersistentVolumes), Delete (default\nfor dynamically provisioned PersistentVolumes), and Recycle (deprecated).\nRecycle must be supported by the volume plugin underlying this PersistentVolume.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#reclaiming\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeReclaimPolicy"
+                        }
+                    ]
+                },
+                "photonPersistentDisk": {
+                    "description": "photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine.\nDeprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PhotonPersistentDiskVolumeSource"
+                        }
+                    ]
+                },
+                "portworxVolume": {
+                    "description": "portworxVolume represents a portworx volume attached and mounted on kubelets host machine.\nDeprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type\nare redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate\nis on.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PortworxVolumeSource"
+                        }
+                    ]
+                },
+                "quobyte": {
+                    "description": "quobyte represents a Quobyte mount on the host that shares a pod's lifetime.\nDeprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.QuobyteVolumeSource"
+                        }
+                    ]
+                },
+                "rbd": {
+                    "description": "rbd represents a Rados Block Device mount on the host that shares a pod's lifetime.\nDeprecated: RBD is deprecated and the in-tree rbd type is no longer supported.\nMore info: https://examples.k8s.io/volumes/rbd/README.md\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.RBDPersistentVolumeSource"
+                        }
+                    ]
+                },
+                "scaleIO": {
+                    "description": "scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.\nDeprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ScaleIOPersistentVolumeSource"
+                        }
+                    ]
+                },
+                "storageClassName": {
+                    "description": "storageClassName is the name of StorageClass to which this persistent volume belongs. Empty value\nmeans that this volume does not belong to any StorageClass.\n+optional",
+                    "type": "string"
+                },
+                "storageos": {
+                    "description": "storageOS represents a StorageOS volume that is attached to the kubelet's host machine and mounted into the pod.\nDeprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported.\nMore info: https://examples.k8s.io/volumes/storageos/README.md\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.StorageOSPersistentVolumeSource"
+                        }
+                    ]
+                },
+                "volumeAttributesClassName": {
+                    "description": "Name of VolumeAttributesClass to which this persistent volume belongs. Empty value\nis not allowed. When this field is not set, it indicates that this volume does not belong to any\nVolumeAttributesClass. This field is mutable and can be changed by the CSI driver\nafter a volume has been updated successfully to a new class.\nFor an unbound PersistentVolume, the volumeAttributesClassName will be matched with unbound\nPersistentVolumeClaims during the binding process.\n+featureGate=VolumeAttributesClass\n+optional",
+                    "type": "string"
+                },
+                "volumeMode": {
+                    "description": "volumeMode defines if a volume is intended to be used with a formatted filesystem\nor to remain in raw block state. Value of Filesystem is implied when not included in spec.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeMode"
+                        }
+                    ]
+                },
+                "vsphereVolume": {
+                    "description": "vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine.\nDeprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type\nare redirected to the csi.vsphere.vmware.com CSI driver.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.VsphereVirtualDiskVolumeSource"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PersistentVolumeStatus": {
+            "type": "object",
+            "properties": {
+                "lastPhaseTransitionTime": {
+                    "description": "lastPhaseTransitionTime is the time the phase transitioned from one to another\nand automatically resets to current time everytime a volume phase transitions.\n+optional",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "message is a human-readable message indicating details about why the volume is in this state.\n+optional",
+                    "type": "string"
+                },
+                "phase": {
+                    "description": "phase indicates if a volume is available, bound to a claim, or released by a claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#phase\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumePhase"
+                        }
+                    ]
+                },
+                "reason": {
+                    "description": "reason is a brief CamelCase string that describes any failure and is meant\nfor machine parsing and tidy display in the CLI.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.PhotonPersistentDiskVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is the filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
+                    "type": "string"
+                },
+                "pdID": {
+                    "description": "pdID is the ID that identifies Photon Controller persistent disk",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.PodAffinity": {
+            "type": "object",
+            "properties": {
+                "preferredDuringSchedulingIgnoredDuringExecution": {
+                    "description": "The scheduler will prefer to schedule pods to nodes that satisfy\nthe affinity expressions specified by this field, but it may choose\na node that violates one or more of the expressions. The node that is\nmost preferred is the one with the greatest sum of weights, i.e.\nfor each node that meets all of the scheduling requirements (resource\nrequest, requiredDuringScheduling affinity expressions, etc.),\ncompute a sum by iterating through the elements of this field and adding\n\"weight\" to the sum if the node has pods which matches the corresponding podAffinityTerm; the\nnode(s) with the highest sum are the most preferred.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.WeightedPodAffinityTerm"
+                    }
+                },
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                    "description": "If the affinity requirements specified by this field are not met at\nscheduling time, the pod will not be scheduled onto the node.\nIf the affinity requirements specified by this field cease to be met\nat some point during pod execution (e.g. due to a pod label update), the\nsystem may or may not try to eventually evict the pod from its node.\nWhen there are multiple elements, the lists of nodes corresponding to each\npodAffinityTerm are intersected, i.e. all terms must be satisfied.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PodAffinityTerm"
+                    }
+                }
+            }
+        },
+        "v1.PodAffinityTerm": {
+            "type": "object",
+            "properties": {
+                "labelSelector": {
+                    "description": "A label query over a set of resources, in this case pods.\nIf it's null, this PodAffinityTerm matches with no Pods.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LabelSelector"
+                        }
+                    ]
+                },
+                "matchLabelKeys": {
+                    "description": "MatchLabelKeys is a set of pod label keys to select which pods will\nbe taken into consideration. The keys are used to lookup values from the\nincoming pod labels, those key-value labels are merged with ` + "`" + `labelSelector` + "`" + ` as ` + "`" + `key in (value)` + "`" + `\nto select the group of existing pods which pods will be taken into consideration\nfor the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming\npod labels will be ignored. The default value is empty.\nThe same key is forbidden to exist in both matchLabelKeys and labelSelector.\nAlso, matchLabelKeys cannot be set when labelSelector isn't set.\n\n+listType=atomic\n+optional",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "mismatchLabelKeys": {
+                    "description": "MismatchLabelKeys is a set of pod label keys to select which pods will\nbe taken into consideration. The keys are used to lookup values from the\nincoming pod labels, those key-value labels are merged with ` + "`" + `labelSelector` + "`" + ` as ` + "`" + `key notin (value)` + "`" + `\nto select the group of existing pods which pods will be taken into consideration\nfor the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming\npod labels will be ignored. The default value is empty.\nThe same key is forbidden to exist in both mismatchLabelKeys and labelSelector.\nAlso, mismatchLabelKeys cannot be set when labelSelector isn't set.\n\n+listType=atomic\n+optional",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "namespaceSelector": {
+                    "description": "A label query over the set of namespaces that the term applies to.\nThe term is applied to the union of the namespaces selected by this field\nand the ones listed in the namespaces field.\nnull selector and null or empty namespaces list means \"this pod's namespace\".\nAn empty selector ({}) matches all namespaces.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LabelSelector"
+                        }
+                    ]
+                },
+                "namespaces": {
+                    "description": "namespaces specifies a static list of namespace names that the term applies to.\nThe term is applied to the union of the namespaces listed in this field\nand the ones selected by namespaceSelector.\nnull or empty namespaces list and null namespaceSelector means \"this pod's namespace\".\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "topologyKey": {
+                    "description": "This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching\nthe labelSelector in the specified namespaces, where co-located is defined as running on a node\nwhose value of the label with key topologyKey matches that of any node on which any of the\nselected pods is running.\nEmpty topologyKey is not allowed.",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.PodAntiAffinity": {
+            "type": "object",
+            "properties": {
+                "preferredDuringSchedulingIgnoredDuringExecution": {
+                    "description": "The scheduler will prefer to schedule pods to nodes that satisfy\nthe anti-affinity expressions specified by this field, but it may choose\na node that violates one or more of the expressions. The node that is\nmost preferred is the one with the greatest sum of weights, i.e.\nfor each node that meets all of the scheduling requirements (resource\nrequest, requiredDuringScheduling anti-affinity expressions, etc.),\ncompute a sum by iterating through the elements of this field and subtracting\n\"weight\" from the sum if the node has pods which matches the corresponding podAffinityTerm; the\nnode(s) with the highest sum are the most preferred.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.WeightedPodAffinityTerm"
+                    }
+                },
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                    "description": "If the anti-affinity requirements specified by this field are not met at\nscheduling time, the pod will not be scheduled onto the node.\nIf the anti-affinity requirements specified by this field cease to be met\nat some point during pod execution (e.g. due to a pod label update), the\nsystem may or may not try to eventually evict the pod from its node.\nWhen there are multiple elements, the lists of nodes corresponding to each\npodAffinityTerm are intersected, i.e. all terms must be satisfied.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PodAffinityTerm"
+                    }
+                }
+            }
+        },
+        "v1.PodCertificateProjection": {
+            "type": "object",
+            "properties": {
+                "certificateChainPath": {
+                    "description": "Write the certificate chain at this path in the projected volume.\n\nMost applications should use credentialBundlePath.  When using keyPath\nand certificateChainPath, your application needs to check that the key\nand leaf certificate are consistent, because it is possible to read the\nfiles mid-rotation.\n\n+optional",
+                    "type": "string"
+                },
+                "credentialBundlePath": {
+                    "description": "Write the credential bundle at this path in the projected volume.\n\nThe credential bundle is a single file that contains multiple PEM blocks.\nThe first PEM block is a PRIVATE KEY block, containing a PKCS#8 private\nkey.\n\nThe remaining blocks are CERTIFICATE blocks, containing the issued\ncertificate chain from the signer (leaf and any intermediates).\n\nUsing credentialBundlePath lets your Pod's application code make a single\natomic read that retrieves a consistent key and certificate chain.  If you\nproject them to separate files, your application code will need to\nadditionally check that the leaf certificate was issued to the key.\n\n+optional",
+                    "type": "string"
+                },
+                "keyPath": {
+                    "description": "Write the key at this path in the projected volume.\n\nMost applications should use credentialBundlePath.  When using keyPath\nand certificateChainPath, your application needs to check that the key\nand leaf certificate are consistent, because it is possible to read the\nfiles mid-rotation.\n\n+optional",
+                    "type": "string"
+                },
+                "keyType": {
+                    "description": "The type of keypair Kubelet will generate for the pod.\n\nValid values are \"RSA3072\", \"RSA4096\", \"ECDSAP256\", \"ECDSAP384\",\n\"ECDSAP521\", and \"ED25519\".\n\n+required",
+                    "type": "string"
+                },
+                "maxExpirationSeconds": {
+                    "description": "maxExpirationSeconds is the maximum lifetime permitted for the\ncertificate.\n\nKubelet copies this value verbatim into the PodCertificateRequests it\ngenerates for this projection.\n\nIf omitted, kube-apiserver will set it to 86400(24 hours). kube-apiserver\nwill reject values shorter than 3600 (1 hour).  The maximum allowable\nvalue is 7862400 (91 days).\n\nThe signer implementation is then free to issue a certificate with any\nlifetime *shorter* than MaxExpirationSeconds, but no shorter than 3600\nseconds (1 hour).  This constraint is enforced by kube-apiserver.\n` + "`" + `kubernetes.io` + "`" + ` signers will never issue certificates with a lifetime\nlonger than 24 hours.\n\n+optional",
+                    "type": "integer"
+                },
+                "signerName": {
+                    "description": "Kubelet's generated CSRs will be addressed to this signer.\n\n+required",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.PodConditionType": {
+            "type": "string",
+            "enum": [
+                "ContainersReady",
+                "Initialized",
+                "Ready",
+                "PodScheduled",
+                "DisruptionTarget",
+                "PodReadyToStartContainers",
+                "PodResizePending",
+                "PodResizeInProgress"
+            ],
+            "x-enum-varnames": [
+                "ContainersReady",
+                "PodInitialized",
+                "PodReady",
+                "PodScheduled",
+                "DisruptionTarget",
+                "PodReadyToStartContainers",
+                "PodResizePending",
+                "PodResizeInProgress"
+            ]
+        },
+        "v1.PodDNSConfig": {
+            "type": "object",
+            "properties": {
+                "nameservers": {
+                    "description": "A list of DNS name server IP addresses.\nThis will be appended to the base nameservers generated from DNSPolicy.\nDuplicated nameservers will be removed.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "options": {
+                    "description": "A list of DNS resolver options.\nThis will be merged with the base options generated from DNSPolicy.\nDuplicated entries will be removed. Resolution options given in Options\nwill override those that appear in the base DNSPolicy.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PodDNSConfigOption"
+                    }
+                },
+                "searches": {
+                    "description": "A list of DNS search domains for host-name lookup.\nThis will be appended to the base search paths generated from DNSPolicy.\nDuplicated search paths will be removed.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "v1.PodDNSConfigOption": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name is this DNS resolver option's name.\nRequired.",
+                    "type": "string"
+                },
+                "value": {
+                    "description": "Value is this DNS resolver option's value.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.PodDisruptionBudget": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectMeta"
+                        }
+                    ]
+                },
+                "spec": {
+                    "description": "Specification of the desired behavior of the PodDisruptionBudget.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodDisruptionBudgetSpec"
+                        }
+                    ]
+                },
+                "status": {
+                    "description": "Most recently observed status of the PodDisruptionBudget.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodDisruptionBudgetStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PodDisruptionBudgetSpec": {
+            "type": "object",
+            "properties": {
+                "maxUnavailable": {
+                    "description": "An eviction is allowed if at most \"maxUnavailable\" pods selected by\n\"selector\" are unavailable after the eviction, i.e. even in absence of\nthe evicted pod. For example, one can prevent all voluntary evictions\nby specifying 0. This is a mutually exclusive setting with \"minAvailable\".\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/intstr.IntOrString"
+                        }
+                    ]
+                },
+                "minAvailable": {
+                    "description": "An eviction is allowed if at least \"minAvailable\" pods selected by\n\"selector\" will still be available after the eviction, i.e. even in the\nabsence of the evicted pod.  So for example you can prevent all voluntary\nevictions by specifying \"100%\".\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/intstr.IntOrString"
+                        }
+                    ]
+                },
+                "selector": {
+                    "description": "Label query over pods whose evictions are managed by the disruption\nbudget.\nA null selector will match no pods, while an empty ({}) selector will select\nall pods within the namespace.\n+patchStrategy=replace\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LabelSelector"
+                        }
+                    ]
+                },
+                "unhealthyPodEvictionPolicy": {
+                    "description": "UnhealthyPodEvictionPolicy defines the criteria for when unhealthy pods\nshould be considered for eviction. Current implementation considers healthy pods,\nas pods that have status.conditions item with type=\"Ready\",status=\"True\".\n\nValid policies are IfHealthyBudget and AlwaysAllow.\nIf no policy is specified, the default behavior will be used,\nwhich corresponds to the IfHealthyBudget policy.\n\nIfHealthyBudget policy means that running pods (status.phase=\"Running\"),\nbut not yet healthy can be evicted only if the guarded application is not\ndisrupted (status.currentHealthy is at least equal to status.desiredHealthy).\nHealthy pods will be subject to the PDB for eviction.\n\nAlwaysAllow policy means that all running pods (status.phase=\"Running\"),\nbut not yet healthy are considered disrupted and can be evicted regardless\nof whether the criteria in a PDB is met. This means perspective running\npods of a disrupted application might not get a chance to become healthy.\nHealthy pods will be subject to the PDB for eviction.\n\nAdditional policies may be added in the future.\nClients making eviction decisions should disallow eviction of unhealthy pods\nif they encounter an unrecognized policy in this field.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.UnhealthyPodEvictionPolicyType"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PodDisruptionBudgetStatus": {
+            "type": "object",
+            "properties": {
+                "conditions": {
+                    "description": "Conditions contain conditions for PDB. The disruption controller sets the\nDisruptionAllowed condition. The following are known values for the reason field\n(additional reasons could be added in the future):\n- SyncFailed: The controller encountered an error and wasn't able to compute\n              the number of allowed disruptions. Therefore no disruptions are\n              allowed and the status of the condition will be False.\n- InsufficientPods: The number of pods are either at or below the number\n                    required by the PodDisruptionBudget. No disruptions are\n                    allowed and the status of the condition will be False.\n- SufficientPods: There are more pods than required by the PodDisruptionBudget.\n                  The condition will be True, and the number of allowed\n                  disruptions are provided by the disruptionsAllowed property.\n\n+optional\n+patchMergeKey=type\n+patchStrategy=merge\n+listType=map\n+listMapKey=type",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.Condition"
+                    }
+                },
+                "currentHealthy": {
+                    "description": "current number of healthy pods",
+                    "type": "integer"
+                },
+                "desiredHealthy": {
+                    "description": "minimum desired number of healthy pods",
+                    "type": "integer"
+                },
+                "disruptedPods": {
+                    "description": "DisruptedPods contains information about pods whose eviction was\nprocessed by the API server eviction subresource handler but has not\nyet been observed by the PodDisruptionBudget controller.\nA pod will be in this map from the time when the API server processed the\neviction request to the time when the pod is seen by PDB controller\nas having been marked for deletion (or after a timeout). The key in the map is the name of the pod\nand the value is the time when the API server processed the eviction request. If\nthe deletion didn't occur and a pod is still there it will be removed from\nthe list automatically by PodDisruptionBudget controller after some time.\nIf everything goes smooth this map should be empty for the most of the time.\nLarge number of entries in the map may indicate problems with pod deletions.\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "disruptionsAllowed": {
+                    "description": "Number of pod disruptions that are currently allowed.",
+                    "type": "integer"
+                },
+                "expectedPods": {
+                    "description": "total number of pods counted by this disruption budget",
+                    "type": "integer"
+                },
+                "observedGeneration": {
+                    "description": "Most recent generation observed when updating this PDB status. DisruptionsAllowed and other\nstatus information is valid only if observedGeneration equals to PDB's object generation.\n+optional",
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.PodFSGroupChangePolicy": {
+            "type": "string",
+            "enum": [
+                "OnRootMismatch",
+                "Always"
+            ],
+            "x-enum-varnames": [
+                "FSGroupChangeOnRootMismatch",
+                "FSGroupChangeAlways"
+            ]
+        },
+        "v1.PodOS": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name is the name of the operating system. The currently supported values are linux and windows.\nAdditional value may be defined in future and can be one of:\nhttps://github.com/opencontainers/runtime-spec/blob/master/config.md#platform-specific-configuration\nClients should expect to handle additional values and treat unrecognized values in this field as os: null",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.OSName"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PodReadinessGate": {
+            "type": "object",
+            "properties": {
+                "conditionType": {
+                    "description": "ConditionType refers to a condition in the pod's condition list with matching type.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodConditionType"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PodResourceClaim": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name uniquely identifies this resource claim inside the pod.\nThis must be a DNS_LABEL.",
+                    "type": "string"
+                },
+                "resourceClaimName": {
+                    "description": "ResourceClaimName is the name of a ResourceClaim object in the same\nnamespace as this pod.\n\nExactly one of ResourceClaimName and ResourceClaimTemplateName must\nbe set.",
+                    "type": "string"
+                },
+                "resourceClaimTemplateName": {
+                    "description": "ResourceClaimTemplateName is the name of a ResourceClaimTemplate\nobject in the same namespace as this pod.\n\nThe template will be used to create a new ResourceClaim, which will\nbe bound to this pod. When this pod is deleted, the ResourceClaim\nwill also be deleted. The pod name and resource name, along with a\ngenerated component, will be used to form a unique name for the\nResourceClaim, which will be recorded in pod.status.resourceClaimStatuses.\n\nThis field is immutable and no changes will be made to the\ncorresponding ResourceClaim by the control plane after creating the\nResourceClaim.\n\nExactly one of ResourceClaimName and ResourceClaimTemplateName must\nbe set.",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.PodSELinuxChangePolicy": {
+            "type": "string",
+            "enum": [
+                "Recursive",
+                "MountOption"
+            ],
+            "x-enum-varnames": [
+                "SELinuxChangePolicyRecursive",
+                "SELinuxChangePolicyMountOption"
+            ]
+        },
+        "v1.PodSchedulingGate": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name of the scheduling gate.\nEach scheduling gate must have a unique name field.",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.PodSecurityContext": {
+            "type": "object",
+            "properties": {
+                "appArmorProfile": {
+                    "description": "appArmorProfile is the AppArmor options to use by the containers in this pod.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.AppArmorProfile"
+                        }
+                    ]
+                },
+                "fsGroup": {
+                    "description": "A special supplemental group that applies to all containers in a pod.\nSome volume types allow the Kubelet to change the ownership of that volume\nto be owned by the pod:\n\n1. The owning GID will be the FSGroup\n2. The setgid bit is set (new files created in the volume will be owned by FSGroup)\n3. The permission bits are OR'd with rw-rw----\n\nIf unset, the Kubelet will not modify the ownership and permissions of any volume.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "type": "integer"
+                },
+                "fsGroupChangePolicy": {
+                    "description": "fsGroupChangePolicy defines behavior of changing ownership and permission of the volume\nbefore being exposed inside Pod. This field will only apply to\nvolume types which support fsGroup based ownership(and permissions).\nIt will have no effect on ephemeral volume types such as: secret, configmaps\nand emptydir.\nValid values are \"OnRootMismatch\" and \"Always\". If not specified, \"Always\" is used.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodFSGroupChangePolicy"
+                        }
+                    ]
+                },
+                "runAsGroup": {
+                    "description": "The GID to run the entrypoint of the container process.\nUses runtime default if unset.\nMay also be set in SecurityContext.  If set in both SecurityContext and\nPodSecurityContext, the value specified in SecurityContext takes precedence\nfor that container.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "type": "integer"
+                },
+                "runAsNonRoot": {
+                    "description": "Indicates that the container must run as a non-root user.\nIf true, the Kubelet will validate the image at runtime to ensure that it\ndoes not run as UID 0 (root) and fail to start the container if it does.\nIf unset or false, no such validation will be performed.\nMay also be set in SecurityContext.  If set in both SecurityContext and\nPodSecurityContext, the value specified in SecurityContext takes precedence.\n+optional",
+                    "type": "boolean"
+                },
+                "runAsUser": {
+                    "description": "The UID to run the entrypoint of the container process.\nDefaults to user specified in image metadata if unspecified.\nMay also be set in SecurityContext.  If set in both SecurityContext and\nPodSecurityContext, the value specified in SecurityContext takes precedence\nfor that container.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "type": "integer"
+                },
+                "seLinuxChangePolicy": {
+                    "description": "seLinuxChangePolicy defines how the container's SELinux label is applied to all volumes used by the Pod.\nIt has no effect on nodes that do not support SELinux or to volumes does not support SELinux.\nValid values are \"MountOption\" and \"Recursive\".\n\n\"Recursive\" means relabeling of all files on all Pod volumes by the container runtime.\nThis may be slow for large volumes, but allows mixing privileged and unprivileged Pods sharing the same volume on the same node.\n\n\"MountOption\" mounts all eligible Pod volumes with ` + "`" + `-o context` + "`" + ` mount option.\nThis requires all Pods that share the same volume to use the same SELinux label.\nIt is not possible to share the same volume among privileged and unprivileged Pods.\nEligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes\nwhose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their\nCSIDriver instance. Other volumes are always re-labelled recursively.\n\"MountOption\" value is allowed only when SELinuxMount feature gate is enabled.\n\nIf not specified and SELinuxMount feature gate is enabled, \"MountOption\" is used.\nIf not specified and SELinuxMount feature gate is disabled, \"MountOption\" is used for ReadWriteOncePod volumes\nand \"Recursive\" for all other volumes.\n\nThis field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.\n\nAll Pods that use the same volume should use the same seLinuxChangePolicy, otherwise some pods can get stuck in ContainerCreating state.\nNote that this field cannot be set when spec.os.name is windows.\n+featureGate=SELinuxChangePolicy\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodSELinuxChangePolicy"
+                        }
+                    ]
+                },
+                "seLinuxOptions": {
+                    "description": "The SELinux context to be applied to all containers.\nIf unspecified, the container runtime will allocate a random SELinux context for each\ncontainer.  May also be set in SecurityContext.  If set in\nboth SecurityContext and PodSecurityContext, the value specified in SecurityContext\ntakes precedence for that container.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SELinuxOptions"
+                        }
+                    ]
+                },
+                "seccompProfile": {
+                    "description": "The seccomp options to use by the containers in this pod.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SeccompProfile"
+                        }
+                    ]
+                },
+                "supplementalGroups": {
+                    "description": "A list of groups applied to the first process run in each container, in\naddition to the container's primary GID and fsGroup (if specified).  If\nthe SupplementalGroupsPolicy feature is enabled, the\nsupplementalGroupsPolicy field determines whether these are in addition\nto or instead of any group memberships defined in the container image.\nIf unspecified, no additional groups are added, though group memberships\ndefined in the container image may still be used, depending on the\nsupplementalGroupsPolicy field.\nNote that this field cannot be set when spec.os.name is windows.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "supplementalGroupsPolicy": {
+                    "description": "Defines how supplemental groups of the first container processes are calculated.\nValid values are \"Merge\" and \"Strict\". If not specified, \"Merge\" is used.\n(Alpha) Using the field requires the SupplementalGroupsPolicy feature gate to be enabled\nand the container runtime must implement support for this feature.\nNote that this field cannot be set when spec.os.name is windows.\nTODO: update the default value to \"Merge\" when spec.os.name is not windows in v1.34\n+featureGate=SupplementalGroupsPolicy\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SupplementalGroupsPolicy"
+                        }
+                    ]
+                },
+                "sysctls": {
+                    "description": "Sysctls hold a list of namespaced sysctls used for the pod. Pods with unsupported\nsysctls (by the container runtime) might fail to launch.\nNote that this field cannot be set when spec.os.name is windows.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.Sysctl"
+                    }
+                },
+                "windowsOptions": {
+                    "description": "The Windows specific settings applied to all containers.\nIf unspecified, the options within a container's SecurityContext will be used.\nIf set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.\nNote that this field cannot be set when spec.os.name is linux.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.WindowsSecurityContextOptions"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PodSpec": {
+            "type": "object",
+            "properties": {
+                "activeDeadlineSeconds": {
+                    "description": "Optional duration in seconds the pod may be active on the node relative to\nStartTime before the system will actively try to mark it failed and kill associated containers.\nValue must be a positive integer.\n+optional",
+                    "type": "integer"
+                },
+                "affinity": {
+                    "description": "If specified, the pod's scheduling constraints\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Affinity"
+                        }
+                    ]
+                },
+                "automountServiceAccountToken": {
+                    "description": "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.\n+optional",
+                    "type": "boolean"
+                },
+                "containers": {
+                    "description": "List of containers belonging to the pod.\nContainers cannot currently be added or removed.\nThere must be at least one container in a Pod.\nCannot be updated.\n+patchMergeKey=name\n+patchStrategy=merge\n+listType=map\n+listMapKey=name",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.Container"
+                    }
+                },
+                "dnsConfig": {
+                    "description": "Specifies the DNS parameters of a pod.\nParameters specified here will be merged to the generated DNS\nconfiguration based on DNSPolicy.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodDNSConfig"
+                        }
+                    ]
+                },
+                "dnsPolicy": {
+                    "description": "Set DNS policy for the pod.\nDefaults to \"ClusterFirst\".\nValid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'.\nDNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy.\nTo have DNS options set along with hostNetwork, you have to specify DNS policy\nexplicitly to 'ClusterFirstWithHostNet'.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.DNSPolicy"
+                        }
+                    ]
+                },
+                "enableServiceLinks": {
+                    "description": "EnableServiceLinks indicates whether information about services should be injected into pod's\nenvironment variables, matching the syntax of Docker links.\nOptional: Defaults to true.\n+optional",
+                    "type": "boolean"
+                },
+                "ephemeralContainers": {
+                    "description": "List of ephemeral containers run in this pod. Ephemeral containers may be run in an existing\npod to perform user-initiated actions such as debugging. This list cannot be specified when\ncreating a pod, and it cannot be modified by updating the pod spec. In order to add an\nephemeral container to an existing pod, use the pod's ephemeralcontainers subresource.\n+optional\n+patchMergeKey=name\n+patchStrategy=merge\n+listType=map\n+listMapKey=name",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.EphemeralContainer"
+                    }
+                },
+                "hostAliases": {
+                    "description": "HostAliases is an optional list of hosts and IPs that will be injected into the pod's hosts\nfile if specified.\n+optional\n+patchMergeKey=ip\n+patchStrategy=merge\n+listType=map\n+listMapKey=ip",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.HostAlias"
+                    }
+                },
+                "hostIPC": {
+                    "description": "Use the host's ipc namespace.\nOptional: Default to false.\n+k8s:conversion-gen=false\n+optional",
+                    "type": "boolean"
+                },
+                "hostNetwork": {
+                    "description": "Host networking requested for this pod. Use the host's network namespace.\nWhen using HostNetwork you should specify ports so the scheduler is aware.\nWhen ` + "`" + `hostNetwork` + "`" + ` is true, specified ` + "`" + `hostPort` + "`" + ` fields in port definitions must match ` + "`" + `containerPort` + "`" + `,\nand unspecified ` + "`" + `hostPort` + "`" + ` fields in port definitions are defaulted to match ` + "`" + `containerPort` + "`" + `.\nDefault to false.\n+k8s:conversion-gen=false\n+optional",
+                    "type": "boolean"
+                },
+                "hostPID": {
+                    "description": "Use the host's pid namespace.\nOptional: Default to false.\n+k8s:conversion-gen=false\n+optional",
+                    "type": "boolean"
+                },
+                "hostUsers": {
+                    "description": "Use the host's user namespace.\nOptional: Default to true.\nIf set to true or not present, the pod will be run in the host user namespace, useful\nfor when the pod needs a feature only available to the host user namespace, such as\nloading a kernel module with CAP_SYS_MODULE.\nWhen set to false, a new userns is created for the pod. Setting false is useful for\nmitigating container breakout vulnerabilities even allowing users to run their\ncontainers as root without actually having root privileges on the host.\nThis field is alpha-level and is only honored by servers that enable the UserNamespacesSupport feature.\n+k8s:conversion-gen=false\n+optional",
+                    "type": "boolean"
+                },
+                "hostname": {
+                    "description": "Specifies the hostname of the Pod\nIf not specified, the pod's hostname will be set to a system-defined value.\n+optional",
+                    "type": "string"
+                },
+                "hostnameOverride": {
+                    "description": "HostnameOverride specifies an explicit override for the pod's hostname as perceived by the pod.\nThis field only specifies the pod's hostname and does not affect its DNS records.\nWhen this field is set to a non-empty string:\n- It takes precedence over the values set in ` + "`" + `hostname` + "`" + ` and ` + "`" + `subdomain` + "`" + `.\n- The Pod's hostname will be set to this value.\n- ` + "`" + `setHostnameAsFQDN` + "`" + ` must be nil or set to false.\n- ` + "`" + `hostNetwork` + "`" + ` must be set to false.\n\nThis field must be a valid DNS subdomain as defined in RFC 1123 and contain at most 64 characters.\nRequires the HostnameOverride feature gate to be enabled.\n\n+featureGate=HostnameOverride\n+optional",
+                    "type": "string"
+                },
+                "imagePullSecrets": {
+                    "description": "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.\nIf specified, these secrets will be passed to individual puller implementations for them to use.\nMore info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod\n+optional\n+patchMergeKey=name\n+patchStrategy=merge\n+listType=map\n+listMapKey=name",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/k8s_io_api_core_v1.LocalObjectReference"
+                    }
+                },
+                "initContainers": {
+                    "description": "List of initialization containers belonging to the pod.\nInit containers are executed in order prior to containers being started. If any\ninit container fails, the pod is considered to have failed and is handled according\nto its restartPolicy. The name for an init container or normal container must be\nunique among all containers.\nInit containers may not have Lifecycle actions, Readiness probes, Liveness probes, or Startup probes.\nThe resourceRequirements of an init container are taken into account during scheduling\nby finding the highest request/limit for each resource type, and then using the max of\nthat value or the sum of the normal containers. Limits are applied to init containers\nin a similar fashion.\nInit containers cannot currently be added or removed.\nCannot be updated.\nMore info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/\n+patchMergeKey=name\n+patchStrategy=merge\n+listType=map\n+listMapKey=name",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.Container"
+                    }
+                },
+                "nodeName": {
+                    "description": "NodeName indicates in which node this pod is scheduled.\nIf empty, this pod is a candidate for scheduling by the scheduler defined in schedulerName.\nOnce this field is set, the kubelet for this node becomes responsible for the lifecycle of this pod.\nThis field should not be used to express a desire for the pod to be scheduled on a specific node.\nhttps://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodename\n+optional",
+                    "type": "string"
+                },
+                "nodeSelector": {
+                    "description": "NodeSelector is a selector which must be true for the pod to fit on a node.\nSelector which must match a node's labels for the pod to be scheduled on that node.\nMore info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/\n+optional\n+mapType=atomic",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "os": {
+                    "description": "Specifies the OS of the containers in the pod.\nSome pod and container fields are restricted if this is set.\n\nIf the OS field is set to linux, the following fields must be unset:\n-securityContext.windowsOptions\n\nIf the OS field is set to windows, following fields must be unset:\n- spec.hostPID\n- spec.hostIPC\n- spec.hostUsers\n- spec.resources\n- spec.securityContext.appArmorProfile\n- spec.securityContext.seLinuxOptions\n- spec.securityContext.seccompProfile\n- spec.securityContext.fsGroup\n- spec.securityContext.fsGroupChangePolicy\n- spec.securityContext.sysctls\n- spec.shareProcessNamespace\n- spec.securityContext.runAsUser\n- spec.securityContext.runAsGroup\n- spec.securityContext.supplementalGroups\n- spec.securityContext.supplementalGroupsPolicy\n- spec.containers[*].securityContext.appArmorProfile\n- spec.containers[*].securityContext.seLinuxOptions\n- spec.containers[*].securityContext.seccompProfile\n- spec.containers[*].securityContext.capabilities\n- spec.containers[*].securityContext.readOnlyRootFilesystem\n- spec.containers[*].securityContext.privileged\n- spec.containers[*].securityContext.allowPrivilegeEscalation\n- spec.containers[*].securityContext.procMount\n- spec.containers[*].securityContext.runAsUser\n- spec.containers[*].securityContext.runAsGroup\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodOS"
+                        }
+                    ]
+                },
+                "overhead": {
+                    "description": "Overhead represents the resource overhead associated with running a pod for a given RuntimeClass.\nThis field will be autopopulated at admission time by the RuntimeClass admission controller. If\nthe RuntimeClass admission controller is enabled, overhead must not be set in Pod create requests.\nThe RuntimeClass admission controller will reject Pod create requests which have the overhead already\nset. If RuntimeClass is configured and selected in the PodSpec, Overhead will be set to the value\ndefined in the corresponding RuntimeClass, otherwise it will remain unset and treated as zero.\nMore info: https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceList"
+                        }
+                    ]
+                },
+                "preemptionPolicy": {
+                    "description": "PreemptionPolicy is the Policy for preempting pods with lower priority.\nOne of Never, PreemptLowerPriority.\nDefaults to PreemptLowerPriority if unset.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PreemptionPolicy"
+                        }
+                    ]
+                },
+                "priority": {
+                    "description": "The priority value. Various system components use this field to find the\npriority of the pod. When Priority Admission Controller is enabled, it\nprevents users from setting this field. The admission controller populates\nthis field from PriorityClassName.\nThe higher the value, the higher the priority.\n+optional",
+                    "type": "integer"
+                },
+                "priorityClassName": {
+                    "description": "If specified, indicates the pod's priority. \"system-node-critical\" and\n\"system-cluster-critical\" are two special keywords which indicate the\nhighest priorities with the former being the highest priority. Any other\nname must be defined by creating a PriorityClass object with that name.\nIf not specified, the pod priority will be default or zero if there is no\ndefault.\n+optional",
+                    "type": "string"
+                },
+                "readinessGates": {
+                    "description": "If specified, all readiness gates will be evaluated for pod readiness.\nA pod is ready when all its containers are ready AND\nall conditions specified in the readiness gates have status equal to \"True\"\nMore info: https://git.k8s.io/enhancements/keps/sig-network/580-pod-readiness-gates\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PodReadinessGate"
+                    }
+                },
+                "resourceClaims": {
+                    "description": "ResourceClaims defines which ResourceClaims must be allocated\nand reserved before the Pod is allowed to start. The resources\nwill be made available to those containers which consume them\nby name.\n\nThis is an alpha field and requires enabling the\nDynamicResourceAllocation feature gate.\n\nThis field is immutable.\n\n+patchMergeKey=name\n+patchStrategy=merge,retainKeys\n+listType=map\n+listMapKey=name\n+featureGate=DynamicResourceAllocation\n+optional",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PodResourceClaim"
+                    }
+                },
+                "resources": {
+                    "description": "Resources is the total amount of CPU and Memory resources required by all\ncontainers in the pod. It supports specifying Requests and Limits for\n\"cpu\", \"memory\" and \"hugepages-\" resource names only. ResourceClaims are not supported.\n\nThis field enables fine-grained control over resource allocation for the\nentire pod, allowing resource sharing among containers in a pod.\nTODO: For beta graduation, expand this comment with a detailed explanation.\n\nThis is an alpha field and requires enabling the PodLevelResources feature\ngate.\n\n+featureGate=PodLevelResources\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceRequirements"
+                        }
+                    ]
+                },
+                "restartPolicy": {
+                    "description": "Restart policy for all containers within the pod.\nOne of Always, OnFailure, Never. In some contexts, only a subset of those values may be permitted.\nDefault to Always.\nMore info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#restart-policy\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.RestartPolicy"
+                        }
+                    ]
+                },
+                "runtimeClassName": {
+                    "description": "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used\nto run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run.\nIf unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an\nempty definition that uses the default runtime handler.\nMore info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class\n+optional",
+                    "type": "string"
+                },
+                "schedulerName": {
+                    "description": "If specified, the pod will be dispatched by specified scheduler.\nIf not specified, the pod will be dispatched by default scheduler.\n+optional",
+                    "type": "string"
+                },
+                "schedulingGates": {
+                    "description": "SchedulingGates is an opaque list of values that if specified will block scheduling the pod.\nIf schedulingGates is not empty, the pod will stay in the SchedulingGated state and the\nscheduler will not attempt to schedule the pod.\n\nSchedulingGates can only be set at pod creation time, and be removed only afterwards.\n\n+patchMergeKey=name\n+patchStrategy=merge\n+listType=map\n+listMapKey=name\n+optional",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.PodSchedulingGate"
+                    }
+                },
+                "securityContext": {
+                    "description": "SecurityContext holds pod-level security attributes and common container settings.\nOptional: Defaults to empty.  See type description for default values of each field.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodSecurityContext"
+                        }
+                    ]
+                },
+                "serviceAccount": {
+                    "description": "DeprecatedServiceAccount is a deprecated alias for ServiceAccountName.\nDeprecated: Use serviceAccountName instead.\n+k8s:conversion-gen=false\n+optional",
+                    "type": "string"
+                },
+                "serviceAccountName": {
+                    "description": "ServiceAccountName is the name of the ServiceAccount to use to run this pod.\nMore info: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/\n+optional",
+                    "type": "string"
+                },
+                "setHostnameAsFQDN": {
+                    "description": "If true the pod's hostname will be configured as the pod's FQDN, rather than the leaf name (the default).\nIn Linux containers, this means setting the FQDN in the hostname field of the kernel (the nodename field of struct utsname).\nIn Windows containers, this means setting the registry value of hostname for the registry key HKEY_LOCAL_MACHINE\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Tcpip\\\\Parameters to FQDN.\nIf a pod does not have FQDN, this has no effect.\nDefault to false.\n+optional",
+                    "type": "boolean"
+                },
+                "shareProcessNamespace": {
+                    "description": "Share a single process namespace between all of the containers in a pod.\nWhen this is set containers will be able to view and signal processes from other containers\nin the same pod, and the first process in each container will not be assigned PID 1.\nHostPID and ShareProcessNamespace cannot both be set.\nOptional: Default to false.\n+k8s:conversion-gen=false\n+optional",
+                    "type": "boolean"
+                },
+                "subdomain": {
+                    "description": "If specified, the fully qualified Pod hostname will be \"\u003chostname\u003e.\u003csubdomain\u003e.\u003cpod namespace\u003e.svc.\u003ccluster domain\u003e\".\nIf not specified, the pod will not have a domainname at all.\n+optional",
+                    "type": "string"
+                },
+                "terminationGracePeriodSeconds": {
+                    "description": "Optional duration in seconds the pod needs to terminate gracefully. May be decreased in delete request.\nValue must be non-negative integer. The value zero indicates stop immediately via\nthe kill signal (no opportunity to shut down).\nIf this value is nil, the default grace period will be used instead.\nThe grace period is the duration in seconds after the processes running in the pod are sent\na termination signal and the time when the processes are forcibly halted with a kill signal.\nSet this value longer than the expected cleanup time for your process.\nDefaults to 30 seconds.\n+optional",
+                    "type": "integer"
+                },
+                "tolerations": {
+                    "description": "If specified, the pod's tolerations.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.Toleration"
+                    }
+                },
+                "topologySpreadConstraints": {
+                    "description": "TopologySpreadConstraints describes how a group of pods ought to spread across topology\ndomains. Scheduler will schedule pods in a way which abides by the constraints.\nAll topologySpreadConstraints are ANDed.\n+optional\n+patchMergeKey=topologyKey\n+patchStrategy=merge\n+listType=map\n+listMapKey=topologyKey\n+listMapKey=whenUnsatisfiable",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.TopologySpreadConstraint"
+                    }
+                },
+                "volumes": {
+                    "description": "List of volumes that can be mounted by containers belonging to the pod.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes\n+optional\n+patchMergeKey=name\n+patchStrategy=merge,retainKeys\n+listType=map\n+listMapKey=name",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.Volume"
+                    }
+                }
+            }
+        },
+        "v1.PodTemplateSpec": {
+            "type": "object",
+            "properties": {
+                "metadata": {
+                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectMeta"
+                        }
+                    ]
+                },
+                "spec": {
+                    "description": "Specification of the desired behavior of the pod.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodSpec"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PortStatus": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "description": "Error is to record the problem with the service port\nThe format of the error shall comply with the following rules:\n- built-in error values shall be specified in this file and those shall use\n  CamelCase names\n- cloud provider specific error values must have names that comply with the\n  format foo.example.com/CamelCase.\n---\nThe regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)\n+optional\n+kubebuilder:validation:Required\n+kubebuilder:validation:Pattern=` + "`" + `^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$` + "`" + `\n+kubebuilder:validation:MaxLength=316",
+                    "type": "string"
+                },
+                "port": {
+                    "description": "Port is the port number of the service port of which status is recorded here",
+                    "type": "integer"
+                },
+                "protocol": {
+                    "description": "Protocol is the protocol of the service port of which status is recorded here\nThe supported values are: \"TCP\", \"UDP\", \"SCTP\"",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Protocol"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.PortworxVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fSType represents the filesystem type to mount\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\". Implicitly inferred to be \"ext4\" if unspecified.",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
+                    "type": "boolean"
+                },
+                "volumeID": {
+                    "description": "volumeID uniquely identifies a Portworx volume",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.PreemptionPolicy": {
+            "type": "string",
+            "enum": [
+                "PreemptLowerPriority",
+                "Never"
+            ],
+            "x-enum-varnames": [
+                "PreemptLowerPriority",
+                "PreemptNever"
+            ]
+        },
+        "v1.PreferredSchedulingTerm": {
+            "type": "object",
+            "properties": {
+                "preference": {
+                    "description": "A node selector term, associated with the corresponding weight.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.NodeSelectorTerm"
+                        }
+                    ]
+                },
+                "weight": {
+                    "description": "Weight associated with matching the corresponding nodeSelectorTerm, in the range 1-100.",
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.Probe": {
+            "type": "object",
+            "properties": {
+                "exec": {
+                    "description": "Exec specifies a command to execute in the container.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ExecAction"
+                        }
+                    ]
+                },
+                "failureThreshold": {
+                    "description": "Minimum consecutive failures for the probe to be considered failed after having succeeded.\nDefaults to 3. Minimum value is 1.\n+optional",
+                    "type": "integer"
+                },
+                "grpc": {
+                    "description": "GRPC specifies a GRPC HealthCheckRequest.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.GRPCAction"
+                        }
+                    ]
+                },
+                "httpGet": {
+                    "description": "HTTPGet specifies an HTTP GET request to perform.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.HTTPGetAction"
+                        }
+                    ]
+                },
+                "initialDelaySeconds": {
+                    "description": "Number of seconds after the container has started before liveness probes are initiated.\nMore info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes\n+optional",
+                    "type": "integer"
+                },
+                "periodSeconds": {
+                    "description": "How often (in seconds) to perform the probe.\nDefault to 10 seconds. Minimum value is 1.\n+optional",
+                    "type": "integer"
+                },
+                "successThreshold": {
+                    "description": "Minimum consecutive successes for the probe to be considered successful after having failed.\nDefaults to 1. Must be 1 for liveness and startup. Minimum value is 1.\n+optional",
+                    "type": "integer"
+                },
+                "tcpSocket": {
+                    "description": "TCPSocket specifies a connection to a TCP port.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.TCPSocketAction"
+                        }
+                    ]
+                },
+                "terminationGracePeriodSeconds": {
+                    "description": "Optional duration in seconds the pod needs to terminate gracefully upon probe failure.\nThe grace period is the duration in seconds after the processes running in the pod are sent\na termination signal and the time when the processes are forcibly halted with a kill signal.\nSet this value longer than the expected cleanup time for your process.\nIf this value is nil, the pod's terminationGracePeriodSeconds will be used. Otherwise, this\nvalue overrides the value provided by the pod spec.\nValue must be non-negative integer. The value zero indicates stop immediately via\nthe kill signal (no opportunity to shut down).\nThis is a beta field and requires enabling ProbeTerminationGracePeriod feature gate.\nMinimum value is 1. spec.terminationGracePeriodSeconds is used if unset.\n+optional",
+                    "type": "integer"
+                },
+                "timeoutSeconds": {
+                    "description": "Number of seconds after which the probe times out.\nDefaults to 1 second. Minimum value is 1.\nMore info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes\n+optional",
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.ProcMountType": {
+            "type": "string",
+            "enum": [
+                "Default",
+                "Unmasked"
+            ],
+            "x-enum-varnames": [
+                "DefaultProcMount",
+                "UnmaskedProcMount"
+            ]
+        },
+        "v1.ProjectedVolumeSource": {
+            "type": "object",
+            "properties": {
+                "defaultMode": {
+                    "description": "defaultMode are the mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.\n+optional",
+                    "type": "integer"
+                },
+                "sources": {
+                    "description": "sources is the list of volume projections. Each entry in this list\nhandles one source.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.VolumeProjection"
+                    }
+                }
+            }
+        },
+        "v1.Protocol": {
+            "type": "string",
+            "enum": [
+                "TCP",
+                "UDP",
+                "SCTP"
+            ],
+            "x-enum-varnames": [
+                "ProtocolTCP",
+                "ProtocolUDP",
+                "ProtocolSCTP"
+            ]
+        },
+        "v1.PullPolicy": {
+            "type": "string",
+            "enum": [
+                "Always",
+                "Never",
+                "IfNotPresent"
+            ],
+            "x-enum-varnames": [
+                "PullAlways",
+                "PullNever",
+                "PullIfNotPresent"
+            ]
+        },
         "v1.QueryParamMatchType": {
             "type": "string",
             "enum": [
@@ -3449,6 +8590,123 @@ const docTemplate = `{
                 "QueryParamMatchExact",
                 "QueryParamMatchRegularExpression"
             ]
+        },
+        "v1.QuobyteVolumeSource": {
+            "type": "object",
+            "properties": {
+                "group": {
+                    "description": "group to map volume access to\nDefault is no group\n+optional",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly here will force the Quobyte volume to be mounted with read-only permissions.\nDefaults to false.\n+optional",
+                    "type": "boolean"
+                },
+                "registry": {
+                    "description": "registry represents a single or multiple Quobyte Registry services\nspecified as a string as host:port pair (multiple entries are separated with commas)\nwhich acts as the central registry for volumes",
+                    "type": "string"
+                },
+                "tenant": {
+                    "description": "tenant owning the given Quobyte volume in the Backend\nUsed with dynamically provisioned Quobyte volumes, value is set by the plugin\n+optional",
+                    "type": "string"
+                },
+                "user": {
+                    "description": "user to map volume access to\nDefaults to serivceaccount user\n+optional",
+                    "type": "string"
+                },
+                "volume": {
+                    "description": "volume is a string that references an already created Quobyte volume by name.",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.RBDPersistentVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is the filesystem type of the volume that you want to mount.\nTip: Ensure that the filesystem type is supported by the host operating system.\nExamples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#rbd\nTODO: how do we prevent errors in the filesystem from compromising the machine\n+optional",
+                    "type": "string"
+                },
+                "image": {
+                    "description": "image is the rados image name.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it",
+                    "type": "string"
+                },
+                "keyring": {
+                    "description": "keyring is the path to key ring for RBDUser.\nDefault is /etc/ceph/keyring.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional\n+default=\"/etc/ceph/keyring\"",
+                    "type": "string"
+                },
+                "monitors": {
+                    "description": "monitors is a collection of Ceph monitors.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "pool": {
+                    "description": "pool is the rados pool name.\nDefault is rbd.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional\n+default=\"rbd\"",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly here will force the ReadOnly setting in VolumeMounts.\nDefaults to false.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional",
+                    "type": "boolean"
+                },
+                "secretRef": {
+                    "description": "secretRef is name of the authentication secret for RBDUser. If provided\noverrides keyring.\nDefault is nil.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretReference"
+                        }
+                    ]
+                },
+                "user": {
+                    "description": "user is the rados user name.\nDefault is admin.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional\n+default=\"admin\"",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.RBDVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is the filesystem type of the volume that you want to mount.\nTip: Ensure that the filesystem type is supported by the host operating system.\nExamples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#rbd\nTODO: how do we prevent errors in the filesystem from compromising the machine\n+optional",
+                    "type": "string"
+                },
+                "image": {
+                    "description": "image is the rados image name.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it",
+                    "type": "string"
+                },
+                "keyring": {
+                    "description": "keyring is the path to key ring for RBDUser.\nDefault is /etc/ceph/keyring.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional\n+default=\"/etc/ceph/keyring\"",
+                    "type": "string"
+                },
+                "monitors": {
+                    "description": "monitors is a collection of Ceph monitors.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "pool": {
+                    "description": "pool is the rados pool name.\nDefault is rbd.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional\n+default=\"rbd\"",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly here will force the ReadOnly setting in VolumeMounts.\nDefaults to false.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional",
+                    "type": "boolean"
+                },
+                "secretRef": {
+                    "description": "secretRef is name of the authentication secret for RBDUser. If provided\noverrides keyring.\nDefault is nil.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_api_core_v1.LocalObjectReference"
+                        }
+                    ]
+                },
+                "user": {
+                    "description": "user is the rados user name.\nDefault is admin.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional\n+default=\"admin\"",
+                    "type": "string"
+                }
+            }
         },
         "v1.RecursiveReadOnlyMode": {
             "type": "string",
@@ -3462,6 +8720,27 @@ const docTemplate = `{
                 "RecursiveReadOnlyIfPossible",
                 "RecursiveReadOnlyEnabled"
             ]
+        },
+        "v1.ResourceFieldSelector": {
+            "type": "object",
+            "properties": {
+                "containerName": {
+                    "description": "Container name: required for volumes, optional for env vars\n+optional",
+                    "type": "string"
+                },
+                "divisor": {
+                    "description": "Specifies the output format of the exposed resources, defaults to \"1\"\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/resource.Quantity"
+                        }
+                    ]
+                },
+                "resource": {
+                    "description": "Required: resource to select",
+                    "type": "string"
+                }
+            }
         },
         "v1.ResourceHealth": {
             "type": "object",
@@ -3574,6 +8853,17 @@ const docTemplate = `{
                 }
             }
         },
+        "v1.ResourceResizeRestartPolicy": {
+            "type": "string",
+            "enum": [
+                "NotRequired",
+                "RestartContainer"
+            ],
+            "x-enum-varnames": [
+                "NotRequired",
+                "RestartContainer"
+            ]
+        },
         "v1.ResourceStatus": {
             "type": "object",
             "properties": {
@@ -3591,6 +8881,693 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/v1.ResourceHealth"
                     }
+                }
+            }
+        },
+        "v1.RestartPolicy": {
+            "type": "string",
+            "enum": [
+                "Always",
+                "OnFailure",
+                "Never"
+            ],
+            "x-enum-varnames": [
+                "RestartPolicyAlways",
+                "RestartPolicyOnFailure",
+                "RestartPolicyNever"
+            ]
+        },
+        "v1.RollingUpdateDeployment": {
+            "type": "object",
+            "properties": {
+                "maxSurge": {
+                    "description": "The maximum number of pods that can be scheduled above the desired number of\npods.\nValue can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).\nThis can not be 0 if MaxUnavailable is 0.\nAbsolute number is calculated from percentage by rounding up.\nDefaults to 25%.\nExample: when this is set to 30%, the new ReplicaSet can be scaled up immediately when\nthe rolling update starts, such that the total number of old and new pods do not exceed\n130% of desired pods. Once old pods have been killed,\nnew ReplicaSet can be scaled up further, ensuring that total number of pods running\nat any time during the update is at most 130% of desired pods.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/intstr.IntOrString"
+                        }
+                    ]
+                },
+                "maxUnavailable": {
+                    "description": "The maximum number of pods that can be unavailable during the update.\nValue can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).\nAbsolute number is calculated from percentage by rounding down.\nThis can not be 0 if MaxSurge is 0.\nDefaults to 25%.\nExample: when this is set to 30%, the old ReplicaSet can be scaled down to 70% of desired pods\nimmediately when the rolling update starts. Once new pods are ready, old ReplicaSet\ncan be scaled down further, followed by scaling up the new ReplicaSet, ensuring\nthat the total number of pods available at all times during the update is at\nleast 70% of desired pods.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/intstr.IntOrString"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.RouteParentStatus": {
+            "type": "object",
+            "properties": {
+                "conditions": {
+                    "description": "Conditions describes the status of the route with respect to the Gateway.\nNote that the route's availability is also subject to the Gateway's own\nstatus conditions and listener status.\n\nIf the Route's ParentRef specifies an existing Gateway that supports\nRoutes of this kind AND that Gateway's controller has sufficient access,\nthen that Gateway's controller MUST set the \"Accepted\" condition on the\nRoute, to indicate whether the route has been accepted or rejected by the\nGateway, and why.\n\nA Route MUST be considered \"Accepted\" if at least one of the Route's\nrules is implemented by the Gateway.\n\nThere are a number of cases where the \"Accepted\" condition may not be set\ndue to lack of controller visibility, that includes when:\n\n* The Route refers to a nonexistent parent.\n* The Route is of a type that the controller does not support.\n* The Route is in a namespace the controller does not have access to.\n\n\u003cgateway:util:excludeFromCRD\u003e\n\nNotes for implementors:\n\nConditions are a listType ` + "`" + `map` + "`" + `, which means that they function like a\nmap with a key of the ` + "`" + `type` + "`" + ` field _in the k8s apiserver_.\n\nThis means that implementations must obey some rules when updating this\nsection.\n\n* Implementations MUST perform a read-modify-write cycle on this field\n  before modifying it. That is, when modifying this field, implementations\n  must be confident they have fetched the most recent version of this field,\n  and ensure that changes they make are on that recent version.\n* Implementations MUST NOT remove or reorder Conditions that they are not\n  directly responsible for. For example, if an implementation sees a Condition\n  with type ` + "`" + `special.io/SomeField` + "`" + `, it MUST NOT remove, change or update that\n  Condition.\n* Implementations MUST always _merge_ changes into Conditions of the same Type,\n  rather than creating more than one Condition of the same Type.\n* Implementations MUST always update the ` + "`" + `observedGeneration` + "`" + ` field of the\n  Condition to the ` + "`" + `metadata.generation` + "`" + ` of the Gateway at the time of update creation.\n* If the ` + "`" + `observedGeneration` + "`" + ` of a Condition is _greater than_ the value the\n  implementation knows about, then it MUST NOT perform the update on that Condition,\n  but must wait for a future reconciliation and status update. (The assumption is that\n  the implementation's copy of the object is stale and an update will be re-triggered\n  if relevant.)\n\n\u003c/gateway:util:excludeFromCRD\u003e\n\n+listType=map\n+listMapKey=type\n+kubebuilder:validation:MinItems=1\n+kubebuilder:validation:MaxItems=8\n+required",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.Condition"
+                    }
+                },
+                "controllerName": {
+                    "description": "ControllerName is a domain/path string that indicates the name of the\ncontroller that wrote this status. This corresponds with the\ncontrollerName field on GatewayClass.\n\nExample: \"example.net/gateway-controller\".\n\nThe format of this field is DOMAIN \"/\" PATH, where DOMAIN and PATH are\nvalid Kubernetes names\n(https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names).\n\nControllers MUST populate this field when writing status. Controllers should ensure that\nentries to status populated with their ControllerName are cleaned up when they are no\nlonger necessary.\n+required",
+                    "type": "string"
+                },
+                "parentRef": {
+                    "description": "ParentRef corresponds with a ParentRef in the spec that this\nRouteParentStatus struct describes the status of.\n+required",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/sigs_k8s_io_gateway-api_apis_v1.ParentReference"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.SELinuxOptions": {
+            "type": "object",
+            "properties": {
+                "level": {
+                    "description": "Level is SELinux level label that applies to the container.\n+optional",
+                    "type": "string"
+                },
+                "role": {
+                    "description": "Role is a SELinux role label that applies to the container.\n+optional",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "Type is a SELinux type label that applies to the container.\n+optional",
+                    "type": "string"
+                },
+                "user": {
+                    "description": "User is a SELinux user label that applies to the container.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ScaleIOPersistentVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is the filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\".\nDefault is \"xfs\"\n+optional\n+default=\"xfs\"",
+                    "type": "string"
+                },
+                "gateway": {
+                    "description": "gateway is the host address of the ScaleIO API Gateway.",
+                    "type": "string"
+                },
+                "protectionDomain": {
+                    "description": "protectionDomain is the name of the ScaleIO Protection Domain for the configured storage.\n+optional",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
+                    "type": "boolean"
+                },
+                "secretRef": {
+                    "description": "secretRef references to the secret for ScaleIO user and other\nsensitive information. If this is not provided, Login operation will fail.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretReference"
+                        }
+                    ]
+                },
+                "sslEnabled": {
+                    "description": "sslEnabled is the flag to enable/disable SSL communication with Gateway, default false\n+optional",
+                    "type": "boolean"
+                },
+                "storageMode": {
+                    "description": "storageMode indicates whether the storage for a volume should be ThickProvisioned or ThinProvisioned.\nDefault is ThinProvisioned.\n+optional\n+default=\"ThinProvisioned\"",
+                    "type": "string"
+                },
+                "storagePool": {
+                    "description": "storagePool is the ScaleIO Storage Pool associated with the protection domain.\n+optional",
+                    "type": "string"
+                },
+                "system": {
+                    "description": "system is the name of the storage system as configured in ScaleIO.",
+                    "type": "string"
+                },
+                "volumeName": {
+                    "description": "volumeName is the name of a volume already created in the ScaleIO system\nthat is associated with this volume source.",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ScaleIOVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is the filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\".\nDefault is \"xfs\".\n+optional\n+default=\"xfs\"",
+                    "type": "string"
+                },
+                "gateway": {
+                    "description": "gateway is the host address of the ScaleIO API Gateway.",
+                    "type": "string"
+                },
+                "protectionDomain": {
+                    "description": "protectionDomain is the name of the ScaleIO Protection Domain for the configured storage.\n+optional",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly Defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
+                    "type": "boolean"
+                },
+                "secretRef": {
+                    "description": "secretRef references to the secret for ScaleIO user and other\nsensitive information. If this is not provided, Login operation will fail.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_api_core_v1.LocalObjectReference"
+                        }
+                    ]
+                },
+                "sslEnabled": {
+                    "description": "sslEnabled Flag enable/disable SSL communication with Gateway, default false\n+optional",
+                    "type": "boolean"
+                },
+                "storageMode": {
+                    "description": "storageMode indicates whether the storage for a volume should be ThickProvisioned or ThinProvisioned.\nDefault is ThinProvisioned.\n+optional\n+default=\"ThinProvisioned\"",
+                    "type": "string"
+                },
+                "storagePool": {
+                    "description": "storagePool is the ScaleIO Storage Pool associated with the protection domain.\n+optional",
+                    "type": "string"
+                },
+                "system": {
+                    "description": "system is the name of the storage system as configured in ScaleIO.",
+                    "type": "string"
+                },
+                "volumeName": {
+                    "description": "volumeName is the name of a volume already created in the ScaleIO system\nthat is associated with this volume source.",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.SeccompProfile": {
+            "type": "object",
+            "properties": {
+                "localhostProfile": {
+                    "description": "localhostProfile indicates a profile defined in a file on the node should be used.\nThe profile must be preconfigured on the node to work.\nMust be a descending path, relative to the kubelet's configured seccomp profile location.\nMust be set if type is \"Localhost\". Must NOT be set for any other type.\n+optional",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "type indicates which kind of seccomp profile will be applied.\nValid options are:\n\nLocalhost - a profile defined in a file on the node should be used.\nRuntimeDefault - the container runtime default profile should be used.\nUnconfined - no profile should be applied.\n+unionDiscriminator",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SeccompProfileType"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.SeccompProfileType": {
+            "type": "string",
+            "enum": [
+                "Unconfined",
+                "RuntimeDefault",
+                "Localhost"
+            ],
+            "x-enum-varnames": [
+                "SeccompProfileTypeUnconfined",
+                "SeccompProfileTypeRuntimeDefault",
+                "SeccompProfileTypeLocalhost"
+            ]
+        },
+        "v1.SecretEnvSource": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names\n+optional\n+default=\"\"\n+kubebuilder:default=\"\"\nTODO: Drop ` + "`" + `kubebuilder:default` + "`" + ` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.",
+                    "type": "string"
+                },
+                "optional": {
+                    "description": "Specify whether the Secret must be defined\n+optional",
+                    "type": "boolean"
+                }
+            }
+        },
+        "v1.SecretKeySelector": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "description": "The key of the secret to select from.  Must be a valid secret key.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names\n+optional\n+default=\"\"\n+kubebuilder:default=\"\"\nTODO: Drop ` + "`" + `kubebuilder:default` + "`" + ` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.",
+                    "type": "string"
+                },
+                "optional": {
+                    "description": "Specify whether the Secret or its key must be defined\n+optional",
+                    "type": "boolean"
+                }
+            }
+        },
+        "v1.SecretProjection": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "items if unspecified, each key-value pair in the Data field of the referenced\nSecret will be projected into the volume as a file whose name is the\nkey and content is the value. If specified, the listed keys will be\nprojected into the specified paths, and unlisted keys will not be\npresent. If a key is specified which is not present in the Secret,\nthe volume setup will error unless it is marked optional. Paths must be\nrelative and may not contain the '..' path or start with '..'.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.KeyToPath"
+                    }
+                },
+                "name": {
+                    "description": "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names\n+optional\n+default=\"\"\n+kubebuilder:default=\"\"\nTODO: Drop ` + "`" + `kubebuilder:default` + "`" + ` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.",
+                    "type": "string"
+                },
+                "optional": {
+                    "description": "optional field specify whether the Secret or its key must be defined\n+optional",
+                    "type": "boolean"
+                }
+            }
+        },
+        "v1.SecretReference": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "name is unique within a namespace to reference a secret resource.\n+optional",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "namespace defines the space within which the secret name must be unique.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.SecretVolumeSource": {
+            "type": "object",
+            "properties": {
+                "defaultMode": {
+                    "description": "defaultMode is Optional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values\nfor mode bits. Defaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.\n+optional",
+                    "type": "integer"
+                },
+                "items": {
+                    "description": "items If unspecified, each key-value pair in the Data field of the referenced\nSecret will be projected into the volume as a file whose name is the\nkey and content is the value. If specified, the listed keys will be\nprojected into the specified paths, and unlisted keys will not be\npresent. If a key is specified which is not present in the Secret,\nthe volume setup will error unless it is marked optional. Paths must be\nrelative and may not contain the '..' path or start with '..'.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.KeyToPath"
+                    }
+                },
+                "optional": {
+                    "description": "optional field specify whether the Secret or its keys must be defined\n+optional",
+                    "type": "boolean"
+                },
+                "secretName": {
+                    "description": "secretName is the name of the secret in the pod's namespace to use.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#secret\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.SecurityContext": {
+            "type": "object",
+            "properties": {
+                "allowPrivilegeEscalation": {
+                    "description": "AllowPrivilegeEscalation controls whether a process can gain more\nprivileges than its parent process. This bool directly controls if\nthe no_new_privs flag will be set on the container process.\nAllowPrivilegeEscalation is true always when the container is:\n1) run as Privileged\n2) has CAP_SYS_ADMIN\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "type": "boolean"
+                },
+                "appArmorProfile": {
+                    "description": "appArmorProfile is the AppArmor options to use by this container. If set, this profile\noverrides the pod's appArmorProfile.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.AppArmorProfile"
+                        }
+                    ]
+                },
+                "capabilities": {
+                    "description": "The capabilities to add/drop when running containers.\nDefaults to the default set of capabilities granted by the container runtime.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Capabilities"
+                        }
+                    ]
+                },
+                "privileged": {
+                    "description": "Run container in privileged mode.\nProcesses in privileged containers are essentially equivalent to root on the host.\nDefaults to false.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "type": "boolean"
+                },
+                "procMount": {
+                    "description": "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nThis requires the ProcMountType feature flag to be enabled.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ProcMountType"
+                        }
+                    ]
+                },
+                "readOnlyRootFilesystem": {
+                    "description": "Whether this container has a read-only root filesystem.\nDefault is false.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "type": "boolean"
+                },
+                "runAsGroup": {
+                    "description": "The GID to run the entrypoint of the container process.\nUses runtime default if unset.\nMay also be set in PodSecurityContext.  If set in both SecurityContext and\nPodSecurityContext, the value specified in SecurityContext takes precedence.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "type": "integer"
+                },
+                "runAsNonRoot": {
+                    "description": "Indicates that the container must run as a non-root user.\nIf true, the Kubelet will validate the image at runtime to ensure that it\ndoes not run as UID 0 (root) and fail to start the container if it does.\nIf unset or false, no such validation will be performed.\nMay also be set in PodSecurityContext.  If set in both SecurityContext and\nPodSecurityContext, the value specified in SecurityContext takes precedence.\n+optional",
+                    "type": "boolean"
+                },
+                "runAsUser": {
+                    "description": "The UID to run the entrypoint of the container process.\nDefaults to user specified in image metadata if unspecified.\nMay also be set in PodSecurityContext.  If set in both SecurityContext and\nPodSecurityContext, the value specified in SecurityContext takes precedence.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "type": "integer"
+                },
+                "seLinuxOptions": {
+                    "description": "The SELinux context to be applied to the container.\nIf unspecified, the container runtime will allocate a random SELinux context for each\ncontainer.  May also be set in PodSecurityContext.  If set in both SecurityContext and\nPodSecurityContext, the value specified in SecurityContext takes precedence.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SELinuxOptions"
+                        }
+                    ]
+                },
+                "seccompProfile": {
+                    "description": "The seccomp options to use by this container. If seccomp options are\nprovided at both the pod \u0026 container level, the container options\noverride the pod options.\nNote that this field cannot be set when spec.os.name is windows.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SeccompProfile"
+                        }
+                    ]
+                },
+                "windowsOptions": {
+                    "description": "The Windows specific settings applied to all containers.\nIf unspecified, the options from the PodSecurityContext will be used.\nIf set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.\nNote that this field cannot be set when spec.os.name is linux.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.WindowsSecurityContextOptions"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.Service": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectMeta"
+                        }
+                    ]
+                },
+                "spec": {
+                    "description": "Spec defines the behavior of a service.\nhttps://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ServiceSpec"
+                        }
+                    ]
+                },
+                "status": {
+                    "description": "Most recently observed status of the service.\nPopulated by the system.\nRead-only.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ServiceStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.ServiceAccountTokenProjection": {
+            "type": "object",
+            "properties": {
+                "audience": {
+                    "description": "audience is the intended audience of the token. A recipient of a token\nmust identify itself with an identifier specified in the audience of the\ntoken, and otherwise should reject the token. The audience defaults to the\nidentifier of the apiserver.\n+optional",
+                    "type": "string"
+                },
+                "expirationSeconds": {
+                    "description": "expirationSeconds is the requested duration of validity of the service\naccount token. As the token approaches expiration, the kubelet volume\nplugin will proactively rotate the service account token. The kubelet will\nstart trying to rotate the token if the token is older than 80 percent of\nits time to live or if the token is older than 24 hours.Defaults to 1 hour\nand must be at least 10 minutes.\n+optional",
+                    "type": "integer"
+                },
+                "path": {
+                    "description": "path is the path relative to the mount point of the file to project the\ntoken into.",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.ServiceAffinity": {
+            "type": "string",
+            "enum": [
+                "ClientIP",
+                "None"
+            ],
+            "x-enum-varnames": [
+                "ServiceAffinityClientIP",
+                "ServiceAffinityNone"
+            ]
+        },
+        "v1.ServiceBackendPort": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "name is the name of the port on the Service.\nThis is a mutually exclusive setting with \"Number\".\n+optional",
+                    "type": "string"
+                },
+                "number": {
+                    "description": "number is the numerical port number (e.g. 80) on the Service.\nThis is a mutually exclusive setting with \"Name\".\n+optional",
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.ServiceExternalTrafficPolicy": {
+            "type": "string",
+            "enum": [
+                "Cluster",
+                "Local",
+                "Local",
+                "Cluster"
+            ],
+            "x-enum-varnames": [
+                "ServiceExternalTrafficPolicyCluster",
+                "ServiceExternalTrafficPolicyLocal",
+                "ServiceExternalTrafficPolicyTypeLocal",
+                "ServiceExternalTrafficPolicyTypeCluster"
+            ]
+        },
+        "v1.ServiceInternalTrafficPolicy": {
+            "type": "string",
+            "enum": [
+                "Cluster",
+                "Local"
+            ],
+            "x-enum-varnames": [
+                "ServiceInternalTrafficPolicyCluster",
+                "ServiceInternalTrafficPolicyLocal"
+            ]
+        },
+        "v1.ServicePort": {
+            "type": "object",
+            "properties": {
+                "appProtocol": {
+                    "description": "The application protocol for this port.\nThis is used as a hint for implementations to offer richer behavior for protocols that they understand.\nThis field follows standard Kubernetes label syntax.\nValid values are either:\n\n* Un-prefixed protocol names - reserved for IANA standard service names (as per\nRFC-6335 and https://www.iana.org/assignments/service-names).\n\n* Kubernetes-defined prefixed names:\n  * 'kubernetes.io/h2c' - HTTP/2 prior knowledge over cleartext as described in https://www.rfc-editor.org/rfc/rfc9113.html#name-starting-http-2-with-prior-\n  * 'kubernetes.io/ws'  - WebSocket over cleartext as described in https://www.rfc-editor.org/rfc/rfc6455\n  * 'kubernetes.io/wss' - WebSocket over TLS as described in https://www.rfc-editor.org/rfc/rfc6455\n\n* Other protocols should use implementation-defined prefixed names such as\nmycompany.com/my-custom-protocol.\n+optional",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "The name of this port within the service. This must be a DNS_LABEL.\nAll ports within a ServiceSpec must have unique names. When considering\nthe endpoints for a Service, this must match the 'name' field in the\nEndpointPort.\nOptional if only one ServicePort is defined on this service.\n+optional",
+                    "type": "string"
+                },
+                "nodePort": {
+                    "description": "The port on each node on which this service is exposed when type is\nNodePort or LoadBalancer.  Usually assigned by the system. If a value is\nspecified, in-range, and not in use it will be used, otherwise the\noperation will fail.  If not specified, a port will be allocated if this\nService requires one.  If this field is specified when creating a\nService which does not need it, creation will fail. This field will be\nwiped when updating a Service to no longer need it (e.g. changing type\nfrom NodePort to ClusterIP).\nMore info: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport\n+optional",
+                    "type": "integer"
+                },
+                "port": {
+                    "description": "The port that will be exposed by this service.",
+                    "type": "integer"
+                },
+                "protocol": {
+                    "description": "The IP protocol for this port. Supports \"TCP\", \"UDP\", and \"SCTP\".\nDefault is TCP.\n+default=\"TCP\"\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Protocol"
+                        }
+                    ]
+                },
+                "targetPort": {
+                    "description": "Number or name of the port to access on the pods targeted by the service.\nNumber must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.\nIf this is a string, it will be looked up as a named port in the\ntarget Pod's container ports. If this is not specified, the value\nof the 'port' field is used (an identity map).\nThis field is ignored for services with clusterIP=None, and should be\nomitted or set equal to the 'port' field.\nMore info: https://kubernetes.io/docs/concepts/services-networking/service/#defining-a-service\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/intstr.IntOrString"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.ServiceSpec": {
+            "type": "object",
+            "properties": {
+                "allocateLoadBalancerNodePorts": {
+                    "description": "allocateLoadBalancerNodePorts defines if NodePorts will be automatically\nallocated for services with type LoadBalancer.  Default is \"true\". It\nmay be set to \"false\" if the cluster load-balancer does not rely on\nNodePorts.  If the caller requests specific NodePorts (by specifying a\nvalue), those requests will be respected, regardless of this field.\nThis field may only be set for services with type LoadBalancer and will\nbe cleared if the type is changed to any other type.\n+optional",
+                    "type": "boolean"
+                },
+                "clusterIP": {
+                    "description": "clusterIP is the IP address of the service and is usually assigned\nrandomly. If an address is specified manually, is in-range (as per\nsystem configuration), and is not in use, it will be allocated to the\nservice; otherwise creation of the service will fail. This field may not\nbe changed through updates unless the type field is also being changed\nto ExternalName (which requires this field to be blank) or the type\nfield is being changed from ExternalName (in which case this field may\noptionally be specified, as describe above).  Valid values are \"None\",\nempty string (\"\"), or a valid IP address. Setting this to \"None\" makes a\n\"headless service\" (no virtual IP), which is useful when direct endpoint\nconnections are preferred and proxying is not required.  Only applies to\ntypes ClusterIP, NodePort, and LoadBalancer. If this field is specified\nwhen creating a Service of type ExternalName, creation will fail. This\nfield will be wiped when updating a Service to type ExternalName.\nMore info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies\n+optional",
+                    "type": "string"
+                },
+                "clusterIPs": {
+                    "description": "ClusterIPs is a list of IP addresses assigned to this service, and are\nusually assigned randomly.  If an address is specified manually, is\nin-range (as per system configuration), and is not in use, it will be\nallocated to the service; otherwise creation of the service will fail.\nThis field may not be changed through updates unless the type field is\nalso being changed to ExternalName (which requires this field to be\nempty) or the type field is being changed from ExternalName (in which\ncase this field may optionally be specified, as describe above).  Valid\nvalues are \"None\", empty string (\"\"), or a valid IP address.  Setting\nthis to \"None\" makes a \"headless service\" (no virtual IP), which is\nuseful when direct endpoint connections are preferred and proxying is\nnot required.  Only applies to types ClusterIP, NodePort, and\nLoadBalancer. If this field is specified when creating a Service of type\nExternalName, creation will fail. This field will be wiped when updating\na Service to type ExternalName.  If this field is not specified, it will\nbe initialized from the clusterIP field.  If this field is specified,\nclients must ensure that clusterIPs[0] and clusterIP have the same\nvalue.\n\nThis field may hold a maximum of two entries (dual-stack IPs, in either order).\nThese IPs must correspond to the values of the ipFamilies field. Both\nclusterIPs and ipFamilies are governed by the ipFamilyPolicy field.\nMore info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies\n+listType=atomic\n+optional",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "externalIPs": {
+                    "description": "externalIPs is a list of IP addresses for which nodes in the cluster\nwill also accept traffic for this service.  These IPs are not managed by\nKubernetes.  The user is responsible for ensuring that traffic arrives\nat a node with this IP.  A common example is external load-balancers\nthat are not part of the Kubernetes system.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "externalName": {
+                    "description": "externalName is the external reference that discovery mechanisms will\nreturn as an alias for this service (e.g. a DNS CNAME record). No\nproxying will be involved.  Must be a lowercase RFC-1123 hostname\n(https://tools.ietf.org/html/rfc1123) and requires ` + "`" + `type` + "`" + ` to be \"ExternalName\".\n+optional",
+                    "type": "string"
+                },
+                "externalTrafficPolicy": {
+                    "description": "externalTrafficPolicy describes how nodes distribute service traffic they\nreceive on one of the Service's \"externally-facing\" addresses (NodePorts,\nExternalIPs, and LoadBalancer IPs). If set to \"Local\", the proxy will configure\nthe service in a way that assumes that external load balancers will take care\nof balancing the service traffic between nodes, and so each node will deliver\ntraffic only to the node-local endpoints of the service, without masquerading\nthe client source IP. (Traffic mistakenly sent to a node with no endpoints will\nbe dropped.) The default value, \"Cluster\", uses the standard behavior of\nrouting to all endpoints evenly (possibly modified by topology and other\nfeatures). Note that traffic sent to an External IP or LoadBalancer IP from\nwithin the cluster will always get \"Cluster\" semantics, but clients sending to\na NodePort from within the cluster may need to take traffic policy into account\nwhen picking a node.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ServiceExternalTrafficPolicy"
+                        }
+                    ]
+                },
+                "healthCheckNodePort": {
+                    "description": "healthCheckNodePort specifies the healthcheck nodePort for the service.\nThis only applies when type is set to LoadBalancer and\nexternalTrafficPolicy is set to Local. If a value is specified, is\nin-range, and is not in use, it will be used.  If not specified, a value\nwill be automatically allocated.  External systems (e.g. load-balancers)\ncan use this port to determine if a given node holds endpoints for this\nservice or not.  If this field is specified when creating a Service\nwhich does not need it, creation will fail. This field will be wiped\nwhen updating a Service to no longer need it (e.g. changing type).\nThis field cannot be updated once set.\n+optional",
+                    "type": "integer"
+                },
+                "internalTrafficPolicy": {
+                    "description": "InternalTrafficPolicy describes how nodes distribute service traffic they\nreceive on the ClusterIP. If set to \"Local\", the proxy will assume that pods\nonly want to talk to endpoints of the service on the same node as the pod,\ndropping the traffic if there are no local endpoints. The default value,\n\"Cluster\", uses the standard behavior of routing to all endpoints evenly\n(possibly modified by topology and other features).\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ServiceInternalTrafficPolicy"
+                        }
+                    ]
+                },
+                "ipFamilies": {
+                    "description": "IPFamilies is a list of IP families (e.g. IPv4, IPv6) assigned to this\nservice. This field is usually assigned automatically based on cluster\nconfiguration and the ipFamilyPolicy field. If this field is specified\nmanually, the requested family is available in the cluster,\nand ipFamilyPolicy allows it, it will be used; otherwise creation of\nthe service will fail. This field is conditionally mutable: it allows\nfor adding or removing a secondary IP family, but it does not allow\nchanging the primary IP family of the Service. Valid values are \"IPv4\"\nand \"IPv6\".  This field only applies to Services of types ClusterIP,\nNodePort, and LoadBalancer, and does apply to \"headless\" services.\nThis field will be wiped when updating a Service to type ExternalName.\n\nThis field may hold a maximum of two entries (dual-stack families, in\neither order).  These families must correspond to the values of the\nclusterIPs field, if specified. Both clusterIPs and ipFamilies are\ngoverned by the ipFamilyPolicy field.\n+listType=atomic\n+optional",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.IPFamily"
+                    }
+                },
+                "ipFamilyPolicy": {
+                    "description": "IPFamilyPolicy represents the dual-stack-ness requested or required by\nthis Service. If there is no value provided, then this field will be set\nto SingleStack. Services can be \"SingleStack\" (a single IP family),\n\"PreferDualStack\" (two IP families on dual-stack configured clusters or\na single IP family on single-stack clusters), or \"RequireDualStack\"\n(two IP families on dual-stack configured clusters, otherwise fail). The\nipFamilies and clusterIPs fields depend on the value of this field. This\nfield will be wiped when updating a service to type ExternalName.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.IPFamilyPolicy"
+                        }
+                    ]
+                },
+                "loadBalancerClass": {
+                    "description": "loadBalancerClass is the class of the load balancer implementation this Service belongs to.\nIf specified, the value of this field must be a label-style identifier, with an optional prefix,\ne.g. \"internal-vip\" or \"example.com/internal-vip\". Unprefixed names are reserved for end-users.\nThis field can only be set when the Service type is 'LoadBalancer'. If not set, the default load\nbalancer implementation is used, today this is typically done through the cloud provider integration,\nbut should apply for any default implementation. If set, it is assumed that a load balancer\nimplementation is watching for Services with a matching class. Any default load balancer\nimplementation (e.g. cloud providers) should ignore Services that set this field.\nThis field can only be set when creating or updating a Service to type 'LoadBalancer'.\nOnce set, it can not be changed. This field will be wiped when a service is updated to a non 'LoadBalancer' type.\n+optional",
+                    "type": "string"
+                },
+                "loadBalancerIP": {
+                    "description": "Only applies to Service Type: LoadBalancer.\nThis feature depends on whether the underlying cloud-provider supports specifying\nthe loadBalancerIP when a load balancer is created.\nThis field will be ignored if the cloud-provider does not support the feature.\nDeprecated: This field was under-specified and its meaning varies across implementations.\nUsing it is non-portable and it may not support dual-stack.\nUsers are encouraged to use implementation-specific annotations when available.\n+optional",
+                    "type": "string"
+                },
+                "loadBalancerSourceRanges": {
+                    "description": "If specified and supported by the platform, this will restrict traffic through the cloud-provider\nload-balancer will be restricted to the specified client IPs. This field will be ignored if the\ncloud-provider does not support the feature.\"\nMore info: https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ports": {
+                    "description": "The list of ports that are exposed by this service.\nMore info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies\n+patchMergeKey=port\n+patchStrategy=merge\n+listType=map\n+listMapKey=port\n+listMapKey=protocol",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.ServicePort"
+                    }
+                },
+                "publishNotReadyAddresses": {
+                    "description": "publishNotReadyAddresses indicates that any agent which deals with endpoints for this\nService should disregard any indications of ready/not-ready.\nThe primary use case for setting this field is for a StatefulSet's Headless Service to\npropagate SRV DNS records for its Pods for the purpose of peer discovery.\nThe Kubernetes controllers that generate Endpoints and EndpointSlice resources for\nServices interpret this to mean that all endpoints are considered \"ready\" even if the\nPods themselves are not. Agents which consume only Kubernetes generated endpoints\nthrough the Endpoints or EndpointSlice resources can safely assume this behavior.\n+optional",
+                    "type": "boolean"
+                },
+                "selector": {
+                    "description": "Route service traffic to pods with label keys and values matching this\nselector. If empty or not present, the service is assumed to have an\nexternal process managing its endpoints, which Kubernetes will not\nmodify. Only applies to types ClusterIP, NodePort, and LoadBalancer.\nIgnored if type is ExternalName.\nMore info: https://kubernetes.io/docs/concepts/services-networking/service/\n+optional\n+mapType=atomic",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "sessionAffinity": {
+                    "description": "Supports \"ClientIP\" and \"None\". Used to maintain session affinity.\nEnable client IP based session affinity.\nMust be ClientIP or None.\nDefaults to None.\nMore info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ServiceAffinity"
+                        }
+                    ]
+                },
+                "sessionAffinityConfig": {
+                    "description": "sessionAffinityConfig contains the configurations of session affinity.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SessionAffinityConfig"
+                        }
+                    ]
+                },
+                "trafficDistribution": {
+                    "description": "TrafficDistribution offers a way to express preferences for how traffic\nis distributed to Service endpoints. Implementations can use this field\nas a hint, but are not required to guarantee strict adherence. If the\nfield is not set, the implementation will apply its default routing\nstrategy. If set to \"PreferClose\", implementations should prioritize\nendpoints that are in the same zone.\n+featureGate=ServiceTrafficDistribution\n+optional",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "type determines how the Service is exposed. Defaults to ClusterIP. Valid\noptions are ExternalName, ClusterIP, NodePort, and LoadBalancer.\n\"ClusterIP\" allocates a cluster-internal IP address for load-balancing\nto endpoints. Endpoints are determined by the selector or if that is not\nspecified, by manual construction of an Endpoints object or\nEndpointSlice objects. If clusterIP is \"None\", no virtual IP is\nallocated and the endpoints are published as a set of endpoints rather\nthan a virtual IP.\n\"NodePort\" builds on ClusterIP and allocates a port on every node which\nroutes to the same endpoints as the clusterIP.\n\"LoadBalancer\" builds on NodePort and creates an external load-balancer\n(if supported in the current cloud) which routes to the same endpoints\nas the clusterIP.\n\"ExternalName\" aliases this service to the specified externalName.\nSeveral other fields do not apply to ExternalName services.\nMore info: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ServiceType"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.ServiceStatus": {
+            "type": "object",
+            "properties": {
+                "conditions": {
+                    "description": "Current service state\n+optional\n+patchMergeKey=type\n+patchStrategy=merge\n+listType=map\n+listMapKey=type",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.Condition"
+                    }
+                },
+                "loadBalancer": {
+                    "description": "LoadBalancer contains the current status of the load-balancer,\nif one is present.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LoadBalancerStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.ServiceType": {
+            "type": "string",
+            "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer",
+                "ExternalName"
+            ],
+            "x-enum-varnames": [
+                "ServiceTypeClusterIP",
+                "ServiceTypeNodePort",
+                "ServiceTypeLoadBalancer",
+                "ServiceTypeExternalName"
+            ]
+        },
+        "v1.SessionAffinityConfig": {
+            "type": "object",
+            "properties": {
+                "clientIP": {
+                    "description": "clientIP contains the configurations of Client IP based session affinity.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ClientIPConfig"
+                        }
+                    ]
                 }
             }
         },
@@ -3775,6 +9752,639 @@ const docTemplate = `{
                 "SIGRTMAX"
             ]
         },
+        "v1.SleepAction": {
+            "type": "object",
+            "properties": {
+                "seconds": {
+                    "description": "Seconds is the number of seconds to sleep.",
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.StorageMedium": {
+            "type": "string",
+            "enum": [
+                "",
+                "Memory",
+                "HugePages",
+                "HugePages-"
+            ],
+            "x-enum-comments": {
+                "StorageMediumDefault": "use whatever the default is for the node, assume anything we don't explicitly handle is this",
+                "StorageMediumHugePages": "use hugepages",
+                "StorageMediumHugePagesPrefix": "prefix for full medium notation HugePages-\u003csize\u003e",
+                "StorageMediumMemory": "use memory (e.g. tmpfs on linux)"
+            },
+            "x-enum-descriptions": [
+                "use whatever the default is for the node, assume anything we don't explicitly handle is this",
+                "use memory (e.g. tmpfs on linux)",
+                "use hugepages",
+                "prefix for full medium notation HugePages-\u003csize\u003e"
+            ],
+            "x-enum-varnames": [
+                "StorageMediumDefault",
+                "StorageMediumMemory",
+                "StorageMediumHugePages",
+                "StorageMediumHugePagesPrefix"
+            ]
+        },
+        "v1.StorageOSPersistentVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is the filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\n+optional",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
+                    "type": "boolean"
+                },
+                "secretRef": {
+                    "description": "secretRef specifies the secret to use for obtaining the StorageOS API\ncredentials.  If not specified, default values will be attempted.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_api_core_v1.ObjectReference"
+                        }
+                    ]
+                },
+                "volumeName": {
+                    "description": "volumeName is the human-readable name of the StorageOS volume.  Volume\nnames are only unique within a namespace.",
+                    "type": "string"
+                },
+                "volumeNamespace": {
+                    "description": "volumeNamespace specifies the scope of the volume within StorageOS.  If no\nnamespace is specified then the Pod's namespace will be used.  This allows the\nKubernetes name scoping to be mirrored within StorageOS for tighter integration.\nSet VolumeName to any name to override the default behaviour.\nSet to \"default\" if you are not using namespaces within StorageOS.\nNamespaces that do not pre-exist within StorageOS will be created.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.StorageOSVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is the filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\n+optional",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "readOnly defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
+                    "type": "boolean"
+                },
+                "secretRef": {
+                    "description": "secretRef specifies the secret to use for obtaining the StorageOS API\ncredentials.  If not specified, default values will be attempted.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/k8s_io_api_core_v1.LocalObjectReference"
+                        }
+                    ]
+                },
+                "volumeName": {
+                    "description": "volumeName is the human-readable name of the StorageOS volume.  Volume\nnames are only unique within a namespace.",
+                    "type": "string"
+                },
+                "volumeNamespace": {
+                    "description": "volumeNamespace specifies the scope of the volume within StorageOS.  If no\nnamespace is specified then the Pod's namespace will be used.  This allows the\nKubernetes name scoping to be mirrored within StorageOS for tighter integration.\nSet VolumeName to any name to override the default behaviour.\nSet to \"default\" if you are not using namespaces within StorageOS.\nNamespaces that do not pre-exist within StorageOS will be created.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.SupplementalGroupsPolicy": {
+            "type": "string",
+            "enum": [
+                "Merge",
+                "Strict"
+            ],
+            "x-enum-varnames": [
+                "SupplementalGroupsPolicyMerge",
+                "SupplementalGroupsPolicyStrict"
+            ]
+        },
+        "v1.Sysctl": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name of a property to set",
+                    "type": "string"
+                },
+                "value": {
+                    "description": "Value of a property to set",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.TCPSocketAction": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "description": "Optional: Host name to connect to, defaults to the pod IP.\n+optional",
+                    "type": "string"
+                },
+                "port": {
+                    "description": "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/intstr.IntOrString"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.TaintEffect": {
+            "type": "string",
+            "enum": [
+                "NoSchedule",
+                "PreferNoSchedule",
+                "NoExecute"
+            ],
+            "x-enum-varnames": [
+                "TaintEffectNoSchedule",
+                "TaintEffectPreferNoSchedule",
+                "TaintEffectNoExecute"
+            ]
+        },
+        "v1.TerminationMessagePolicy": {
+            "type": "string",
+            "enum": [
+                "File",
+                "FallbackToLogsOnError"
+            ],
+            "x-enum-varnames": [
+                "TerminationMessageReadFile",
+                "TerminationMessageFallbackToLogsOnError"
+            ]
+        },
+        "v1.Toleration": {
+            "type": "object",
+            "properties": {
+                "effect": {
+                    "description": "Effect indicates the taint effect to match. Empty means match all taint effects.\nWhen specified, allowed values are NoSchedule, PreferNoSchedule and NoExecute.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.TaintEffect"
+                        }
+                    ]
+                },
+                "key": {
+                    "description": "Key is the taint key that the toleration applies to. Empty means match all taint keys.\nIf the key is empty, operator must be Exists; this combination means to match all values and all keys.\n+optional",
+                    "type": "string"
+                },
+                "operator": {
+                    "description": "Operator represents a key's relationship to the value.\nValid operators are Exists and Equal. Defaults to Equal.\nExists is equivalent to wildcard for value, so that a pod can\ntolerate all taints of a particular category.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.TolerationOperator"
+                        }
+                    ]
+                },
+                "tolerationSeconds": {
+                    "description": "TolerationSeconds represents the period of time the toleration (which must be\nof effect NoExecute, otherwise this field is ignored) tolerates the taint. By default,\nit is not set, which means tolerate the taint forever (do not evict). Zero and\nnegative values will be treated as 0 (evict immediately) by the system.\n+optional",
+                    "type": "integer"
+                },
+                "value": {
+                    "description": "Value is the taint value the toleration matches to.\nIf the operator is Exists, the value should be empty, otherwise just a regular string.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.TolerationOperator": {
+            "type": "string",
+            "enum": [
+                "Exists",
+                "Equal"
+            ],
+            "x-enum-varnames": [
+                "TolerationOpExists",
+                "TolerationOpEqual"
+            ]
+        },
+        "v1.TopologySpreadConstraint": {
+            "type": "object",
+            "properties": {
+                "labelSelector": {
+                    "description": "LabelSelector is used to find matching pods.\nPods that match this label selector are counted to determine the number of pods\nin their corresponding topology domain.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.LabelSelector"
+                        }
+                    ]
+                },
+                "matchLabelKeys": {
+                    "description": "MatchLabelKeys is a set of pod label keys to select the pods over which\nspreading will be calculated. The keys are used to lookup values from the\nincoming pod labels, those key-value labels are ANDed with labelSelector\nto select the group of existing pods over which spreading will be calculated\nfor the incoming pod. The same key is forbidden to exist in both MatchLabelKeys and LabelSelector.\nMatchLabelKeys cannot be set when LabelSelector isn't set.\nKeys that don't exist in the incoming pod labels will\nbe ignored. A null or empty list means only match against labelSelector.\n\nThis is a beta field and requires the MatchLabelKeysInPodTopologySpread feature gate to be enabled (enabled by default).\n+listType=atomic\n+optional",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "maxSkew": {
+                    "description": "MaxSkew describes the degree to which pods may be unevenly distributed.\nWhen ` + "`" + `whenUnsatisfiable=DoNotSchedule` + "`" + `, it is the maximum permitted difference\nbetween the number of matching pods in the target topology and the global minimum.\nThe global minimum is the minimum number of matching pods in an eligible domain\nor zero if the number of eligible domains is less than MinDomains.\nFor example, in a 3-zone cluster, MaxSkew is set to 1, and pods with the same\nlabelSelector spread as 2/2/1:\nIn this case, the global minimum is 1.\n+-------+-------+-------+\n| zone1 | zone2 | zone3 |\n+-------+-------+-------+\n|  P P  |  P P  |   P   |\n+-------+-------+-------+\n- if MaxSkew is 1, incoming pod can only be scheduled to zone3 to become 2/2/2;\nscheduling it onto zone1(zone2) would make the ActualSkew(3-1) on zone1(zone2)\nviolate MaxSkew(1).\n- if MaxSkew is 2, incoming pod can be scheduled onto any zone.\nWhen ` + "`" + `whenUnsatisfiable=ScheduleAnyway` + "`" + `, it is used to give higher precedence\nto topologies that satisfy it.\nIt's a required field. Default value is 1 and 0 is not allowed.",
+                    "type": "integer"
+                },
+                "minDomains": {
+                    "description": "MinDomains indicates a minimum number of eligible domains.\nWhen the number of eligible domains with matching topology keys is less than minDomains,\nPod Topology Spread treats \"global minimum\" as 0, and then the calculation of Skew is performed.\nAnd when the number of eligible domains with matching topology keys equals or greater than minDomains,\nthis value has no effect on scheduling.\nAs a result, when the number of eligible domains is less than minDomains,\nscheduler won't schedule more than maxSkew Pods to those domains.\nIf value is nil, the constraint behaves as if MinDomains is equal to 1.\nValid values are integers greater than 0.\nWhen value is not nil, WhenUnsatisfiable must be DoNotSchedule.\n\nFor example, in a 3-zone cluster, MaxSkew is set to 2, MinDomains is set to 5 and pods with the same\nlabelSelector spread as 2/2/2:\n+-------+-------+-------+\n| zone1 | zone2 | zone3 |\n+-------+-------+-------+\n|  P P  |  P P  |  P P  |\n+-------+-------+-------+\nThe number of domains is less than 5(MinDomains), so \"global minimum\" is treated as 0.\nIn this situation, new pod with the same labelSelector cannot be scheduled,\nbecause computed skew will be 3(3 - 0) if new Pod is scheduled to any of the three zones,\nit will violate MaxSkew.\n+optional",
+                    "type": "integer"
+                },
+                "nodeAffinityPolicy": {
+                    "description": "NodeAffinityPolicy indicates how we will treat Pod's nodeAffinity/nodeSelector\nwhen calculating pod topology spread skew. Options are:\n- Honor: only nodes matching nodeAffinity/nodeSelector are included in the calculations.\n- Ignore: nodeAffinity/nodeSelector are ignored. All nodes are included in the calculations.\n\nIf this value is nil, the behavior is equivalent to the Honor policy.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.NodeInclusionPolicy"
+                        }
+                    ]
+                },
+                "nodeTaintsPolicy": {
+                    "description": "NodeTaintsPolicy indicates how we will treat node taints when calculating\npod topology spread skew. Options are:\n- Honor: nodes without taints, along with tainted nodes for which the incoming pod\nhas a toleration, are included.\n- Ignore: node taints are ignored. All nodes are included.\n\nIf this value is nil, the behavior is equivalent to the Ignore policy.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.NodeInclusionPolicy"
+                        }
+                    ]
+                },
+                "topologyKey": {
+                    "description": "TopologyKey is the key of node labels. Nodes that have a label with this key\nand identical values are considered to be in the same topology.\nWe consider each \u003ckey, value\u003e as a \"bucket\", and try to put balanced number\nof pods into each bucket.\nWe define a domain as a particular instance of a topology.\nAlso, we define an eligible domain as a domain whose nodes meet the requirements of\nnodeAffinityPolicy and nodeTaintsPolicy.\ne.g. If TopologyKey is \"kubernetes.io/hostname\", each Node is a domain of that topology.\nAnd, if TopologyKey is \"topology.kubernetes.io/zone\", each zone is a domain of that topology.\nIt's a required field.",
+                    "type": "string"
+                },
+                "whenUnsatisfiable": {
+                    "description": "WhenUnsatisfiable indicates how to deal with a pod if it doesn't satisfy\nthe spread constraint.\n- DoNotSchedule (default) tells the scheduler not to schedule it.\n- ScheduleAnyway tells the scheduler to schedule the pod in any location,\n  but giving higher precedence to topologies that would help reduce the\n  skew.\nA constraint is considered \"Unsatisfiable\" for an incoming pod\nif and only if every possible node assignment for that pod would violate\n\"MaxSkew\" on some topology.\nFor example, in a 3-zone cluster, MaxSkew is set to 1, and pods with the same\nlabelSelector spread as 3/1/1:\n+-------+-------+-------+\n| zone1 | zone2 | zone3 |\n+-------+-------+-------+\n| P P P |   P   |   P   |\n+-------+-------+-------+\nIf WhenUnsatisfiable is set to DoNotSchedule, incoming pod can only be scheduled\nto zone2(zone3) to become 3/2/1(3/1/2) as ActualSkew(2-1) on zone2(zone3) satisfies\nMaxSkew(1). In other words, the cluster can still be imbalanced, but scheduler\nwon't make it *more* imbalanced.\nIt's a required field.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.UnsatisfiableConstraintAction"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.TypedLocalObjectReference": {
+            "type": "object",
+            "properties": {
+                "apiGroup": {
+                    "description": "APIGroup is the group for the resource being referenced.\nIf APIGroup is not specified, the specified Kind must be in the core API group.\nFor any other third-party types, APIGroup is required.\n+optional",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind is the type of resource being referenced",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is the name of resource being referenced",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.TypedObjectReference": {
+            "type": "object",
+            "properties": {
+                "apiGroup": {
+                    "description": "APIGroup is the group for the resource being referenced.\nIf APIGroup is not specified, the specified Kind must be in the core API group.\nFor any other third-party types, APIGroup is required.\n+optional",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind is the type of resource being referenced",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is the name of resource being referenced",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "Namespace is the namespace of resource being referenced\nNote that when a namespace is specified, a gateway.networking.k8s.io/ReferenceGrant object is required in the referent namespace to allow that namespace's owner to accept the reference. See the ReferenceGrant documentation for details.\n(Alpha) This field requires the CrossNamespaceVolumeDataSource feature gate to be enabled.\n+featureGate=CrossNamespaceVolumeDataSource\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.URIScheme": {
+            "type": "string",
+            "enum": [
+                "HTTP",
+                "HTTPS"
+            ],
+            "x-enum-varnames": [
+                "URISchemeHTTP",
+                "URISchemeHTTPS"
+            ]
+        },
+        "v1.UnhealthyPodEvictionPolicyType": {
+            "type": "string",
+            "enum": [
+                "IfHealthyBudget",
+                "AlwaysAllow"
+            ],
+            "x-enum-varnames": [
+                "IfHealthyBudget",
+                "AlwaysAllow"
+            ]
+        },
+        "v1.UnsatisfiableConstraintAction": {
+            "type": "string",
+            "enum": [
+                "DoNotSchedule",
+                "ScheduleAnyway"
+            ],
+            "x-enum-varnames": [
+                "DoNotSchedule",
+                "ScheduleAnyway"
+            ]
+        },
+        "v1.Volume": {
+            "type": "object",
+            "properties": {
+                "awsElasticBlockStore": {
+                    "description": "awsElasticBlockStore represents an AWS Disk resource that is attached to a\nkubelet's host machine and then exposed to the pod.\nDeprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree\nawsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.AWSElasticBlockStoreVolumeSource"
+                        }
+                    ]
+                },
+                "azureDisk": {
+                    "description": "azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod.\nDeprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type\nare redirected to the disk.csi.azure.com CSI driver.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.AzureDiskVolumeSource"
+                        }
+                    ]
+                },
+                "azureFile": {
+                    "description": "azureFile represents an Azure File Service mount on the host and bind mount to the pod.\nDeprecated: AzureFile is deprecated. All operations for the in-tree azureFile type\nare redirected to the file.csi.azure.com CSI driver.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.AzureFileVolumeSource"
+                        }
+                    ]
+                },
+                "cephfs": {
+                    "description": "cephFS represents a Ceph FS mount on the host that shares a pod's lifetime.\nDeprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.CephFSVolumeSource"
+                        }
+                    ]
+                },
+                "cinder": {
+                    "description": "cinder represents a cinder volume attached and mounted on kubelets host machine.\nDeprecated: Cinder is deprecated. All operations for the in-tree cinder type\nare redirected to the cinder.csi.openstack.org CSI driver.\nMore info: https://examples.k8s.io/mysql-cinder-pd/README.md\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.CinderVolumeSource"
+                        }
+                    ]
+                },
+                "configMap": {
+                    "description": "configMap represents a configMap that should populate this volume\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ConfigMapVolumeSource"
+                        }
+                    ]
+                },
+                "csi": {
+                    "description": "csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.CSIVolumeSource"
+                        }
+                    ]
+                },
+                "downwardAPI": {
+                    "description": "downwardAPI represents downward API about the pod that should populate this volume\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.DownwardAPIVolumeSource"
+                        }
+                    ]
+                },
+                "emptyDir": {
+                    "description": "emptyDir represents a temporary directory that shares a pod's lifetime.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.EmptyDirVolumeSource"
+                        }
+                    ]
+                },
+                "ephemeral": {
+                    "description": "ephemeral represents a volume that is handled by a cluster storage driver.\nThe volume's lifecycle is tied to the pod that defines it - it will be created before the pod starts,\nand deleted when the pod is removed.\n\nUse this if:\na) the volume is only needed while the pod runs,\nb) features of normal volumes like restoring from snapshot or capacity\n   tracking are needed,\nc) the storage driver is specified through a storage class, and\nd) the storage driver supports dynamic volume provisioning through\n   a PersistentVolumeClaim (see EphemeralVolumeSource for more\n   information on the connection between this volume type\n   and PersistentVolumeClaim).\n\nUse PersistentVolumeClaim or one of the vendor-specific\nAPIs for volumes that persist for longer than the lifecycle\nof an individual pod.\n\nUse CSI for light-weight local ephemeral volumes if the CSI driver is meant to\nbe used that way - see the documentation of the driver for\nmore information.\n\nA pod can use both types of ephemeral volumes and\npersistent volumes at the same time.\n\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.EphemeralVolumeSource"
+                        }
+                    ]
+                },
+                "fc": {
+                    "description": "fc represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.FCVolumeSource"
+                        }
+                    ]
+                },
+                "flexVolume": {
+                    "description": "flexVolume represents a generic volume resource that is\nprovisioned/attached using an exec based plugin.\nDeprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.FlexVolumeSource"
+                        }
+                    ]
+                },
+                "flocker": {
+                    "description": "flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running.\nDeprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.FlockerVolumeSource"
+                        }
+                    ]
+                },
+                "gcePersistentDisk": {
+                    "description": "gcePersistentDisk represents a GCE Disk resource that is attached to a\nkubelet's host machine and then exposed to the pod.\nDeprecated: GCEPersistentDisk is deprecated. All operations for the in-tree\ngcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.GCEPersistentDiskVolumeSource"
+                        }
+                    ]
+                },
+                "gitRepo": {
+                    "description": "gitRepo represents a git repository at a particular revision.\nDeprecated: GitRepo is deprecated. To provision a container with a git repo, mount an\nEmptyDir into an InitContainer that clones the repo using git, then mount the EmptyDir\ninto the Pod's container.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.GitRepoVolumeSource"
+                        }
+                    ]
+                },
+                "glusterfs": {
+                    "description": "glusterfs represents a Glusterfs mount on the host that shares a pod's lifetime.\nDeprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.GlusterfsVolumeSource"
+                        }
+                    ]
+                },
+                "hostPath": {
+                    "description": "hostPath represents a pre-existing file or directory on the host\nmachine that is directly exposed to the container. This is generally\nused for system agents or other privileged things that are allowed\nto see the host machine. Most containers will NOT need this.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath\n---\nTODO(jonesdl) We need to restrict who can use host directory mounts and who can/can not\nmount host directories as read/write.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.HostPathVolumeSource"
+                        }
+                    ]
+                },
+                "image": {
+                    "description": "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.\nThe volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.\n- Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.\n- IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.\nA failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.\nThe types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.\nThe OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.\nThe volume will be mounted read-only (ro) and non-executable files (noexec).\nSub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.\nThe field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.\n+featureGate=ImageVolume\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ImageVolumeSource"
+                        }
+                    ]
+                },
+                "iscsi": {
+                    "description": "iscsi represents an ISCSI Disk resource that is attached to a\nkubelet's host machine and then exposed to the pod.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes/#iscsi\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ISCSIVolumeSource"
+                        }
+                    ]
+                },
+                "name": {
+                    "description": "name of the volume.\nMust be a DNS_LABEL and unique within the pod.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names",
+                    "type": "string"
+                },
+                "nfs": {
+                    "description": "nfs represents an NFS mount on the host that shares a pod's lifetime\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#nfs\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.NFSVolumeSource"
+                        }
+                    ]
+                },
+                "persistentVolumeClaim": {
+                    "description": "persistentVolumeClaimVolumeSource represents a reference to a\nPersistentVolumeClaim in the same namespace.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PersistentVolumeClaimVolumeSource"
+                        }
+                    ]
+                },
+                "photonPersistentDisk": {
+                    "description": "photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine.\nDeprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PhotonPersistentDiskVolumeSource"
+                        }
+                    ]
+                },
+                "portworxVolume": {
+                    "description": "portworxVolume represents a portworx volume attached and mounted on kubelets host machine.\nDeprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type\nare redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate\nis on.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PortworxVolumeSource"
+                        }
+                    ]
+                },
+                "projected": {
+                    "description": "projected items for all in one resources secrets, configmaps, and downward API",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ProjectedVolumeSource"
+                        }
+                    ]
+                },
+                "quobyte": {
+                    "description": "quobyte represents a Quobyte mount on the host that shares a pod's lifetime.\nDeprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.QuobyteVolumeSource"
+                        }
+                    ]
+                },
+                "rbd": {
+                    "description": "rbd represents a Rados Block Device mount on the host that shares a pod's lifetime.\nDeprecated: RBD is deprecated and the in-tree rbd type is no longer supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.RBDVolumeSource"
+                        }
+                    ]
+                },
+                "scaleIO": {
+                    "description": "scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.\nDeprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ScaleIOVolumeSource"
+                        }
+                    ]
+                },
+                "secret": {
+                    "description": "secret represents a secret that should populate this volume.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#secret\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretVolumeSource"
+                        }
+                    ]
+                },
+                "storageos": {
+                    "description": "storageOS represents a StorageOS volume attached and mounted on Kubernetes nodes.\nDeprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.StorageOSVolumeSource"
+                        }
+                    ]
+                },
+                "vsphereVolume": {
+                    "description": "vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine.\nDeprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type\nare redirected to the csi.vsphere.vmware.com CSI driver.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.VsphereVirtualDiskVolumeSource"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.VolumeDevice": {
+            "type": "object",
+            "properties": {
+                "devicePath": {
+                    "description": "devicePath is the path inside of the container that the device will be mapped to.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "name must match the name of a persistentVolumeClaim in the pod",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.VolumeMount": {
+            "type": "object",
+            "properties": {
+                "mountPath": {
+                    "description": "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.",
+                    "type": "string"
+                },
+                "mountPropagation": {
+                    "description": "mountPropagation determines how mounts are propagated from the host\nto container and the other way around.\nWhen not set, MountPropagationNone is used.\nThis field is beta in 1.10.\nWhen RecursiveReadOnly is set to IfPossible or to Enabled, MountPropagation must be None or unspecified\n(which defaults to None).\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.MountPropagationMode"
+                        }
+                    ]
+                },
+                "name": {
+                    "description": "This must match the Name of a Volume.",
+                    "type": "string"
+                },
+                "readOnly": {
+                    "description": "Mounted read-only if true, read-write otherwise (false or unspecified).\nDefaults to false.\n+optional",
+                    "type": "boolean"
+                },
+                "recursiveReadOnly": {
+                    "description": "RecursiveReadOnly specifies whether read-only mounts should be handled\nrecursively.\n\nIf ReadOnly is false, this field has no meaning and must be unspecified.\n\nIf ReadOnly is true, and this field is set to Disabled, the mount is not made\nrecursively read-only.  If this field is set to IfPossible, the mount is made\nrecursively read-only, if it is supported by the container runtime.  If this\nfield is set to Enabled, the mount is made recursively read-only if it is\nsupported by the container runtime, otherwise the pod will not be started and\nan error will be generated to indicate the reason.\n\nIf this field is set to IfPossible or Enabled, MountPropagation must be set to\nNone (or be unspecified, which defaults to None).\n\nIf this field is not specified, it is treated as an equivalent of Disabled.\n\n+featureGate=RecursiveReadOnlyMounts\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.RecursiveReadOnlyMode"
+                        }
+                    ]
+                },
+                "subPath": {
+                    "description": "Path within the volume from which the container's volume should be mounted.\nDefaults to \"\" (volume's root).\n+optional",
+                    "type": "string"
+                },
+                "subPathExpr": {
+                    "description": "Expanded path within the volume from which the container's volume should be mounted.\nBehaves similarly to SubPath but environment variable references $(VAR_NAME) are expanded using the container's environment.\nDefaults to \"\" (volume's root).\nSubPathExpr and SubPath are mutually exclusive.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
         "v1.VolumeMountStatus": {
             "type": "object",
             "properties": {
@@ -3797,6 +10407,152 @@ const docTemplate = `{
                             "$ref": "#/definitions/v1.RecursiveReadOnlyMode"
                         }
                     ]
+                }
+            }
+        },
+        "v1.VolumeNodeAffinity": {
+            "type": "object",
+            "properties": {
+                "required": {
+                    "description": "required specifies hard node constraints that must be met.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.NodeSelector"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.VolumeProjection": {
+            "type": "object",
+            "properties": {
+                "clusterTrustBundle": {
+                    "description": "ClusterTrustBundle allows a pod to access the ` + "`" + `.spec.trustBundle` + "`" + ` field\nof ClusterTrustBundle objects in an auto-updating file.\n\nAlpha, gated by the ClusterTrustBundleProjection feature gate.\n\nClusterTrustBundle objects can either be selected by name, or by the\ncombination of signer name and a label selector.\n\nKubelet performs aggressive normalization of the PEM contents written\ninto the pod filesystem.  Esoteric PEM features such as inter-block\ncomments and block headers are stripped.  Certificates are deduplicated.\nThe ordering of certificates within the file is arbitrary, and Kubelet\nmay change the order over time.\n\n+featureGate=ClusterTrustBundleProjection\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ClusterTrustBundleProjection"
+                        }
+                    ]
+                },
+                "configMap": {
+                    "description": "configMap information about the configMap data to project\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ConfigMapProjection"
+                        }
+                    ]
+                },
+                "downwardAPI": {
+                    "description": "downwardAPI information about the downwardAPI data to project\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.DownwardAPIProjection"
+                        }
+                    ]
+                },
+                "podCertificate": {
+                    "description": "Projects an auto-rotating credential bundle (private key and certificate\nchain) that the pod can use either as a TLS client or server.\n\nKubelet generates a private key and uses it to send a\nPodCertificateRequest to the named signer.  Once the signer approves the\nrequest and issues a certificate chain, Kubelet writes the key and\ncertificate chain to the pod filesystem.  The pod does not start until\ncertificates have been issued for each podCertificate projected volume\nsource in its spec.\n\nKubelet will begin trying to rotate the certificate at the time indicated\nby the signer using the PodCertificateRequest.Status.BeginRefreshAt\ntimestamp.\n\nKubelet can write a single file, indicated by the credentialBundlePath\nfield, or separate files, indicated by the keyPath and\ncertificateChainPath fields.\n\nThe credential bundle is a single file in PEM format.  The first PEM\nentry is the private key (in PKCS#8 format), and the remaining PEM\nentries are the certificate chain issued by the signer (typically,\nsigners will return their certificate chain in leaf-to-root order).\n\nPrefer using the credential bundle format, since your application code\ncan read it atomically.  If you use keyPath and certificateChainPath,\nyour application must make two separate file reads. If these coincide\nwith a certificate rotation, it is possible that the private key and leaf\ncertificate you read may not correspond to each other.  Your application\nwill need to check for this condition, and re-read until they are\nconsistent.\n\nThe named signer controls chooses the format of the certificate it\nissues; consult the signer implementation's documentation to learn how to\nuse the certificates it issues.\n\n+featureGate=PodCertificateProjection +optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodCertificateProjection"
+                        }
+                    ]
+                },
+                "secret": {
+                    "description": "secret information about the secret data to project\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretProjection"
+                        }
+                    ]
+                },
+                "serviceAccountToken": {
+                    "description": "serviceAccountToken is information about the serviceAccountToken data to project\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ServiceAccountTokenProjection"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.VolumeResourceRequirements": {
+            "type": "object",
+            "properties": {
+                "limits": {
+                    "description": "Limits describes the maximum amount of compute resources allowed.\nMore info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceList"
+                        }
+                    ]
+                },
+                "requests": {
+                    "description": "Requests describes the minimum amount of compute resources required.\nIf Requests is omitted for a container, it defaults to Limits if that is explicitly specified,\notherwise to an implementation-defined value. Requests cannot exceed Limits.\nMore info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ResourceList"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.VsphereVirtualDiskVolumeSource": {
+            "type": "object",
+            "properties": {
+                "fsType": {
+                    "description": "fsType is filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\n+optional",
+                    "type": "string"
+                },
+                "storagePolicyID": {
+                    "description": "storagePolicyID is the storage Policy Based Management (SPBM) profile ID associated with the StoragePolicyName.\n+optional",
+                    "type": "string"
+                },
+                "storagePolicyName": {
+                    "description": "storagePolicyName is the storage Policy Based Management (SPBM) profile name.\n+optional",
+                    "type": "string"
+                },
+                "volumePath": {
+                    "description": "volumePath is the path that identifies vSphere volume vmdk",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.WeightedPodAffinityTerm": {
+            "type": "object",
+            "properties": {
+                "podAffinityTerm": {
+                    "description": "Required. A pod affinity term, associated with the corresponding weight.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PodAffinityTerm"
+                        }
+                    ]
+                },
+                "weight": {
+                    "description": "weight associated with matching the corresponding podAffinityTerm,\nin the range 1-100.",
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.WindowsSecurityContextOptions": {
+            "type": "object",
+            "properties": {
+                "gmsaCredentialSpec": {
+                    "description": "GMSACredentialSpec is where the GMSA admission webhook\n(https://github.com/kubernetes-sigs/windows-gmsa) inlines the contents of the\nGMSA credential spec named by the GMSACredentialSpecName field.\n+optional",
+                    "type": "string"
+                },
+                "gmsaCredentialSpecName": {
+                    "description": "GMSACredentialSpecName is the name of the GMSA credential spec to use.\n+optional",
+                    "type": "string"
+                },
+                "hostProcess": {
+                    "description": "HostProcess determines if a container should be run as a 'Host Process' container.\nAll of a Pod's containers must have the same effective HostProcess value\n(it is not allowed to have a mix of HostProcess containers and non-HostProcess containers).\nIn addition, if HostProcess is true then HostNetwork must also be set to true.\n+optional",
+                    "type": "boolean"
+                },
+                "runAsUserName": {
+                    "description": "The UserName in Windows to run the entrypoint of the container process.\nDefaults to the user specified in image metadata if unspecified.\nMay also be set in PodSecurityContext. If set in both SecurityContext and\nPodSecurityContext, the value specified in SecurityContext takes precedence.\n+optional",
+                    "type": "string"
                 }
             }
         }

@@ -2,9 +2,11 @@ package jobinfo
 
 import (
 	"context"
+	"errors"
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/model/v10"
 )
 
@@ -21,14 +23,12 @@ type DefaultJobInfo struct {
 
 // JobLabels returns the set of labels to use for all Kubernetes resources associated with the given job.
 func (j *DefaultJobInfo) JobLabels(ctx context.Context, job *model.Job) (map[string]string, error) {
-	name := []rune(job.Name)
-
-	var stringmax int
-	if len(name) >= 63 {
-		stringmax = 62
-	} else {
-		stringmax = len(name) - 1
+	if job.Name == "" {
+		return nil, errors.New("job name must not be empty")
 	}
+
+	name := []rune(job.Name)
+	stringmax := min(len(name), 63)
 
 	ipAddr, err := j.Apps.GetUserIP(ctx, job.UserID)
 	if err != nil {
@@ -36,19 +36,20 @@ func (j *DefaultJobInfo) JobLabels(ctx context.Context, job *model.Job) (map[str
 	}
 
 	return map[string]string{
-		"external-id":   job.InvocationID,
-		"app-name":      common.LabelValueString(job.AppName),
-		"app-id":        job.AppID,
-		"username":      common.LabelValueString(job.Submitter),
-		"user-id":       job.UserID,
-		"analysis-name": common.LabelValueString(string(name[:stringmax])),
-		"app-type":      "interactive",
-		"subdomain":     common.Subdomain(job.UserID, job.InvocationID),
-		"login-ip":      ipAddr,
+		constants.ExternalIDLabel: job.InvocationID,
+		constants.AnalysisIDLabel: job.ID,
+		constants.AppNameLabel:    common.LabelValueString(job.AppName),
+		constants.AppIDLabel:      job.AppID,
+		constants.UsernameLabel:   common.LabelValueString(job.Submitter),
+		constants.UserIDLabel:     job.UserID,
+		"analysis-name":           common.LabelValueString(string(name[:stringmax])),
+		constants.AppTypeLabel:    "interactive",
+		constants.SubdomainLabel:  common.Subdomain(job.UserID, job.InvocationID),
+		"login-ip":                ipAddr,
 	}, nil
 }
 
 // NewJobInfo returns an implementation of JobInfo for the given Apps instance.
 func NewJobInfo(apps *apps.Apps) JobInfo {
-	return JobInfo(&DefaultJobInfo{Apps: apps})
+	return &DefaultJobInfo{Apps: apps}
 }

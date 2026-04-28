@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Launching: {{.AppName}}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --cobalt: #0971AB;
+            --cobalt-light: rgba(9, 113, 171, 0.12);
+            --navy: #004471;
+            --dark-navy: #142248;
+            --sky: #99D9EA;
+            --sky-pale: rgba(153, 217, 234, 0.15);
+            --grass: #7CB342;
+            --alert-red: #AF0404;
+            --bg: #f4f4f4;
+            --card: #ffffff;
+            --text: #333333;
+            --text-muted: #48515f;
+            --text-faint: #a5a4a4;
+            --border: #e2e2e2;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(9, 113, 171, 0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(20, 34, 72, 0.05) 0%, transparent 60%);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: var(--card);
+            border-radius: 12px;
+            box-shadow:
+                0 1px 3px rgba(0, 0, 0, 0.06),
+                0 8px 24px rgba(20, 34, 72, 0.08);
+            padding: 48px 40px 40px;
+            max-width: 560px;
+            width: 90%;
+            text-align: center;
+            animation: fadeUp 0.4s ease-out;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* CyVerse leaf mark. */
+        .brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 28px;
+        }
+
+        .brand svg {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 500;
+            color: var(--dark-navy);
+            letter-spacing: -0.01em;
+        }
+
+        /* Progress track and fill. */
+        .progress-bar {
+            background: var(--border);
+            border-radius: 6px;
+            height: 6px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, var(--cobalt), var(--sky));
+            height: 100%;
+            border-radius: 6px;
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 0%;
+            position: relative;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                rgba(255, 255, 255, 0.3) 50%,
+                transparent 100%
+            );
+            animation: shimmer 2s ease-in-out infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .progress-fill.error {
+            background: var(--alert-red);
+        }
+
+        .progress-fill.error::after { display: none; }
+
+        .progress-fill.ready {
+            background: var(--grass);
+        }
+
+        .progress-fill.ready::after { display: none; }
+
+        .status-msg {
+            font-size: 0.9rem;
+            font-weight: 400;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            transition: color 0.3s ease;
+        }
+
+        .status-msg.error {
+            color: var(--alert-red);
+            font-weight: 500;
+        }
+
+        .status-msg.ready {
+            color: var(--grass);
+            font-weight: 500;
+        }
+
+        .support-link {
+            display: none;
+            margin-top: 16px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--cobalt);
+            text-decoration: none;
+            padding: 8px 20px;
+            border: 1px solid var(--cobalt);
+            border-radius: 6px;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+
+        .support-link:hover {
+            background: var(--cobalt);
+            color: #fff;
+        }
+
+        .details-toggle {
+            margin-top: 24px;
+            font-size: 0.8rem;
+            font-weight: 400;
+            color: var(--text-faint);
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.2s ease;
+        }
+
+        .details-toggle:hover { color: var(--text-muted); }
+
+        .details {
+            display: none;
+            margin-top: 12px;
+            text-align: left;
+            font-size: 0.78rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .details pre {
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: 'Roboto Mono', 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 0.85em;
+            line-height: 1.6;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="brand">
+            <!-- CyVerse leaf mark (inline SVG). -->
+            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M50 10 C25 25, 10 55, 20 85 C30 70, 45 55, 50 50 C55 55, 70 70, 80 85 C90 55, 75 25, 50 10Z"
+                      fill="var(--cobalt)" opacity="0.85"/>
+                <path d="M50 50 L50 85" stroke="var(--sky)" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+                <path d="M50 60 L38 52" stroke="var(--sky)" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+                <path d="M50 68 L62 58" stroke="var(--sky)" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+            </svg>
+            <h1>Launching: {{.AppName}}</h1>
+        </div>
+
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress"></div>
+        </div>
+        <div class="status-msg" id="status">Connecting...</div>
+        <a class="support-link" id="support"
+           href="mailto:support@cyverse.org?subject=VICE%20Launch%20Failure%20-%20{{.AnalysisID}}">
+            Contact Support
+        </a>
+        <div class="details-toggle" id="toggle">Show Details</div>
+        <div class="details" id="details">
+            <pre id="details-content">Waiting for status...</pre>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        var analysisID = "{{.AnalysisID}}";
+        var timeoutMs = {{.TimeoutMs}};
+        var startTime = Date.now();
+        var pollInterval = 5000;
+        // The ready-reload delay gives the Gateway time to reconcile the
+        // HTTPRoute swap into data-plane config before the browser reloads.
+        // Too short and the reload races the swap and lands on a fresh
+        // loading page that can never recover.
+        var readyReloadDelayMs = 3000;
+        // Consecutive poll failures that trigger an auto-reload. Once the
+        // HTTPRoute swaps, /loading/status stops existing on this host and
+        // every poll 404s — reloading is the only way for the browser to
+        // re-resolve through the gateway and land on the analysis service.
+        var maxConsecutiveErrors = 2;
+        var consecutiveErrors = 0;
+        var progress = document.getElementById("progress");
+        var status = document.getElementById("status");
+        var support = document.getElementById("support");
+        var toggle = document.getElementById("toggle");
+        var details = document.getElementById("details");
+        var detailsContent = document.getElementById("details-content");
+        var detailsVisible = false;
+
+        toggle.addEventListener("click", function() {
+            detailsVisible = !detailsVisible;
+            details.style.display = detailsVisible ? "block" : "none";
+            toggle.textContent = detailsVisible ? "Hide Details" : "Show Details";
+        });
+
+        var stageProgress = {
+            "deploying": 20,
+            "starting": 50,
+            "almost-ready": 80,
+            "ready": 100,
+            "error": 0
+        };
+
+        var stageMessages = {
+            "deploying": "Deploying your analysis environment...",
+            "starting": "Starting services...",
+            "almost-ready": "Almost ready...",
+            "ready": "Ready! Redirecting...",
+            "error": "Failed to start."
+        };
+
+        function poll() {
+            // Check client-side timeout.
+            if (timeoutMs > 0 && (Date.now() - startTime) > timeoutMs) {
+                showError("Launch timed out. Please contact support.", {
+                    stage: "client-timeout",
+                    error: "client-side timeout after " + timeoutMs + "ms"
+                });
+                return;
+            }
+
+            fetch("/loading/status")
+                .then(function(resp) {
+                    if (!resp.ok) throw new Error("status " + resp.status);
+                    return resp.json();
+                })
+                .then(function(data) {
+                    consecutiveErrors = 0;
+                    var pct = stageProgress[data.stage] || 0;
+                    progress.style.width = pct + "%";
+
+                    if (data.stage === "error") {
+                        // Show a friendly message; the raw error goes into the
+                        // details panel and the Contact Support mailto body so
+                        // the user isn't confronted with Kubernetes jargon.
+                        showError(
+                            "We couldn't bring your analysis online. " +
+                            "Please terminate it from the analyses page and " +
+                            "try launching again, or contact support if this " +
+                            "keeps happening.",
+                            data
+                        );
+                        updateDetails(data);
+                        return;
+                    }
+
+                    if (data.stage === "ready") {
+                        progress.className = "progress-fill ready";
+                        status.className = "status-msg ready";
+                    } else {
+                        progress.className = "progress-fill";
+                        status.className = "status-msg";
+                    }
+
+                    status.textContent = stageMessages[data.stage] || data.stage;
+                    updateDetails(data);
+
+                    if (data.ready) {
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, readyReloadDelayMs);
+                        return;
+                    }
+
+                    setTimeout(poll, pollInterval);
+                })
+                .catch(function(err) {
+                    console.warn("poll error:", err);
+                    consecutiveErrors++;
+                    // If /loading/status has become unreachable for several
+                    // polls in a row, the HTTPRoute has likely swapped to
+                    // the analysis service. Reload so the browser routes
+                    // fresh through the gateway and lands on the app.
+                    if (consecutiveErrors >= maxConsecutiveErrors) {
+                        window.location.reload();
+                        return;
+                    }
+                    setTimeout(poll, pollInterval);
+                });
+        }
+
+        function showError(msg, data) {
+            status.textContent = msg;
+            status.className = "status-msg error";
+            progress.className = "progress-fill error";
+            support.style.display = "inline-block";
+            // Rebuild the Contact Support mailto with the specifics support
+            // needs to triage: analysis ID, stage at failure, raw error,
+            // and the moment the failure was observed. Saves the user from
+            // copying fields out of the Details panel and saves support a
+            // round-trip asking for logs.
+            if (data) {
+                updateSupportLink(data);
+            }
+        }
+
+        function updateSupportLink(data) {
+            var rawError = (data && data.error) ? data.error : "unknown";
+            var stage    = (data && data.stage) ? data.stage : "unknown";
+            var body =
+                "Analysis: " + analysisID + "\n" +
+                "Stage at failure: " + stage + "\n" +
+                "Error: " + rawError + "\n" +
+                "Time: " + new Date().toISOString() + "\n\n" +
+                "(Please describe what you were trying to do.)";
+            support.href =
+                "mailto:support@cyverse.org" +
+                "?subject=" + encodeURIComponent("VICE Launch Failure - " + analysisID) +
+                "&body=" + encodeURIComponent(body);
+        }
+
+        function updateDetails(data) {
+            var lines = [];
+            // Surface the raw error at the top of the details panel when
+            // present. The friendly status message above hides it from
+            // casual users; operators expanding details want to see the
+            // underlying cause first, pod state second.
+            if (data.error) {
+                lines.push("Error: " + data.error);
+                lines.push("");
+            }
+            if (!data.pods || data.pods.length === 0) {
+                if (lines.length === 0) {
+                    detailsContent.textContent = "No pods found yet.";
+                    return;
+                }
+                lines.push("No pods found yet.");
+                detailsContent.textContent = lines.join("\n");
+                return;
+            }
+            data.pods.forEach(function(pod) {
+                lines.push("Pod: " + pod.name + " (" + pod.phase + ", ready=" + pod.ready + ")");
+                if (pod.containerStatuses) {
+                    pod.containerStatuses.forEach(function(cs) {
+                        var line = "  " + cs.name + ": " + cs.state;
+                        if (cs.reason) line += " (" + cs.reason + ")";
+                        line += " ready=" + cs.ready + " restarts=" + cs.restartCount;
+                        lines.push(line);
+                    });
+                }
+            });
+            detailsContent.textContent = lines.join("\n");
+        }
+
+        poll();
+    })();
+    </script>
+</body>
+</html>

@@ -87,7 +87,7 @@ func (j *JSLPublisher) postStatus(ctx context.Context, jobID, msg string, jobSta
 			u.String(),
 		)
 	}
-	defer func() { _ = response.Body.Close() }()
+	defer func() { _ = response.Body.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 	if response.StatusCode < 200 || response.StatusCode > 399 {
 		return errors.Wrapf(
 			err,
@@ -122,6 +122,13 @@ func (j *JSLPublisher) Success(ctx context.Context, jobID, msg string) error {
 func (j *JSLPublisher) Running(ctx context.Context, jobID, msg string) error {
 	log.Warnf("Sending running job status update for external-id %s", jobID)
 	return j.postStatus(ctx, jobID, msg, messaging.RunningState)
+}
+
+// PublishFailure publishes a failure status update for the given external ID.
+// This exposes the status publisher's Fail method for use by other packages
+// (e.g. httphandlers) without exporting the publisher itself.
+func (i *Incluster) PublishFailure(ctx context.Context, externalID, msg string) error {
+	return i.statusPublisher.Fail(ctx, externalID, msg)
 }
 
 func hostname() string {

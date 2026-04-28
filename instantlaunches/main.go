@@ -86,7 +86,7 @@ type FullInstantLaunch struct {
 // NewInstantLaunchFromJSON instantiates and returns a new *InstantLaunch from the
 // ReadCloser passed in. The ReadCloser is closed as part of this function.
 func NewInstantLaunchFromJSON(r io.ReadCloser) (*InstantLaunch, error) {
-	defer func() { _ = r.Close() }()
+	defer func() { _ = r.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 
 	il := &InstantLaunch{}
 
@@ -138,7 +138,7 @@ func (i InstantLaunchMapping) Value() (driver.Value, error) {
 func InstantLaunchMappingFromJSON(r io.ReadCloser) (*InstantLaunchMapping, error) {
 	il := &InstantLaunchMapping{}
 
-	defer func() { _ = r.Close() }()
+	defer func() { _ = r.Close() }() //nolint:errcheck // pre-existing swallow; tracked for a future sweep
 	readbytes, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err

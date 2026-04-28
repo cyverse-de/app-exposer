@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	defaultStorageCapacity, _ = resourcev1.ParseQuantity("5Gi")
+	defaultStorageCapacity, _ = resourcev1.ParseQuantity("5Gi") //nolint:errcheck // pre-existing; hard-coded literal can't fail to parse
 )
 
 func persistentVolumeName(analysis *model.Analysis) string {
@@ -207,8 +207,10 @@ func (i *Incluster) getPersistentVolumes(ctx context.Context, job *model.Job) ([
 							"client":              "irodsfuse",
 							"path_mapping_json":   string(dataPathMappingsJSONBytes),
 							"no_permission_check": "true",
-							// use proxy access
-							"clientUser": job.Submitter,
+							// use proxy access — iRODS expects the short username
+							// without the domain suffix (e.g. "wregglej" not
+							// "wregglej@iplantcollaborative.org").
+							"clientUser": strings.SplitN(job.Submitter, "@", 2)[0],
 							"uid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
 							"gid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
 						},
@@ -363,7 +365,7 @@ func (i *Incluster) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMou
 // it returns the objects that can be included in the Deployment object that
 // will get passed to the k8s API later. Also not that these are the Volumes,
 // not the container-specific VolumeMounts.
-func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
+func (i *Incluster) deploymentVolumes(job *model.Job) ([]apiv1.Volume, error) {
 	output := []apiv1.Volume{}
 
 	if len(job.FilterInputsWithoutTickets()) > 0 {
@@ -389,16 +391,16 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 	// 	},
 	// )
 
-	if i.UseCSIDriver {
-		volumeSources, err := i.getPersistentVolumeSources(job)
-		if err != nil {
-			log.Warn(err)
-		} else {
-			for _, volumeSource := range volumeSources {
-				output = append(output, *volumeSource)
-			}
-		}
-	} else {
+	// Always add persistent volume sources (includes working-dir volume, and CSI data volume when enabled).
+	volumeSources, err := i.getPersistentVolumeSources(job)
+	if err != nil {
+		return nil, fmt.Errorf("getting persistent volume sources: %w", err)
+	}
+	for _, volumeSource := range volumeSources {
+		output = append(output, *volumeSource)
+	}
+
+	if !i.UseCSIDriver {
 		output = append(output,
 			apiv1.Volume{
 				Name: constants.PorklockConfigVolumeName,
@@ -424,6 +426,21 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 		},
 	)
 
+	// Permissions ConfigMap volume — mounted into vice-proxy so it can
+	// authorize users by reading the allowed-users file.
+	output = append(output,
+		apiv1.Volume{
+			Name: constants.PermissionsVolumeName,
+			VolumeSource: apiv1.VolumeSource{
+				ConfigMap: &apiv1.ConfigMapVolumeSource{
+					LocalObjectReference: apiv1.LocalObjectReference{
+						Name: permissionsConfigMapName(job),
+					},
+				},
+			},
+		},
+	)
+
 	shmSize := resourcing.SharedMemoryAmount(job)
 	if shmSize != nil {
 		output = append(output,
@@ -439,7 +456,7 @@ func (i *Incluster) deploymentVolumes(job *model.Job) []apiv1.Volume {
 		)
 	}
 
-	return output
+	return output, nil
 }
 
 func (i *Incluster) deploymentVolumeMounts(job *model.Job) []apiv1.VolumeMount {
