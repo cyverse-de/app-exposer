@@ -11,3 +11,5 @@ local-test-config.yml
 k8s/vice-operator-local.*
 k8s/vice-operator.yml
 k8s/vice-operator-qa.yml
+.claude/settings.local.json
+.claude/*.lock
