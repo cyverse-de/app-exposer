@@ -48,6 +48,9 @@ func NewApp(op *operator.Operator, verifier *oidc.IDTokenVerifier, expectedClien
 
 		docs := e.Group("/docs")
 		docs.Use(swaggerSessionMiddleware(verifier, swaggerCfg))
+		// InstanceName must match the --instanceName passed to swag init for
+		// operatordocs (see Justfile); a mismatch causes echo-swagger to 500
+		// on doc.json without logging.
 		docs.GET("/*", echoSwagger.EchoWrapHandler(echoSwagger.InstanceName("operator")))
 	} else {
 		e.GET("/docs/*", echoSwagger.EchoWrapHandler(echoSwagger.InstanceName("operator")))

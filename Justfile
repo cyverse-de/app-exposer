@@ -136,7 +136,12 @@ fmt-operator-docs:
     swag fmt -g app.go -d cmd/vice-operator/,operator/,operatorclient/,common/
 
 operator-docs: fmt-operator-docs
-    swag init --parseDependency -g app.go -d cmd/vice-operator/,operator/,operatorclient/,common/ -o operatordocs/
+    # Use [[/]] delimiters because the operator's API surfaces Gateway API
+    # CRD types whose godoc contains literal Go-template-style braces in
+    # kubebuilder default annotations, which break Go template parsing when
+    # the default delimiters are used.
+    # InstanceName must match the echoSwagger handler in cmd/vice-operator/app.go.
+    swag init --parseDependency -g app.go -d cmd/vice-operator/,operator/,operatorclient/,common/ -o operatordocs/ --instanceName operator --templateDelims '[[,]]'
 
 clean:
     #!/usr/bin/env bash

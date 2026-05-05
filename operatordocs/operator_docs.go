@@ -3,17 +3,17 @@ package operatordocs
 
 import "github.com/swaggo/swag"
 
-const docTemplate = `{
-    "schemes": {{ marshal .Schemes }},
+const docTemplateoperator = `{
+    "schemes": [[ marshal .Schemes ]],
     "swagger": "2.0",
     "info": {
-        "description": "{{escape .Description}}",
-        "title": "{{.Title}}",
+        "description": "[[escape .Description]]",
+        "title": "[[.Title]]",
         "contact": {},
-        "version": "{{.Version}}"
+        "version": "[[.Version]]"
     },
-    "host": "{{.Host}}",
-    "basePath": "{{.BasePath}}",
+    "host": "[[.Host]]",
+    "basePath": "[[.BasePath]]",
     "paths": {
         "/analyses": {
             "get": {
@@ -9007,20 +9007,20 @@ const docTemplate = `{
     }
 }`
 
-// SwaggerInfo holds exported Swagger Info so clients can modify it
-var SwaggerInfo = &swag.Spec{
+// SwaggerInfooperator holds exported Swagger Info so clients can modify it
+var SwaggerInfooperator = &swag.Spec{
 	Version:          "1.0",
 	Host:             "",
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "vice-operator",
 	Description:      "The vice-operator API for managing VICE analyses on remote clusters.",
-	InfoInstanceName: "swagger",
-	SwaggerTemplate:  docTemplate,
-	LeftDelim:        "{{",
-	RightDelim:       "}}",
+	InfoInstanceName: "operator",
+	SwaggerTemplate:  docTemplateoperator,
+	LeftDelim:        "[[",
+	RightDelim:       "]]",
 }
 
 func init() {
-	swag.Register(SwaggerInfo.InstanceName(), SwaggerInfo)
+	swag.Register(SwaggerInfooperator.InstanceName(), SwaggerInfooperator)
 }
