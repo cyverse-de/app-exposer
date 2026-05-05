@@ -234,6 +234,19 @@ func getIntField(v any, name string) int {
 func minGPUs(c model.Container) int { return getIntField(c, "MinGPUs") }
 func maxGPUs(c model.Container) int { return getIntField(c, "MaxGPUs") }
 
+// gpuCount returns the preferred GPU count, falling back to the alternate
+// when the preferred field is unset. Returns 1 if both are zero so legacy
+// device-path detection still yields a valid GPU resource quantity.
+func gpuCount(preferred, fallback int) int {
+	if preferred > 0 {
+		return preferred
+	}
+	if fallback > 0 {
+		return fallback
+	}
+	return 1
+}
+
 // getStringSliceField is a reflection helper to safely read a string slice field
 // from a struct value. Returns empty slice when the field doesn't exist or
 // can't be converted to a []string.
@@ -383,14 +396,13 @@ func resourceRequests(analysis *model.Analysis) apiv1.ResourceList {
 	}
 
 	// Add GPU request if specified. For extended resources like GPUs, requests
-	// should be integers. When only legacy device detection is present, default
-	// the request to 1 to match previous implicit behavior.
+	// should be integers. When only one of MinGPUs/MaxGPUs is set we use that
+	// value for the request so K8s' "request must equal limit for extended
+	// resources" rule doesn't end up clamping a multi-GPU ask down to 1. When
+	// neither is set (legacy /dev/nvidia* device path), default to 1.
 	if GPUEnabled(analysis) {
 		c := analysis.Steps[0].Component.Container
-		requestedGPUs := 1
-		if minGPUs(c) > 0 {
-			requestedGPUs = minGPUs(c)
-		}
+		requestedGPUs := gpuCount(minGPUs(c), maxGPUs(c))
 		if q, err := resourcev1.ParseQuantity(fmt.Sprintf("%d", int64(requestedGPUs))); err == nil {
 			reqs[apiv1.ResourceName("nvidia.com/gpu")] = q
 		} else {
@@ -412,15 +424,13 @@ func resourceLimits(analysis *model.Analysis) apiv1.ResourceList {
 		limits[apiv1.ResourceMemory] = memResourceLimit(analysis)
 	}
 
-	// If GPUs are requested, set the GPU limits appropriately. Prefer the
-	// explicit MaxGPUs field when provided; otherwise, fall back to legacy
-	// device-path detection and a single GPU.
+	// If GPUs are requested, set the GPU limits appropriately. Prefer MaxGPUs;
+	// fall back to MinGPUs when MaxGPUs is unset so a one-sided ask still emits
+	// a non-default limit. When neither is set (legacy /dev/nvidia* device
+	// path), default to 1.
 	if GPUEnabled(analysis) {
 		c := analysis.Steps[0].Component.Container
-		limitGPUs := 1
-		if maxGPUs(c) > 0 {
-			limitGPUs = maxGPUs(c)
-		}
+		limitGPUs := gpuCount(maxGPUs(c), minGPUs(c))
 		if q, err := resourcev1.ParseQuantity(fmt.Sprintf("%d", int64(limitGPUs))); err == nil {
 			limits[apiv1.ResourceName("nvidia.com/gpu")] = q
 		} else {
