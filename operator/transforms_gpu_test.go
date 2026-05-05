@@ -214,7 +214,7 @@ func TestTransformGPUVendor(t *testing.T) {
 }
 
 // TestEqualizeGPUResources verifies that mismatched GPU requests/limits are
-// equalized to the lower value for both NVIDIA and AMD vendors.
+// equalized to the higher value for both NVIDIA and AMD vendors.
 func TestEqualizeGPUResources(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -225,28 +225,28 @@ func TestEqualizeGPUResources(t *testing.T) {
 		wantBoth string // both requests and limits should equal this
 	}{
 		{
-			name:     "nvidia: equalized to lower (requests < limits)",
+			name:     "nvidia: equalized to higher (requests < limits)",
 			vendor:   GPUVendorNvidia,
 			gpuKey:   nvidiaGPUResource,
 			reqQty:   "1",
 			limQty:   "2",
-			wantBoth: "1",
+			wantBoth: "2",
 		},
 		{
-			name:     "nvidia: equalized to lower (limits < requests)",
+			name:     "nvidia: equalized to higher (limits < requests)",
 			vendor:   GPUVendorNvidia,
 			gpuKey:   nvidiaGPUResource,
 			reqQty:   "3",
 			limQty:   "1",
-			wantBoth: "1",
+			wantBoth: "3",
 		},
 		{
-			name:     "amd: equalized to lower (requests < limits)",
+			name:     "amd: equalized to higher (requests < limits)",
 			vendor:   GPUVendorAMD,
 			gpuKey:   amdGPUResource,
 			reqQty:   "1",
 			limQty:   "2",
-			wantBoth: "1",
+			wantBoth: "2",
 		},
 		{
 			name:     "nvidia: already equal is no-op",
@@ -288,9 +288,9 @@ func TestEqualizeGPUResources(t *testing.T) {
 			reqQty := res.Requests[tt.gpuKey]
 			limQty := res.Limits[tt.gpuKey]
 			assert.Equal(t, tt.wantBoth, reqQty.String(),
-				"GPU requests should be equalized to the lower value")
+				"GPU requests should be equalized to the higher value")
 			assert.Equal(t, tt.wantBoth, limQty.String(),
-				"GPU limits should be equalized to the lower value")
+				"GPU limits should be equalized to the higher value")
 		})
 	}
 }

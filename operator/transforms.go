@@ -126,8 +126,8 @@ func renameGPUResource(res *apiv1.ResourceRequirements) {
 // key. Kubernetes requires requests to equal limits for extended resources
 // (like GPUs) because they are discrete devices that cannot be overcommitted.
 // If the analysis definition has mismatched values (e.g. requests=1, limits=2),
-// both are set to the lower of the two, since the request represents the
-// actual number of GPUs needed.
+// both are set to the higher of the two so a multi-GPU ask isn't silently
+// clamped down by a stale or defaulted counterpart.
 //
 // See:
 //   - https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#extended-resources
@@ -138,14 +138,15 @@ func equalizeGPUResources(res *apiv1.ResourceRequirements, gpuKey apiv1.Resource
 
 	switch {
 	case hasLim && hasReq && !limQty.Equal(reqQty):
-		// Both set but mismatched — use the lower value since the request
-		// reflects the actual number of GPUs needed.
-		minQty := reqQty.DeepCopy()
-		if limQty.Cmp(reqQty) < 0 {
-			minQty = limQty.DeepCopy()
+		// Both set but mismatched — use the higher value so the user's
+		// requested GPU count isn't lost when only one side was populated
+		// upstream.
+		maxQty := reqQty.DeepCopy()
+		if limQty.Cmp(reqQty) > 0 {
+			maxQty = limQty.DeepCopy()
 		}
-		res.Requests[gpuKey] = minQty
-		res.Limits[gpuKey] = minQty
+		res.Requests[gpuKey] = maxQty
+		res.Limits[gpuKey] = maxQty
 
 	case hasLim && !hasReq:
 		// Only limits set — copy to requests so K8s accepts the pod.

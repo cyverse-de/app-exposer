@@ -115,6 +115,38 @@ func TestRequirements_EqualMinMaxGPU(t *testing.T) {
 	assert.Equal(t, int64(3), limGPU.Value(), "GPU limit should be 3")
 }
 
+func TestRequirements_OnlyMaxGPUsSet(t *testing.T) {
+	// When apps sends only max_gpus, the request should mirror it instead of
+	// defaulting to 1 — otherwise the operator's equalize step would clamp
+	// the multi-GPU ask back down.
+	a := testAnalysis()
+	a.Steps[0].Component.Container.MaxGPUs = 4
+	reqs := Requirements(a)
+	gpuName := apiv1.ResourceName("nvidia.com/gpu")
+
+	reqGPU := reqs.Requests[gpuName]
+	limGPU := reqs.Limits[gpuName]
+	assert.Equal(t, int64(4), reqGPU.Value(),
+		"GPU request should mirror MaxGPUs when MinGPUs is unset")
+	assert.Equal(t, int64(4), limGPU.Value(),
+		"GPU limit should equal MaxGPUs")
+}
+
+func TestRequirements_OnlyMinGPUsSet(t *testing.T) {
+	// Symmetric to OnlyMaxGPUsSet: a min-only ask should set both sides.
+	a := testAnalysis()
+	a.Steps[0].Component.Container.MinGPUs = 2
+	reqs := Requirements(a)
+	gpuName := apiv1.ResourceName("nvidia.com/gpu")
+
+	reqGPU := reqs.Requests[gpuName]
+	limGPU := reqs.Limits[gpuName]
+	assert.Equal(t, int64(2), reqGPU.Value(),
+		"GPU request should equal MinGPUs")
+	assert.Equal(t, int64(2), limGPU.Value(),
+		"GPU limit should mirror MinGPUs when MaxGPUs is unset")
+}
+
 func TestRequirements_LegacyNvidiaDeviceDefaultsToOne(t *testing.T) {
 	a := testAnalysis()
 	a.Steps[0].Component.Container.Devices = []model.Device{
