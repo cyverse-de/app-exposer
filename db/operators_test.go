@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	"regexp"
 	"testing"
 	"time"
 
@@ -19,8 +18,10 @@ import (
 
 // newTestDB returns a *Database backed by sqlmock so query-shape and
 // argument-binding can be asserted without a live PostgreSQL instance.
-// QueryMatcherEqual is used (after whitespace normalization) so SQL drift
-// fails the test rather than being papered over by a regex matcher.
+// QueryMatcherEqual normalizes whitespace on both expected and actual
+// statements internally, so multi-line SQL constants match without manual
+// pre-processing — and a regex match that could mask unintended SQL
+// drift is avoided.
 func newTestDB(t *testing.T) (*Database, sqlmock.Sqlmock) {
 	t.Helper()
 	rawDB, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
@@ -28,14 +29,6 @@ func newTestDB(t *testing.T) (*Database, sqlmock.Sqlmock) {
 	t.Cleanup(func() { _ = rawDB.Close() })
 	sqlxDB := sqlx.NewDb(rawDB, "postgres")
 	return New(sqlxDB, ""), mock
-}
-
-// whitespaceRE collapses runs of whitespace so multi-line SQL literals
-// match the production query's own multi-line layout.
-var whitespaceRE = regexp.MustCompile(`\s+`)
-
-func normalizeSQL(s string) string {
-	return whitespaceRE.ReplaceAllString(s, " ")
 }
 
 func TestDeleteOperatorByID(t *testing.T) {
@@ -153,7 +146,7 @@ func TestUpdateOperatorByID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			d, mock := newTestDB(t)
 
-			expect := mock.ExpectQuery(normalizeSQL(expectedSQL)).
+			expect := mock.ExpectQuery(expectedSQL).
 				WithArgs(tt.wantArgs...)
 
 			if tt.dbErr != nil {

@@ -26,11 +26,8 @@ func schedulerWithConfigs(t *testing.T, configs []OperatorConfig) *Scheduler {
 	summaries := make([]OperatorAdminSummary, len(configs))
 	for i, cfg := range configs {
 		summaries[i] = OperatorAdminSummary{
-			ID:            uuid.New(),
-			Name:          cfg.Name,
-			URL:           cfg.URL,
-			TLSSkipVerify: cfg.TLSSkipVerify,
-			Priority:      cfg.Priority,
+			ID:             uuid.New(),
+			OperatorConfig: cfg,
 		}
 	}
 	s := NewScheduler(nil)
@@ -400,7 +397,7 @@ func TestSchedulerClientByID(t *testing.T) {
 	id := uuid.New()
 	scheduler := NewScheduler(nil)
 	require.NoError(t, scheduler.Sync([]OperatorAdminSummary{
-		{ID: id, Name: "test-op", URL: srv.URL},
+		{ID: id, OperatorConfig: OperatorConfig{Name: "test-op", URL: srv.URL}},
 	}))
 
 	client := scheduler.ClientByID(id)
@@ -412,7 +409,7 @@ func TestSchedulerClientByID(t *testing.T) {
 
 	// Rename the operator (same id) and verify the lookup still works.
 	require.NoError(t, scheduler.Sync([]OperatorAdminSummary{
-		{ID: id, Name: "renamed", URL: srv.URL},
+		{ID: id, OperatorConfig: OperatorConfig{Name: "renamed", URL: srv.URL}},
 	}))
 	client = scheduler.ClientByID(id)
 	require.NotNil(t, client, "id-keyed lookup must survive a rename")
@@ -466,7 +463,7 @@ func TestSchedulerSyncAndSetTokenSource(t *testing.T) {
 	defer srv0.Close()
 
 	origSummaries := []OperatorAdminSummary{
-		{ID: uuid.New(), Name: "original-op", URL: srv0.URL},
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "original-op", URL: srv0.URL}},
 	}
 	scheduler := NewScheduler(nil)
 	require.NoError(t, scheduler.Sync(origSummaries))
@@ -481,8 +478,8 @@ func TestSchedulerSyncAndSetTokenSource(t *testing.T) {
 	defer srv2.Close()
 
 	newSummaries := []OperatorAdminSummary{
-		{ID: uuid.New(), Name: "new-op-0", URL: srv1.URL},
-		{ID: uuid.New(), Name: "new-op-1", URL: srv2.URL},
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "new-op-0", URL: srv1.URL}},
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "new-op-1", URL: srv2.URL}},
 	}
 	require.NoError(t, scheduler.Sync(newSummaries))
 

@@ -240,8 +240,10 @@ func (s *Scheduler) Clients() []*Client {
 }
 
 // ClientByName returns the operator client with the given name, or nil.
-// Prefer ClientByID for internal lookups: name is mutable, so a concurrent
-// rename can leave a name-keyed lookup looking for a stale value.
+//
+// Deprecated: Use ClientByID. Operator names are mutable, so a concurrent
+// rename can leave a name-keyed lookup looking for a stale value; ClientByID
+// uses the immutable UUID and is rename-safe.
 func (s *Scheduler) ClientByName(name string) *Client {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

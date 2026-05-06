@@ -416,7 +416,7 @@ func main() {
 
 	// Initialize and start the status reconciliation worker. The apps
 	// handle is passed so the reconciler can back-fill missing
-	// operator_name records on each cycle (see r.backfillOperatorName).
+	// operator_id records on each cycle (see r.backfillOperatorID).
 	reconciler := reconciler.New(dbase, a, app.handlers.GetScheduler(), tokenSource)
 	go reconciler.Run(context.Background())
 

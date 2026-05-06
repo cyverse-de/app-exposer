@@ -611,19 +611,6 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 	return c.JSON(http.StatusCreated, created.ToOperatorAdminSummary())
 }
 
-// UpdateOperatorRequest is the body for PATCH /vice/admin/operators/id/:id.
-// All fields are optional; only the fields whose pointers are non-nil are
-// applied. Pointer types let us distinguish "client omitted this field"
-// from "client wants to set it to the zero value" (a value-typed shape
-// would silently force priority=0 / tls_skip_verify=false on every PATCH
-// that omitted them).
-type UpdateOperatorRequest struct {
-	Name          *string `json:"name,omitempty"`
-	URL           *string `json:"url,omitempty"`
-	TLSSkipVerify *bool   `json:"tls_skip_verify,omitempty"`
-	Priority      *int    `json:"priority,omitempty"`
-}
-
 // UpdateOperatorHandler applies a partial update to the operator with the
 // given UUID. The path identifies the row by id rather than name so that
 // renames don't break the path semantics: PATCH targets the same row even
@@ -631,12 +618,12 @@ type UpdateOperatorRequest struct {
 //
 //	@ID				admin-update-operator
 //	@Summary		Updates an operator
-//	@Description	Partial update of an operator identified by UUID. Only fields supplied in the body are changed.
+//	@Description	Partial update of an operator identified by UUID. Only fields supplied in the body are changed. The response carries the row's id alongside the updated fields, mirroring the create endpoint.
 //	@Accept			json
 //	@Produce		json
-//	@Param			id		path		string					true	"Operator UUID"
-//	@Param			body	body		UpdateOperatorRequest	true	"Fields to update"
-//	@Success		200		{object}	operatorclient.OperatorConfig
+//	@Param			id		path		string									true	"Operator UUID"
+//	@Param			body	body		operatorclient.UpdateOperatorRequest	true	"Fields to update"
+//	@Success		200		{object}	operatorclient.OperatorAdminSummary
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		404		{object}	common.ErrorResponse
 //	@Failure		409		{object}	common.ErrorResponse
@@ -651,7 +638,7 @@ func (h *HTTPHandlers) UpdateOperatorHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "id must be a valid UUID")
 	}
 
-	var req UpdateOperatorRequest
+	var req operatorclient.UpdateOperatorRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
@@ -677,7 +664,7 @@ func (h *HTTPHandlers) UpdateOperatorHandler(c echo.Context) error {
 		return operatorWriteError("update", idStr, err)
 	}
 
-	return c.JSON(http.StatusOK, updated.ToOperatorConfig())
+	return c.JSON(http.StatusOK, updated.ToOperatorAdminSummary())
 }
 
 // DeleteOperatorHandler deletes an operator by UUID. The operation is

@@ -175,7 +175,7 @@ func runUpdate(baseURLStr string, args []string) {
 	// flag.Visit reports only flags the user passed on the command line;
 	// untouched flags map to nil pointers so the server's COALESCE leaves
 	// those columns unchanged.
-	req := &UpdateOperatorRequest{}
+	req := &operatorclient.UpdateOperatorRequest{}
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "new-name":
@@ -211,8 +211,18 @@ func runUpdate(baseURLStr string, args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Operator %q updated successfully (name=%s, url=%s, priority=%d, tls_skip_verify=%v)\n",
-		*name, summary.Name, summary.URL, summary.Priority, summary.TLSSkipVerify)
+	// summary.Name reads the *new* name through the embedded OperatorConfig,
+	// so when this is a rename the printed line shows the post-rename
+	// state. *name (from the flag) is the lookup key; we print both as
+	// "old → new" only when they differ to keep the steady-state path
+	// terse.
+	if *name != summary.Name {
+		fmt.Printf("Operator %q → %q updated successfully (id=%s, url=%s, priority=%d, tls_skip_verify=%v)\n",
+			*name, summary.Name, summary.ID, summary.URL, summary.Priority, summary.TLSSkipVerify)
+	} else {
+		fmt.Printf("Operator %q updated successfully (id=%s, url=%s, priority=%d, tls_skip_verify=%v)\n",
+			summary.Name, summary.ID, summary.URL, summary.Priority, summary.TLSSkipVerify)
+	}
 }
 
 func runDelete(baseURLStr string, args []string) {

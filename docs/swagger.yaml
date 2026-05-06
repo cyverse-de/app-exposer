@@ -239,17 +239,6 @@ definitions:
           type: string
         type: array
     type: object
-  httphandlers.UpdateOperatorRequest:
-    properties:
-      name:
-        type: string
-      priority:
-        type: integer
-      tls_skip_verify:
-        type: boolean
-      url:
-        type: string
-    type: object
   httphandlers.uuidBody:
     properties:
       uuid:
@@ -959,6 +948,17 @@ definitions:
         type: string
       ready:
         type: boolean
+    type: object
+  operatorclient.UpdateOperatorRequest:
+    properties:
+      name:
+        type: string
+      priority:
+        type: integer
+      tls_skip_verify:
+        type: boolean
+      url:
+        type: string
     type: object
   operatorclient.UpdatePermissionsRequest:
     properties:
@@ -12236,7 +12236,8 @@ paths:
       consumes:
       - application/json
       description: Partial update of an operator identified by UUID. Only fields supplied
-        in the body are changed.
+        in the body are changed. The response carries the row's id alongside the updated
+        fields, mirroring the create endpoint.
       operationId: admin-update-operator
       parameters:
       - description: Operator UUID
@@ -12249,14 +12250,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/httphandlers.UpdateOperatorRequest'
+          $ref: '#/definitions/operatorclient.UpdateOperatorRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/operatorclient.OperatorConfig'
+            $ref: '#/definitions/operatorclient.OperatorAdminSummary'
         "400":
           description: Bad Request
           schema:

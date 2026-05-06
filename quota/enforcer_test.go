@@ -85,11 +85,8 @@ func newTestScheduler(t *testing.T, operators ...operatorclient.OperatorConfig) 
 	summaries := make([]operatorclient.OperatorAdminSummary, len(operators))
 	for i, op := range operators {
 		summaries[i] = operatorclient.OperatorAdminSummary{
-			ID:            uuid.New(),
-			Name:          op.Name,
-			URL:           op.URL,
-			TLSSkipVerify: op.TLSSkipVerify,
-			Priority:      op.Priority,
+			ID:             uuid.New(),
+			OperatorConfig: op,
 		}
 	}
 	s := operatorclient.NewScheduler(nil)

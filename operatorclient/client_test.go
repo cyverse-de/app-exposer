@@ -25,7 +25,10 @@ func newTestClient(t *testing.T, handler http.Handler) (*Client, *httptest.Serve
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	client, err := NewClient(OperatorAdminSummary{ID: uuid.New(), Name: "test-op", URL: srv.URL}, nil)
+	client, err := NewClient(OperatorAdminSummary{
+		ID:             uuid.New(),
+		OperatorConfig: OperatorConfig{Name: "test-op", URL: srv.URL},
+	}, nil)
 	require.NoError(t, err)
 	return client, srv
 }
@@ -38,12 +41,18 @@ func TestNewClient(t *testing.T) {
 		wantErrSubstr string
 	}{
 		{
-			name:    "valid URL",
-			summary: OperatorAdminSummary{ID: uuid.New(), Name: "op-a", URL: "http://op-a.example.invalid"},
+			name: "valid URL",
+			summary: OperatorAdminSummary{
+				ID:             uuid.New(),
+				OperatorConfig: OperatorConfig{Name: "op-a", URL: "http://op-a.example.invalid"},
+			},
 		},
 		{
-			name:          "invalid URL",
-			summary:       OperatorAdminSummary{ID: uuid.New(), Name: "op-bad", URL: "://nope"},
+			name: "invalid URL",
+			summary: OperatorAdminSummary{
+				ID:             uuid.New(),
+				OperatorConfig: OperatorConfig{Name: "op-bad", URL: "://nope"},
+			},
 			wantErr:       true,
 			wantErrSubstr: "parsing operator URL",
 		},
@@ -52,8 +61,11 @@ func TestNewClient(t *testing.T) {
 			// Exercising the actual InsecureSkipVerify flag would require
 			// introspecting the otelhttp-wrapped transport, which offers no
 			// stable public API for unwrapping in the version in use here.
-			name:    "TLS skip verify constructs successfully",
-			summary: OperatorAdminSummary{ID: uuid.New(), Name: "op-skip", URL: "https://op.example.invalid", TLSSkipVerify: true},
+			name: "TLS skip verify constructs successfully",
+			summary: OperatorAdminSummary{
+				ID:             uuid.New(),
+				OperatorConfig: OperatorConfig{Name: "op-skip", URL: "https://op.example.invalid", TLSSkipVerify: true},
+			},
 		},
 	}
 

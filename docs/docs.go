@@ -645,7 +645,7 @@ const docTemplate = `{
                 }
             },
             "patch": {
-                "description": "Partial update of an operator identified by UUID. Only fields supplied in the body are changed.",
+                "description": "Partial update of an operator identified by UUID. Only fields supplied in the body are changed. The response carries the row's id alongside the updated fields, mirroring the create endpoint.",
                 "consumes": [
                     "application/json"
                 ],
@@ -668,7 +668,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httphandlers.UpdateOperatorRequest"
+                            "$ref": "#/definitions/operatorclient.UpdateOperatorRequest"
                         }
                     }
                 ],
@@ -676,7 +676,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/operatorclient.OperatorConfig"
+                            "$ref": "#/definitions/operatorclient.OperatorAdminSummary"
                         }
                     },
                     "400": {
@@ -2047,23 +2047,6 @@ const docTemplate = `{
                 }
             }
         },
-        "httphandlers.UpdateOperatorRequest": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "priority": {
-                    "type": "integer"
-                },
-                "tls_skip_verify": {
-                    "type": "boolean"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
         "httphandlers.uuidBody": {
             "type": "object",
             "properties": {
@@ -3036,6 +3019,23 @@ const docTemplate = `{
                 },
                 "ready": {
                     "type": "boolean"
+                }
+            }
+        },
+        "operatorclient.UpdateOperatorRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "tls_skip_verify": {
+                    "type": "boolean"
+                },
+                "url": {
+                    "type": "string"
                 }
             }
         },

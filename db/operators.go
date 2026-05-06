@@ -53,17 +53,15 @@ func (o *Operator) ToOperatorConfig() operatorclient.OperatorConfig {
 }
 
 // ToOperatorAdminSummary projects the DB's full Operator row down to the
-// admin-facing summary shape (id plus the four public config fields). Used
-// by handlers that return a single row's identity to admin clients —
-// notably create, where the caller needs the new row's id without an
-// extra list call.
+// admin-facing summary shape (id plus the four public config fields).
+// Reuses ToOperatorConfig for the embedded config so the projection stays
+// in lock-step if OperatorConfig gains a new field. Used by handlers that
+// return a single row's identity to admin clients — notably create and
+// update, where the caller needs the row's id without an extra list call.
 func (o *Operator) ToOperatorAdminSummary() operatorclient.OperatorAdminSummary {
 	return operatorclient.OperatorAdminSummary{
-		ID:            o.ID,
-		Name:          o.Name,
-		URL:           o.URL,
-		TLSSkipVerify: o.TLSSkipVerify,
-		Priority:      o.Priority,
+		ID:             o.ID,
+		OperatorConfig: o.ToOperatorConfig(),
 	}
 }
 

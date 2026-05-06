@@ -114,11 +114,8 @@ func TestAddOperator(t *testing.T) {
 					// Echo the request fields back as the admin summary
 					// (id + four config fields) so the client can decode it.
 					_ = json.NewEncoder(w).Encode(operatorclient.OperatorAdminSummary{ //nolint:errcheck // test server write
-						ID:            createdID,
-						Name:          tt.req.Name,
-						URL:           tt.req.URL,
-						TLSSkipVerify: tt.req.TLSSkipVerify,
-						Priority:      tt.req.Priority,
+						ID:             createdID,
+						OperatorConfig: *tt.req,
 					})
 				}
 			})
@@ -213,19 +210,19 @@ func TestUpdateOperator(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		req        *UpdateOperatorRequest
+		req        *operatorclient.UpdateOperatorRequest
 		statusCode int
 		respBody   string
 		wantErr    bool
 		// validate inspects the decoded request body so individual cases can
 		// assert on which fields were sent (omitted nil pointers should not
 		// appear in the JSON thanks to omitempty).
-		validate func(t *testing.T, raw []byte, decoded UpdateOperatorRequest)
+		validate func(t *testing.T, raw []byte, decoded operatorclient.UpdateOperatorRequest)
 	}{
 		{
 			name: "single-field rename",
-			req:  &UpdateOperatorRequest{Name: &newName},
-			validate: func(t *testing.T, raw []byte, decoded UpdateOperatorRequest) {
+			req:  &operatorclient.UpdateOperatorRequest{Name: &newName},
+			validate: func(t *testing.T, raw []byte, decoded operatorclient.UpdateOperatorRequest) {
 				t.Helper()
 				require.NotNil(t, decoded.Name)
 				assert.Equal(t, "renamed", *decoded.Name)
@@ -237,17 +234,17 @@ func TestUpdateOperator(t *testing.T) {
 				assert.NotContains(t, string(raw), "priority")
 			},
 			statusCode: http.StatusOK,
-			respBody:   `{"name":"renamed","url":"https://orig.example.com","tls_skip_verify":false,"priority":0}`,
+			respBody:   `{"id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","name":"renamed","url":"https://orig.example.com","tls_skip_verify":false,"priority":0}`,
 		},
 		{
 			name: "all fields",
-			req: &UpdateOperatorRequest{
+			req: &operatorclient.UpdateOperatorRequest{
 				Name:          &newName,
 				URL:           &newURL,
 				TLSSkipVerify: &newSkip,
 				Priority:      &newPriority,
 			},
-			validate: func(t *testing.T, raw []byte, decoded UpdateOperatorRequest) {
+			validate: func(t *testing.T, raw []byte, decoded operatorclient.UpdateOperatorRequest) {
 				t.Helper()
 				require.NotNil(t, decoded.Name)
 				require.NotNil(t, decoded.URL)
@@ -259,25 +256,25 @@ func TestUpdateOperator(t *testing.T) {
 				assert.Equal(t, 7, *decoded.Priority)
 			},
 			statusCode: http.StatusOK,
-			respBody:   `{"name":"renamed","url":"https://new.example.com","tls_skip_verify":true,"priority":7}`,
+			respBody:   `{"id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","name":"renamed","url":"https://new.example.com","tls_skip_verify":true,"priority":7}`,
 		},
 		{
 			name:       "404 not found",
-			req:        &UpdateOperatorRequest{Priority: &newPriority},
+			req:        &operatorclient.UpdateOperatorRequest{Priority: &newPriority},
 			statusCode: http.StatusNotFound,
 			respBody:   `{"message":"operator not found"}`,
 			wantErr:    true,
 		},
 		{
 			name:       "409 conflict on rename collision",
-			req:        &UpdateOperatorRequest{Name: &newName},
+			req:        &operatorclient.UpdateOperatorRequest{Name: &newName},
 			statusCode: http.StatusConflict,
 			respBody:   `{"message":"operator with that name or url already exists"}`,
 			wantErr:    true,
 		},
 		{
 			name:       "400 bad request on validation failure",
-			req:        &UpdateOperatorRequest{URL: strPtr("not-a-url")},
+			req:        &operatorclient.UpdateOperatorRequest{URL: strPtr("not-a-url")},
 			statusCode: http.StatusBadRequest,
 			respBody:   `{"message":"url must be a valid HTTP(S) URL"}`,
 			wantErr:    true,
@@ -296,7 +293,7 @@ func TestUpdateOperator(t *testing.T) {
 				if tt.validate != nil {
 					raw, err := readAllAndRestore(r)
 					require.NoError(t, err)
-					var decoded UpdateOperatorRequest
+					var decoded operatorclient.UpdateOperatorRequest
 					require.NoError(t, json.Unmarshal(raw, &decoded))
 					tt.validate(t, raw, decoded)
 				}
@@ -316,7 +313,12 @@ func TestUpdateOperator(t *testing.T) {
 				assert.Nil(t, summary)
 			} else {
 				require.NoError(t, err)
-				assert.NotNil(t, summary)
+				require.NotNil(t, summary)
+				// Confirm the response carries the row's id, not just
+				// the OperatorConfig fields — the asymmetric "create
+				// returns id, update doesn't" bug from the prior PR is
+				// what motivated the response-shape change.
+				assert.Equal(t, id, summary.ID)
 			}
 		})
 	}

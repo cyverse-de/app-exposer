@@ -92,21 +92,13 @@ func (c *OperatorClient) ListOperators(ctx context.Context) ([]operatorclient.Op
 	return ops, nil
 }
 
-// UpdateOperatorRequest is the wire-shape for PATCH
-// /vice/admin/operators/id/{id}. Pointer fields encode partial updates:
-// nil means "leave this column unchanged."
-type UpdateOperatorRequest struct {
-	Name          *string `json:"name,omitempty"`
-	URL           *string `json:"url,omitempty"`
-	TLSSkipVerify *bool   `json:"tls_skip_verify,omitempty"`
-	Priority      *int    `json:"priority,omitempty"`
-}
-
 // UpdateOperator partially updates the operator with the given id via
 // PATCH /vice/admin/operators/id/{id}. Only fields with non-nil pointers
 // in req are sent (json:omitempty handles the omission), matching the
-// server's COALESCE-based partial-update semantics.
-func (c *OperatorClient) UpdateOperator(ctx context.Context, id uuid.UUID, req *UpdateOperatorRequest) (*operatorclient.OperatorConfig, error) {
+// server's COALESCE-based partial-update semantics. The response carries
+// the row's id alongside the updated fields so callers can confirm the
+// post-update state without a follow-up list call.
+func (c *OperatorClient) UpdateOperator(ctx context.Context, id uuid.UUID, req *operatorclient.UpdateOperatorRequest) (*operatorclient.OperatorAdminSummary, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling request: %w", err)
@@ -129,7 +121,7 @@ func (c *OperatorClient) UpdateOperator(ctx context.Context, id uuid.UUID, req *
 		return nil, readError(resp)
 	}
 
-	var summary operatorclient.OperatorConfig
+	var summary operatorclient.OperatorAdminSummary
 	if err := json.NewDecoder(resp.Body).Decode(&summary); err != nil {
 		return nil, fmt.Errorf("decoding response: %w", err)
 	}
