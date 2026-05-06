@@ -313,12 +313,16 @@ func main() {
 		log.Fatalf("failed to construct operator: %v", err)
 	}
 
-	verifier, err := buildAPIVerifier(context.Background(), apiAuthIssuerURL, apiAuthClientID, apiAuth)
+	// One OIDC discovery roundtrip populates both the API token verifier and
+	// the Swagger UI OAuth2 config so all endpoint URLs stay in sync with the
+	// issuer's published metadata.
+	provider, err := buildOIDCProvider(context.Background(), apiAuthIssuerURL, apiAuth)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
+	verifier := buildAPIVerifier(provider, apiAuthIssuerURL, apiAuthClientID)
 
-	swaggerCfg, err := buildSwaggerAuthConfig(swaggerClientID, swaggerClientSecret, swaggerCookieSecret, apiAuthIssuerURL)
+	swaggerCfg, err := buildSwaggerAuthConfig(provider, swaggerClientID, swaggerClientSecret, swaggerCookieSecret)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}

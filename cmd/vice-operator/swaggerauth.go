@@ -6,64 +6,59 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/cyverse-de/app-exposer/common"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/oauth2"
 )
 
 const (
-	sessionCookieName = "vice-operator-session"
-	stateCookieName   = "vice-operator-oauth-state"
-	stateMaxAge       = 300 // 5 minutes for the CSRF state cookie.
+	sessionCookieName    = "vice-operator-session"
+	stateCookieName      = "vice-operator-oauth-state"
+	stateMaxAge          = 300            // 5 minutes for the CSRF state cookie.
+	tokenExchangeTimeout = 10 * time.Second // Prevents a hung IdP from stalling the callback handler.
 )
 
-// swaggerAuthHTTPClient is used for OAuth token-endpoint calls. The default
+// tokenExchangeHTTPClient is used for OAuth token-endpoint calls. The default
 // http.Client has no timeout, which allows an unresponsive identity provider
 // to hang the callback goroutine indefinitely.
-var swaggerAuthHTTPClient = &http.Client{Timeout: 10 * time.Second}
+var tokenExchangeHTTPClient = &http.Client{Timeout: tokenExchangeTimeout}
 
 // SwaggerAuthConfig holds the OAuth2/OIDC settings for the Swagger UI login flow.
+// Endpoint is populated from OIDC discovery at startup so the auth/token URLs
+// stay in sync with the issuer's metadata.
 type SwaggerAuthConfig struct {
-	IssuerURL    string // OIDC issuer (e.g. https://keycloak.example.com/realms/cyverse).
-	ClientID     string // OAuth2 client ID (authorization code flow).
-	ClientSecret string // OAuth2 client secret.
-	CookieSecret []byte // HMAC key for signing session cookies.
+	Endpoint     oauth2.Endpoint // Auth + token URLs from OIDC discovery.
+	ClientID     string          // OAuth2 client ID (authorization code flow).
+	ClientSecret string          // OAuth2 client secret.
+	CookieSecret []byte          // HMAC key for signing session cookies.
 }
 
 // Enabled returns true when enough configuration is present for the login flow.
 func (c *SwaggerAuthConfig) Enabled() bool {
-	return c.ClientID != "" && c.IssuerURL != ""
+	return c.ClientID != "" && c.Endpoint.AuthURL != ""
 }
 
-// authURL returns the Keycloak authorization endpoint.
-func (c *SwaggerAuthConfig) authURL() string {
-	u, err := url.JoinPath(c.IssuerURL, "protocol", "openid-connect", "auth")
-	if err != nil {
-		log.Errorf("swaggerauth: joiningauth URL from %q: %v", c.IssuerURL, err)
+// oauth2Config returns a fresh OAuth2 config bound to the given redirect URI.
+// The redirect is computed per request because the operator may be reached
+// over different host/scheme combinations, so it can't be baked in once.
+func (c *SwaggerAuthConfig) oauth2Config(redirectURI string) *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:     c.ClientID,
+		ClientSecret: c.ClientSecret,
+		Endpoint:     c.Endpoint,
+		RedirectURL:  redirectURI,
+		Scopes:       []string{oidc.ScopeOpenID},
 	}
-	return u
 }
 
-// tokenURL returns the Keycloak token endpoint. Same caveat as authURL.
-func (c *SwaggerAuthConfig) tokenURL() string {
-	u, err := url.JoinPath(c.IssuerURL, "protocol", "openid-connect", "token")
-	if err != nil {
-		log.Errorf("swaggerauth: joiningtoken URL from %q: %v", c.IssuerURL, err)
-	}
-	return u
-}
-
-// GenerateCookieSecret creates a random 32-byte key for HMAC signing.
-func GenerateCookieSecret() ([]byte, error) {
+// generateCookieSecret creates a random 32-byte key for HMAC signing.
+func generateCookieSecret() ([]byte, error) {
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
 		return nil, fmt.Errorf("generating cookie secret: %w", err)
@@ -135,7 +130,7 @@ func swaggerSessionMiddleware(verifier *oidc.IDTokenVerifier, cfg *SwaggerAuthCo
 	}
 }
 
-// handleLogin serves a simple HTML page with a "Login with Keycloak" button.
+// handleLogin serves the login page with a "Login with Keycloak" button.
 func handleLogin(cfg *SwaggerAuthConfig) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		// Generate a random state parameter for CSRF protection.
@@ -156,16 +151,10 @@ func handleLogin(cfg *SwaggerAuthConfig) echo.HandlerFunc {
 			SameSite: http.SameSiteLaxMode,
 		})
 
-		// Build the Keycloak authorization URL.
-		redirectURI := buildRedirectURI(c)
-		authParams := url.Values{
-			"response_type": {"code"},
-			"client_id":     {cfg.ClientID},
-			"redirect_uri":  {redirectURI},
-			"scope":         {"openid"},
-			"state":         {state},
-		}
-		authLink := cfg.authURL() + "?" + authParams.Encode()
+		// Build the Keycloak authorization URL via the OAuth2 library so the
+		// scope/state/redirect parameters and any future PKCE additions stay
+		// in one place.
+		authLink := cfg.oauth2Config(buildRedirectURI(c)).AuthCodeURL(state)
 
 		return c.HTML(http.StatusOK, loginPage(authLink))
 	}
@@ -202,26 +191,35 @@ func handleCallback(cfg *SwaggerAuthConfig, verifier *oidc.IDTokenVerifier) echo
 			return echo.NewHTTPError(http.StatusBadRequest, "missing authorization code")
 		}
 
-		// Exchange the code for tokens.
-		redirectURI := buildRedirectURI(c)
-		tokenResp, err := exchangeCode(c.Request().Context(), cfg, code, redirectURI)
+		// Exchange the code for tokens. The oauth2 library handles the POST
+		// to the token endpoint, JSON parsing, and per-request cancellation.
+		// Inject a timeout-bounded HTTP client so a slow IdP can't stall the
+		// callback handler indefinitely.
+		ctx := context.WithValue(c.Request().Context(), oauth2.HTTPClient, tokenExchangeHTTPClient)
+		tok, err := cfg.oauth2Config(buildRedirectURI(c)).Exchange(ctx, code)
 		if err != nil {
 			log.Errorf("token exchange failed: %v", err)
 			return echo.NewHTTPError(http.StatusInternalServerError, "token exchange failed")
 		}
 
-		// Verify the access token so we know it's valid before storing.
-		idToken, err := verifier.Verify(c.Request().Context(), tokenResp.AccessToken)
+		// Verify the access token's signature/expiry before storing it. The
+		// token endpoint just returns whatever the IdP says; we trust it only
+		// after go-oidc validates the JWT against the discovered JWKS.
+		idToken, err := verifier.Verify(ctx, tok.AccessToken)
 		if err != nil {
 			log.Errorf("token verification failed after exchange: %v", err)
 			return echo.NewHTTPError(http.StatusInternalServerError, "received invalid token from identity provider")
 		}
 
-		// Compute cookie expiry from the token's exp claim.
+		// Tie the cookie's lifetime to the verified JWT exp claim. Using
+		// idToken.Expiry rather than tok.Expiry guards against IdPs that
+		// omit expires_in from the token response — that would leave
+		// tok.Expiry as the time.Time zero value and produce a no-Max-Age
+		// session cookie that outlives the underlying token.
 		maxAge := max(int(time.Until(idToken.Expiry).Seconds()), 0)
 
 		// Set the signed session cookie.
-		signed := signToken(tokenResp.AccessToken, cfg.CookieSecret)
+		signed := signToken(tok.AccessToken, cfg.CookieSecret)
 		c.SetCookie(&http.Cookie{
 			Name:     sessionCookieName,
 			Value:    signed,
@@ -259,56 +257,6 @@ func clearSessionCookie(c echo.Context) {
 func buildRedirectURI(c echo.Context) string {
 	scheme := c.Scheme()
 	return fmt.Sprintf("%s://%s/docs/callback", scheme, c.Request().Host)
-}
-
-// tokenResponse holds the fields we need from the Keycloak token endpoint.
-type tokenResponse struct {
-	AccessToken string `json:"access_token"`
-}
-
-// exchangeCode performs the OAuth2 authorization code exchange. The caller
-// provides the request context so cancellation composes with the package-level
-// client timeout on swaggerAuthHTTPClient.
-func exchangeCode(ctx context.Context, cfg *SwaggerAuthConfig, code, redirectURI string) (*tokenResponse, error) {
-	data := url.Values{
-		"grant_type":   {"authorization_code"},
-		"code":         {code},
-		"redirect_uri": {redirectURI},
-		"client_id":    {cfg.ClientID},
-	}
-	if cfg.ClientSecret != "" {
-		data.Set("client_secret", cfg.ClientSecret)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.tokenURL(), strings.NewReader(data.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("building token request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := swaggerAuthHTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("POST to token endpoint: %w", err)
-	}
-	defer common.CloseBody(resp)
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading token response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token endpoint returned %d: %s", resp.StatusCode, string(body))
-	}
-
-	var tokenResp tokenResponse
-	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return nil, fmt.Errorf("parsing token response: %w", err)
-	}
-	if tokenResp.AccessToken == "" {
-		return nil, errors.New("token response missing access_token")
-	}
-	return &tokenResp, nil
 }
 
 // extractTokenFromCookie reads and verifies the session cookie, returning the
