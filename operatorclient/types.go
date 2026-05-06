@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/google/uuid"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -279,4 +280,15 @@ type OperatorConfig struct {
 	URL           string `json:"url"             koanf:"url"             db:"url"`
 	TLSSkipVerify bool   `json:"tls_skip_verify" koanf:"tls_skip_verify" db:"tls_skip_verify"`
 	Priority      int    `json:"priority"        koanf:"priority"        db:"priority"`
+}
+
+// OperatorAdminSummary is the admin-facing listing shape for operators. It
+// extends OperatorConfig with the row's UUID so admin clients can address an
+// operator by id (which is stable across renames) rather than by name.
+type OperatorAdminSummary struct {
+	ID            uuid.UUID `json:"id"              db:"id"`
+	Name          string    `json:"name"            db:"name"`
+	URL           string    `json:"url"             db:"url"`
+	TLSSkipVerify bool      `json:"tls_skip_verify" db:"tls_skip_verify"`
+	Priority      int       `json:"priority"        db:"priority"`
 }

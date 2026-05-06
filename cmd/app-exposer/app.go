@@ -144,19 +144,12 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		handlers:   httphandlers.New(incluster, apps, init.ClientSet, init.batchadapter, init.dbase, init.MaxConcurrentLaunches),
 	}
 
-	// Configure operator scheduler. Try config first for backward compatibility,
-	// but the reconciler will later overwrite this from the database.
-	var operatorConfigs []operatorclient.OperatorConfig
-	if err := c.Unmarshal("vice.operators", &operatorConfigs); err != nil {
-		log.Warnf("could not parse operators config: %v", err)
-	}
-
-	scheduler, err := operatorclient.NewScheduler(operatorConfigs, nil)
-	if err != nil {
-		log.Fatalf("error creating operator scheduler: %v", err)
-	}
+	// Operator scheduler starts empty; the reconciler's initial
+	// SyncOperators call (in main.go) populates it from the operators
+	// table, which is the source of truth for operator configuration.
+	scheduler := operatorclient.NewScheduler(nil)
 	app.handlers.SetScheduler(scheduler)
-	log.Infof("operator scheduler configured with %d operators from config", len(operatorConfigs))
+	log.Info("operator scheduler initialized; awaiting initial DB sync")
 
 	app.router.Use(otelecho.Middleware("app-exposer"))
 
@@ -230,7 +223,8 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	viceadmin.GET("/operators", app.handlers.AdminOperatorsHandler)
 	viceadmin.POST("/operators", app.handlers.CreateOperatorHandler)
 	viceadmin.GET("/operators/capacities", app.handlers.AdminOperatorCapacitiesHandler)
-	viceadmin.DELETE("/operators/name/:name", app.handlers.DeleteOperatorHandler)
+	viceadmin.DELETE("/operators/id/:id", app.handlers.DeleteOperatorHandler)
+	viceadmin.PATCH("/operators/id/:id", app.handlers.UpdateOperatorHandler)
 	viceadmin.GET("/listing", app.handlers.AdminFilterableResourcesHandler)
 	viceadmin.GET("/operator-listing", app.handlers.AdminOperatorListingHandler)
 	viceadmin.POST("/terminate-all", app.handlers.TerminateAllAnalysesHandler)

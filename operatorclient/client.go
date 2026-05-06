@@ -13,6 +13,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/reporting"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/oauth2"
@@ -48,30 +49,32 @@ func (e *HTTPStatusError) Transient() bool {
 
 // Client communicates with a single vice-operator instance via HTTP.
 type Client struct {
+	id      uuid.UUID
 	name    string
 	baseURL *url.URL
 	http    *http.Client
 }
 
-// NewClient creates a new operator Client from an OperatorConfig. When ts is
-// non-nil, an oauth2.Transport is inserted into the transport chain so that
-// every request carries a Bearer token (automatically refreshed). When
-// cfg.TLSSkipVerify is true, TLS certificate verification is skipped — use
-// only for development/testing with self-signed certs.
-func NewClient(cfg OperatorConfig, ts oauth2.TokenSource) (*Client, error) {
-	u, err := url.Parse(cfg.URL)
+// NewClient creates a new operator Client from an OperatorAdminSummary
+// (the DB-backed shape that carries the operator's UUID). When ts is
+// non-nil, an oauth2.Transport is inserted into the transport chain so
+// that every request carries a Bearer token (automatically refreshed).
+// When summary.TLSSkipVerify is true, TLS certificate verification is
+// skipped — use only for development/testing with self-signed certs.
+func NewClient(summary OperatorAdminSummary, ts oauth2.TokenSource) (*Client, error) {
+	u, err := url.Parse(summary.URL)
 	if err != nil {
-		return nil, fmt.Errorf("parsing operator URL %q: %w", cfg.URL, err)
+		return nil, fmt.Errorf("parsing operator URL %q: %w", summary.URL, err)
 	}
 
 	transport := http.RoundTripper(http.DefaultTransport)
-	if cfg.TLSSkipVerify {
+	if summary.TLSSkipVerify {
 		// Clone DefaultTransport to preserve connection pooling, timeouts, and
 		// proxy settings — only override the TLS verification.
 		dt := http.DefaultTransport.(*http.Transport).Clone()
 		dt.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec // intentional for dev/testing
 		transport = dt
-		log.Warnf("operator %q: TLS certificate verification disabled (tls_skip_verify)", cfg.Name)
+		log.Warnf("operator %q: TLS certificate verification disabled (tls_skip_verify)", summary.Name)
 	}
 
 	// When a token source is provided, wrap the transport so every outgoing
@@ -82,7 +85,8 @@ func NewClient(cfg OperatorConfig, ts oauth2.TokenSource) (*Client, error) {
 	}
 
 	return &Client{
-		name:    cfg.Name,
+		id:      summary.ID,
+		name:    summary.Name,
 		baseURL: u,
 		http: &http.Client{
 			Transport: otelhttp.NewTransport(transport),
@@ -118,6 +122,13 @@ func checkStatus(resp *http.Response, label string) error {
 // Name returns the operator's configured name.
 func (c *Client) Name() string {
 	return c.name
+}
+
+// ID returns the operator's UUID. Stable across renames — callers that
+// need to identify the same operator across config refreshes should index
+// by id rather than name.
+func (c *Client) ID() uuid.UUID {
+	return c.id
 }
 
 // Capacity queries the operator for its current cluster capacity.

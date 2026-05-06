@@ -12,6 +12,7 @@ import (
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -76,10 +77,23 @@ func newTestEnforcer(t *testing.T, scheduler *operatorclient.Scheduler, lookup *
 	}
 }
 
+// newTestScheduler builds a Scheduler whose operators come from the given
+// OperatorConfig list. Synthesizes a fresh UUID per operator so existing
+// call sites can stay name-keyed (the enforcer doesn't care about ids).
 func newTestScheduler(t *testing.T, operators ...operatorclient.OperatorConfig) *operatorclient.Scheduler {
 	t.Helper()
-	s, err := operatorclient.NewScheduler(operators, nil)
-	require.NoError(t, err)
+	summaries := make([]operatorclient.OperatorAdminSummary, len(operators))
+	for i, op := range operators {
+		summaries[i] = operatorclient.OperatorAdminSummary{
+			ID:            uuid.New(),
+			Name:          op.Name,
+			URL:           op.URL,
+			TLSSkipVerify: op.TLSSkipVerify,
+			Priority:      op.Priority,
+		}
+	}
+	s := operatorclient.NewScheduler(nil)
+	require.NoError(t, s.Sync(summaries))
 	return s
 }
 

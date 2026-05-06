@@ -10,10 +10,33 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 )
+
+// schedulerWithConfigs builds a Scheduler whose operators come from the
+// given OperatorConfig list, synthesizing a deterministic UUID per slot so
+// older tests authored against the config-only signature continue to read
+// naturally. Tests that need to assert a specific id should construct
+// OperatorAdminSummary values directly and call Sync.
+func schedulerWithConfigs(t *testing.T, configs []OperatorConfig) *Scheduler {
+	t.Helper()
+	summaries := make([]OperatorAdminSummary, len(configs))
+	for i, cfg := range configs {
+		summaries[i] = OperatorAdminSummary{
+			ID:            uuid.New(),
+			Name:          cfg.Name,
+			URL:           cfg.URL,
+			TLSSkipVerify: cfg.TLSSkipVerify,
+			Priority:      cfg.Priority,
+		}
+	}
+	s := NewScheduler(nil)
+	require.NoError(t, s.Sync(summaries))
+	return s
+}
 
 // mockOperatorServer creates a test HTTP server that simulates an operator.
 // capacitySlots controls how many available slots are reported.
@@ -149,11 +172,10 @@ func TestSchedulerLaunchAnalysis(t *testing.T) {
 				}
 			}()
 
-			scheduler, err := NewScheduler(configs, nil)
-			require.NoError(t, err)
+			scheduler := schedulerWithConfigs(t, configs)
 
 			bundle := &AnalysisBundle{AnalysisID: "test-123"}
-			operatorName, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+			_, operatorName, err := scheduler.LaunchAnalysis(context.Background(), bundle)
 
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
@@ -176,13 +198,12 @@ func TestSchedulerLaunchAllCapacityChecksFail(t *testing.T) {
 	srv1 := mockOperatorServerWithStatuses(0, false, http.StatusInternalServerError, 0, "")
 	defer srv1.Close()
 
-	scheduler, err := NewScheduler([]OperatorConfig{
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
 		{Name: "op-0", URL: srv0.URL},
 		{Name: "op-1", URL: srv1.URL},
-	}, nil)
-	require.NoError(t, err)
+	})
 
-	_, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
+	_, _, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrAllOperatorsExhausted)
 	assert.Contains(t, err.Error(), "failed capacity check", "message should distinguish capacity-failure from at-capacity")
@@ -198,13 +219,12 @@ func TestSchedulerLaunchTransientErrorFalthrough(t *testing.T) {
 	srv1 := mockOperatorServer(5, false)
 	defer srv1.Close()
 
-	scheduler, err := NewScheduler([]OperatorConfig{
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
 		{Name: "op-0", URL: srv0.URL},
 		{Name: "op-1", URL: srv1.URL},
-	}, nil)
-	require.NoError(t, err)
+	})
 
-	name, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
+	_, name, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
 	require.NoError(t, err)
 	assert.Equal(t, "op-1", name, "scheduler must fall through on transient 5xx launch errors")
 }
@@ -219,13 +239,12 @@ func TestSchedulerLaunchNonTransientAborts(t *testing.T) {
 	srv1 := mockOperatorServer(5, false) // would succeed if we reached it
 	defer srv1.Close()
 
-	scheduler, err := NewScheduler([]OperatorConfig{
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
 		{Name: "op-0", URL: srv0.URL},
 		{Name: "op-1", URL: srv1.URL},
-	}, nil)
-	require.NoError(t, err)
+	})
 
-	_, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
+	_, _, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "op-0", "error must name the operator that failed")
 	assert.Contains(t, err.Error(), "400", "error must surface the HTTP status")
@@ -241,13 +260,12 @@ func TestSchedulerLaunchAllTransient(t *testing.T) {
 	srv1 := mockOperatorServerWithStatuses(5, false, 0, http.StatusBadGateway, "")
 	defer srv1.Close()
 
-	scheduler, err := NewScheduler([]OperatorConfig{
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
 		{Name: "op-0", URL: srv0.URL},
 		{Name: "op-1", URL: srv1.URL},
-	}, nil)
-	require.NoError(t, err)
+	})
 
-	_, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
+	_, _, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unhealthy", "message should distinguish from at-capacity")
 
@@ -267,14 +285,13 @@ func TestSchedulerLaunchVendorMismatchAllAMD(t *testing.T) {
 	srv1 := mockOperatorServerWithVendor(5, "amd")
 	defer srv1.Close()
 
-	scheduler, err := NewScheduler([]OperatorConfig{
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
 		{Name: "amd-0", URL: srv0.URL},
 		{Name: "amd-1", URL: srv1.URL},
-	}, nil)
-	require.NoError(t, err)
+	})
 
 	bundle := gpuBundle("nvidia.com/gpu", "main", "requests")
-	_, err = scheduler.LaunchAnalysis(context.Background(), bundle)
+	_, _, err := scheduler.LaunchAnalysis(context.Background(), bundle)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrNoCompatibleOperator)
 	assert.Contains(t, err.Error(), "nvidia", "error must name the requested vendor")
@@ -290,14 +307,13 @@ func TestSchedulerLaunchVendorMismatchSkipsToCompatible(t *testing.T) {
 	srv1 := mockOperatorServerWithVendor(5, "nvidia")
 	defer srv1.Close()
 
-	scheduler, err := NewScheduler([]OperatorConfig{
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
 		{Name: "amd-op", URL: srv0.URL},
 		{Name: "nvidia-op", URL: srv1.URL},
-	}, nil)
-	require.NoError(t, err)
+	})
 
 	bundle := gpuBundle("nvidia.com/gpu", "main", "requests")
-	name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	_, name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
 	require.NoError(t, err)
 	assert.Equal(t, "nvidia-op", name, "must skip AMD operator and land on Nvidia one")
 }
@@ -313,14 +329,13 @@ func TestSchedulerLaunchNoGPURequestSkipsVendorCheck(t *testing.T) {
 	srv1 := mockOperatorServerWithVendor(5, "amd")
 	defer srv1.Close()
 
-	scheduler, err := NewScheduler([]OperatorConfig{
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
 		{Name: "amd-0", URL: srv0.URL},
 		{Name: "amd-1", URL: srv1.URL},
-	}, nil)
-	require.NoError(t, err)
+	})
 
 	bundle := gpuBundle("", "main", "requests")
-	name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	_, name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
 	require.NoError(t, err)
 	assert.Equal(t, "amd-0", name, "no-GPU bundle must accept first capacity-passing operator")
 }
@@ -335,28 +350,26 @@ func TestSchedulerLaunchOperatorWithoutVendorIsCompatible(t *testing.T) {
 	srv0 := mockOperatorServerWithVendor(5, "")
 	defer srv0.Close()
 
-	scheduler, err := NewScheduler([]OperatorConfig{
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
 		{Name: "no-vendor", URL: srv0.URL},
-	}, nil)
-	require.NoError(t, err)
+	})
 
 	bundle := gpuBundle("nvidia.com/gpu", "main", "requests")
-	name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	_, name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
 	require.NoError(t, err)
 	assert.Equal(t, "no-vendor", name)
 }
 
 func TestSchedulerNoOperators(t *testing.T) {
-	scheduler, err := NewScheduler(nil, nil)
-	assert.NoError(t, err)
+	scheduler := NewScheduler(nil)
 
-	_, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
+	_, _, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
 	assert.ErrorIs(t, err, ErrNoOperators)
 
-	scheduler, err = NewScheduler([]OperatorConfig{}, nil)
-	assert.NoError(t, err)
+	scheduler = NewScheduler(nil)
+	require.NoError(t, scheduler.Sync(nil))
 
-	_, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
+	_, _, err = scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
 	assert.ErrorIs(t, err, ErrNoOperators)
 }
 
@@ -364,10 +377,9 @@ func TestSchedulerClientByName(t *testing.T) {
 	srv := mockOperatorServer(5, false)
 	defer srv.Close()
 
-	scheduler, err := NewScheduler([]OperatorConfig{
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
 		{Name: "test-op", URL: srv.URL},
-	}, nil)
-	require.NoError(t, err)
+	})
 
 	client := scheduler.ClientByName("test-op")
 	assert.NotNil(t, client)
@@ -375,6 +387,36 @@ func TestSchedulerClientByName(t *testing.T) {
 
 	client = scheduler.ClientByName("nonexistent")
 	assert.Nil(t, client)
+}
+
+// TestSchedulerClientByID covers the id-keyed variant. It also verifies
+// that ClientByID continues to return the right client across a Sync
+// that renames the operator — the rename-safety guarantee the id-based
+// API was introduced to provide.
+func TestSchedulerClientByID(t *testing.T) {
+	srv := mockOperatorServer(5, false)
+	defer srv.Close()
+
+	id := uuid.New()
+	scheduler := NewScheduler(nil)
+	require.NoError(t, scheduler.Sync([]OperatorAdminSummary{
+		{ID: id, Name: "test-op", URL: srv.URL},
+	}))
+
+	client := scheduler.ClientByID(id)
+	require.NotNil(t, client)
+	assert.Equal(t, "test-op", client.Name())
+	assert.Equal(t, id, client.ID())
+
+	assert.Nil(t, scheduler.ClientByID(uuid.New()), "unknown id must return nil")
+
+	// Rename the operator (same id) and verify the lookup still works.
+	require.NoError(t, scheduler.Sync([]OperatorAdminSummary{
+		{ID: id, Name: "renamed", URL: srv.URL},
+	}))
+	client = scheduler.ClientByID(id)
+	require.NotNil(t, client, "id-keyed lookup must survive a rename")
+	assert.Equal(t, "renamed", client.Name())
 }
 
 // TestSchedulerLaunchUnlimitedCapacity verifies that an operator reporting
@@ -403,13 +445,12 @@ func TestSchedulerLaunchUnlimitedCapacity(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	scheduler, err := NewScheduler([]OperatorConfig{
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
 		{Name: "unlimited-op", URL: srv.URL},
-	}, nil)
-	require.NoError(t, err)
+	})
 
 	bundle := &AnalysisBundle{AnalysisID: "unlimited-test-456"}
-	operatorName, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	_, operatorName, err := scheduler.LaunchAnalysis(context.Background(), bundle)
 
 	require.NoError(t, err)
 	assert.Equal(t, "unlimited-op", operatorName)
@@ -424,11 +465,11 @@ func TestSchedulerSyncAndSetTokenSource(t *testing.T) {
 	srv0 := mockOperatorServer(5, false)
 	defer srv0.Close()
 
-	origConfigs := []OperatorConfig{
-		{Name: "original-op", URL: srv0.URL},
+	origSummaries := []OperatorAdminSummary{
+		{ID: uuid.New(), Name: "original-op", URL: srv0.URL},
 	}
-	scheduler, err := NewScheduler(origConfigs, nil)
-	require.NoError(t, err)
+	scheduler := NewScheduler(nil)
+	require.NoError(t, scheduler.Sync(origSummaries))
 
 	// The original operator must be findable.
 	require.NotNil(t, scheduler.ClientByName("original-op"), "original-op should exist before Sync")
@@ -439,11 +480,11 @@ func TestSchedulerSyncAndSetTokenSource(t *testing.T) {
 	srv2 := mockOperatorServer(3, false)
 	defer srv2.Close()
 
-	newConfigs := []OperatorConfig{
-		{Name: "new-op-0", URL: srv1.URL},
-		{Name: "new-op-1", URL: srv2.URL},
+	newSummaries := []OperatorAdminSummary{
+		{ID: uuid.New(), Name: "new-op-0", URL: srv1.URL},
+		{ID: uuid.New(), Name: "new-op-1", URL: srv2.URL},
 	}
-	require.NoError(t, scheduler.Sync(newConfigs))
+	require.NoError(t, scheduler.Sync(newSummaries))
 
 	// The old operator must be gone; new ones must be present.
 	assert.Nil(t, scheduler.ClientByName("original-op"), "original-op should be absent after Sync")
@@ -462,11 +503,11 @@ func TestSchedulerSyncAndSetTokenSource(t *testing.T) {
 		for i := range iterations {
 			// Alternate between the two operator lists so Sync exercises a
 			// real list-shape change (1 ↔ 2 operators) under churn.
-			cfgs := newConfigs
+			summaries := newSummaries
 			if i%2 == 1 {
-				cfgs = origConfigs
+				summaries = origSummaries
 			}
-			if err := scheduler.Sync(cfgs); err != nil {
+			if err := scheduler.Sync(summaries); err != nil {
 				t.Errorf("Sync failed during race: %v", err)
 				return
 			}

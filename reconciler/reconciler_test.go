@@ -16,6 +16,7 @@ import (
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/cyverse-de/messaging/v12"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,8 +40,7 @@ func TestGetLocalIP(t *testing.T) {
 // the ip and hostname fields are populated (they are set unconditionally in
 // the constructor).
 func TestNewReconciler(t *testing.T) {
-	scheduler, err := operatorclient.NewScheduler(nil, nil)
-	require.NoError(t, err)
+	scheduler := operatorclient.NewScheduler(nil)
 
 	r := New(&fakeReconcilerDB{}, nil, scheduler, nil)
 
@@ -155,8 +155,7 @@ func (f *fakeReconcilerDB) InsertJobStatusUpdate(_ context.Context, _ *sqlx.Tx, 
 // guards against a nil apps before invoking any back-fill.
 func newTestReconciler(t *testing.T, fake *fakeReconcilerDB) *Reconciler {
 	t.Helper()
-	sched, err := operatorclient.NewScheduler(nil, nil)
-	require.NoError(t, err)
+	sched := operatorclient.NewScheduler(nil)
 	return New(fake, nil, sched, nil)
 }
 
@@ -416,17 +415,20 @@ func TestReconcileNext(t *testing.T) {
 		}
 		srv := newListingServer(t, info)
 
+		opID := uuid.New()
 		fake := &fakeReconcilerDB{
 			statuses: map[constants.ExternalID]messaging.JobState{
 				"ext-1": messaging.SubmittedState, // transition Submitted -> Running
 				"ext-2": messaging.RunningState,   // transition Running -> Failed
 			},
-			claimOp: &db.Operator{Name: "op-a", URL: srv.URL},
+			claimOp: &db.Operator{ID: opID, Name: "op-a", URL: srv.URL},
 		}
 		r := newTestReconciler(t, fake)
-		// Wire the scheduler to know about the claimed operator.
-		require.NoError(t, r.scheduler.Sync([]operatorclient.OperatorConfig{
-			{Name: "op-a", URL: srv.URL},
+		// Wire the scheduler to know about the claimed operator. The id
+		// must match claimOp.ID because ReconcileNext looks up the
+		// scheduler client by id, not name.
+		require.NoError(t, r.scheduler.Sync([]operatorclient.OperatorAdminSummary{
+			{ID: opID, Name: "op-a", URL: srv.URL},
 		}))
 
 		err := r.ReconcileNext(context.Background())
@@ -444,7 +446,7 @@ func TestReconcileNext(t *testing.T) {
 
 	t.Run("returns descriptive error when operator is not in scheduler", func(t *testing.T) {
 		fake := &fakeReconcilerDB{
-			claimOp: &db.Operator{Name: "op-missing", URL: "http://unused.invalid"},
+			claimOp: &db.Operator{ID: uuid.New(), Name: "op-missing", URL: "http://unused.invalid"},
 		}
 		r := newTestReconciler(t, fake)
 		// Scheduler intentionally has no clients.
@@ -462,12 +464,13 @@ func TestReconcileNext(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
+		opID := uuid.New()
 		fake := &fakeReconcilerDB{
-			claimOp: &db.Operator{Name: "op-a", URL: srv.URL},
+			claimOp: &db.Operator{ID: opID, Name: "op-a", URL: srv.URL},
 		}
 		r := newTestReconciler(t, fake)
-		require.NoError(t, r.scheduler.Sync([]operatorclient.OperatorConfig{
-			{Name: "op-a", URL: srv.URL},
+		require.NoError(t, r.scheduler.Sync([]operatorclient.OperatorAdminSummary{
+			{ID: opID, Name: "op-a", URL: srv.URL},
 		}))
 
 		err := r.ReconcileNext(context.Background())

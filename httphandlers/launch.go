@@ -15,6 +15,7 @@ import (
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/permissions"
 	"github.com/cyverse-de/model/v10"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
@@ -52,17 +53,17 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	// every operator and get "not found" from all of them — wasted work that
 	// becomes a problem during workshops with many concurrent launches.
 	//
-	// GetOperatorName normalizes sql.ErrNoRows to ("", nil); a non-nil error
-	// here is a real DB fault. Treating it as "not running" would silently
-	// drop the idempotency guard and can cause double-launches during
-	// concurrent-launch bursts when the DB briefly blips.
-	name, err := h.apps.GetOperatorName(ctx, constants.AnalysisID(job.ID))
+	// GetOperatorID normalizes sql.ErrNoRows to (uuid.Nil, nil); a non-nil
+	// error here is a real DB fault. Treating it as "not running" would
+	// silently drop the idempotency guard and can cause double-launches
+	// during concurrent-launch bursts when the DB briefly blips.
+	operatorID, err := h.apps.GetOperatorID(ctx, constants.AnalysisID(job.ID))
 	if err != nil {
 		log.Errorf("idempotency lookup failed for analysis %s: %v", job.ID, err)
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "idempotency check unavailable")
 	}
-	if name != "" {
-		if client := h.scheduler.ClientByName(name); client != nil {
+	if operatorID != uuid.Nil {
+		if client := h.scheduler.ClientByID(operatorID); client != nil {
 			log.Infof("analysis %s already running on operator %s, returning success", job.ID, client.Name())
 			return c.NoContent(http.StatusOK)
 		}
@@ -77,7 +78,7 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 
 	// Validation passed — accept the job and do the heavy lifting in the
 	// background. Returning early lets the caller commit its DB transaction,
-	// which makes the jobs row visible for SetOperatorName below.
+	// which makes the jobs row visible for SetOperatorID below.
 	//
 	// Gate the background goroutine on launchSemaphore so a workshop-scale
 	// burst can't spawn thousands of 2-minute-lifetime goroutines each
@@ -161,8 +162,10 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 		return
 	}
 
-	// Route the bundle to an available operator.
-	operatorName, err := h.scheduler.LaunchAnalysis(ctx, bundle)
+	// Route the bundle to an available operator. The scheduler returns
+	// both the id (used for the DB write below) and the name (used in
+	// human-readable log lines).
+	operatorID, operatorName, err := h.scheduler.LaunchAnalysis(ctx, bundle)
 	if err != nil {
 		log.Errorf("async launch %s: failed to launch analysis: %v", job.ID, err)
 		h.failLaunch(ctx, job, fmt.Sprintf("failed to schedule analysis on operator: %v", err))
@@ -175,30 +178,30 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 	// amplify a brief DB blip into sustained load on every operator. Retry
 	// a few times to ride out transient blips before giving up; the
 	// reconciler's per-pod back-fill closes any hole that remains.
-	if err := h.setOperatorNameWithRetry(ctx, constants.AnalysisID(job.ID), operatorName); err != nil {
-		log.Errorf("async launch %s: failed to set operator name after retries: %v", job.ID, err)
+	if err := h.setOperatorIDWithRetry(ctx, constants.AnalysisID(job.ID), operatorID); err != nil {
+		log.Errorf("async launch %s: failed to set operator id after retries: %v", job.ID, err)
 	}
 
-	log.Infof("async launch %s: successfully launched on operator %s", job.ID, operatorName)
+	log.Infof("async launch %s: successfully launched on operator %s (id=%s)", job.ID, operatorName, operatorID)
 }
 
-// setOperatorNameWithRetry records which operator is running an analysis,
-// retrying a few times to survive transient DB blips. SetOperatorName
+// setOperatorIDWithRetry records which operator is running an analysis,
+// retrying a few times to survive transient DB blips. SetOperatorID
 // already retries internally for the "jobs row not yet visible" case;
 // this wrapper layers a small additional retry on top to handle
 // connection-level failures that bypass the inner loop. When the outer
 // retry also exhausts, the reconciler's back-fill will eventually close
 // the hole within ~30 s.
-func (h *HTTPHandlers) setOperatorNameWithRetry(ctx context.Context, analysisID constants.AnalysisID, operatorName string) error {
+func (h *HTTPHandlers) setOperatorIDWithRetry(ctx context.Context, analysisID constants.AnalysisID, operatorID uuid.UUID) error {
 	const attempts = 3
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
-		lastErr = h.apps.SetOperatorName(ctx, analysisID, operatorName)
+		lastErr = h.apps.SetOperatorID(ctx, analysisID, operatorID)
 		if lastErr == nil {
 			return nil
 		}
 		if attempt < attempts {
-			log.Warnf("async launch %s: SetOperatorName attempt %d/%d failed, retrying: %v", analysisID, attempt, attempts, lastErr)
+			log.Warnf("async launch %s: SetOperatorID attempt %d/%d failed, retrying: %v", analysisID, attempt, attempts, lastErr)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
