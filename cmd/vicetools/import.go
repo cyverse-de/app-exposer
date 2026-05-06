@@ -3,9 +3,10 @@ package vicetools
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"slices"
 
-	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -67,125 +68,12 @@ func importAppTx(ctx context.Context, tx *sqlx.Tx, export *VICEAppExport) (*Impo
 	}
 
 	if !hasSettings {
-		settingsID := uuid.New().String()
-		cs := export.Tool.ContainerSettings
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO container_settings (id, tools_id, cpu_shares, memory_limit, min_memory_limit,
-			                                min_cpu_cores, max_cpu_cores, min_gpus, max_gpus,
-			                                min_disk_space, network_mode, working_directory,
-			                                entrypoint, uid, skip_tmp_mount, pids_limit)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-		`, settingsID, toolID,
-			cs.CPUShares, cs.MemoryLimit, cs.MinMemoryLimit,
-			cs.MinCPUCores, cs.MaxCPUCores, cs.MinGPUs, cs.MaxGPUs,
-			cs.MinDiskSpace,
-			nullIfEmpty(cs.NetworkMode),
-			nullIfEmpty(cs.WorkingDirectory),
-			nullIfEmpty(cs.EntryPoint),
-			cs.UID, cs.SkipTmpMount, cs.PIDsLimit)
-		if err != nil {
-			return nil, fmt.Errorf("inserting container_settings: %w", err)
-		}
-
-		// Insert container_ports
-		for _, p := range cs.Ports {
-			_, err = tx.ExecContext(ctx, `
-				INSERT INTO container_ports (id, container_settings_id, host_port, container_port, bind_to_host)
-				VALUES ($1, $2, $3, $4, $5)
-			`, uuid.New().String(), settingsID, p.HostPort, p.ContainerPort, p.BindToHost)
-			if err != nil {
-				return nil, fmt.Errorf("inserting container_ports: %w", err)
-			}
-		}
-
-		// Insert container_devices
-		for _, d := range cs.Devices {
-			_, err = tx.ExecContext(ctx, `
-				INSERT INTO container_devices (id, container_settings_id, host_path, container_path)
-				VALUES ($1, $2, $3, $4)
-			`, uuid.New().String(), settingsID, d.HostPath, d.ContainerPath)
-			if err != nil {
-				return nil, fmt.Errorf("inserting container_devices: %w", err)
-			}
-		}
-
-		// Insert container_volumes
-		for _, v := range cs.Volumes {
-			_, err = tx.ExecContext(ctx, `
-				INSERT INTO container_volumes (id, container_settings_id, host_path, container_path)
-				VALUES ($1, $2, $3, $4)
-			`, uuid.New().String(), settingsID, v.HostPath, v.ContainerPath)
-			if err != nil {
-				return nil, fmt.Errorf("inserting container_volumes: %w", err)
-			}
-		}
-
-		// Insert container_gpu_models. Matches migration 000046's join-table
-		// shape: one row per (container_settings_id, gpu_model) pair.
-		for _, m := range cs.GPUModels {
-			_, err = tx.ExecContext(ctx, `
-				INSERT INTO container_gpu_models (container_settings_id, gpu_model)
-				VALUES ($1, $2)
-			`, settingsID, m)
-			if err != nil {
-				return nil, fmt.Errorf("inserting container_gpu_models: %w", err)
-			}
-		}
-
-		// Insert container_volumes_from (with data_containers)
-		for _, vf := range cs.VolumesFrom {
-			dcImageID, err := findOrCreateContainerImage(ctx, tx, vf.Name, vf.Tag, vf.URL)
-			if err != nil {
-				return nil, fmt.Errorf("volumes_from image: %w", err)
-			}
-			dcID := uuid.New().String()
-			_, err = tx.ExecContext(ctx, `
-				INSERT INTO data_containers (id, container_images_id, name_prefix, read_only)
-				VALUES ($1, $2, $3, $4)
-			`, dcID, dcImageID, nullIfEmpty(vf.NamePrefix), vf.ReadOnly)
-			if err != nil {
-				return nil, fmt.Errorf("inserting data_containers: %w", err)
-			}
-			_, err = tx.ExecContext(ctx, `
-				INSERT INTO container_volumes_from (id, container_settings_id, data_containers_id)
-				VALUES ($1, $2, $3)
-			`, uuid.New().String(), settingsID, dcID)
-			if err != nil {
-				return nil, fmt.Errorf("inserting container_volumes_from: %w", err)
-			}
-		}
-
-		// Insert interactive_apps_proxy_settings if present
-		if cs.ProxySettings != nil {
-			proxyID := uuid.New().String()
-			ps := cs.ProxySettings
-			_, err = tx.ExecContext(ctx, `
-				INSERT INTO interactive_apps_proxy_settings
-				       (id, image, name, frontend_url, cas_url, cas_validate, ssl_cert_path, ssl_key_path)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			`, proxyID,
-				nullIfEmpty(ps.Image),
-				nullIfEmpty(ps.Name),
-				nullIfEmpty(ps.FrontendURL),
-				nullIfEmpty(ps.CASURL),
-				nullIfEmpty(ps.CASValidate),
-				nullIfEmpty(ps.SSLCertPath),
-				nullIfEmpty(ps.SSLKeyPath))
-			if err != nil {
-				return nil, fmt.Errorf("inserting proxy_settings: %w", err)
-			}
-			_, err = tx.ExecContext(ctx, `
-				UPDATE container_settings
-				   SET interactive_apps_proxy_settings_id = $1
-				 WHERE id = $2
-			`, proxyID, settingsID)
-			if err != nil {
-				return nil, fmt.Errorf("updating container_settings proxy ref: %w", err)
-			}
+		if err := insertContainerSettings(ctx, tx, toolID, &export.Tool.ContainerSettings); err != nil {
+			return nil, err
 		}
 	}
 
-	// 8. Look up or create integration_data for the app
+	// 6. Look up or create integration_data for the app
 	appIntDataID, err := lookupOrCreateIntegrationData(ctx, tx,
 		export.App.IntegrationData.IntegratorEmail,
 		export.App.IntegrationData.IntegratorName)
@@ -193,122 +81,67 @@ func importAppTx(ctx context.Context, tx *sqlx.Tx, export *VICEAppExport) (*Impo
 		return nil, fmt.Errorf("app integration_data: %w", err)
 	}
 
-	// 9. Insert apps
-	appID := uuid.New().String()
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO apps (id, name, description, wiki_url)
-		VALUES ($1, $2, $3, $4)
-	`, appID, export.App.Name, export.App.Description, nullIfEmpty(export.App.WikiURL))
+	// 7. Insert apps
+	var appID string
+	err = tx.QueryRowxContext(ctx, `
+		INSERT INTO apps (name, description, wiki_url)
+		VALUES ($1, $2, $3)
+		RETURNING id
+	`, export.App.Name, export.App.Description, nullIfEmpty(export.App.WikiURL)).Scan(&appID)
 	if err != nil {
 		return nil, fmt.Errorf("inserting apps: %w", err)
 	}
 
-	// 10. Insert app_versions
-	versionID := uuid.New().String()
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO app_versions (id, app_id, version, integration_data_id, version_order, edited_date)
-		VALUES ($1, $2, $3, $4, 0, NOW())
-	`, versionID, appID, export.App.Version, appIntDataID)
+	// 8. Insert app_versions
+	var versionID string
+	err = tx.QueryRowxContext(ctx, `
+		INSERT INTO app_versions (app_id, version, integration_data_id, version_order, edited_date)
+		VALUES ($1, $2, $3, 0, NOW())
+		RETURNING id
+	`, appID, export.App.Version, appIntDataID).Scan(&versionID)
 	if err != nil {
 		return nil, fmt.Errorf("inserting app_versions: %w", err)
 	}
 
-	// 11. Look up job_types by system_id matching the tool type
+	// 9. Look up job_types by system_id matching the tool type
 	jobTypeID, err := lookupJobType(ctx, tx, export.Tool.Type)
 	if err != nil {
 		return nil, fmt.Errorf("looking up job_type for %q: %w", export.Tool.Type, err)
 	}
 
-	// 12. Insert tasks
-	taskID := uuid.New().String()
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO tasks (id, name, description, tool_id, job_type_id)
-		VALUES ($1, $2, $3, $4, $5)
-	`, taskID, export.Tool.Name, export.Tool.Description, toolID, jobTypeID)
+	// 10. Insert tasks
+	var taskID string
+	err = tx.QueryRowxContext(ctx, `
+		INSERT INTO tasks (name, description, tool_id, job_type_id)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id
+	`, export.Tool.Name, export.Tool.Description, toolID, jobTypeID).Scan(&taskID)
 	if err != nil {
 		return nil, fmt.Errorf("inserting tasks: %w", err)
 	}
 
-	// 13. Insert app_steps
+	// 11. Insert app_steps
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO app_steps (id, app_version_id, task_id, step)
-		VALUES ($1, $2, $3, 0)
-	`, uuid.New().String(), versionID, taskID)
+		INSERT INTO app_steps (app_version_id, task_id, step)
+		VALUES ($1, $2, 0)
+	`, versionID, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("inserting app_steps: %w", err)
 	}
 
-	// 14. Insert parameter_groups and parameters
+	// 12. Insert parameter_groups, parameters, and parameter_values
 	for _, g := range export.App.ParameterGroups {
-		groupID := uuid.New().String()
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO parameter_groups (id, task_id, name, description, label, display_order, is_visible)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
-		`, groupID, taskID, g.Name,
-			nullIfEmpty(g.Description),
-			nullIfEmpty(g.Label),
-			g.DisplayOrder, g.IsVisible)
-		if err != nil {
-			return nil, fmt.Errorf("inserting parameter_groups: %w", err)
-		}
-
-		for _, p := range g.Parameters {
-			paramTypeID, err := lookupParameterType(ctx, tx, p.Type)
-			if err != nil {
-				return nil, fmt.Errorf("looking up parameter_type %q: %w", p.Type, err)
-			}
-
-			paramID := uuid.New().String()
-			_, err = tx.ExecContext(ctx, `
-				INSERT INTO parameters (id, parameter_group_id, name, label, description,
-				                        parameter_type, ordering, required, is_visible, omit_if_blank)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			`, paramID, groupID,
-				p.Name,
-				nullIfEmpty(p.Label),
-				nullIfEmpty(p.Description),
-				paramTypeID,
-				p.Ordering, p.Required, p.IsVisible, p.OmitIfBlank)
-			if err != nil {
-				return nil, fmt.Errorf("inserting parameters: %w", err)
-			}
-
-			// 15. Insert parameter_values
-			for _, v := range p.Values {
-				_, err = tx.ExecContext(ctx, `
-					INSERT INTO parameter_values (id, parameter_id, name, value, description,
-					                              label, is_default, display_order)
-					VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-				`, uuid.New().String(), paramID,
-					nullIfEmpty(v.Name),
-					nullIfEmpty(v.Value),
-					nullIfEmpty(v.Description),
-					nullIfEmpty(v.Label),
-					v.IsDefault, v.DisplayOrder)
-				if err != nil {
-					return nil, fmt.Errorf("inserting parameter_values: %w", err)
-				}
-			}
-
-			// If there's a default value and no values with is_default, add one
-			if p.DefaultValue != "" && !hasDefault(p.Values) {
-				_, err = tx.ExecContext(ctx, `
-					INSERT INTO parameter_values (id, parameter_id, value, is_default)
-					VALUES ($1, $2, $3, true)
-				`, uuid.New().String(), paramID, p.DefaultValue)
-				if err != nil {
-					return nil, fmt.Errorf("inserting default parameter_value: %w", err)
-				}
-			}
+		if err := insertParameterGroup(ctx, tx, taskID, &g); err != nil {
+			return nil, err
 		}
 	}
 
-	// 16. Insert app_references
+	// 13. Insert app_references
 	for _, ref := range export.App.References {
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO app_references (id, app_version_id, reference_text)
-			VALUES ($1, $2, $3)
-		`, uuid.New().String(), versionID, ref)
+			INSERT INTO app_references (app_version_id, reference_text)
+			VALUES ($1, $2)
+		`, versionID, ref)
 		if err != nil {
 			return nil, fmt.Errorf("inserting app_references: %w", err)
 		}
@@ -321,13 +154,196 @@ func importAppTx(ctx context.Context, tx *sqlx.Tx, export *VICEAppExport) (*Impo
 	}, nil
 }
 
-func hasDefault(values []ParameterValueDef) bool {
-	for _, v := range values {
-		if v.IsDefault {
-			return true
+// insertContainerSettings inserts container_settings and all related child rows
+// (ports, devices, volumes, gpu_models, volumes_from, proxy settings) for the
+// given tool. The container_settings row's id is generated by the database via
+// uuid_generate_v1() and returned, then used as the foreign key for child rows.
+func insertContainerSettings(ctx context.Context, tx *sqlx.Tx, toolID string, cs *ContainerSettingsDef) error {
+	var settingsID string
+	err := tx.QueryRowxContext(ctx, `
+		INSERT INTO container_settings (tools_id, cpu_shares, memory_limit, min_memory_limit,
+		                                min_cpu_cores, max_cpu_cores, min_gpus, max_gpus,
+		                                min_disk_space, network_mode, working_directory,
+		                                entrypoint, uid, skip_tmp_mount, pids_limit)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		RETURNING id
+	`, toolID,
+		cs.CPUShares, cs.MemoryLimit, cs.MinMemoryLimit,
+		cs.MinCPUCores, cs.MaxCPUCores, cs.MinGPUs, cs.MaxGPUs,
+		cs.MinDiskSpace,
+		nullIfEmpty(cs.NetworkMode),
+		nullIfEmpty(cs.WorkingDirectory),
+		nullIfEmpty(cs.EntryPoint),
+		cs.UID, cs.SkipTmpMount, cs.PIDsLimit).Scan(&settingsID)
+	if err != nil {
+		return fmt.Errorf("inserting container_settings: %w", err)
+	}
+
+	for _, p := range cs.Ports {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO container_ports (container_settings_id, host_port, container_port, bind_to_host)
+			VALUES ($1, $2, $3, $4)
+		`, settingsID, p.HostPort, p.ContainerPort, p.BindToHost)
+		if err != nil {
+			return fmt.Errorf("inserting container_ports: %w", err)
 		}
 	}
-	return false
+
+	for _, d := range cs.Devices {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO container_devices (container_settings_id, host_path, container_path)
+			VALUES ($1, $2, $3)
+		`, settingsID, d.HostPath, d.ContainerPath)
+		if err != nil {
+			return fmt.Errorf("inserting container_devices: %w", err)
+		}
+	}
+
+	for _, v := range cs.Volumes {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO container_volumes (container_settings_id, host_path, container_path)
+			VALUES ($1, $2, $3)
+		`, settingsID, v.HostPath, v.ContainerPath)
+		if err != nil {
+			return fmt.Errorf("inserting container_volumes: %w", err)
+		}
+	}
+
+	// container_gpu_models matches migration 000046's join-table shape: one row
+	// per (container_settings_id, gpu_model) pair, with no surrogate id column.
+	for _, m := range cs.GPUModels {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO container_gpu_models (container_settings_id, gpu_model)
+			VALUES ($1, $2)
+		`, settingsID, m)
+		if err != nil {
+			return fmt.Errorf("inserting container_gpu_models: %w", err)
+		}
+	}
+
+	for _, vf := range cs.VolumesFrom {
+		dcImageID, err := findOrCreateContainerImage(ctx, tx, vf.Name, vf.Tag, vf.URL)
+		if err != nil {
+			return fmt.Errorf("volumes_from image: %w", err)
+		}
+		var dcID string
+		err = tx.QueryRowxContext(ctx, `
+			INSERT INTO data_containers (container_images_id, name_prefix, read_only)
+			VALUES ($1, $2, $3)
+			RETURNING id
+		`, dcImageID, nullIfEmpty(vf.NamePrefix), vf.ReadOnly).Scan(&dcID)
+		if err != nil {
+			return fmt.Errorf("inserting data_containers: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO container_volumes_from (container_settings_id, data_containers_id)
+			VALUES ($1, $2)
+		`, settingsID, dcID)
+		if err != nil {
+			return fmt.Errorf("inserting container_volumes_from: %w", err)
+		}
+	}
+
+	if cs.ProxySettings != nil {
+		ps := cs.ProxySettings
+		var proxyID string
+		err = tx.QueryRowxContext(ctx, `
+			INSERT INTO interactive_apps_proxy_settings
+			       (image, name, frontend_url, cas_url, cas_validate, ssl_cert_path, ssl_key_path)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			RETURNING id
+		`,
+			nullIfEmpty(ps.Image),
+			nullIfEmpty(ps.Name),
+			nullIfEmpty(ps.FrontendURL),
+			nullIfEmpty(ps.CASURL),
+			nullIfEmpty(ps.CASValidate),
+			nullIfEmpty(ps.SSLCertPath),
+			nullIfEmpty(ps.SSLKeyPath)).Scan(&proxyID)
+		if err != nil {
+			return fmt.Errorf("inserting proxy_settings: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `
+			UPDATE container_settings
+			   SET interactive_apps_proxy_settings_id = $1
+			 WHERE id = $2
+		`, proxyID, settingsID)
+		if err != nil {
+			return fmt.Errorf("updating container_settings proxy ref: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// insertParameterGroup inserts a parameter_groups row plus its parameters and
+// parameter_values. Database-generated ids flow forward as foreign keys.
+func insertParameterGroup(ctx context.Context, tx *sqlx.Tx, taskID string, g *ParameterGroupDef) error {
+	var groupID string
+	err := tx.QueryRowxContext(ctx, `
+		INSERT INTO parameter_groups (task_id, name, description, label, display_order, is_visible)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id
+	`, taskID, g.Name,
+		nullIfEmpty(g.Description),
+		nullIfEmpty(g.Label),
+		g.DisplayOrder, g.IsVisible).Scan(&groupID)
+	if err != nil {
+		return fmt.Errorf("inserting parameter_groups: %w", err)
+	}
+
+	for _, p := range g.Parameters {
+		paramTypeID, err := lookupParameterType(ctx, tx, p.Type)
+		if err != nil {
+			return fmt.Errorf("looking up parameter_type %q: %w", p.Type, err)
+		}
+
+		var paramID string
+		err = tx.QueryRowxContext(ctx, `
+			INSERT INTO parameters (parameter_group_id, name, label, description,
+			                        parameter_type, ordering, required, is_visible, omit_if_blank)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			RETURNING id
+		`, groupID,
+			p.Name,
+			nullIfEmpty(p.Label),
+			nullIfEmpty(p.Description),
+			paramTypeID,
+			p.Ordering, p.Required, p.IsVisible, p.OmitIfBlank).Scan(&paramID)
+		if err != nil {
+			return fmt.Errorf("inserting parameters: %w", err)
+		}
+
+		for _, v := range p.Values {
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO parameter_values (parameter_id, name, value, description,
+				                              label, is_default, display_order)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
+			`, paramID,
+				nullIfEmpty(v.Name),
+				nullIfEmpty(v.Value),
+				nullIfEmpty(v.Description),
+				nullIfEmpty(v.Label),
+				v.IsDefault, v.DisplayOrder)
+			if err != nil {
+				return fmt.Errorf("inserting parameter_values: %w", err)
+			}
+		}
+
+		// If a default value was supplied at the parameter level and none of
+		// the explicit values are flagged as default, synthesize one.
+		if p.DefaultValue != "" && !slices.ContainsFunc(p.Values, func(v ParameterValueDef) bool { return v.IsDefault }) {
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO parameter_values (parameter_id, value, is_default)
+				VALUES ($1, $2, true)
+			`, paramID, p.DefaultValue)
+			if err != nil {
+				return fmt.Errorf("inserting default parameter_value: %w", err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func findOrCreateTool(ctx context.Context, tx *sqlx.Tx, export *VICEAppExport, toolTypeID, intDataID, imageID string) (string, error) {
@@ -338,16 +354,16 @@ func findOrCreateTool(ctx context.Context, tx *sqlx.Tx, export *VICEAppExport, t
 	if err == nil {
 		return id, nil
 	}
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return "", err
 	}
-	id = uuid.New().String()
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO tools (id, name, description, version, location, attribution,
+	err = tx.QueryRowxContext(ctx, `
+		INSERT INTO tools (name, description, version, location, attribution,
 		                   interactive, time_limit_seconds, restricted,
 		                   tool_type_id, integration_data_id, container_images_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-	`, id,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		RETURNING id
+	`,
 		export.Tool.Name,
 		export.Tool.Description,
 		export.Tool.Version,
@@ -358,7 +374,7 @@ func findOrCreateTool(ctx context.Context, tx *sqlx.Tx, export *VICEAppExport, t
 		export.Tool.Restricted,
 		toolTypeID,
 		intDataID,
-		imageID)
+		imageID).Scan(&id)
 	if err != nil {
 		return "", err
 	}
@@ -386,15 +402,15 @@ func lookupOrCreateIntegrationData(ctx context.Context, tx *sqlx.Tx, email, name
 	if err == nil {
 		return id, nil
 	}
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return "", err
 	}
 
-	id = uuid.New().String()
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO integration_data (id, integrator_name, integrator_email)
-		VALUES ($1, $2, $3)
-	`, id, name, email)
+	err = tx.QueryRowxContext(ctx, `
+		INSERT INTO integration_data (integrator_name, integrator_email)
+		VALUES ($1, $2)
+		RETURNING id
+	`, name, email).Scan(&id)
 	if err != nil {
 		return "", err
 	}
@@ -453,14 +469,14 @@ func findOrCreateContainerImage(ctx context.Context, tx *sqlx.Tx, name, tag, url
 	if err == nil {
 		return id, nil
 	}
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return "", err
 	}
-	id = uuid.New().String()
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO container_images (id, name, tag, url)
-		VALUES ($1, $2, $3, $4)
-	`, id, name, tag, nullIfEmpty(url))
+	err = tx.QueryRowxContext(ctx, `
+		INSERT INTO container_images (name, tag, url)
+		VALUES ($1, $2, $3)
+		RETURNING id
+	`, name, tag, nullIfEmpty(url)).Scan(&id)
 	if err != nil {
 		return "", err
 	}
