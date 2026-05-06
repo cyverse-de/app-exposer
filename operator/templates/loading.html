@@ -3,231 +3,529 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Launching: {{.AppName}}</title>
+    <title>Launching: {{.AppName}} | Discovery Environment</title>
+    <link rel="icon" href="/favicon.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
-            --cobalt: #0971AB;
-            --cobalt-light: rgba(9, 113, 171, 0.12);
-            --navy: #004471;
-            --dark-navy: #142248;
-            --sky: #99D9EA;
-            --sky-pale: rgba(153, 217, 234, 0.15);
-            --grass: #7CB342;
-            --alert-red: #AF0404;
-            --bg: #f4f4f4;
-            --card: #ffffff;
-            --text: #333333;
-            --text-muted: #48515f;
-            --text-faint: #a5a4a4;
-            --border: #e2e2e2;
+            /* Discovery Environment palette
+             * Source: cyverse-de/sonora — CyVersePalette.js, CyVerseTheme.js, theme/default/index.js */
+            --de-cobalt:    #0971ab;   /* primary.main */
+            --de-sky:       #99d9ea;   /* secondary.main */
+            --de-navy:      #004471;
+            --de-dark-navy: #142248;
+            --de-appbar:    #074060;   /* main_appbar — hand-tuned in theme/default/index.js */
+            --de-sidebar:   #052537;   /* main_sidebar */
+            --de-grass:     #7cb342;   /* success.main */
+            --de-yellow:    #f7d21e;   /* warning.main */
+            --de-alert-red: #af0404;   /* error.main */
+            --de-blue-grey: #48515f;   /* info.main */
+            --de-bg:        #f4f4f4;
+            --de-surface:   #ffffff;
+            --de-silver:    #a5a4a4;
+            --de-divider:   rgba(0,0,0,0.12);
+            --de-border:    #e2e2e2;
+            --de-fg-1:      #2b2b2b;
+            --de-fg-2:      rgba(0,0,0,0.6);
+
+            /* MUI elevation 1 / 2 */
+            --de-shadow-1: 0 2px 1px -1px rgba(0,0,0,0.2),
+                           0 1px 1px 0 rgba(0,0,0,0.14),
+                           0 1px 3px 0 rgba(0,0,0,0.12);
+            --de-shadow-2: 0 3px 1px -2px rgba(0,0,0,0.2),
+                           0 2px 2px 0 rgba(0,0,0,0.14),
+                           0 1px 5px 0 rgba(0,0,0,0.12);
+        }
+
+        html, body {
+            font-family: "Roboto", "Helvetica", "Arial", sans-serif;
+            background: var(--de-bg);
+            color: var(--de-fg-1);
+            -webkit-font-smoothing: antialiased;
         }
 
         body {
-            font-family: 'Roboto', sans-serif;
-            background: var(--bg);
-            background-image:
-                radial-gradient(ellipse at 20% 0%, rgba(9, 113, 171, 0.06) 0%, transparent 60%),
-                radial-gradient(ellipse at 80% 100%, rgba(20, 34, 72, 0.05) 0%, transparent 60%);
-            color: var(--text);
-            display: flex;
-            justify-content: center;
-            align-items: center;
             min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
 
-        .container {
-            background: var(--card);
-            border-radius: 12px;
-            box-shadow:
-                0 1px 3px rgba(0, 0, 0, 0.06),
-                0 8px 24px rgba(20, 34, 72, 0.08);
-            padding: 48px 40px 40px;
-            max-width: 560px;
-            width: 90%;
-            text-align: center;
-            animation: fadeUp 0.4s ease-out;
-        }
-
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(12px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* CyVerse leaf mark. */
-        .brand {
+        /* DE app-bar chrome — keeps users feeling like they're still inside the workbench. */
+        .appbar {
+            height: 64px;
+            background: var(--de-appbar);
+            color: #fff;
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 28px;
-        }
-
-        .brand svg {
-            width: 28px;
-            height: 28px;
+            padding: 0 24px;
+            box-shadow: var(--de-shadow-2);
             flex-shrink: 0;
         }
 
-        h1 {
+        .appbar .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+        }
+
+        /* Inline DE binocular mark — drawn to match assets/de.png at 32px height. */
+        .de-mark {
+            width: 36px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .appbar .product {
+            font-size: 0.95rem;
+            line-height: 1.1;
+        }
+
+        .appbar .product .row1 {
+            font-weight: 500;
+            letter-spacing: 0.04em;
+        }
+        .appbar .product .row2 {
+            font-weight: 400;
+            font-size: 0.78rem;
+            letter-spacing: 0.06em;
+            color: rgba(255,255,255,0.78);
+        }
+
+        .appbar .spacer { flex: 1; }
+
+        .appbar .analysis-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-family: "Roboto Mono", "Courier New", monospace;
+            color: rgba(255,255,255,0.85);
+            max-width: 320px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .appbar .analysis-pill .material-symbols-outlined {
+            font-size: 18px;
+            color: var(--de-sky);
+            flex-shrink: 0;
+        }
+
+        /* Main canvas */
+        main {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 48px 24px;
+        }
+
+        .card {
+            background: var(--de-surface);
+            box-shadow: var(--de-shadow-1);
+            border-radius: 4px;
+            width: 100%;
+            max-width: 640px;
+            overflow: hidden;
+            animation: fadeUp 0.225s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .card-header {
+            padding: 20px 24px 16px;
+            border-bottom: 1px solid var(--de-divider);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .card-header .material-symbols-outlined {
+            color: var(--de-cobalt);
+            font-size: 24px;
+        }
+
+        .card-header h1 {
+            /* MUI h6: 1.25rem, 500, info.main */
             font-size: 1.25rem;
             font-weight: 500;
-            color: var(--dark-navy);
-            letter-spacing: -0.01em;
-        }
-
-        /* Progress track and fill. */
-        .progress-bar {
-            background: var(--border);
-            border-radius: 6px;
-            height: 6px;
-            margin-bottom: 20px;
+            color: var(--de-blue-grey);
+            line-height: 1.6;
+            letter-spacing: 0.0075em;
+            flex: 1;
+            min-width: 0;
             overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .progress-fill {
-            background: linear-gradient(90deg, var(--cobalt), var(--sky));
-            height: 100%;
-            border-radius: 6px;
-            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-            width: 0%;
+        .card-header h1 .app-name {
+            color: var(--de-dark-navy);
+        }
+
+        .card-body { padding: 24px; }
+
+        /* Stage rail — the four discrete VICE phases (deploying → starting → almost-ready → ready),
+         * shown as numbered steps so the user knows where they are in the launch sequence. */
+        .stage-rail {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .stage {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
             position: relative;
         }
 
-        .progress-fill::after {
-            content: '';
+        .stage-track {
+            height: 4px;
+            background: var(--de-border);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+        .stage-track-fill {
             position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
+            inset: 0;
+            background: var(--de-cobalt);
+            transform-origin: left center;
+            transform: scaleX(0);
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .stage.active .stage-track-fill { transform: scaleX(0.5); }
+        .stage.done   .stage-track-fill { transform: scaleX(1); }
+
+        /* Active stage gets a shimmer to signal "in progress". */
+        .stage.active .stage-track-fill::after {
+            content: "";
+            position: absolute;
+            inset: 0;
             background: linear-gradient(
                 90deg,
                 transparent 0%,
-                rgba(255, 255, 255, 0.3) 50%,
+                rgba(255,255,255,0.55) 50%,
                 transparent 100%
             );
-            animation: shimmer 2s ease-in-out infinite;
+            animation: shimmer 1.6s linear infinite;
         }
-
         @keyframes shimmer {
-            0% { transform: translateX(-100%); }
+            0%   { transform: translateX(-100%); }
             100% { transform: translateX(100%); }
         }
 
-        .progress-fill.error {
-            background: var(--alert-red);
+        .stage-label {
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: var(--de-silver);
+            letter-spacing: 0.02em;
+            line-height: 1.3;
+            transition: color 0.225s ease;
+        }
+        .stage.active .stage-label,
+        .stage.done   .stage-label { color: var(--de-blue-grey); }
+
+        .stage-num {
+            font-size: 0.65rem;
+            font-weight: 500;
+            color: var(--de-silver);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
 
-        .progress-fill.error::after { display: none; }
+        /* Error state recolors the rail. */
+        .stage-rail.error .stage-track-fill { background: var(--de-alert-red); }
+        .stage-rail.error .stage.active .stage-track-fill::after { display: none; }
+        .stage-rail.ready .stage-track-fill { background: var(--de-grass); }
+        .stage-rail.ready .stage.active .stage-track-fill::after { display: none; }
 
-        .progress-fill.ready {
-            background: var(--grass);
+        /* Status row */
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--de-bg);
+            border: 1px solid var(--de-divider);
+            border-radius: 4px;
         }
 
-        .progress-fill.ready::after { display: none; }
+        .status-row .status-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        /* Indeterminate spinner for in-progress states. MUI-style: a single arc rotating. */
+        .status-row .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--de-border);
+            border-top-color: var(--de-cobalt);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .status-row .material-symbols-outlined {
+            font-size: 22px;
+        }
 
         .status-msg {
-            font-size: 0.9rem;
-            font-weight: 400;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-            transition: color 0.3s ease;
+            font-size: 0.875rem;
+            color: var(--de-blue-grey);
+            line-height: 1.43;
+            flex: 1;
+            min-width: 0;
         }
 
-        .status-msg.error {
-            color: var(--alert-red);
-            font-weight: 500;
-        }
+        .status-row.error  { background: rgba(175, 4, 4, 0.04); border-color: rgba(175, 4, 4, 0.3); }
+        .status-row.error  .status-msg { color: var(--de-alert-red); font-weight: 500; }
+        .status-row.error  .material-symbols-outlined { color: var(--de-alert-red); }
 
-        .status-msg.ready {
-            color: var(--grass);
-            font-weight: 500;
-        }
+        .status-row.ready  { background: rgba(124, 179, 66, 0.06); border-color: rgba(124, 179, 66, 0.3); }
+        .status-row.ready  .status-msg { color: var(--de-grass); font-weight: 500; }
+        .status-row.ready  .material-symbols-outlined { color: var(--de-grass); }
 
-        .support-link {
-            display: none;
+        /* Actions row */
+        .actions {
+            display: flex;
+            gap: 8px;
             margin-top: 16px;
-            font-size: 0.85rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        /* MUI text/outlined button — sentence case (DE override) */
+        .btn {
+            font-family: inherit;
+            font-size: 0.875rem;
             font-weight: 500;
-            color: var(--cobalt);
+            letter-spacing: 0.02857em;
+            text-transform: none;
+            padding: 6px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--de-cobalt);
             text-decoration: none;
-            padding: 8px 20px;
-            border: 1px solid var(--cobalt);
-            border-radius: 6px;
-            transition: background 0.2s ease, color 0.2s ease;
+            line-height: 1.75;
+            transition: background-color 0.15s ease;
+        }
+        .btn:hover { background: rgba(9, 113, 171, 0.08); }
+        .btn.outlined {
+            border-color: rgba(9, 113, 171, 0.5);
+        }
+        .btn.outlined:hover {
+            border-color: var(--de-cobalt);
+            background: rgba(9, 113, 171, 0.08);
+        }
+        .btn .material-symbols-outlined { font-size: 18px; }
+
+        .support-link { display: none; }
+        .support-link.visible { display: inline-flex; }
+
+        .spacer-flex { flex: 1; }
+
+        /* Details disclosure — a real <details> element so it's keyboard-accessible. */
+        .details {
+            margin-top: 16px;
+            border-top: 1px solid var(--de-divider);
+            padding-top: 16px;
         }
 
-        .support-link:hover {
-            background: var(--cobalt);
-            color: #fff;
-        }
-
-        .details-toggle {
-            margin-top: 24px;
+        .details summary {
             font-size: 0.8rem;
-            font-weight: 400;
-            color: var(--text-faint);
+            font-weight: 500;
+            color: var(--de-blue-grey);
             cursor: pointer;
             user-select: none;
-            transition: color 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            list-style: none;
+            padding: 4px 8px;
+            margin-left: -8px;
+            border-radius: 4px;
+            transition: background-color 0.15s ease;
         }
+        .details summary::-webkit-details-marker { display: none; }
+        .details summary:hover { background: rgba(0,0,0,0.04); }
+        .details summary .material-symbols-outlined {
+            font-size: 18px;
+            transition: transform 0.225s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .details[open] summary .material-symbols-outlined { transform: rotate(180deg); }
 
-        .details-toggle:hover { color: var(--text-muted); }
-
-        .details {
-            display: none;
+        .details-body {
             margin-top: 12px;
-            text-align: left;
-            font-size: 0.78rem;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 14px 16px;
+            background: var(--de-bg);
+            border: 1px solid var(--de-divider);
+            border-radius: 4px;
+            padding: 12px 14px;
             max-height: 280px;
             overflow-y: auto;
         }
 
-        .details pre {
+        .details-body pre {
+            font-family: "Roboto Mono", "SF Mono", Monaco, Consolas, monospace;
+            font-size: 0.75rem;
+            line-height: 1.6;
+            color: var(--de-blue-grey);
             white-space: pre-wrap;
             word-break: break-all;
-            font-family: 'Roboto Mono', 'SF Mono', Monaco, Consolas, monospace;
-            font-size: 0.85em;
-            line-height: 1.6;
-            color: var(--text-muted);
+        }
+
+        /* Footer — Powered by CyVerse, matching DE's footer treatment. */
+        footer {
+            padding: 20px 24px 24px;
+            text-align: center;
+            color: var(--de-silver);
+            font-size: 0.75rem;
+            line-height: 1.66;
+            letter-spacing: 0.03333em;
+        }
+        footer a {
+            color: var(--de-cobalt);
+            text-decoration: none;
+        }
+        footer a:hover { text-decoration: underline; }
+        footer .powered {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+            opacity: 0.85;
+        }
+
+        /* Responsive: collapse stage rail labels on narrow screens. */
+        @media (max-width: 600px) {
+            main { padding: 24px 16px; }
+            .card-header { padding: 16px; }
+            .card-body { padding: 16px; }
+            .stage-label { display: none; }
+            .appbar { padding: 0 16px; }
+            .appbar .analysis-pill { display: none; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <header class="appbar">
         <div class="brand">
-            <!-- CyVerse leaf mark (inline SVG). -->
-            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M50 10 C25 25, 10 55, 20 85 C30 70, 45 55, 50 50 C55 55, 70 70, 80 85 C90 55, 75 25, 50 10Z"
-                      fill="var(--cobalt)" opacity="0.85"/>
-                <path d="M50 50 L50 85" stroke="var(--sky)" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
-                <path d="M50 60 L38 52" stroke="var(--sky)" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
-                <path d="M50 68 L62 58" stroke="var(--sky)" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+            <!-- DE binocular mark (matches assets/de.png) -->
+            <svg class="de-mark" viewBox="0 0 90 60" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <g fill="#fff">
+                    <circle cx="22" cy="30" r="22"/>
+                    <circle cx="68" cy="30" r="22"/>
+                    <rect x="22" y="22" width="46" height="16"/>
+                </g>
+                <g fill="#074060">
+                    <circle cx="22" cy="30" r="13"/>
+                    <circle cx="68" cy="30" r="13"/>
+                </g>
+                <g fill="#fff" opacity="0.95">
+                    <circle cx="18" cy="26" r="3"/>
+                    <circle cx="64" cy="26" r="3"/>
+                </g>
             </svg>
-            <h1>Launching: {{.AppName}}</h1>
+            <div class="product">
+                <div class="row1">DISCOVERY</div>
+                <div class="row2">ENVIRONMENT</div>
+            </div>
         </div>
+        <div class="spacer"></div>
+        <div class="analysis-pill" title="Analysis ID: {{.AnalysisID}}">
+            <span class="material-symbols-outlined">science</span>
+            <span>{{.AnalysisID}}</span>
+        </div>
+    </header>
 
-        <div class="progress-bar">
-            <div class="progress-fill" id="progress"></div>
-        </div>
-        <div class="status-msg" id="status">Connecting...</div>
-        <a class="support-link" id="support"
-           href="mailto:support@cyverse.org?subject=VICE%20Launch%20Failure%20-%20{{.AnalysisID}}">
-            Contact Support
-        </a>
-        <div class="details-toggle" id="toggle">Show Details</div>
-        <div class="details" id="details">
-            <pre id="details-content">Waiting for status...</pre>
-        </div>
-    </div>
+    <main>
+        <div class="card" role="status" aria-live="polite">
+            <div class="card-header">
+                <span class="material-symbols-outlined">rocket_launch</span>
+                <h1>Launching <span class="app-name">{{.AppName}}</span></h1>
+            </div>
+            <div class="card-body">
+                <!-- Stage rail: 4 discrete steps that mirror the Stage type in operator/loading.go -->
+                <div class="stage-rail" id="stage-rail" aria-hidden="true">
+                    <div class="stage" data-stage="deploying">
+                        <div class="stage-track"><div class="stage-track-fill"></div></div>
+                        <div class="stage-num">Step 1</div>
+                        <div class="stage-label">Deploying</div>
+                    </div>
+                    <div class="stage" data-stage="starting">
+                        <div class="stage-track"><div class="stage-track-fill"></div></div>
+                        <div class="stage-num">Step 2</div>
+                        <div class="stage-label">Starting</div>
+                    </div>
+                    <div class="stage" data-stage="almost-ready">
+                        <div class="stage-track"><div class="stage-track-fill"></div></div>
+                        <div class="stage-num">Step 3</div>
+                        <div class="stage-label">Almost ready</div>
+                    </div>
+                    <div class="stage" data-stage="ready">
+                        <div class="stage-track"><div class="stage-track-fill"></div></div>
+                        <div class="stage-num">Step 4</div>
+                        <div class="stage-label">Ready</div>
+                    </div>
+                </div>
 
-    <script>
+                <div class="status-row" id="status-row">
+                    <div class="status-icon"><div class="spinner" id="spinner"></div></div>
+                    <div class="status-msg" id="status">Connecting…</div>
+                </div>
+
+                <div class="actions">
+                    <a class="btn outlined support-link" id="support" href="/cdn-cgi/l/email-protection#15666065657a676155766c63706766703b7a67722a6660777f70766128435c56503027255974607b767d30272553747c79606770302725383027256e6e3b547b74796c667c665c516868">
+                        <span class="material-symbols-outlined">mail</span>
+                        Contact Support
+                    </a>
+                    <div class="spacer-flex"></div>
+                </div>
+
+                <details class="details" id="details">
+                    <summary>
+                        <span class="material-symbols-outlined">expand_more</span>
+                        Show technical details
+                    </summary>
+                    <div class="details-body">
+                        <pre id="details-content">Waiting for status…</pre>
+                    </div>
+                </details>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div>Discovery Environment · CyVerse</div>
+        <div class="powered">
+            Powered by CyVerse cyberinfrastructure
+        </div>
+    </footer>
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
     (function() {
         var analysisID = "{{.AnalysisID}}";
         var timeoutMs = {{.TimeoutMs}};
@@ -244,35 +542,68 @@
         // re-resolve through the gateway and land on the analysis service.
         var maxConsecutiveErrors = 2;
         var consecutiveErrors = 0;
-        var progress = document.getElementById("progress");
-        var status = document.getElementById("status");
+
+        var stageRail = document.getElementById("stage-rail");
+        var statusRow = document.getElementById("status-row");
+        var spinner = document.getElementById("spinner");
+        var statusEl = document.getElementById("status");
         var support = document.getElementById("support");
-        var toggle = document.getElementById("toggle");
-        var details = document.getElementById("details");
         var detailsContent = document.getElementById("details-content");
-        var detailsVisible = false;
+        var headerIcon = document.querySelector(".card-header .material-symbols-outlined");
 
-        toggle.addEventListener("click", function() {
-            detailsVisible = !detailsVisible;
-            details.style.display = detailsVisible ? "block" : "none";
-            toggle.textContent = detailsVisible ? "Hide Details" : "Show Details";
-        });
-
-        var stageProgress = {
-            "deploying": 20,
-            "starting": 50,
-            "almost-ready": 80,
-            "ready": 100,
-            "error": 0
-        };
+        var stageOrder = ["deploying", "starting", "almost-ready", "ready"];
 
         var stageMessages = {
-            "deploying": "Deploying your analysis environment...",
-            "starting": "Starting services...",
-            "almost-ready": "Almost ready...",
-            "ready": "Ready! Redirecting...",
-            "error": "Failed to start."
+            "deploying":    "Deploying your analysis environment\u2026",
+            "starting":     "Starting services\u2026",
+            "almost-ready": "Almost ready\u2026",
+            "ready":        "Ready! Redirecting\u2026",
+            "error":        "Failed to start."
         };
+
+        function setStage(stage) {
+            // Reset
+            stageRail.classList.remove("error", "ready");
+            var stages = stageRail.querySelectorAll(".stage");
+            for (var i = 0; i < stages.length; i++) {
+                stages[i].classList.remove("active", "done");
+            }
+
+            if (stage === "error") {
+                stageRail.classList.add("error");
+                // Mark currently-active step as the failure point.
+                var idx = parseInt(stageRail.getAttribute("data-last-idx") || "0", 10);
+                for (var j = 0; j < idx; j++) stages[j].classList.add("done");
+                if (stages[idx]) stages[idx].classList.add("active");
+                return;
+            }
+
+            var idx = stageOrder.indexOf(stage);
+            if (idx < 0) return;
+            stageRail.setAttribute("data-last-idx", String(idx));
+            for (var k = 0; k < idx; k++) stages[k].classList.add("done");
+            if (stage === "ready") {
+                stages[idx].classList.add("done");
+                stageRail.classList.add("ready");
+            } else {
+                stages[idx].classList.add("active");
+            }
+        }
+
+        function setStatusKind(kind) {
+            statusRow.classList.remove("error", "ready");
+            // Replace the spinner with an icon for terminal states.
+            var icon = document.querySelector(".status-icon");
+            if (kind === "error") {
+                statusRow.classList.add("error");
+                icon.innerHTML = '<span class="material-symbols-outlined">error</span>';
+            } else if (kind === "ready") {
+                statusRow.classList.add("ready");
+                icon.innerHTML = '<span class="material-symbols-outlined">check_circle</span>';
+            } else {
+                icon.innerHTML = '<div class="spinner"></div>';
+            }
+        }
 
         function poll() {
             // Check client-side timeout.
@@ -291,8 +622,6 @@
                 })
                 .then(function(data) {
                     consecutiveErrors = 0;
-                    var pct = stageProgress[data.stage] || 0;
-                    progress.style.width = pct + "%";
 
                     if (data.stage === "error") {
                         // Show a friendly message; the raw error goes into the
@@ -300,7 +629,7 @@
                         // the user isn't confronted with Kubernetes jargon.
                         showError(
                             "We couldn't bring your analysis online. " +
-                            "Please terminate it from the analyses page and " +
+                            "Please terminate it from the Analyses page and " +
                             "try launching again, or contact support if this " +
                             "keeps happening.",
                             data
@@ -309,15 +638,14 @@
                         return;
                     }
 
+                    setStage(data.stage);
                     if (data.stage === "ready") {
-                        progress.className = "progress-fill ready";
-                        status.className = "status-msg ready";
+                        setStatusKind("ready");
                     } else {
-                        progress.className = "progress-fill";
-                        status.className = "status-msg";
+                        setStatusKind("normal");
                     }
 
-                    status.textContent = stageMessages[data.stage] || data.stage;
+                    statusEl.textContent = stageMessages[data.stage] || data.stage;
                     updateDetails(data);
 
                     if (data.ready) {
@@ -345,10 +673,10 @@
         }
 
         function showError(msg, data) {
-            status.textContent = msg;
-            status.className = "status-msg error";
-            progress.className = "progress-fill error";
-            support.style.display = "inline-block";
+            statusEl.textContent = msg;
+            setStatusKind("error");
+            setStage("error");
+            support.classList.add("visible");
             // Rebuild the Contact Support mailto with the specifics support
             // needs to triage: analysis ID, stage at failure, raw error,
             // and the moment the failure was observed. Saves the user from
