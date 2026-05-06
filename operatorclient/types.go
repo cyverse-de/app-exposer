@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/google/uuid"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -267,16 +268,40 @@ type URLReadyResponse struct {
 
 // OperatorConfig holds the public configuration of a single vice-operator
 // instance. It is the canonical shape for operator metadata that crosses
-// process boundaries: koanf tags let it be loaded from a config file;
-// json tags let it be marshalled over the HTTP API; db tags let sqlx
-// scan directly from the operators table's SELECT columns.
+// process boundaries: json tags let it be marshalled over the HTTP API
+// and db tags let sqlx scan directly from the operators table's SELECT
+// columns.
 //
 // The internal full-row struct db.Operator continues to exist for DB
 // access that needs the write-only fields (timestamps, reconciliation
 // state, etc.) that don't belong on the wire.
 type OperatorConfig struct {
-	Name          string `json:"name"            koanf:"name"            db:"name"`
-	URL           string `json:"url"             koanf:"url"             db:"url"`
-	TLSSkipVerify bool   `json:"tls_skip_verify" koanf:"tls_skip_verify" db:"tls_skip_verify"`
-	Priority      int    `json:"priority"        koanf:"priority"        db:"priority"`
+	Name          string `json:"name"            db:"name"`
+	URL           string `json:"url"             db:"url"`
+	TLSSkipVerify bool   `json:"tls_skip_verify" db:"tls_skip_verify"`
+	Priority      int    `json:"priority"        db:"priority"`
+}
+
+// OperatorAdminSummary is the admin-facing listing shape for operators.
+// It extends OperatorConfig (via embedding) with the row's UUID so admin
+// clients can address an operator by id — which is stable across renames
+// — rather than by name. JSON marshalling and sqlx column scans both
+// flatten the embedded struct, so the wire format is the five fields
+// {id, name, url, tls_skip_verify, priority}.
+type OperatorAdminSummary struct {
+	ID uuid.UUID `json:"id" db:"id"`
+	OperatorConfig
+}
+
+// UpdateOperatorRequest is the body for PATCH
+// /vice/admin/operators/id/{id}. All fields are optional; only fields
+// whose pointers are non-nil are applied. Pointer types let the wire
+// shape distinguish "client omitted this field" from "client wants to
+// set it to the zero value" — a value-typed shape would silently force
+// priority=0 / tls_skip_verify=false on every PATCH that omitted them.
+type UpdateOperatorRequest struct {
+	Name          *string `json:"name,omitempty"`
+	URL           *string `json:"url,omitempty"`
+	TLSSkipVerify *bool   `json:"tls_skip_verify,omitempty"`
+	Priority      *int    `json:"priority,omitempty"`
 }

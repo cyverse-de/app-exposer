@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
 	"github.com/cyverse-de/app-exposer/operatorclient"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,6 +26,8 @@ func testClient(t *testing.T, handler http.Handler) *OperatorClient {
 }
 
 func TestAddOperator(t *testing.T) {
+	createdID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+
 	tests := []struct {
 		name       string
 		req        *operatorclient.OperatorConfig
@@ -30,6 +35,7 @@ func TestAddOperator(t *testing.T) {
 		respBody   string
 		wantErr    bool
 		wantName   string
+		wantID     uuid.UUID
 		// validate is called with the decoded request body when provided,
 		// allowing individual cases to assert on fields sent to the server.
 		validate func(t *testing.T, got operatorclient.OperatorConfig)
@@ -41,8 +47,9 @@ func TestAddOperator(t *testing.T) {
 				URL:  "https://op-a.example.com",
 			},
 			statusCode: http.StatusCreated,
-			respBody:   `{"name":"cluster-a","url":"https://op-a.example.com","tls_skip_verify":false,"priority":0}`,
+			respBody:   `{"id":"33333333-3333-3333-3333-333333333333","name":"cluster-a","url":"https://op-a.example.com","tls_skip_verify":false,"priority":0}`,
 			wantName:   "cluster-a",
+			wantID:     createdID,
 		},
 		{
 			// Verify that all fields (including TLSSkipVerify) are sent correctly in the request body.
@@ -56,6 +63,7 @@ func TestAddOperator(t *testing.T) {
 			statusCode: http.StatusCreated,
 			// The handler echos back the decoded request, so respBody is built dynamically via validate.
 			wantName: "op-1",
+			wantID:   createdID,
 			validate: func(t *testing.T, got operatorclient.OperatorConfig) {
 				t.Helper()
 				assert.Equal(t, "op-1", got.Name)
@@ -103,11 +111,11 @@ func TestAddOperator(t *testing.T) {
 				if tt.respBody != "" {
 					_, _ = w.Write([]byte(tt.respBody)) //nolint:errcheck // test server write
 				} else if tt.validate != nil {
-					// Echo the request fields back as the summary so the client can decode it.
-					_ = json.NewEncoder(w).Encode(operatorclient.OperatorConfig{ //nolint:errcheck // test server write
-						Name:          tt.req.Name,
-						URL:           tt.req.URL,
-						TLSSkipVerify: tt.req.TLSSkipVerify,
+					// Echo the request fields back as the admin summary
+					// (id + four config fields) so the client can decode it.
+					_ = json.NewEncoder(w).Encode(operatorclient.OperatorAdminSummary{ //nolint:errcheck // test server write
+						ID:             createdID,
+						OperatorConfig: *tt.req,
 					})
 				}
 			})
@@ -121,24 +129,36 @@ func TestAddOperator(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.wantName, summary.Name)
+				assert.Equal(t, tt.wantID, summary.ID)
 			}
 		})
 	}
 }
 
 func TestListOperators(t *testing.T) {
+	idA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	idB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+
 	tests := []struct {
 		name       string
 		statusCode int
 		respBody   string
 		wantErr    bool
 		wantLen    int
+		// validate runs on the decoded slice when no error is expected,
+		// allowing per-case assertions (e.g., that id decodes correctly).
+		validate func(t *testing.T, ops []operatorclient.OperatorAdminSummary)
 	}{
 		{
-			name:       "populated list",
+			name:       "populated list with ids",
 			statusCode: http.StatusOK,
-			respBody:   `[{"name":"a","url":"https://a.example.com","tls_skip_verify":false,"priority":0},{"name":"b","url":"https://b.example.com","tls_skip_verify":true,"priority":10}]`,
+			respBody:   `[{"id":"11111111-1111-1111-1111-111111111111","name":"a","url":"https://a.example.com","tls_skip_verify":false,"priority":0},{"id":"22222222-2222-2222-2222-222222222222","name":"b","url":"https://b.example.com","tls_skip_verify":true,"priority":10}]`,
 			wantLen:    2,
+			validate: func(t *testing.T, ops []operatorclient.OperatorAdminSummary) {
+				t.Helper()
+				assert.Equal(t, idA, ops[0].ID)
+				assert.Equal(t, idB, ops[1].ID)
+			},
 		},
 		{
 			name:       "empty list",
@@ -173,47 +193,196 @@ func TestListOperators(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.Len(t, ops, tt.wantLen)
+				if tt.validate != nil {
+					tt.validate(t, ops)
+				}
 			}
 		})
 	}
 }
 
-func TestDeleteOperator(t *testing.T) {
+func TestUpdateOperator(t *testing.T) {
+	id := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	newName := "renamed"
+	newURL := "https://new.example.com"
+	newSkip := true
+	newPriority := 7
+
 	tests := []struct {
 		name       string
-		opName     string
+		req        *operatorclient.UpdateOperatorRequest
 		statusCode int
 		respBody   string
 		wantErr    bool
-		wantPath   string
+		// validate inspects the decoded request body so individual cases can
+		// assert on which fields were sent (omitted nil pointers should not
+		// appear in the JSON thanks to omitempty).
+		validate func(t *testing.T, raw []byte, decoded operatorclient.UpdateOperatorRequest)
+	}{
+		{
+			name: "single-field rename",
+			req:  &operatorclient.UpdateOperatorRequest{Name: &newName},
+			validate: func(t *testing.T, raw []byte, decoded operatorclient.UpdateOperatorRequest) {
+				t.Helper()
+				require.NotNil(t, decoded.Name)
+				assert.Equal(t, "renamed", *decoded.Name)
+				assert.Nil(t, decoded.URL)
+				assert.Nil(t, decoded.TLSSkipVerify)
+				assert.Nil(t, decoded.Priority)
+				assert.NotContains(t, string(raw), "url")
+				assert.NotContains(t, string(raw), "tls_skip_verify")
+				assert.NotContains(t, string(raw), "priority")
+			},
+			statusCode: http.StatusOK,
+			respBody:   `{"id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","name":"renamed","url":"https://orig.example.com","tls_skip_verify":false,"priority":0}`,
+		},
+		{
+			name: "all fields",
+			req: &operatorclient.UpdateOperatorRequest{
+				Name:          &newName,
+				URL:           &newURL,
+				TLSSkipVerify: &newSkip,
+				Priority:      &newPriority,
+			},
+			validate: func(t *testing.T, raw []byte, decoded operatorclient.UpdateOperatorRequest) {
+				t.Helper()
+				require.NotNil(t, decoded.Name)
+				require.NotNil(t, decoded.URL)
+				require.NotNil(t, decoded.TLSSkipVerify)
+				require.NotNil(t, decoded.Priority)
+				assert.Equal(t, "renamed", *decoded.Name)
+				assert.Equal(t, "https://new.example.com", *decoded.URL)
+				assert.True(t, *decoded.TLSSkipVerify)
+				assert.Equal(t, 7, *decoded.Priority)
+			},
+			statusCode: http.StatusOK,
+			respBody:   `{"id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","name":"renamed","url":"https://new.example.com","tls_skip_verify":true,"priority":7}`,
+		},
+		{
+			name:       "404 not found",
+			req:        &operatorclient.UpdateOperatorRequest{Priority: &newPriority},
+			statusCode: http.StatusNotFound,
+			respBody:   `{"message":"operator not found"}`,
+			wantErr:    true,
+		},
+		{
+			name:       "409 conflict on rename collision",
+			req:        &operatorclient.UpdateOperatorRequest{Name: &newName},
+			statusCode: http.StatusConflict,
+			respBody:   `{"message":"operator with that name or url already exists"}`,
+			wantErr:    true,
+		},
+		{
+			name:       "400 bad request on validation failure",
+			req:        &operatorclient.UpdateOperatorRequest{URL: strPtr("not-a-url")},
+			statusCode: http.StatusBadRequest,
+			respBody:   `{"message":"url must be a valid HTTP(S) URL"}`,
+			wantErr:    true,
+		},
+	}
+
+	wantPath := "/vice/admin/operators/id/" + id.String()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, http.MethodPatch, r.Method)
+				assert.Equal(t, wantPath, r.URL.Path)
+				assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+				if tt.validate != nil {
+					raw, err := readAllAndRestore(r)
+					require.NoError(t, err)
+					var decoded operatorclient.UpdateOperatorRequest
+					require.NoError(t, json.Unmarshal(raw, &decoded))
+					tt.validate(t, raw, decoded)
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.statusCode)
+				if tt.respBody != "" {
+					_, _ = w.Write([]byte(tt.respBody)) //nolint:errcheck // test server write
+				}
+			})
+
+			client := testClient(t, handler)
+			summary, err := client.UpdateOperator(context.Background(), id, tt.req)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, summary)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, summary)
+				// Confirm the response carries the row's id, not just
+				// the OperatorConfig fields — the asymmetric "create
+				// returns id, update doesn't" bug from the prior PR is
+				// what motivated the response-shape change.
+				assert.Equal(t, id, summary.ID)
+			}
+		})
+	}
+}
+
+// strPtr returns a pointer to the given string. Used to build pointer-typed
+// fields concisely in test table entries.
+func strPtr(s string) *string { return &s }
+
+// readAllAndRestore drains r.Body so the test can both inspect the raw
+// JSON and decode it. The body is replaced with a fresh reader so any
+// subsequent reader sees the same bytes.
+func readAllAndRestore(r *http.Request) ([]byte, error) {
+	buf, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+	_ = r.Body.Close() //nolint:errcheck // test request body
+	r.Body = io.NopCloser(bytes.NewReader(buf))
+	return buf, nil
+}
+
+func TestDeleteOperator(t *testing.T) {
+	idA := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	idMissing := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+	idFKBlocked := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+
+	tests := []struct {
+		name       string
+		id         uuid.UUID
+		statusCode int
+		respBody   string
+		wantErr    bool
 	}{
 		{
 			name:       "success",
-			opName:     "cluster-a",
+			id:         idA,
 			statusCode: http.StatusOK,
-			wantPath:   "/vice/admin/operators/name/cluster-a",
 		},
 		{
+			// The DELETE endpoint stays idempotent at the API layer:
+			// deleting a non-existent UUID returns 200. The CLI prevents
+			// missing-name calls earlier (resolveOperatorID errors), but
+			// programmatic clients calling DeleteOperator directly with
+			// a stale id still see the silent-success behavior.
 			name:       "idempotent delete of missing operator",
-			opName:     "nonexistent",
+			id:         idMissing,
 			statusCode: http.StatusOK,
-			wantPath:   "/vice/admin/operators/name/nonexistent",
 		},
 		{
-			name:       "server error",
-			opName:     "cluster-b",
+			name:       "server error (FK constraint blocks delete)",
+			id:         idFKBlocked,
 			statusCode: http.StatusInternalServerError,
-			respBody:   `{"message":"FK constraint"}`,
+			respBody:   `{"message":"failed to delete operator"}`,
 			wantErr:    true,
-			wantPath:   "/vice/admin/operators/name/cluster-b",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			wantPath := "/vice/admin/operators/id/" + tt.id.String()
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, http.MethodDelete, r.Method)
-				assert.Equal(t, tt.wantPath, r.URL.Path)
+				assert.Equal(t, wantPath, r.URL.Path)
 
 				w.WriteHeader(tt.statusCode)
 				if tt.respBody != "" {
@@ -222,7 +391,7 @@ func TestDeleteOperator(t *testing.T) {
 			})
 
 			client := testClient(t, handler)
-			err := client.DeleteOperator(context.Background(), tt.opName)
+			err := client.DeleteOperator(context.Background(), tt.id)
 
 			if tt.wantErr {
 				assert.Error(t, err)

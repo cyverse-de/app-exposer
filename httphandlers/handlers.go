@@ -19,7 +19,9 @@ import (
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/cyverse-de/model/v10"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/lib/pq"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -81,9 +83,9 @@ func (h *HTTPHandlers) GetScheduler() *operatorclient.Scheduler {
 
 // operatorClientForAnalysis looks up which operator is running an analysis
 // and returns the corresponding client. Uses a three-step strategy:
-//  1. Fast path: check the DB for a recorded operator name.
-//  2. Search path: if no name is recorded or the named operator isn't found,
-//     search all operators in parallel via HasAnalysis.
+//  1. Fast path: check the DB for a recorded operator id.
+//  2. Search path: if no id is recorded or the operator with that id isn't
+//     in the scheduler, search all operators in parallel via HasAnalysis.
 //  3. Return (nil, nil) only when no operator has the analysis.
 //
 // A non-nil error indicates the lookup could not be completed (e.g. a
@@ -92,25 +94,25 @@ func (h *HTTPHandlers) GetScheduler() *operatorclient.Scheduler {
 // treat nil-client-with-nil-error as "not found". Callers answering an
 // "exists?" question may use nil-with-nil-error as "no".
 func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID constants.AnalysisID) (*operatorclient.Client, error) {
-	// Fast path: check the DB for a recorded operator name. GetOperatorName
-	// normalizes sql.ErrNoRows to ("", nil); a non-nil error here signals a
-	// real DB fault, which we must surface instead of silently falling through
-	// to fan-out search. Under burst traffic (e.g. workshop launches), a brief
-	// DB blip otherwise amplifies into an operator fan-out storm.
-	operatorName, err := h.apps.GetOperatorName(ctx, analysisID)
+	// Fast path: check the DB for a recorded operator id. GetOperatorID
+	// normalizes sql.ErrNoRows to (uuid.Nil, nil); a non-nil error here
+	// signals a real DB fault, which we must surface instead of silently
+	// falling through to fan-out search. Under burst traffic (e.g. workshop
+	// launches), a brief DB blip otherwise amplifies into a fan-out storm.
+	operatorID, err := h.apps.GetOperatorID(ctx, analysisID)
 	if err != nil {
 		return nil, fmt.Errorf("looking up operator for analysis %s: %w", analysisID, err)
 	}
 
-	if operatorName != "" {
-		client := h.scheduler.ClientByName(operatorName)
+	if operatorID != uuid.Nil {
+		client := h.scheduler.ClientByID(operatorID)
 		if client != nil {
-			log.Debugf("analysis %s routed to operator %q (fast path)", analysisID, operatorName)
+			log.Debugf("analysis %s routed to operator %q (id=%s, fast path)", analysisID, client.Name(), operatorID)
 			return client, nil
 		}
-		log.Warnf("operator %q not found in scheduler for analysis %s, searching all operators", operatorName, analysisID)
+		log.Warnf("operator id %s not found in scheduler for analysis %s, searching all operators", operatorID, analysisID)
 	} else {
-		log.Debugf("no operator name recorded for analysis %s, searching all operators", analysisID)
+		log.Debugf("no operator id recorded for analysis %s, searching all operators", analysisID)
 	}
 
 	// Search path: ask every operator in parallel whether it has this analysis.
@@ -128,11 +130,11 @@ func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID
 	}
 
 	// Update the DB so future lookups use the fast path.
-	if err := h.apps.SetOperatorName(ctx, analysisID, client.Name()); err != nil {
-		log.Errorf("failed to record operator %q for analysis %s: %v", client.Name(), analysisID, err)
+	if err := h.apps.SetOperatorID(ctx, analysisID, client.ID()); err != nil {
+		log.Errorf("failed to record operator %q (id=%s) for analysis %s: %v", client.Name(), client.ID(), analysisID, err)
 	}
 
-	log.Infof("analysis %s found on operator %q (search path)", analysisID, client.Name())
+	log.Infof("analysis %s found on operator %q (id=%s, search path)", analysisID, client.Name(), client.ID())
 	return client, nil
 }
 
@@ -451,19 +453,21 @@ func (h *HTTPHandlers) AsyncDataHandler(c echo.Context) error {
 }
 
 // AdminOperatorsHandler lists all operators registered in the database,
-// returning only their name, URL, and TLS skip-verify flag.
+// returning each operator's id, name, URL, TLS skip-verify flag, and
+// priority. The id is included so admin clients can address an operator by
+// its stable UUID for PATCH/DELETE operations.
 //
 //	@ID				admin-list-operators
 //	@Summary		Lists registered operators
-//	@Description	Returns the name, URL, and tls_skip_verify flag for all operators in the database.
+//	@Description	Returns id, name, URL, tls_skip_verify, and priority for all operators in the database.
 //	@Produce		json
-//	@Success		200	{array}		operatorclient.OperatorConfig
+//	@Success		200	{array}		operatorclient.OperatorAdminSummary
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/vice/admin/operators [get]
 func (h *HTTPHandlers) AdminOperatorsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	ops, err := h.db.ListOperatorSummaries(ctx)
+	ops, err := h.db.ListOperatorAdminSummaries(ctx)
 	if err != nil {
 		log.Errorf("failed to list operators: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -520,38 +524,74 @@ func (h *HTTPHandlers) AdminOperatorCapacitiesHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, results)
 }
 
-// CreateOperatorHandler adds a new operator to the database.
+// validateOperatorFields validates the optional name and url for an
+// operator request. nil pointers indicate the field is absent (a valid
+// state for a partial update); non-nil pointers are validated against the
+// same rules the operators table's CHECK and UNIQUE constraints enforce —
+// non-whitespace text, and for url an HTTP(S) URL with a host. Uniqueness
+// is checked at the DB layer rather than here.
+func validateOperatorFields(name, urlStr *string) error {
+	if name != nil && strings.TrimSpace(*name) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "name must not be empty or whitespace")
+	}
+	if urlStr != nil {
+		if strings.TrimSpace(*urlStr) == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "url must not be empty or whitespace")
+		}
+		parsed, err := url.Parse(*urlStr)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "url must be a valid HTTP(S) URL")
+		}
+	}
+	return nil
+}
+
+// operatorWriteError maps an InsertOperator/UpdateOperatorByID error to the
+// appropriate HTTP status. UNIQUE-constraint violations (SQLSTATE 23505)
+// from name- or url-collisions become 409 Conflict; everything else is a
+// 500. Callers handle sql.ErrNoRows separately because only update can
+// return it.
+func operatorWriteError(operation string, identifier string, err error) error {
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+		log.Warnf("%s operator %q rejected by unique constraint: %v", operation, identifier, err)
+		return echo.NewHTTPError(http.StatusConflict, "operator with that name or url already exists")
+	}
+	log.Errorf("failed to %s operator %q: %v", operation, identifier, err)
+	return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+}
+
+// CreateOperatorHandler adds a new operator to the database. The response
+// echoes the persisted row's id alongside the public config fields so
+// callers can address the new operator by id (e.g., for a follow-up PATCH
+// or DELETE) without a separate list call.
 //
 //	@ID				admin-create-operator
 //	@Summary		Creates a new operator
-//	@Description	Adds a new operator to the database.
+//	@Description	Adds a new operator to the database. Returns the new row including its server-assigned UUID.
 //	@Accept			json
 //	@Produce		json
 //	@Param			body	body		operatorclient.OperatorConfig	true	"Operator to create"
-//	@Success		201		{object}	operatorclient.OperatorConfig
+//	@Success		201		{object}	operatorclient.OperatorAdminSummary
 //	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		409		{object}	common.ErrorResponse
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/vice/admin/operators [post]
 func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	// The request body has the same shape as the response — both are
-	// operatorclient.OperatorConfig. A separate request type would only
-	// invite the two to drift.
+	// The request body uses operatorclient.OperatorConfig because clients
+	// don't supply an id at create time — id is server-assigned. The
+	// response shape (OperatorAdminSummary) carries the new id back.
 	var req operatorclient.OperatorConfig
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	if strings.TrimSpace(req.Name) == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "name is required")
-	}
-	if strings.TrimSpace(req.URL) == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "url is required")
-	}
-	parsedURL, parseErr := url.Parse(req.URL)
-	if parseErr != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "url must be a valid HTTP(S) URL")
+	// Both fields are required at create time, so pass them as non-nil to
+	// reuse the same validator the update path uses for present-fields.
+	if err := validateOperatorFields(&req.Name, &req.URL); err != nil {
+		return err
 	}
 
 	op := &db.Operator{
@@ -563,38 +603,94 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 
 	created, err := h.db.InsertOperator(ctx, op)
 	if err != nil {
-		log.Errorf("failed to insert operator %q: %v", req.Name, err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return operatorWriteError("insert", req.Name, err)
 	}
 
-	// Return only the public fields — drop timestamps, IDs, and
-	// reconciliation state. ToOperatorConfig performs that projection.
-	return c.JSON(http.StatusCreated, created.ToOperatorConfig())
+	// Project to the admin-summary shape: id plus the four public config
+	// fields. Drops timestamps and reconciliation state.
+	return c.JSON(http.StatusCreated, created.ToOperatorAdminSummary())
 }
 
-// DeleteOperatorHandler deletes an operator by name. The operation is
+// UpdateOperatorHandler applies a partial update to the operator with the
+// given UUID. The path identifies the row by id rather than name so that
+// renames don't break the path semantics: PATCH targets the same row even
+// if the name field is being changed in the body.
+//
+//	@ID				admin-update-operator
+//	@Summary		Updates an operator
+//	@Description	Partial update of an operator identified by UUID. Only fields supplied in the body are changed. The response carries the row's id alongside the updated fields, mirroring the create endpoint.
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string									true	"Operator UUID"
+//	@Param			body	body		operatorclient.UpdateOperatorRequest	true	"Fields to update"
+//	@Success		200		{object}	operatorclient.OperatorAdminSummary
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		404		{object}	common.ErrorResponse
+//	@Failure		409		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Router			/vice/admin/operators/id/{id} [patch]
+func (h *HTTPHandlers) UpdateOperatorHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "id must be a valid UUID")
+	}
+
+	var req operatorclient.UpdateOperatorRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	if req.Name == nil && req.URL == nil && req.TLSSkipVerify == nil && req.Priority == nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "request body must update at least one field")
+	}
+
+	if err := validateOperatorFields(req.Name, req.URL); err != nil {
+		return err
+	}
+
+	updated, err := h.db.UpdateOperatorByID(ctx, id, db.OperatorUpdate{
+		Name:          req.Name,
+		URL:           req.URL,
+		TLSSkipVerify: req.TLSSkipVerify,
+		Priority:      req.Priority,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusNotFound, "operator not found")
+	}
+	if err != nil {
+		return operatorWriteError("update", idStr, err)
+	}
+
+	return c.JSON(http.StatusOK, updated.ToOperatorAdminSummary())
+}
+
+// DeleteOperatorHandler deletes an operator by UUID. The operation is
 // idempotent for operators with no associated jobs: deleting a non-existent
 // operator returns 200. Deleting an operator that still has jobs referencing
-// it will fail due to a foreign key constraint.
+// it will fail due to the jobs.operator_id ON DELETE RESTRICT FK.
 //
 //	@ID				admin-delete-operator
-//	@Summary		Deletes an operator by name
-//	@Description	Removes the named operator from the database. Succeeds silently if the operator does not exist. Fails if jobs still reference the operator.
-//	@Param			name	path	string	true	"Operator name"
+//	@Summary		Deletes an operator by id
+//	@Description	Removes the operator with the given UUID. Succeeds silently if the operator does not exist. Fails if jobs still reference the operator.
+//	@Param			id	path	string	true	"Operator UUID"
 //	@Success		200
 //	@Failure		400	{object}	common.ErrorResponse
 //	@Failure		500	{object}	common.ErrorResponse
-//	@Router			/vice/admin/operators/name/{name} [delete]
+//	@Router			/vice/admin/operators/id/{id} [delete]
 func (h *HTTPHandlers) DeleteOperatorHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	name := c.Param("name")
-	if name == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "name is required")
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "id must be a valid UUID")
 	}
 
-	if err := h.db.DeleteOperatorByName(ctx, name); err != nil {
-		log.Errorf("failed to delete operator %q: %v", name, err)
+	if err := h.db.DeleteOperatorByID(ctx, id); err != nil {
+		log.Errorf("failed to delete operator %q: %v", idStr, err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete operator")
 	}
 

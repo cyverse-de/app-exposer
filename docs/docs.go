@@ -512,7 +512,7 @@ const docTemplate = `{
         },
         "/vice/admin/operators": {
             "get": {
-                "description": "Returns the name, URL, and tls_skip_verify flag for all operators in the database.",
+                "description": "Returns id, name, URL, tls_skip_verify, and priority for all operators in the database.",
                 "produces": [
                     "application/json"
                 ],
@@ -524,7 +524,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/operatorclient.OperatorConfig"
+                                "$ref": "#/definitions/operatorclient.OperatorAdminSummary"
                             }
                         }
                     },
@@ -537,7 +537,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Adds a new operator to the database.",
+                "description": "Adds a new operator to the database. Returns the new row including its server-assigned UUID.",
                 "consumes": [
                     "application/json"
                 ],
@@ -561,11 +561,17 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/operatorclient.OperatorConfig"
+                            "$ref": "#/definitions/operatorclient.OperatorAdminSummary"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
@@ -606,16 +612,16 @@ const docTemplate = `{
                 }
             }
         },
-        "/vice/admin/operators/name/{name}": {
+        "/vice/admin/operators/id/{id}": {
             "delete": {
-                "description": "Removes the named operator from the database. Succeeds silently if the operator does not exist. Fails if jobs still reference the operator.",
-                "summary": "Deletes an operator by name",
+                "description": "Removes the operator with the given UUID. Succeeds silently if the operator does not exist. Fails if jobs still reference the operator.",
+                "summary": "Deletes an operator by id",
                 "operationId": "admin-delete-operator",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Operator name",
-                        "name": "name",
+                        "description": "Operator UUID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -626,6 +632,67 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Partial update of an operator identified by UUID. Only fields supplied in the body are changed. The response carries the row's id alongside the updated fields, mirroring the create endpoint.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Updates an operator",
+                "operationId": "admin-update-operator",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Operator UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/operatorclient.UpdateOperatorRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/operatorclient.OperatorAdminSummary"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
@@ -2907,6 +2974,26 @@ const docTemplate = `{
                 }
             }
         },
+        "operatorclient.OperatorAdminSummary": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "tls_skip_verify": {
+                    "type": "boolean"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "operatorclient.OperatorConfig": {
             "type": "object",
             "properties": {
@@ -2932,6 +3019,23 @@ const docTemplate = `{
                 },
                 "ready": {
                     "type": "boolean"
+                }
+            }
+        },
+        "operatorclient.UpdateOperatorRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "tls_skip_verify": {
+                    "type": "boolean"
+                },
+                "url": {
+                    "type": "string"
                 }
             }
         },

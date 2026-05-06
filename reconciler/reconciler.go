@@ -17,6 +17,7 @@ import (
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
 	"github.com/cyverse-de/messaging/v12"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"github.com/sirupsen/logrus"
@@ -29,7 +30,7 @@ var log = common.Log.WithFields(logrus.Fields{"package": "reconciler"})
 // from remote operators into the DE database.
 type Reconciler struct {
 	db          db.ReconcilerDB
-	apps        apps.OperatorNameLookup
+	apps        apps.OperatorLookup
 	scheduler   *operatorclient.Scheduler
 	tokenSource oauth2.TokenSource
 	hostname    string
@@ -42,9 +43,9 @@ type Reconciler struct {
 // operator-change notifications; a URI of "" disables NOTIFY-driven syncs and
 // falls back to periodic polling. The token source is passed through to the
 // scheduler for authenticating requests to operator instances. appsLookup may
-// be nil — in that case the per-pod operator_name back-fill in ReconcileNext
+// be nil — in that case the per-pod operator_id back-fill in ReconcileNext
 // is skipped.
-func New(database db.ReconcilerDB, appsLookup apps.OperatorNameLookup, scheduler *operatorclient.Scheduler, ts oauth2.TokenSource) *Reconciler {
+func New(database db.ReconcilerDB, appsLookup apps.OperatorLookup, scheduler *operatorclient.Scheduler, ts oauth2.TokenSource) *Reconciler {
 	return &Reconciler{
 		db:          database,
 		apps:        appsLookup,
@@ -290,6 +291,8 @@ func (r *Reconciler) Run(ctx context.Context) {
 }
 
 // SyncOperators fetches operators from the DB and updates the scheduler.
+// The scheduler is keyed by id (rebuilt atomically), so callers that look
+// up clients by id remain correct across renames.
 func (r *Reconciler) SyncOperators(ctx context.Context) error {
 	ops, err := r.db.ListOperators(ctx)
 	if err != nil {
@@ -300,18 +303,18 @@ func (r *Reconciler) SyncOperators(ctx context.Context) error {
 		log.Info("no operators found in database")
 	}
 
-	configs := make([]operatorclient.OperatorConfig, 0, len(ops))
+	summaries := make([]operatorclient.OperatorAdminSummary, 0, len(ops))
 	names := make([]string, 0, len(ops))
 	for _, op := range ops {
-		configs = append(configs, op.ToOperatorConfig())
+		summaries = append(summaries, op.ToOperatorAdminSummary())
 		names = append(names, op.Name)
 	}
 
-	if err := r.scheduler.Sync(configs); err != nil {
+	if err := r.scheduler.Sync(summaries); err != nil {
 		return err
 	}
 
-	log.Infof("synced %d operator(s) to scheduler: %v", len(configs), names)
+	log.Infof("synced %d operator(s) to scheduler: %v", len(summaries), names)
 	return nil
 }
 
@@ -320,16 +323,20 @@ func (r *Reconciler) SyncOperators(ctx context.Context) error {
 // coordinated atomically by the database.
 func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 	return r.db.ClaimAndReconcile(ctx, r.hostname, DefaultClaimTTL, func(tx *sqlx.Tx, op *db.Operator) error {
-		log.Infof("reconciling operator %q", op.Name)
+		log.Infof("reconciling operator %q (id=%s)", op.Name, op.ID)
 
-		client := r.scheduler.ClientByName(op.Name)
+		// Look up the scheduler client by the operator's stable id rather
+		// than its current name: this is rename-safe even in the brief
+		// window between a Sync that observed the old name and the post-
+		// rename Sync triggered by the operators NOTIFY trigger.
+		client := r.scheduler.ClientByID(op.ID)
 		if client == nil {
 			clients := r.scheduler.Clients()
 			known := make([]string, 0, len(clients))
 			for _, c := range clients {
-				known = append(known, c.Name())
+				known = append(known, fmt.Sprintf("%s (%s)", c.Name(), c.ID()))
 			}
-			return fmt.Errorf("operator %q not found in scheduler (scheduler has %d operator(s): %v)", op.Name, len(known), known)
+			return fmt.Errorf("operator %q (id=%s) not found in scheduler (scheduler has %d operator(s): %v)", op.Name, op.ID, len(known), known)
 		}
 
 		// Fetch bulk status from operator.
@@ -354,17 +361,17 @@ func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 			} else {
 				log.Infof("reconciled analysis %s", pod.AnalysisID)
 			}
-			// Back-fill the operator name for this analysis if it's missing
+			// Back-fill the operator id for this analysis if it's missing
 			// or stale. The launch path also records this via
-			// setOperatorNameWithRetry, but that retry can exhaust, and
-			// without a recorded name every subsequent request for this
+			// setOperatorIDWithRetry, but that retry can exhaust, and
+			// without a recorded id every subsequent request for this
 			// analysis falls through to the operator fan-out search.
 			//
-			// Back-fill errors are logged inside backfillOperatorName and
+			// Back-fill errors are logged inside backfillOperatorID and
 			// deliberately NOT added to analysisErrs — a failed back-fill
 			// is self-healing on the next cycle and doesn't warrant
 			// rolling back status updates we already collected.
-			r.backfillOperatorName(ctx, pod.AnalysisID, op.Name)
+			r.backfillOperatorID(ctx, pod.AnalysisID, op.ID)
 		}
 
 		if len(analysisErrs) > 0 {
@@ -374,31 +381,32 @@ func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 	})
 }
 
-// backfillOperatorName writes the operator name for an analysis when the
-// DB either has no row yet or has a different name recorded. Errors are
-// logged but never propagate — a failed back-fill just means the next
-// reconciliation cycle will try again, and the fan-out fallback in
-// operatorClientForAnalysis continues to work in the meantime.
-func (r *Reconciler) backfillOperatorName(ctx context.Context, analysisID constants.AnalysisID, operatorName string) {
+// backfillOperatorID writes the operator id for an analysis when the
+// jobs row either has uuid.Nil (NULL) or has a different id recorded
+// (e.g. legacy data). Errors are logged but never propagate — a failed
+// back-fill just means the next reconciliation cycle will try again, and
+// the fan-out fallback in operatorClientForAnalysis continues to work in
+// the meantime.
+func (r *Reconciler) backfillOperatorID(ctx context.Context, analysisID constants.AnalysisID, operatorID uuid.UUID) {
 	if r.apps == nil || analysisID == "" {
 		return
 	}
-	current, err := r.apps.GetOperatorName(ctx, analysisID)
+	current, err := r.apps.GetOperatorID(ctx, analysisID)
 	if err != nil {
-		log.Warnf("backfill: GetOperatorName failed for analysis %s: %v", analysisID, err)
+		log.Warnf("backfill: GetOperatorID failed for analysis %s: %v", analysisID, err)
 		return
 	}
-	if current == operatorName {
+	if current == operatorID {
 		return
 	}
-	if err := r.apps.SetOperatorName(ctx, analysisID, operatorName); err != nil {
-		log.Warnf("backfill: SetOperatorName failed for analysis %s → %q: %v", analysisID, operatorName, err)
+	if err := r.apps.SetOperatorID(ctx, analysisID, operatorID); err != nil {
+		log.Warnf("backfill: SetOperatorID failed for analysis %s → %s: %v", analysisID, operatorID, err)
 		return
 	}
-	if current == "" {
-		log.Infof("backfill: recorded operator %q for analysis %s", operatorName, analysisID)
+	if current == uuid.Nil {
+		log.Infof("backfill: recorded operator %s for analysis %s", operatorID, analysisID)
 	} else {
-		log.Infof("backfill: updated operator for analysis %s from %q to %q", analysisID, current, operatorName)
+		log.Infof("backfill: updated operator for analysis %s from %s to %s", analysisID, current, operatorID)
 	}
 }
 

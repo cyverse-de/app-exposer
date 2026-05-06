@@ -52,6 +52,19 @@ func (o *Operator) ToOperatorConfig() operatorclient.OperatorConfig {
 	}
 }
 
+// ToOperatorAdminSummary projects the DB's full Operator row down to the
+// admin-facing summary shape (id plus the four public config fields).
+// Reuses ToOperatorConfig for the embedded config so the projection stays
+// in lock-step if OperatorConfig gains a new field. Used by handlers that
+// return a single row's identity to admin clients — notably create and
+// update, where the caller needs the row's id without an extra list call.
+func (o *Operator) ToOperatorAdminSummary() operatorclient.OperatorAdminSummary {
+	return operatorclient.OperatorAdminSummary{
+		ID:             o.ID,
+		OperatorConfig: o.ToOperatorConfig(),
+	}
+}
+
 // ListOperators returns all operators from the database, ordered by priority
 // (lower values first) with creation time as tiebreaker.
 func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
@@ -66,17 +79,15 @@ func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 	return ops, err
 }
 
-// ListOperatorSummaries returns the public (non-sensitive) fields of every
-// operator, ordered by priority (lower values first) with creation time as
-// tiebreaker. The returned type is operatorclient.OperatorConfig rather
-// than a db-local struct because that type already carries the same four
-// fields and serves as the canonical public shape; having a second struct
-// here would invite drift. sqlx can scan directly into OperatorConfig via
-// its db struct tags.
-func (d *Database) ListOperatorSummaries(ctx context.Context) ([]operatorclient.OperatorConfig, error) {
-	ops := make([]operatorclient.OperatorConfig, 0)
+// ListOperatorAdminSummaries returns the admin-listing fields of every
+// operator (id plus the four public config fields), ordered by priority
+// (lower values first) with creation time as tiebreaker. Including id lets
+// admin clients address an operator by its stable UUID rather than by name,
+// which is important for PATCH where the operator may be renamed.
+func (d *Database) ListOperatorAdminSummaries(ctx context.Context) ([]operatorclient.OperatorAdminSummary, error) {
+	ops := make([]operatorclient.OperatorAdminSummary, 0)
 	const query = `
-		SELECT name, url, tls_skip_verify, priority
+		SELECT id, name, url, tls_skip_verify, priority
 		FROM operators
 		ORDER BY priority ASC, created_at ASC
 	`
@@ -101,14 +112,59 @@ func (d *Database) InsertOperator(ctx context.Context, op *Operator) (*Operator,
 	return &created, nil
 }
 
-// DeleteOperatorByName deletes the operator with the given name. It is
+// DeleteOperatorByID deletes the operator with the given UUID. It is
 // idempotent for operators with no associated jobs: deleting a non-existent
-// operator succeeds silently. Deleting an operator that still has jobs
-// referencing it will fail due to a foreign key constraint.
-func (d *Database) DeleteOperatorByName(ctx context.Context, name string) error {
-	const query = `DELETE FROM operators WHERE name = $1`
-	_, err := d.db.ExecContext(ctx, query, name)
+// operator succeeds silently because DELETE simply affects zero rows.
+// Deleting an operator that still has jobs referencing it will fail due to
+// the jobs.operator_id FK with ON DELETE RESTRICT.
+func (d *Database) DeleteOperatorByID(ctx context.Context, id uuid.UUID) error {
+	const query = `DELETE FROM operators WHERE id = $1`
+	_, err := d.db.ExecContext(ctx, query, id)
 	return err
+}
+
+// OperatorUpdate carries the optional fields for a partial-update of an
+// operator row. A nil pointer leaves the column unchanged. Only fields that
+// the AFTER UPDATE NOTIFY trigger covers (name, url, tls_skip_verify,
+// priority) are exposed here; reconciliation columns are intentionally
+// reconciler-only.
+type OperatorUpdate struct {
+	Name          *string
+	URL           *string
+	TLSSkipVerify *bool
+	Priority      *int
+}
+
+// UpdateOperatorByID applies a partial update to the operator row identified
+// by id and returns the resulting row. Unset (nil) fields in upd are left
+// unchanged via COALESCE on typed-NULL parameters. updated_at is maintained
+// by a BEFORE UPDATE trigger on the table, so the SQL does not set it.
+//
+// Returns sql.ErrNoRows if no operator with the given id exists. Returns
+// the underlying *pq.Error (with Code 23505) on UNIQUE collisions for name
+// or url so the handler layer can map it to 409 Conflict.
+//
+// The AFTER UPDATE OF (name, url, tls_skip_verify, priority) trigger on
+// the operators table fires NOTIFY operator_changed automatically, which
+// the reconciler's pq.Listener picks up to drive an immediate scheduler
+// resync — no explicit pg_notify call is required here.
+func (d *Database) UpdateOperatorByID(ctx context.Context, id uuid.UUID, upd OperatorUpdate) (*Operator, error) {
+	const query = `
+		UPDATE operators
+		SET name            = COALESCE($2, name),
+		    url             = COALESCE($3, url),
+		    tls_skip_verify = COALESCE($4, tls_skip_verify),
+		    priority        = COALESCE($5, priority)
+		WHERE id = $1
+		RETURNING id, name, url, tls_skip_verify, priority,
+		          last_reconciled_at, reconciled_by, created_at, updated_at
+	`
+	var updated Operator
+	err := d.db.QueryRowxContext(ctx, query, id, upd.Name, upd.URL, upd.TLSSkipVerify, upd.Priority).StructScan(&updated)
+	if err != nil {
+		return nil, err
+	}
+	return &updated, nil
 }
 
 // ClaimAndReconcile atomically claims an operator that hasn't been reconciled

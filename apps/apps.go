@@ -253,34 +253,22 @@ const setOperatorIDStmt = `
 	WHERE id = $1;
 `
 
-// GetOperatorIDByName returns the UUID for an operator by its unique name.
-func (a *Apps) GetOperatorIDByName(ctx context.Context, name string) (uuid.UUID, error) {
-	var id uuid.UUID
-	const query = "SELECT id FROM operators WHERE name = $1"
-	err := a.DB.GetContext(ctx, &id, query, name)
-	return id, err
-}
-
-// SetOperatorName records which operator is running an analysis by mapping its
-// name to an operator_id and updating the jobs row. It retries briefly because
-// the jobs row may not be visible yet if the caller's database transaction
-// hasn't committed. The launch handler returns early to unblock that commit,
-// so the row typically appears within a few seconds.
+// SetOperatorID records which operator is running an analysis by writing
+// jobs.operator_id directly. It retries briefly because the jobs row may
+// not be visible yet if the caller's database transaction hasn't
+// committed. The launch handler returns early to unblock that commit, so
+// the row typically appears within a few seconds.
 //
-// The wait between attempts doubles each round, starting at initialBackoff and
-// capping at maxBackoff, so a healthy DB that commits quickly sees nearly no
-// delay while a slow DB sheds load gracefully across the 10-attempt budget.
-func (a *Apps) SetOperatorName(ctx context.Context, analysisID constants.AnalysisID, operatorName string) error {
+// The wait between attempts doubles each round, starting at
+// initialBackoff and capping at maxBackoff, so a healthy DB that commits
+// quickly sees nearly no delay while a slow DB sheds load gracefully
+// across the 10-attempt budget.
+func (a *Apps) SetOperatorID(ctx context.Context, analysisID constants.AnalysisID, operatorID uuid.UUID) error {
 	const (
 		maxRetries     = 10
 		initialBackoff = 100 * time.Millisecond
 		maxBackoff     = 5 * time.Second
 	)
-
-	operatorID, err := a.GetOperatorIDByName(ctx, operatorName)
-	if err != nil {
-		return fmt.Errorf("resolving operator %q to ID: %w", operatorName, err)
-	}
 
 	backoff := initialBackoff
 	for attempt := range maxRetries {
@@ -293,7 +281,7 @@ func (a *Apps) SetOperatorName(ctx context.Context, analysisID constants.Analysi
 			return err
 		}
 		if rows > 0 {
-			log.Infof("set operator_id %s (name %q) for analysis %s (attempt %d)", operatorID, operatorName, analysisID, attempt+1)
+			log.Infof("set operator_id %s for analysis %s (attempt %d)", operatorID, analysisID, attempt+1)
 			return nil
 		}
 
@@ -349,28 +337,28 @@ func (a *Apps) GetJobDebugInfo(ctx context.Context, analysisID constants.Analysi
 	return &info, nil
 }
 
-const getOperatorNameQuery = `
-	SELECT o.name
-	FROM jobs j
-	JOIN operators o ON j.operator_id = o.id
-	WHERE j.id = $1
+const getOperatorIDQuery = `
+	SELECT operator_id
+	FROM jobs
+	WHERE id = $1
 `
 
-// GetOperatorName returns the name of the operator running an analysis,
-// or an empty string if none is set or no row exists. sql.NullString's zero
-// value has String == "" when the column is NULL, so we can return it
-// directly without checking .Valid.
-func (a *Apps) GetOperatorName(ctx context.Context, analysisID constants.AnalysisID) (string, error) {
-	var name sql.NullString
-	err := a.DB.QueryRowContext(ctx, getOperatorNameQuery, analysisID).Scan(&name)
+// GetOperatorID returns the UUID of the operator running an analysis, or
+// uuid.Nil if no row exists or operator_id is NULL. uuid.UUID's Scan
+// implementation tolerates NULL by leaving the value as uuid.Nil, so the
+// "no operator yet" case (legacy launch, mid-launch before SetOperatorID
+// commits, or unknown analysis) is represented uniformly.
+func (a *Apps) GetOperatorID(ctx context.Context, analysisID constants.AnalysisID) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := a.DB.QueryRowContext(ctx, getOperatorIDQuery, analysisID).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
-		// The analysis doesn't exist in the database or has no operator; treat as none.
-		return "", nil
+		// The analysis doesn't exist in the database; treat as none.
+		return uuid.Nil, nil
 	}
 	if err != nil {
-		return "", err
+		return uuid.Nil, err
 	}
-	return name.String, nil
+	return id, nil
 }
 
 const externalIDsByStatusQuery = `

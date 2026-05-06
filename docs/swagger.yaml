@@ -918,6 +918,19 @@ definitions:
         description: bytes
         type: integer
     type: object
+  operatorclient.OperatorAdminSummary:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      priority:
+        type: integer
+      tls_skip_verify:
+        type: boolean
+      url:
+        type: string
+    type: object
   operatorclient.OperatorConfig:
     properties:
       name:
@@ -935,6 +948,17 @@ definitions:
         type: string
       ready:
         type: boolean
+    type: object
+  operatorclient.UpdateOperatorRequest:
+    properties:
+      name:
+        type: string
+      priority:
+        type: integer
+      tls_skip_verify:
+        type: boolean
+      url:
+        type: string
     type: object
   operatorclient.UpdatePermissionsRequest:
     properties:
@@ -12116,7 +12140,7 @@ paths:
       summary: Lists running analyses across all operators
   /vice/admin/operators:
     get:
-      description: Returns the name, URL, and tls_skip_verify flag for all operators
+      description: Returns id, name, URL, tls_skip_verify, and priority for all operators
         in the database.
       operationId: admin-list-operators
       produces:
@@ -12126,7 +12150,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/operatorclient.OperatorConfig'
+              $ref: '#/definitions/operatorclient.OperatorAdminSummary'
             type: array
         "500":
           description: Internal Server Error
@@ -12136,7 +12160,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Adds a new operator to the database.
+      description: Adds a new operator to the database. Returns the new row including
+        its server-assigned UUID.
       operationId: admin-create-operator
       parameters:
       - description: Operator to create
@@ -12151,9 +12176,13 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/operatorclient.OperatorConfig'
+            $ref: '#/definitions/operatorclient.OperatorAdminSummary'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "409":
+          description: Conflict
           schema:
             $ref: '#/definitions/common.ErrorResponse'
         "500":
@@ -12180,15 +12209,15 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Returns operator capacities
-  /vice/admin/operators/name/{name}:
+  /vice/admin/operators/id/{id}:
     delete:
-      description: Removes the named operator from the database. Succeeds silently
-        if the operator does not exist. Fails if jobs still reference the operator.
+      description: Removes the operator with the given UUID. Succeeds silently if
+        the operator does not exist. Fails if jobs still reference the operator.
       operationId: admin-delete-operator
       parameters:
-      - description: Operator name
+      - description: Operator UUID
         in: path
-        name: name
+        name: id
         required: true
         type: string
       responses:
@@ -12202,7 +12231,50 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/common.ErrorResponse'
-      summary: Deletes an operator by name
+      summary: Deletes an operator by id
+    patch:
+      consumes:
+      - application/json
+      description: Partial update of an operator identified by UUID. Only fields supplied
+        in the body are changed. The response carries the row's id alongside the updated
+        fields, mirroring the create endpoint.
+      operationId: admin-update-operator
+      parameters:
+      - description: Operator UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/operatorclient.UpdateOperatorRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/operatorclient.OperatorAdminSummary'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Updates an operator
   /vice/admin/terminate-all:
     post:
       description: |-

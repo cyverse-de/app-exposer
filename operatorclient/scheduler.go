@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 )
 
@@ -84,21 +85,12 @@ type Scheduler struct {
 	tokenSource oauth2.TokenSource
 }
 
-// NewScheduler creates a Scheduler from operator configs. The token source is
-// used to authenticate requests to all operators; pass nil to disable auth.
-// Operators are tried in the order they appear in the configs slice
-// (config order = priority order).
-func NewScheduler(configs []OperatorConfig, ts oauth2.TokenSource) (*Scheduler, error) {
-	clients := make([]*Client, 0, len(configs))
-	for _, cfg := range configs {
-		c, err := NewClient(cfg, ts)
-		if err != nil {
-			return nil, fmt.Errorf("creating client for operator %q: %w", cfg.Name, err)
-		}
-		clients = append(clients, c)
-	}
-
-	return &Scheduler{operators: clients, tokenSource: ts}, nil
+// NewScheduler creates an empty Scheduler. The reconciler's first
+// SyncOperators call populates it from the database, which is the source
+// of truth for operator configuration. The token source is used to
+// authenticate requests to all operators; pass nil to disable auth.
+func NewScheduler(ts oauth2.TokenSource) *Scheduler {
+	return &Scheduler{tokenSource: ts}
 }
 
 // SetTokenSource updates the token source used for authenticating requests
@@ -109,20 +101,23 @@ func (s *Scheduler) SetTokenSource(ts oauth2.TokenSource) {
 	s.tokenSource = ts
 }
 
-// Sync replaces the scheduler's current operator clients with a new list.
-// This allows runtime updates from the database without a restart.
-func (s *Scheduler) Sync(configs []OperatorConfig) error {
+// Sync replaces the scheduler's current operator clients with a new list
+// built from the DB-backed admin summaries (each carrying its UUID). This
+// allows runtime updates from the database without a restart. Each client
+// remembers its id so callers can look it up via ClientByID even after a
+// rename.
+func (s *Scheduler) Sync(summaries []OperatorAdminSummary) error {
 	// Snapshot the token source under a read-lock so that a concurrent
 	// SetTokenSource call cannot race with our read of s.tokenSource.
 	s.mu.RLock()
 	ts := s.tokenSource
 	s.mu.RUnlock()
 
-	clients := make([]*Client, 0, len(configs))
-	for _, cfg := range configs {
-		c, err := NewClient(cfg, ts)
+	clients := make([]*Client, 0, len(summaries))
+	for _, summary := range summaries {
+		c, err := NewClient(summary, ts)
 		if err != nil {
-			return fmt.Errorf("creating client for operator %q: %w", cfg.Name, err)
+			return fmt.Errorf("creating client for operator %q: %w", summary.Name, err)
 		}
 		clients = append(clients, c)
 	}
@@ -135,20 +130,21 @@ func (s *Scheduler) Sync(configs []OperatorConfig) error {
 }
 
 // LaunchAnalysis sends the bundle to the first operator that has capacity.
-// Returns the name of the operator that accepted the analysis, or an error
-// if no operator could accept it.
+// Returns the id and name of the operator that accepted the analysis, or
+// an error if no operator could accept it. Returning the id directly lets
+// callers persist the analysis→operator linkage by UUID without a
+// follow-up name→id lookup that could race with a concurrent rename.
 //
-// The scheduling strategy is simple: operators are tried in config order
-// (priority order). The first operator with available capacity gets the
-// analysis. This minimizes usage of later (potentially more expensive)
-// clusters.
-func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) (string, error) {
+// The scheduling strategy is simple: operators are tried in priority order.
+// The first operator with available capacity gets the analysis. This
+// minimizes usage of later (potentially more expensive) clusters.
+func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) (uuid.UUID, string, error) {
 	s.mu.RLock()
 	clients := slices.Clone(s.operators)
 	s.mu.RUnlock()
 
 	if len(clients) == 0 {
-		return "", ErrNoOperators
+		return uuid.Nil, "", ErrNoOperators
 	}
 
 	// Track capacity-check errors, transient launch failures, and vendor
@@ -204,23 +200,23 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 				log.Warnf("operator %s launch failed transiently, trying next: %v", op.Name(), err)
 				continue
 			}
-			return "", fmt.Errorf("launch on operator %s failed: %w", op.Name(), err)
+			return uuid.Nil, "", fmt.Errorf("launch on operator %s failed: %w", op.Name(), err)
 		}
 
-		log.Infof("analysis %s launched on operator %s", bundle.AnalysisID, op.Name())
-		return op.Name(), nil
+		log.Infof("analysis %s launched on operator %s (id=%s)", bundle.AnalysisID, op.Name(), op.ID())
+		return op.ID(), op.Name(), nil
 	}
 
 	// Every operator's capacity check failed (all returned errors).
 	if capacityErrors == len(clients) {
-		return "", fmt.Errorf("all %d operators failed capacity check: %w", len(clients), ErrAllOperatorsExhausted)
+		return uuid.Nil, "", fmt.Errorf("all %d operators failed capacity check: %w", len(clients), ErrAllOperatorsExhausted)
 	}
 
 	// No operator advertised a compatible GPU vendor. Distinct from the
 	// at-capacity / unhealthy buckets so callers can surface a routing-
 	// policy error rather than a misleading "at capacity" message.
 	if wantVendor != "" && vendorMismatches > 0 && capacityErrors+vendorMismatches == len(clients) {
-		return "", fmt.Errorf("no operator with vendor %s for analysis %s: %w",
+		return uuid.Nil, "", fmt.Errorf("no operator with vendor %s for analysis %s: %w",
 			wantVendor, bundle.AnalysisID, ErrNoCompatibleOperator)
 	}
 
@@ -228,10 +224,10 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 	// transient reasons. Surface the last underlying error so the caller
 	// can distinguish it from a real "all at capacity" situation.
 	if transientErrors > 0 && capacityErrors+transientErrors+vendorMismatches == len(clients) {
-		return "", fmt.Errorf("all %d operators unhealthy; last error: %w", len(clients), lastTransient)
+		return uuid.Nil, "", fmt.Errorf("all %d operators unhealthy; last error: %w", len(clients), lastTransient)
 	}
 
-	return "", ErrAllOperatorsExhausted
+	return uuid.Nil, "", ErrAllOperatorsExhausted
 }
 
 // Clients returns a copy of all operator clients so callers can iterate for
@@ -244,11 +240,30 @@ func (s *Scheduler) Clients() []*Client {
 }
 
 // ClientByName returns the operator client with the given name, or nil.
+//
+// Deprecated: Use ClientByID. Operator names are mutable, so a concurrent
+// rename can leave a name-keyed lookup looking for a stale value; ClientByID
+// uses the immutable UUID and is rename-safe.
 func (s *Scheduler) ClientByName(name string) *Client {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, op := range s.operators {
 		if op.Name() == name {
+			return op
+		}
+	}
+	return nil
+}
+
+// ClientByID returns the operator client with the given UUID, or nil.
+// Preferred over ClientByName because the id is stable across renames —
+// a client looked up by id won't go stale just because the operator's
+// name was changed.
+func (s *Scheduler) ClientByID(id uuid.UUID) *Client {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, op := range s.operators {
+		if op.ID() == id {
 			return op
 		}
 	}
