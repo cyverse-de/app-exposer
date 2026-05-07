@@ -169,6 +169,79 @@ func TestBuildSwaggerAuthConfigCookieSecret(t *testing.T) {
 	}
 }
 
+func TestAllowedByAdminGate(t *testing.T) {
+	const role = "vice-operator"
+	allowedEnts := []string{"core-services", "tito-admins"}
+
+	tests := []struct {
+		name         string
+		roles        []string
+		entitlements []string
+		adminRole    string
+		allowedEnts  []string
+		want         bool
+	}{
+		{"role only", []string{"vice-operator"}, nil, role, allowedEnts, true},
+		{"entitlement only", nil, []string{"tito-admins"}, role, allowedEnts, true},
+		{"both role and entitlement", []string{"vice-operator"}, []string{"core-services"}, role, allowedEnts, true},
+		{"neither", []string{"some-other-role"}, []string{"users"}, role, allowedEnts, false},
+		{"empty claims", nil, nil, role, allowedEnts, false},
+		{"role match with extra roles present", []string{"users", "vice-operator", "default-roles-cyverse"}, nil, role, allowedEnts, true},
+		{"entitlement match among many", nil, []string{"users", "core-services", "students"}, role, allowedEnts, true},
+		{"custom admin role", []string{"vice-ops"}, nil, "vice-ops", allowedEnts, true},
+		{"custom admin role rejects default", []string{"vice-operator"}, nil, "vice-ops", allowedEnts, false},
+		{"empty allowed entitlements + role match", []string{"vice-operator"}, nil, role, nil, true},
+		{"empty allowed entitlements + entitlement-only token", nil, []string{"core-services"}, role, nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := allowedByAdminGate(tt.roles, tt.entitlements, tt.adminRole, tt.allowedEnts)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestAnyMatch(t *testing.T) {
+	tests := []struct {
+		name string
+		a, b []string
+		want bool
+	}{
+		{"both empty", nil, nil, false},
+		{"first empty", nil, []string{"x"}, false},
+		{"second empty", []string{"x"}, nil, false},
+		{"single match", []string{"x"}, []string{"x"}, true},
+		{"no overlap", []string{"a", "b"}, []string{"c", "d"}, false},
+		{"partial overlap", []string{"a", "b", "c"}, []string{"x", "b", "y"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, anyMatch(tt.a, tt.b))
+		})
+	}
+}
+
+func TestParseAdminEntitlements(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"empty", "", nil},
+		{"single", "core-services", []string{"core-services"}},
+		{"multiple", "core-services,tito-admins,dev", []string{"core-services", "tito-admins", "dev"}},
+		{"whitespace around entries", "  core-services , tito-admins  ", []string{"core-services", "tito-admins"}},
+		{"empty entries dropped", "core-services,,tito-admins,", []string{"core-services", "tito-admins"}},
+		{"only commas", ",,,", nil},
+		{"only whitespace", "   ", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, parseAdminEntitlements(tt.in))
+		})
+	}
+}
+
 func TestStripBearer(t *testing.T) {
 	tests := []struct {
 		name      string

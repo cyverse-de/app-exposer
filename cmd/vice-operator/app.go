@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -24,10 +25,12 @@ type App struct {
 
 // NewApp creates a new App with all operator routes registered.
 // When verifier is non-nil, all API routes require a valid Keycloak JWT Bearer
-// token (or a valid session cookie set by the Swagger login flow).
+// token (or a valid session cookie set by the Swagger login flow). The token
+// must additionally carry adminRole in realm_access.roles or at least one
+// value in adminEntitlements in its entitlement claim — the API is admin-only.
 // swaggerCfg controls the Swagger UI login gate; when disabled, docs are served
 // without authentication.
-func NewApp(op *operator.Operator, verifier *oidc.IDTokenVerifier, expectedClientID string, swaggerCfg *SwaggerAuthConfig) *App {
+func NewApp(op *operator.Operator, verifier *oidc.IDTokenVerifier, expectedClientID string, swaggerCfg *SwaggerAuthConfig, adminRole string, adminEntitlements []string) *App {
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
@@ -59,7 +62,7 @@ func NewApp(op *operator.Operator, verifier *oidc.IDTokenVerifier, expectedClien
 	// All API routes go through an optional auth group.
 	api := e.Group("")
 	if verifier != nil {
-		api.Use(bearerAuthMiddleware(verifier, expectedClientID, swaggerCfg))
+		api.Use(bearerAuthMiddleware(verifier, expectedClientID, swaggerCfg, adminRole, adminEntitlements))
 	}
 	api.GET("/capacity", op.HandleCapacity)
 	api.POST("/analyses", op.HandleLaunch)
@@ -146,7 +149,12 @@ func stripBearer(auth string) (string, bool) {
 // the client ID rather than "aud", so the standard audience check is skipped and
 // azp is verified manually against the expected API client ID and (optionally)
 // the Swagger UI client ID.
-func bearerAuthMiddleware(verifier *oidc.IDTokenVerifier, expectedClientID string, swaggerCfg *SwaggerAuthConfig) echo.MiddlewareFunc {
+//
+// After azp validation, the token must additionally carry adminRole in
+// realm_access.roles[] or at least one value in adminEntitlements in its
+// entitlement claim. This restricts the API to service accounts that hold the
+// role and to admin users whose group memberships surface as entitlements.
+func bearerAuthMiddleware(verifier *oidc.IDTokenVerifier, expectedClientID string, swaggerCfg *SwaggerAuthConfig, adminRole string, adminEntitlements []string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			var rawToken string
@@ -169,9 +177,15 @@ func bearerAuthMiddleware(verifier *oidc.IDTokenVerifier, expectedClientID strin
 				return echo.NewHTTPError(http.StatusUnauthorized, "invalid token: "+err.Error())
 			}
 
-			// Extract azp (authorized party) from the token claims.
+			// Pull every claim we need in a single Claims() call. Re-parsing
+			// the token a second time for the role/entitlement check would
+			// double the JSON-decode cost on every request.
 			var claims struct {
-				AZP string `json:"azp"`
+				AZP         string `json:"azp"`
+				RealmAccess struct {
+					Roles []string `json:"roles"`
+				} `json:"realm_access"`
+				Entitlement []string `json:"entitlement"`
 			}
 			if err := token.Claims(&claims); err != nil {
 				return echo.NewHTTPError(http.StatusUnauthorized, "failed to parse token claims: "+err.Error())
@@ -182,7 +196,34 @@ func bearerAuthMiddleware(verifier *oidc.IDTokenVerifier, expectedClientID strin
 				return echo.NewHTTPError(http.StatusForbidden, "unauthorized client")
 			}
 
+			// Admin gate: realm role OR entitlement intersection. The role
+			// path is how service accounts get in; the entitlement path is
+			// how human admins get in via group membership.
+			if !allowedByAdminGate(claims.RealmAccess.Roles, claims.Entitlement, adminRole, adminEntitlements) {
+				return echo.NewHTTPError(http.StatusForbidden, "insufficient privileges")
+			}
+
 			return next(c)
 		}
 	}
+}
+
+// allowedByAdminGate reports whether a token with the given realm roles and
+// entitlement values should be admitted by the API's admin gate. A token
+// passes if it carries adminRole in roles, or if any of its entitlements
+// appears in adminEntitlements.
+func allowedByAdminGate(roles, entitlements []string, adminRole string, adminEntitlements []string) bool {
+	return slices.Contains(roles, adminRole) || anyMatch(entitlements, adminEntitlements)
+}
+
+// anyMatch reports whether any element of a is also present in b. Used for
+// the entitlement-intersection check; both inputs are typically very small
+// (≤10 entries) so a nested loop beats building a set.
+func anyMatch(a, b []string) bool {
+	for _, v := range a {
+		if slices.Contains(b, v) {
+			return true
+		}
+	}
+	return false
 }

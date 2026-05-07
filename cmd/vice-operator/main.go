@@ -30,6 +30,8 @@ func main() {
 		apiAuth               bool
 		apiAuthIssuerURL      string
 		apiAuthClientID       string
+		adminRole             string
+		adminEntitlementsRaw  string
 		viceBaseURL           string
 		clusterConfigSecret   string
 		imagePullSecret       string
@@ -76,6 +78,8 @@ func main() {
 	flag.BoolVar(&apiAuth, "api-auth", true, "Enable OIDC JWT Bearer auth for the API")
 	flag.StringVar(&apiAuthIssuerURL, "api-auth-issuer-url", "", "OIDC issuer URL for API auth (e.g. https://keycloak.example.com/realms/cyverse)")
 	flag.StringVar(&apiAuthClientID, "api-auth-client-id", "", "Expected client ID (azp claim) for API auth")
+	flag.StringVar(&adminRole, "admin-role", "vice-operator", "Realm role that grants API access (or ADMIN_ROLE env var)")
+	flag.StringVar(&adminEntitlementsRaw, "admin-entitlements", "", "Comma-separated list of entitlement-claim values that grant API access (or ADMIN_ENTITLEMENTS env var)")
 	flag.StringVar(&viceBaseURL, "vice-base-url", "https://cyverse.run", "Base URL for VICE, stored in the cluster config secret")
 	flag.StringVar(&clusterConfigSecret, "cluster-config-secret", "cluster-config-secret", "Name of the K8s Secret holding cluster config")
 	flag.StringVar(&imagePullSecret, "image-pull-secret", "vice-image-pull-secret", "Name of the K8s image pull Secret")
@@ -123,6 +127,17 @@ func main() {
 	envFallback(&keycloakClientSecret, "KEYCLOAK_CLIENT_SECRET")
 	envFallback(&swaggerClientSecret, "SWAGGER_CLIENT_SECRET")
 	envFallback(&swaggerCookieSecret, "SWAGGER_COOKIE_SECRET")
+	envFallback(&adminEntitlementsRaw, "ADMIN_ENTITLEMENTS")
+	// admin-role defaults to "vice-operator"; the env fallback only kicks in
+	// when the flag wasn't passed explicitly. The current envFallback helper
+	// can't distinguish "not passed" from "passed empty," so handle this one
+	// inline: respect the env override only when the flag default is unchanged.
+	if adminRole == "vice-operator" {
+		if v := os.Getenv("ADMIN_ROLE"); v != "" {
+			adminRole = v
+		}
+	}
+	adminEntitlements := parseAdminEntitlements(adminEntitlementsRaw)
 
 	// Validate OIDC auth flags.
 	if apiAuth && (apiAuthIssuerURL == "" || apiAuthClientID == "") {
@@ -168,6 +183,10 @@ func main() {
 		"KEYCLOAK_REALM":         keycloakRealm,
 		"KEYCLOAK_CLIENT_ID":     keycloakClientID,
 		"KEYCLOAK_CLIENT_SECRET": keycloakClientSecret,
+		// Propagated to vice-proxy (via EnvFrom) so it can grant admins
+		// access to running analyses regardless of the per-analysis
+		// allowed-users list.
+		"ADMIN_ENTITLEMENTS": adminEntitlementsRaw,
 	}
 	if disableViceProxyAuth {
 		clusterConfig["DISABLE_AUTH"] = "true"
@@ -327,7 +346,7 @@ func main() {
 		log.Fatalf("%v", err)
 	}
 
-	app := NewApp(op, verifier, apiAuthClientID, swaggerCfg)
+	app := NewApp(op, verifier, apiAuthClientID, swaggerCfg, adminRole, adminEntitlements)
 	loadingApp := NewLoadingApp(op)
 
 	apiAddr := fmt.Sprintf(":%d", port)
