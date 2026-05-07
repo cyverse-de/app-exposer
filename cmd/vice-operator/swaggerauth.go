@@ -20,7 +20,7 @@ import (
 const (
 	sessionCookieName    = "vice-operator-session"
 	stateCookieName      = "vice-operator-oauth-state"
-	stateMaxAge          = 300            // 5 minutes for the CSRF state cookie.
+	stateMaxAge          = 300              // 5 minutes for the CSRF state cookie.
 	tokenExchangeTimeout = 10 * time.Second // Prevents a hung IdP from stalling the callback handler.
 )
 
