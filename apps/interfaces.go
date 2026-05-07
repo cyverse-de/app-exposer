@@ -30,6 +30,13 @@ type OperatorLookup interface {
 
 	// SetOperatorID records the operator running the analysis. Internally
 	// retries a handful of times if the jobs row isn't yet visible
-	// (handles the launch/commit race).
+	// (handles the launch/commit race). Use this from the launch path.
 	SetOperatorID(ctx context.Context, analysisID constants.AnalysisID, operatorID uuid.UUID) error
+
+	// SetOperatorIDNoRetry performs a single UPDATE and returns
+	// ErrJobsRowMissing if no row matches. Use this for cache-hint
+	// backfill from non-launch callers, where waiting through the
+	// SetOperatorID retry loop would block the request that triggered
+	// the lookup.
+	SetOperatorIDNoRetry(ctx context.Context, analysisID constants.AnalysisID, operatorID uuid.UUID) error
 }

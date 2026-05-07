@@ -129,8 +129,11 @@ func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID
 		return nil, nil
 	}
 
-	// Update the DB so future lookups use the fast path.
-	if err := h.apps.SetOperatorID(ctx, analysisID, client.ID()); err != nil {
+	// Update the DB so future lookups use the fast path. Use the no-retry
+	// variant: a missing jobs row here indicates a stale or unknown
+	// analysis id, not a pending launch commit, so waiting through the
+	// SetOperatorID retry loop would just stall the request.
+	if err := h.apps.SetOperatorIDNoRetry(ctx, analysisID, client.ID()); err != nil {
 		log.Errorf("failed to record operator %q (id=%s) for analysis %s: %v", client.Name(), client.ID(), analysisID, err)
 	}
 

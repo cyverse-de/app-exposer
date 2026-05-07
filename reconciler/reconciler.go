@@ -399,7 +399,7 @@ func (r *Reconciler) backfillOperatorID(ctx context.Context, analysisID constant
 	if current == operatorID {
 		return
 	}
-	if err := r.apps.SetOperatorID(ctx, analysisID, operatorID); err != nil {
+	if err := r.apps.SetOperatorIDNoRetry(ctx, analysisID, operatorID); err != nil {
 		log.Warnf("backfill: SetOperatorID failed for analysis %s → %s: %v", analysisID, operatorID, err)
 		return
 	}
