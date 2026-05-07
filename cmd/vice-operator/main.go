@@ -128,11 +128,18 @@ func main() {
 	envFallback(&swaggerClientSecret, "SWAGGER_CLIENT_SECRET")
 	envFallback(&swaggerCookieSecret, "SWAGGER_COOKIE_SECRET")
 	envFallback(&adminEntitlementsRaw, "ADMIN_ENTITLEMENTS")
-	// admin-role defaults to "vice-operator"; the env fallback only kicks in
-	// when the flag wasn't passed explicitly. The current envFallback helper
-	// can't distinguish "not passed" from "passed empty," so handle this one
-	// inline: respect the env override only when the flag default is unchanged.
-	if adminRole == "vice-operator" {
+	// --admin-role has a non-empty default, so the envFallback "is empty?"
+	// trick can't distinguish "user passed default" from "user didn't pass
+	// anything." Walk visited flags to detect explicit-set, then apply the
+	// env override only when the user wasn't explicit. This makes the
+	// explicit flag always win over the env var.
+	adminRoleSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "admin-role" {
+			adminRoleSet = true
+		}
+	})
+	if !adminRoleSet {
 		if v := os.Getenv("ADMIN_ROLE"); v != "" {
 			adminRole = v
 		}
