@@ -40,6 +40,20 @@ func parseSelector(s string) (map[string]string, error) {
 	return result, nil
 }
 
+// parseAdminEntitlements splits a comma-separated entitlement list, trims
+// whitespace, and drops empty entries. An empty input yields an empty slice
+// (which means "no entitlement-claim values are accepted as admin").
+func parseAdminEntitlements(raw string) []string {
+	var out []string
+	for part := range strings.SplitSeq(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
 // stringSliceFlag implements flag.Value for repeatable string flags.
 type stringSliceFlag []string
 
