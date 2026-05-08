@@ -8,7 +8,7 @@ build-flags := ""
 
 default: build
 
-build: docs operator-docs app-exposer vice-operator vice-operator-tool workflow-builder vice-export vice-import vice-launch vice-list vice-bundle vice-userid
+build: docs operator-docs app-exposer vice-operator vice-operator-tool vice-operator-token workflow-builder vice-export vice-import vice-launch vice-list vice-bundle vice-userid
 
 build-image:
     {{ container-runtime }} build -f {{ build-context}}/{{ dockerfile }} -t {{ image-name }}:{{ tag }} --platform {{ platform }} {{ build-flags }} {{ build-context}}
@@ -63,6 +63,9 @@ vice-operator:
 
 vice-operator-tool:
     go build -o bin/vice-operator-tool cmd/vice-operator-tool/*.go
+
+vice-operator-token:
+    go build -o bin/vice-operator-token cmd/vice-operator-token/*.go
 
 workflow-builder:
     go build -o bin/workflow-builder cmd/workflow-builder/*.go
@@ -172,4 +175,7 @@ clean:
     fi
     if [ -f bin/vice-userid ]; then
         rm bin/vice-userid
+    fi
+    if [ -f bin/vice-operator-token ]; then
+        rm bin/vice-operator-token
     fi
