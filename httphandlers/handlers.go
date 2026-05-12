@@ -80,11 +80,13 @@ func (h *HTTPHandlers) GetScheduler() *operatorclient.Scheduler {
 }
 
 // operatorClientForAnalysis looks up which operator is running an analysis
-// and returns the corresponding client. Uses a three-step strategy:
+// and returns the corresponding client. Uses a two-step strategy:
 //  1. Fast path: check the DB for a recorded operator name.
 //  2. Search path: if no name is recorded or the named operator isn't found,
-//     search all operators in parallel via HasAnalysis.
-//  3. Return (nil, nil) only when no operator has the analysis.
+//     search all operators in parallel via HasAnalysis. Search-path hits are
+//     NOT written back to the DB — the launch handler is the only writer of
+//     jobs.operator_id, by design, to reduce write contention on jobs. With
+//     a single VICE operator the fan-out is cheap; revisit if we add more.
 //
 // A non-nil error indicates the lookup could not be completed (e.g. a
 // database outage) and the caller should surface that to the client rather
@@ -125,11 +127,6 @@ func (h *HTTPHandlers) operatorClientForAnalysis(ctx context.Context, analysisID
 		}
 		log.Warnf("no operator has analysis %s", analysisID)
 		return nil, nil
-	}
-
-	// Update the DB so future lookups use the fast path.
-	if err := h.apps.SetOperatorName(ctx, analysisID, client.Name()); err != nil {
-		log.Errorf("failed to record operator %q for analysis %s: %v", client.Name(), analysisID, err)
 	}
 
 	log.Infof("analysis %s found on operator %q (search path)", analysisID, client.Name())

@@ -10,7 +10,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/db"
@@ -29,7 +28,6 @@ var log = common.Log.WithFields(logrus.Fields{"package": "reconciler"})
 // from remote operators into the DE database.
 type Reconciler struct {
 	db          db.ReconcilerDB
-	apps        apps.OperatorNameLookup
 	scheduler   *operatorclient.Scheduler
 	tokenSource oauth2.TokenSource
 	hostname    string
@@ -41,13 +39,10 @@ type Reconciler struct {
 // connection string used to open a dedicated PostgreSQL LISTEN channel for
 // operator-change notifications; a URI of "" disables NOTIFY-driven syncs and
 // falls back to periodic polling. The token source is passed through to the
-// scheduler for authenticating requests to operator instances. appsLookup may
-// be nil — in that case the per-pod operator_name back-fill in ReconcileNext
-// is skipped.
-func New(database db.ReconcilerDB, appsLookup apps.OperatorNameLookup, scheduler *operatorclient.Scheduler, ts oauth2.TokenSource) *Reconciler {
+// scheduler for authenticating requests to operator instances.
+func New(database db.ReconcilerDB, scheduler *operatorclient.Scheduler, ts oauth2.TokenSource) *Reconciler {
 	return &Reconciler{
 		db:          database,
-		apps:        appsLookup,
 		scheduler:   scheduler,
 		tokenSource: ts,
 		hostname:    resolveHostname(),
@@ -354,17 +349,6 @@ func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 			} else {
 				log.Infof("reconciled analysis %s", pod.AnalysisID)
 			}
-			// Back-fill the operator name for this analysis if it's missing
-			// or stale. The launch path also records this via
-			// setOperatorNameWithRetry, but that retry can exhaust, and
-			// without a recorded name every subsequent request for this
-			// analysis falls through to the operator fan-out search.
-			//
-			// Back-fill errors are logged inside backfillOperatorName and
-			// deliberately NOT added to analysisErrs — a failed back-fill
-			// is self-healing on the next cycle and doesn't warrant
-			// rolling back status updates we already collected.
-			r.backfillOperatorName(ctx, pod.AnalysisID, op.Name)
 		}
 
 		if len(analysisErrs) > 0 {
@@ -372,34 +356,6 @@ func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 		}
 		return nil
 	})
-}
-
-// backfillOperatorName writes the operator name for an analysis when the
-// DB either has no row yet or has a different name recorded. Errors are
-// logged but never propagate — a failed back-fill just means the next
-// reconciliation cycle will try again, and the fan-out fallback in
-// operatorClientForAnalysis continues to work in the meantime.
-func (r *Reconciler) backfillOperatorName(ctx context.Context, analysisID constants.AnalysisID, operatorName string) {
-	if r.apps == nil || analysisID == "" {
-		return
-	}
-	current, err := r.apps.GetOperatorName(ctx, analysisID)
-	if err != nil {
-		log.Warnf("backfill: GetOperatorName failed for analysis %s: %v", analysisID, err)
-		return
-	}
-	if current == operatorName {
-		return
-	}
-	if err := r.apps.SetOperatorName(ctx, analysisID, operatorName); err != nil {
-		log.Warnf("backfill: SetOperatorName failed for analysis %s → %q: %v", analysisID, operatorName, err)
-		return
-	}
-	if current == "" {
-		log.Infof("backfill: recorded operator %q for analysis %s", operatorName, analysisID)
-	} else {
-		log.Infof("backfill: updated operator for analysis %s from %q to %q", analysisID, current, operatorName)
-	}
 }
 
 func (r *Reconciler) reconcileAnalysis(ctx context.Context, tx *sqlx.Tx, pod reporting.PodInfo) error {

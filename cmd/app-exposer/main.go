@@ -414,10 +414,8 @@ func main() {
 	tokenSource := ccConfig.TokenSource(context.Background())
 	log.Infof("Keycloak OIDC client credentials configured (client_id=%s, token_url=%s)", kcClientID, tokenURL)
 
-	// Initialize and start the status reconciliation worker. The apps
-	// handle is passed so the reconciler can back-fill missing
-	// operator_name records on each cycle (see r.backfillOperatorName).
-	reconciler := reconciler.New(dbase, a, app.handlers.GetScheduler(), tokenSource)
+	// Initialize and start the status reconciliation worker.
+	reconciler := reconciler.New(dbase, app.handlers.GetScheduler(), tokenSource)
 	go reconciler.Run(context.Background())
 
 	log.Printf("listening on port %d", *listenPort)

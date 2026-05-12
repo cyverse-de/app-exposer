@@ -262,58 +262,31 @@ func (a *Apps) GetOperatorIDByName(ctx context.Context, name string) (uuid.UUID,
 }
 
 // SetOperatorName records which operator is running an analysis by mapping its
-// name to an operator_id and updating the jobs row. It retries briefly because
-// the jobs row may not be visible yet if the caller's database transaction
-// hasn't committed. The launch handler returns early to unblock that commit,
-// so the row typically appears within a few seconds.
-//
-// The wait between attempts doubles each round, starting at initialBackoff and
-// capping at maxBackoff, so a healthy DB that commits quickly sees nearly no
-// delay while a slow DB sheds load gracefully across the 10-attempt budget.
+// name to an operator_id and updating the jobs row. Best-effort: called only
+// from the VICE launch handler, which logs and continues on failure. We no
+// longer retry from here because the loop amplifies write contention on the
+// jobs table. If the launch caller's transaction hasn't committed yet (so the
+// jobs row isn't visible), the update is dropped on the floor; with a single
+// VICE operator, a missing operator_id just means subsequent routing falls
+// back to the fan-out search across operators, which is acceptable.
 func (a *Apps) SetOperatorName(ctx context.Context, analysisID constants.AnalysisID, operatorName string) error {
-	const (
-		maxRetries     = 10
-		initialBackoff = 100 * time.Millisecond
-		maxBackoff     = 5 * time.Second
-	)
-
 	operatorID, err := a.GetOperatorIDByName(ctx, operatorName)
 	if err != nil {
 		return fmt.Errorf("resolving operator %q to ID: %w", operatorName, err)
 	}
-
-	backoff := initialBackoff
-	for attempt := range maxRetries {
-		result, err := a.DB.ExecContext(ctx, setOperatorIDStmt, analysisID, operatorID)
-		if err != nil {
-			return err
-		}
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if rows > 0 {
-			log.Infof("set operator_id %s (name %q) for analysis %s (attempt %d)", operatorID, operatorName, analysisID, attempt+1)
-			return nil
-		}
-
-		// Row not found yet; wait for the caller's transaction to commit.
-		if attempt < maxRetries-1 {
-			log.Debugf("jobs row not yet visible for analysis %s, retrying in %s (attempt %d/%d)",
-				analysisID, backoff, attempt+1, maxRetries)
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(backoff):
-			}
-			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
-			}
-		}
+	result, err := a.DB.ExecContext(ctx, setOperatorIDStmt, analysisID, operatorID)
+	if err != nil {
+		return err
 	}
-
-	return fmt.Errorf("no jobs row found for analysis %s after %d attempts", analysisID, maxRetries)
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("no jobs row found for analysis %s", analysisID)
+	}
+	log.Infof("set operator_id %s (name %q) for analysis %s", operatorID, operatorName, analysisID)
+	return nil
 }
 
 // JobDebugInfo holds key fields from the jobs table for diagnostic logging.
