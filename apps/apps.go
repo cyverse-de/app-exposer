@@ -253,18 +253,14 @@ const setOperatorIDStmt = `
 	WHERE id = $1;
 `
 
-// ErrJobsRowMissing is returned by SetOperatorIDNoRetry (and the internal
-// single-attempt helper SetOperatorID layers on top of) when the UPDATE
-// matched zero rows. Callers that don't want to wait for a launching
-// transaction to commit — e.g. the routing-cache backfill in
-// operatorClientForAnalysis or the reconciler's per-pod backfill — can
-// distinguish "no row to update right now" from a real DB error.
-var ErrJobsRowMissing = errors.New("no jobs row found for analysis")
-
-// setOperatorIDOnce performs a single UPDATE attempt. Returns nil on a
-// successful update, ErrJobsRowMissing when the row doesn't (yet) exist,
-// or the underlying DB error otherwise.
-func (a *Apps) setOperatorIDOnce(ctx context.Context, analysisID constants.AnalysisID, operatorID uuid.UUID) error {
+// SetOperatorID records which operator is running an analysis by writing
+// jobs.operator_id directly. Best-effort: called only from the VICE launch
+// handler, which logs and continues on failure. No retry — the retry loop
+// previously here amplified write contention on the jobs table when the
+// caller's transaction hadn't yet committed. With a single VICE operator
+// in prod, a missing operator_id just means subsequent routing falls back
+// to the fan-out search, which is acceptable.
+func (a *Apps) SetOperatorID(ctx context.Context, analysisID constants.AnalysisID, operatorID uuid.UUID) error {
 	result, err := a.DB.ExecContext(ctx, setOperatorIDStmt, analysisID, operatorID)
 	if err != nil {
 		return err
@@ -274,70 +270,10 @@ func (a *Apps) setOperatorIDOnce(ctx context.Context, analysisID constants.Analy
 		return err
 	}
 	if rows == 0 {
-		return ErrJobsRowMissing
+		return fmt.Errorf("no jobs row found for analysis %s", analysisID)
 	}
+	log.Infof("set operator_id %s for analysis %s", operatorID, analysisID)
 	return nil
-}
-
-// SetOperatorIDNoRetry performs a single UPDATE attempt and returns
-// ErrJobsRowMissing if the row isn't there. Use this from callers that
-// only want to backfill a cache hint (the routing fast path, the
-// reconciler) and have no reason to wait through a multi-second retry
-// loop. The launch path, which races against its own committing
-// transaction, should keep using SetOperatorID.
-func (a *Apps) SetOperatorIDNoRetry(ctx context.Context, analysisID constants.AnalysisID, operatorID uuid.UUID) error {
-	return a.setOperatorIDOnce(ctx, analysisID, operatorID)
-}
-
-// SetOperatorID records which operator is running an analysis by writing
-// jobs.operator_id directly. It retries briefly because the jobs row may
-// not be visible yet if the caller's database transaction hasn't
-// committed. The launch handler returns early to unblock that commit, so
-// the row typically appears within a few seconds.
-//
-// The wait between attempts doubles each round, starting at
-// initialBackoff and capping at maxBackoff, so a healthy DB that commits
-// quickly sees nearly no delay while a slow DB sheds load gracefully
-// across the 10-attempt budget.
-//
-// Non-launch callers should use SetOperatorIDNoRetry: a missing row there
-// means a stale or unknown analysis id, not a pending commit, and waiting
-// ~21 s blocks the request that triggered the lookup.
-func (a *Apps) SetOperatorID(ctx context.Context, analysisID constants.AnalysisID, operatorID uuid.UUID) error {
-	const (
-		maxRetries     = 10
-		initialBackoff = 100 * time.Millisecond
-		maxBackoff     = 5 * time.Second
-	)
-
-	backoff := initialBackoff
-	for attempt := range maxRetries {
-		err := a.setOperatorIDOnce(ctx, analysisID, operatorID)
-		if err == nil {
-			log.Infof("set operator_id %s for analysis %s (attempt %d)", operatorID, analysisID, attempt+1)
-			return nil
-		}
-		if !errors.Is(err, ErrJobsRowMissing) {
-			return err
-		}
-
-		// Row not found yet; wait for the caller's transaction to commit.
-		if attempt < maxRetries-1 {
-			log.Debugf("jobs row not yet visible for analysis %s, retrying in %s (attempt %d/%d)",
-				analysisID, backoff, attempt+1, maxRetries)
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(backoff):
-			}
-			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
-			}
-		}
-	}
-
-	return fmt.Errorf("%w %s after %d attempts", ErrJobsRowMissing, analysisID, maxRetries)
 }
 
 // JobDebugInfo holds key fields from the jobs table for diagnostic logging.
