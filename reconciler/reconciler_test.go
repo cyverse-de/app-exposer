@@ -42,7 +42,7 @@ func TestGetLocalIP(t *testing.T) {
 func TestNewReconciler(t *testing.T) {
 	scheduler := operatorclient.NewScheduler(nil)
 
-	r := New(&fakeReconcilerDB{}, nil, scheduler, nil)
+	r := New(&fakeReconcilerDB{}, scheduler, nil)
 
 	require.NotNil(t, r)
 	// ip is populated by getLocalIP, which always returns a non-empty string.
@@ -150,13 +150,11 @@ func (f *fakeReconcilerDB) InsertJobStatusUpdate(_ context.Context, _ *sqlx.Tx, 
 
 // newTestReconciler wires a Reconciler against the supplied fake DB and an
 // empty scheduler. Callers that need operator clients should extend the
-// scheduler via its Sync method after construction. appsLookup is passed
-// as nil by default — reconcileAnalysis doesn't use it, and ReconcileNext
-// guards against a nil apps before invoking any back-fill.
+// scheduler via its Sync method after construction.
 func newTestReconciler(t *testing.T, fake *fakeReconcilerDB) *Reconciler {
 	t.Helper()
 	sched := operatorclient.NewScheduler(nil)
-	return New(fake, nil, sched, nil)
+	return New(fake, sched, nil)
 }
 
 func TestSyncOperators(t *testing.T) {

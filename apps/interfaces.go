@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/cyverse-de/app-exposer/constants"
-	"github.com/google/uuid"
 )
 
 // AnalysisStatusLookup is the narrow subset of *Apps used by the quota
@@ -16,27 +15,4 @@ type AnalysisStatusLookup interface {
 	// (e.g. "Submitted", "Running", "Completed"). Returns sql.ErrNoRows
 	// if no row exists for the given analysis ID.
 	GetAnalysisStatus(ctx context.Context, analysisID constants.AnalysisID) (string, error)
-}
-
-// OperatorLookup is the narrow subset of *Apps used by the reconciler to
-// back-fill missing operator_id records on the jobs table. Defined here
-// so the reconciler can be unit-tested with a fake. *Apps satisfies this
-// interface structurally.
-type OperatorLookup interface {
-	// GetOperatorID returns the operator UUID currently recorded for the
-	// analysis, or uuid.Nil with nil error if no row exists or the column
-	// is NULL.
-	GetOperatorID(ctx context.Context, analysisID constants.AnalysisID) (uuid.UUID, error)
-
-	// SetOperatorID records the operator running the analysis. Internally
-	// retries a handful of times if the jobs row isn't yet visible
-	// (handles the launch/commit race). Use this from the launch path.
-	SetOperatorID(ctx context.Context, analysisID constants.AnalysisID, operatorID uuid.UUID) error
-
-	// SetOperatorIDNoRetry performs a single UPDATE and returns
-	// ErrJobsRowMissing if no row matches. Use this for cache-hint
-	// backfill from non-launch callers, where waiting through the
-	// SetOperatorID retry loop would block the request that triggered
-	// the lookup.
-	SetOperatorIDNoRetry(ctx context.Context, analysisID constants.AnalysisID, operatorID uuid.UUID) error
 }
