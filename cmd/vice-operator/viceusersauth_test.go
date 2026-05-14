@@ -106,6 +106,11 @@ func TestHandleViceUsersCallback(t *testing.T) {
 			query:    url.Values{"code": {"abc"}, "state": {state(t, codec, "http://a1234abcd.cyverse.run/")}},
 			wantCode: http.StatusBadRequest,
 		},
+		{
+			name:     "userinfo in origin",
+			query:    url.Values{"code": {"abc"}, "state": {state(t, codec, "https://attacker@a1234abcd.cyverse.run/")}},
+			wantCode: http.StatusBadRequest,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

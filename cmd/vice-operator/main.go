@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"strings"
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
@@ -194,7 +193,11 @@ func main() {
 	// unset so vice-proxy's own startup validation can flag the gap.
 	var operatorCallbackURL string
 	if publicURL != "" {
-		operatorCallbackURL = strings.TrimSuffix(publicURL, "/") + viceUsersCallbackPath
+		parsedPublicURL, parseErr := url.Parse(publicURL)
+		if parseErr != nil {
+			log.Fatalf("--public-url must be a valid URL, got %q: %v", publicURL, parseErr)
+		}
+		operatorCallbackURL = parsedPublicURL.JoinPath(viceUsersCallbackPath).String()
 	}
 
 	// Build the cluster config map from flags. All keys are always written so
@@ -227,7 +230,7 @@ func main() {
 			log.Warn("auth is enabled (--disable-vice-proxy-auth not set) but one or more Keycloak flags are empty; vice-proxy pods will fail to start")
 		}
 		if publicURL == "" || stateHMACSecret == "" {
-			log.Warn("auth is enabled but --public-url or --state-hmac-secret is empty; vice-proxy pods will fail to start and the OAuth callback relay is disabled")
+			log.Warn("auth is enabled but --public-url or --state-hmac-secret is empty; vice-proxy pods will fail to start without both")
 		}
 	}
 

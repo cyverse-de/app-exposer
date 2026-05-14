@@ -69,17 +69,22 @@ func handleViceUsersCallback(cfg *ViceUsersAuthConfig) echo.HandlerFunc {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid state")
 		}
 
+		// Reject anything that isn't a plain https URL on an allowed VICE
+		// subdomain. origin.User is refused outright — userinfo has no place in
+		// a relay target and is a classic redirect-spoofing vector.
 		origin, err := url.Parse(claims.Origin)
-		if err != nil || origin.Scheme != "https" || !cfg.isAllowedHost(origin.Hostname()) {
+		if err != nil || origin.Scheme != "https" || origin.User != nil || !cfg.isAllowedHost(origin.Hostname()) {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid redirect target")
 		}
 
 		// Re-attach code + state so vice-proxy can validate state against its
-		// cookie and exchange the code. Preserve any path/query already present.
+		// cookie and exchange the code. Preserve any path/query already present;
+		// drop any fragment, which has no business in a server-side redirect.
 		oq := origin.Query()
 		oq.Set("code", code)
 		oq.Set("state", state)
 		origin.RawQuery = oq.Encode()
+		origin.Fragment = ""
 
 		return c.Redirect(http.StatusTemporaryRedirect, origin.String())
 	}
