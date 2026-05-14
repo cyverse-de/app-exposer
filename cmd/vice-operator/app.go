@@ -23,15 +23,35 @@ type App struct {
 //	@description	The vice-operator API for managing VICE analyses on remote clusters.
 //	@BasePath		/
 
+// AppConfig holds the dependencies for NewApp, grouped into a struct rather
+// than a long positional parameter list.
+type AppConfig struct {
+	Operator          *operator.Operator
+	Verifier          *oidc.IDTokenVerifier
+	ExpectedClientID  string
+	SwaggerCfg        *SwaggerAuthConfig
+	AdminRole         string
+	AdminEntitlements []string
+	ViceUsersCfg      *ViceUsersAuthConfig
+}
+
 // NewApp creates a new App with all operator routes registered.
-// When verifier is non-nil, all API routes require a valid Keycloak JWT Bearer
-// token (or a valid session cookie set by the Swagger login flow). The token
-// must additionally carry adminRole in realm_access.roles or at least one
-// value in adminEntitlements in its entitlement claim — the API is admin-only.
-// swaggerCfg controls the Swagger UI login gate; when disabled, docs are served
-// without authentication. When viceUsersCfg is non-nil, the unauthenticated
-// vice-users OAuth callback relay is registered.
-func NewApp(op *operator.Operator, verifier *oidc.IDTokenVerifier, expectedClientID string, swaggerCfg *SwaggerAuthConfig, adminRole string, adminEntitlements []string, viceUsersCfg *ViceUsersAuthConfig) *App {
+// When cfg.Verifier is non-nil, all API routes require a valid Keycloak JWT
+// Bearer token (or a valid session cookie set by the Swagger login flow). The
+// token must additionally carry cfg.AdminRole in realm_access.roles or at least
+// one value in cfg.AdminEntitlements in its entitlement claim — the API is
+// admin-only. cfg.SwaggerCfg controls the Swagger UI login gate; when disabled,
+// docs are served without authentication. When cfg.ViceUsersCfg is non-nil, the
+// unauthenticated OAuth callback relay is registered.
+func NewApp(cfg AppConfig) *App {
+	op := cfg.Operator
+	verifier := cfg.Verifier
+	expectedClientID := cfg.ExpectedClientID
+	swaggerCfg := cfg.SwaggerCfg
+	adminRole := cfg.AdminRole
+	adminEntitlements := cfg.AdminEntitlements
+	viceUsersCfg := cfg.ViceUsersCfg
+
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())

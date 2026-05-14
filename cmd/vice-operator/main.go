@@ -390,7 +390,15 @@ func main() {
 		}
 	}
 
-	app := NewApp(op, verifier, apiAuthClientID, swaggerCfg, adminRole, adminEntitlements, viceUsersCfg)
+	app := NewApp(AppConfig{
+		Operator:          op,
+		Verifier:          verifier,
+		ExpectedClientID:  apiAuthClientID,
+		SwaggerCfg:        swaggerCfg,
+		AdminRole:         adminRole,
+		AdminEntitlements: adminEntitlements,
+		ViceUsersCfg:      viceUsersCfg,
+	})
 	loadingApp := NewLoadingApp(op)
 
 	apiAddr := fmt.Sprintf(":%d", port)

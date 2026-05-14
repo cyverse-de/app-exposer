@@ -11,9 +11,9 @@ import (
 )
 
 // viceUsersCallbackPath is the fixed path of the OAuth callback relay. It is
-// combined with --public-url to form OPERATOR_CALLBACK_URL, the single static
-// redirect_uri registered in Keycloak for the vice-users client.
-const viceUsersCallbackPath = "/vice-users/callback"
+// combined with --public-url to form OPERATOR_CALLBACK_URL, the static
+// redirect_uri that must be registered in Keycloak.
+const viceUsersCallbackPath = "/auth/callback"
 
 // ViceUsersAuthConfig configures the vice-users OAuth callback relay.
 type ViceUsersAuthConfig struct {
@@ -38,11 +38,12 @@ func (cfg *ViceUsersAuthConfig) isAllowedHost(host string) bool {
 	return label != "" && !strings.Contains(label, ".")
 }
 
-// handleViceUsersCallback returns the handler for GET /vice-users/callback.
+// handleViceUsersCallback returns the OAuth callback relay handler.
 //
-// vice-proxy registers this operator's URL as the single static redirect_uri
-// for the Keycloak "vice-users" client, because Keycloak cannot wildcard-match
-// per-app VICE subdomains. Keycloak delivers the authorization code here; the
+// The operator's callback URL is registered in Keycloak as the static
+// redirect_uri for the OAuth client vice-proxy authenticates against —
+// Keycloak cannot wildcard-match per-app VICE subdomains, so a single fixed
+// callback is needed. Keycloak delivers the authorization code here; the
 // handler recovers the original app URL from the signed state and relays the
 // browser back to it with the code intact. It is intentionally stateless and
 // does no token exchange — vice-proxy holds the client secret and redeems the
