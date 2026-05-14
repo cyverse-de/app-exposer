@@ -290,8 +290,8 @@ type OperatorConfig struct {
 // It extends OperatorConfig (via embedding) with the row's UUID so admin
 // clients can address an operator by id — which is stable across renames
 // — rather than by name. JSON marshalling and sqlx column scans both
-// flatten the embedded struct, so the wire format is the five fields
-// {id, name, url, tls_skip_verify, priority}.
+// flatten the embedded struct, so the wire format is the six fields
+// {id, name, url, base_url, tls_skip_verify, priority}.
 type OperatorAdminSummary struct {
 	ID uuid.UUID `json:"id" db:"id"`
 	OperatorConfig

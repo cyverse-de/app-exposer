@@ -599,8 +599,10 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 
 	// name, url, and base_url are all required at create time. base_url is a
 	// pointer (nullable column), so its presence is checked explicitly here;
-	// name and url are value types and always "present".
-	if req.BaseURL == nil || strings.TrimSpace(*req.BaseURL) == "" {
+	// name and url are value types and always "present". Format/whitespace
+	// validation is left to validateOperatorFields so the error messages
+	// stay consistent across all three fields.
+	if req.BaseURL == nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "base_url is required")
 	}
 	if err := validateOperatorFields(&req.Name, &req.URL, req.BaseURL); err != nil {
@@ -620,7 +622,7 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 		return operatorWriteError("insert", req.Name, err)
 	}
 
-	// Project to the admin-summary shape: id plus the four public config
+	// Project to the admin-summary shape: id plus the five public config
 	// fields. Drops timestamps and reconciliation state.
 	return c.JSON(http.StatusCreated, created.ToOperatorAdminSummary())
 }

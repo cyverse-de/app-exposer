@@ -58,7 +58,7 @@ func (o *Operator) ToOperatorConfig() operatorclient.OperatorConfig {
 }
 
 // ToOperatorAdminSummary projects the DB's full Operator row down to the
-// admin-facing summary shape (id plus the four public config fields).
+// admin-facing summary shape (id plus the five public config fields).
 // Reuses ToOperatorConfig for the embedded config so the projection stays
 // in lock-step if OperatorConfig gains a new field. Used by handlers that
 // return a single row's identity to admin clients — notably create and
@@ -85,7 +85,7 @@ func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 }
 
 // ListOperatorAdminSummaries returns the admin-listing fields of every
-// operator (id plus the four public config fields), ordered by priority
+// operator (id plus the five public config fields), ordered by priority
 // (lower values first) with creation time as tiebreaker. Including id lets
 // admin clients address an operator by its stable UUID rather than by name,
 // which is important for PATCH where the operator may be renamed.
@@ -134,6 +134,11 @@ func (d *Database) DeleteOperatorByID(ctx context.Context, id uuid.UUID) error {
 // NOTIFY trigger; base_url is not (it is consumed by the apps service, not
 // app-exposer's scheduler). Reconciliation columns are intentionally
 // reconciler-only and not exposed here.
+//
+// Because UpdateOperatorByID applies fields with COALESCE, a nil pointer
+// means "leave unchanged" — there is no way to clear base_url back to NULL
+// once set. That is intentional: base_url is required from creation onward,
+// so the only NULL rows are legacy operators that predate the column.
 type OperatorUpdate struct {
 	Name          *string
 	URL           *string
