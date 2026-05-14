@@ -129,6 +129,8 @@ github.com/cyverse-de/go-mod/pbinit v0.1.11 h1:HUGZ5Q0yOwkp8vnGjJzmKX7FweX96f68I
 github.com/cyverse-de/go-mod/pbinit v0.1.11/go.mod h1:eC6iC5kAxbWvJgZcqK04qeQbioX6KYwBoBw/SzsuPak=
 github.com/cyverse-de/go-mod/protobufjson v0.0.3 h1:XTIZejY7EUbpF6ZdhRhiFX9PGYDkGGmPP760cDswGWM=
 github.com/cyverse-de/go-mod/protobufjson v0.0.3/go.mod h1:p/ASemjpl2GEFYb3Tt7N8RozViwonsK0fOm0LxYeCt8=
+github.com/cyverse-de/go-mod/viceauth v1.0.0 h1:k5lCiBi7Lfa4eHZfkD1Msnez5kcAgoyUELPVSSr61H4=
+github.com/cyverse-de/go-mod/viceauth v1.0.0/go.mod h1:58UZ7WOFEAA3gy4Allc9NzVviiK10c4/2fwZDuQVXVo=
 github.com/cyverse-de/messaging/v12 v12.0.0 h1:fS+QMiFid0tSDFR5jDqSJLPqU9UlptPRs4kbjw5X4hM=
 github.com/cyverse-de/messaging/v12 v12.0.0/go.mod h1:psHZ100y28PAE06Aa/O8rLTf8ZLRba7zDoC9Q7efsiw=
 github.com/cyverse-de/model/v10 v10.0.0 h1:ukO7FMD4rtDt92THkOqeagEXlGQkI453BjqGIs0ja/U=
