@@ -622,8 +622,8 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 		return operatorWriteError("insert", req.Name, err)
 	}
 
-	// Project to the admin-summary shape: id plus the five public config
-	// fields. Drops timestamps and reconciliation state.
+	// Project to the admin-summary shape, dropping timestamps and
+	// reconciliation state.
 	return c.JSON(http.StatusCreated, created.ToOperatorAdminSummary())
 }
 

@@ -13,14 +13,11 @@ import (
 
 // Operator models the operators table.
 type Operator struct {
-	ID            uuid.UUID `db:"id"`
-	Name          string    `db:"name"`
-	URL           string    `db:"url"`
-	TLSSkipVerify bool      `db:"tls_skip_verify"`
-	Priority      int       `db:"priority"`
-	// BaseURL is the VICE landing-domain base URL for analyses launched on
-	// this operator (e.g. https://sandbox.cyverse.rocks). Nullable: legacy
-	// rows predate the column.
+	ID               uuid.UUID  `db:"id"`
+	Name             string     `db:"name"`
+	URL              string     `db:"url"`
+	TLSSkipVerify    bool       `db:"tls_skip_verify"`
+	Priority         int        `db:"priority"`
 	BaseURL          *string    `db:"base_url"`
 	LastReconciledAt *time.Time `db:"last_reconciled_at"`
 	ReconciledBy     *string    `db:"reconciled_by"`
@@ -58,7 +55,7 @@ func (o *Operator) ToOperatorConfig() operatorclient.OperatorConfig {
 }
 
 // ToOperatorAdminSummary projects the DB's full Operator row down to the
-// admin-facing summary shape (id plus the five public config fields).
+// admin-facing summary shape.
 // Reuses ToOperatorConfig for the embedded config so the projection stays
 // in lock-step if OperatorConfig gains a new field. Used by handlers that
 // return a single row's identity to admin clients — notably create and
@@ -85,10 +82,10 @@ func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 }
 
 // ListOperatorAdminSummaries returns the admin-listing fields of every
-// operator (id plus the five public config fields), ordered by priority
-// (lower values first) with creation time as tiebreaker. Including id lets
-// admin clients address an operator by its stable UUID rather than by name,
-// which is important for PATCH where the operator may be renamed.
+// operator, ordered by priority (lower values first) with creation time as
+// tiebreaker. Including id lets admin clients address an operator by its
+// stable UUID rather than by name, which is important for PATCH where the
+// operator may be renamed.
 func (d *Database) ListOperatorAdminSummaries(ctx context.Context) ([]operatorclient.OperatorAdminSummary, error) {
 	ops := make([]operatorclient.OperatorAdminSummary, 0)
 	const query = `

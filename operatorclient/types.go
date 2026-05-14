@@ -276,14 +276,11 @@ type URLReadyResponse struct {
 // access that needs the write-only fields (timestamps, reconciliation
 // state, etc.) that don't belong on the wire.
 type OperatorConfig struct {
-	Name          string `json:"name"            db:"name"`
-	URL           string `json:"url"             db:"url"`
-	TLSSkipVerify bool   `json:"tls_skip_verify" db:"tls_skip_verify"`
-	Priority      int    `json:"priority"        db:"priority"`
-	// BaseURL is the VICE landing-domain base URL for analyses launched on
-	// this operator. A pointer because the column is nullable: legacy rows
-	// predate it. Required when creating an operator.
-	BaseURL *string `json:"base_url,omitempty" db:"base_url"`
+	Name          string  `json:"name"               db:"name"`
+	URL           string  `json:"url"                db:"url"`
+	TLSSkipVerify bool    `json:"tls_skip_verify"    db:"tls_skip_verify"`
+	Priority      int     `json:"priority"           db:"priority"`
+	BaseURL       *string `json:"base_url,omitempty" db:"base_url"` // required at create; nil only for legacy rows
 }
 
 // OperatorAdminSummary is the admin-facing listing shape for operators.
