@@ -13,11 +13,15 @@ import (
 
 // Operator models the operators table.
 type Operator struct {
-	ID               uuid.UUID  `db:"id"`
-	Name             string     `db:"name"`
-	URL              string     `db:"url"`
-	TLSSkipVerify    bool       `db:"tls_skip_verify"`
-	Priority         int        `db:"priority"`
+	ID            uuid.UUID `db:"id"`
+	Name          string    `db:"name"`
+	URL           string    `db:"url"`
+	TLSSkipVerify bool      `db:"tls_skip_verify"`
+	Priority      int       `db:"priority"`
+	// BaseURL is the VICE landing-domain base URL for analyses launched on
+	// this operator (e.g. https://sandbox.cyverse.rocks). Nullable: legacy
+	// rows predate the column.
+	BaseURL          *string    `db:"base_url"`
 	LastReconciledAt *time.Time `db:"last_reconciled_at"`
 	ReconciledBy     *string    `db:"reconciled_by"`
 	CreatedAt        time.Time  `db:"created_at"`
@@ -49,6 +53,7 @@ func (o *Operator) ToOperatorConfig() operatorclient.OperatorConfig {
 		URL:           o.URL,
 		TLSSkipVerify: o.TLSSkipVerify,
 		Priority:      o.Priority,
+		BaseURL:       o.BaseURL,
 	}
 }
 
@@ -70,7 +75,7 @@ func (o *Operator) ToOperatorAdminSummary() operatorclient.OperatorAdminSummary 
 func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 	var ops []Operator
 	const query = `
-		SELECT id, name, url, tls_skip_verify, priority,
+		SELECT id, name, url, tls_skip_verify, priority, base_url,
 		       last_reconciled_at, reconciled_by, created_at, updated_at
 		FROM operators
 		ORDER BY priority ASC, created_at ASC
@@ -87,7 +92,7 @@ func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 func (d *Database) ListOperatorAdminSummaries(ctx context.Context) ([]operatorclient.OperatorAdminSummary, error) {
 	ops := make([]operatorclient.OperatorAdminSummary, 0)
 	const query = `
-		SELECT id, name, url, tls_skip_verify, priority
+		SELECT id, name, url, tls_skip_verify, priority, base_url
 		FROM operators
 		ORDER BY priority ASC, created_at ASC
 	`
@@ -99,13 +104,13 @@ func (d *Database) ListOperatorAdminSummaries(ctx context.Context) ([]operatorcl
 // created row with DB-generated fields (id, created_at, updated_at) populated.
 func (d *Database) InsertOperator(ctx context.Context, op *Operator) (*Operator, error) {
 	const query = `
-		INSERT INTO operators (name, url, tls_skip_verify, priority)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, name, url, tls_skip_verify, priority,
+		INSERT INTO operators (name, url, tls_skip_verify, priority, base_url)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, name, url, tls_skip_verify, priority, base_url,
 		          last_reconciled_at, reconciled_by, created_at, updated_at
 	`
 	var created Operator
-	err := d.db.QueryRowxContext(ctx, query, op.Name, op.URL, op.TLSSkipVerify, op.Priority).StructScan(&created)
+	err := d.db.QueryRowxContext(ctx, query, op.Name, op.URL, op.TLSSkipVerify, op.Priority, op.BaseURL).StructScan(&created)
 	if err != nil {
 		return nil, err
 	}
@@ -124,15 +129,17 @@ func (d *Database) DeleteOperatorByID(ctx context.Context, id uuid.UUID) error {
 }
 
 // OperatorUpdate carries the optional fields for a partial-update of an
-// operator row. A nil pointer leaves the column unchanged. Only fields that
-// the AFTER UPDATE NOTIFY trigger covers (name, url, tls_skip_verify,
-// priority) are exposed here; reconciliation columns are intentionally
-// reconciler-only.
+// operator row. A nil pointer leaves the column unchanged. The name, url,
+// tls_skip_verify, and priority columns are covered by the AFTER UPDATE
+// NOTIFY trigger; base_url is not (it is consumed by the apps service, not
+// app-exposer's scheduler). Reconciliation columns are intentionally
+// reconciler-only and not exposed here.
 type OperatorUpdate struct {
 	Name          *string
 	URL           *string
 	TLSSkipVerify *bool
 	Priority      *int
+	BaseURL       *string
 }
 
 // UpdateOperatorByID applies a partial update to the operator row identified
@@ -154,13 +161,14 @@ func (d *Database) UpdateOperatorByID(ctx context.Context, id uuid.UUID, upd Ope
 		SET name            = COALESCE($2, name),
 		    url             = COALESCE($3, url),
 		    tls_skip_verify = COALESCE($4, tls_skip_verify),
-		    priority        = COALESCE($5, priority)
+		    priority        = COALESCE($5, priority),
+		    base_url        = COALESCE($6, base_url)
 		WHERE id = $1
-		RETURNING id, name, url, tls_skip_verify, priority,
+		RETURNING id, name, url, tls_skip_verify, priority, base_url,
 		          last_reconciled_at, reconciled_by, created_at, updated_at
 	`
 	var updated Operator
-	err := d.db.QueryRowxContext(ctx, query, id, upd.Name, upd.URL, upd.TLSSkipVerify, upd.Priority).StructScan(&updated)
+	err := d.db.QueryRowxContext(ctx, query, id, upd.Name, upd.URL, upd.TLSSkipVerify, upd.Priority, upd.BaseURL).StructScan(&updated)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +188,7 @@ func (d *Database) ClaimAndReconcile(ctx context.Context, hostname string, recon
 	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
 	const claimQuery = `
-		SELECT id, name, url, tls_skip_verify, priority,
+		SELECT id, name, url, tls_skip_verify, priority, base_url,
 		       last_reconciled_at, reconciled_by, created_at, updated_at
 		FROM operators
 		WHERE last_reconciled_at IS NULL OR last_reconciled_at < $1

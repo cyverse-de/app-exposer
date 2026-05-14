@@ -280,6 +280,10 @@ type OperatorConfig struct {
 	URL           string `json:"url"             db:"url"`
 	TLSSkipVerify bool   `json:"tls_skip_verify" db:"tls_skip_verify"`
 	Priority      int    `json:"priority"        db:"priority"`
+	// BaseURL is the VICE landing-domain base URL for analyses launched on
+	// this operator. A pointer because the column is nullable: legacy rows
+	// predate it. Required when creating an operator.
+	BaseURL *string `json:"base_url,omitempty" db:"base_url"`
 }
 
 // OperatorAdminSummary is the admin-facing listing shape for operators.
@@ -304,4 +308,5 @@ type UpdateOperatorRequest struct {
 	URL           *string `json:"url,omitempty"`
 	TLSSkipVerify *bool   `json:"tls_skip_verify,omitempty"`
 	Priority      *int    `json:"priority,omitempty"`
+	BaseURL       *string `json:"base_url,omitempty"`
 }

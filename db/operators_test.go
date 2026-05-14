@@ -85,12 +85,12 @@ func TestUpdateOperatorByID(t *testing.T) {
 	id := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	now := time.Now()
 
-	const expectedSQL = `UPDATE operators SET name = COALESCE($2, name), url = COALESCE($3, url), tls_skip_verify = COALESCE($4, tls_skip_verify), priority = COALESCE($5, priority) WHERE id = $1 RETURNING id, name, url, tls_skip_verify, priority, last_reconciled_at, reconciled_by, created_at, updated_at`
+	const expectedSQL = `UPDATE operators SET name = COALESCE($2, name), url = COALESCE($3, url), tls_skip_verify = COALESCE($4, tls_skip_verify), priority = COALESCE($5, priority), base_url = COALESCE($6, base_url) WHERE id = $1 RETURNING id, name, url, tls_skip_verify, priority, base_url, last_reconciled_at, reconciled_by, created_at, updated_at`
 
 	// returnedColumns matches the RETURNING list so StructScan can populate
 	// the *Operator struct on the success path.
 	returnedColumns := []string{
-		"id", "name", "url", "tls_skip_verify", "priority",
+		"id", "name", "url", "tls_skip_verify", "priority", "base_url",
 		"last_reconciled_at", "reconciled_by", "created_at", "updated_at",
 	}
 
@@ -102,8 +102,8 @@ func TestUpdateOperatorByID(t *testing.T) {
 		name string
 		upd  OperatorUpdate
 		// wantArgs is the argument slice in the order the production query
-		// binds them: [id, name, url, tls_skip_verify, priority]. Any
-		// driver.Value here is matched literally; nil represents SQL NULL.
+		// binds them: [id, name, url, tls_skip_verify, priority, base_url].
+		// Any driver.Value here is matched literally; nil represents SQL NULL.
 		wantArgs []driver.Value
 		// dbErr is what sqlmock returns; nil means "succeed and return a row".
 		dbErr error
@@ -111,33 +111,39 @@ func TestUpdateOperatorByID(t *testing.T) {
 		{
 			name:     "single field — priority only",
 			upd:      OperatorUpdate{Priority: intPtr(7)},
-			wantArgs: []driver.Value{id.String(), nil, nil, nil, int64(7)},
+			wantArgs: []driver.Value{id.String(), nil, nil, nil, int64(7), nil},
 		},
 		{
 			name:     "rename only",
 			upd:      OperatorUpdate{Name: strPtr("renamed")},
-			wantArgs: []driver.Value{id.String(), "renamed", nil, nil, nil},
+			wantArgs: []driver.Value{id.String(), "renamed", nil, nil, nil, nil},
 		},
 		{
-			name: "all four fields",
+			name:     "base_url only",
+			upd:      OperatorUpdate{BaseURL: strPtr("https://a.cyverse.run")},
+			wantArgs: []driver.Value{id.String(), nil, nil, nil, nil, "https://a.cyverse.run"},
+		},
+		{
+			name: "all fields",
 			upd: OperatorUpdate{
 				Name:          strPtr("a"),
 				URL:           strPtr("https://a.example.com"),
 				TLSSkipVerify: boolPtr(true),
 				Priority:      intPtr(2),
+				BaseURL:       strPtr("https://a.cyverse.run"),
 			},
-			wantArgs: []driver.Value{id.String(), "a", "https://a.example.com", true, int64(2)},
+			wantArgs: []driver.Value{id.String(), "a", "https://a.example.com", true, int64(2), "https://a.cyverse.run"},
 		},
 		{
 			name:     "no row matches — surfaces sql.ErrNoRows from RETURNING",
 			upd:      OperatorUpdate{Priority: intPtr(1)},
-			wantArgs: []driver.Value{id.String(), nil, nil, nil, int64(1)},
+			wantArgs: []driver.Value{id.String(), nil, nil, nil, int64(1), nil},
 			dbErr:    sql.ErrNoRows,
 		},
 		{
 			name:     "unique violation — surfaces *pq.Error 23505",
 			upd:      OperatorUpdate{Name: strPtr("dup")},
-			wantArgs: []driver.Value{id.String(), "dup", nil, nil, nil},
+			wantArgs: []driver.Value{id.String(), "dup", nil, nil, nil, nil},
 			dbErr:    &pq.Error{Code: "23505", Message: "duplicate key value violates unique constraint"},
 		},
 	}
@@ -153,7 +159,7 @@ func TestUpdateOperatorByID(t *testing.T) {
 				expect.WillReturnError(tt.dbErr)
 			} else {
 				rows := sqlmock.NewRows(returnedColumns).
-					AddRow(id, "n", "https://u", false, 0, sql.NullTime{}, sql.NullString{}, now, now)
+					AddRow(id, "n", "https://u", false, 0, sql.NullString{}, sql.NullTime{}, sql.NullString{}, now, now)
 				expect.WillReturnRows(rows)
 			}
 

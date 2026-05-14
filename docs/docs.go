@@ -2977,6 +2977,10 @@ const docTemplate = `{
         "operatorclient.OperatorAdminSummary": {
             "type": "object",
             "properties": {
+                "base_url": {
+                    "description": "BaseURL is the VICE landing-domain base URL for analyses launched on\nthis operator. A pointer because the column is nullable: legacy rows\npredate it. Required when creating an operator.",
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -2997,6 +3001,10 @@ const docTemplate = `{
         "operatorclient.OperatorConfig": {
             "type": "object",
             "properties": {
+                "base_url": {
+                    "description": "BaseURL is the VICE landing-domain base URL for analyses launched on\nthis operator. A pointer because the column is nullable: legacy rows\npredate it. Required when creating an operator.",
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -3025,6 +3033,9 @@ const docTemplate = `{
         "operatorclient.UpdateOperatorRequest": {
             "type": "object",
             "properties": {
+                "base_url": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },

@@ -60,6 +60,15 @@ func main() {
 	}
 }
 
+// derefOr returns the pointee of p, or fallback when p is nil. Used to render
+// the nullable base_url field for human-readable output.
+func derefOr(p *string, fallback string) string {
+	if p == nil {
+		return fallback
+	}
+	return *p
+}
+
 // requireBaseURL validates and parses the --app-exposer-url flag.
 func requireBaseURL(raw string) *url.URL {
 	if raw == "" {
@@ -80,13 +89,14 @@ func runAdd(baseURLStr string, args []string) {
 	fs := flag.NewFlagSet("add", flag.ExitOnError)
 	name := fs.String("name", "", "Operator name (required)")
 	opURL := fs.String("url", "", "Operator URL (required)")
+	baseURL := fs.String("base-url", "", "VICE landing-domain base URL for analyses on this operator (required)")
 	tlsSkip := fs.Bool("tls-skip-verify", false, "Skip TLS certificate verification")
 	priority := fs.Int("priority", 0, "Scheduling priority (lower = tried first, default 0)")
 	// ExitOnError means Parse calls os.Exit on failure; it never returns a non-nil error.
 	_ = fs.Parse(args) //nolint:errcheck // see comment above
 
-	if *name == "" || *opURL == "" {
-		fmt.Fprintln(os.Stderr, "error: --name and --url are required")
+	if *name == "" || *opURL == "" || *baseURL == "" {
+		fmt.Fprintln(os.Stderr, "error: --name, --url, and --base-url are required")
 		fs.Usage()
 		os.Exit(1)
 	}
@@ -97,14 +107,15 @@ func runAdd(baseURLStr string, args []string) {
 		URL:           *opURL,
 		TLSSkipVerify: *tlsSkip,
 		Priority:      *priority,
+		BaseURL:       baseURL,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Operator %q added successfully (id=%s, url=%s, priority=%d, tls_skip_verify=%v)\n",
-		summary.Name, summary.ID, summary.URL, summary.Priority, summary.TLSSkipVerify)
+	fmt.Printf("Operator %q added successfully (id=%s, url=%s, base_url=%s, priority=%d, tls_skip_verify=%v)\n",
+		summary.Name, summary.ID, summary.URL, derefOr(summary.BaseURL, "-"), summary.Priority, summary.TLSSkipVerify)
 }
 
 // resolveOperatorID looks up an operator by name and returns its UUID.
@@ -144,9 +155,9 @@ func runList(baseURLStr string, args []string) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tURL\tPRIORITY\tTLS_SKIP_VERIFY") //nolint:errcheck
+	fmt.Fprintln(w, "ID\tNAME\tURL\tBASE_URL\tPRIORITY\tTLS_SKIP_VERIFY") //nolint:errcheck
 	for _, op := range ops {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%v\n", op.ID, op.Name, op.URL, op.Priority, op.TLSSkipVerify) //nolint:errcheck
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%v\n", op.ID, op.Name, op.URL, derefOr(op.BaseURL, "-"), op.Priority, op.TLSSkipVerify) //nolint:errcheck
 	}
 	if err := w.Flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: flushing tabwriter: %v\n", err)
@@ -160,6 +171,7 @@ func runUpdate(baseURLStr string, args []string) {
 	name := fs.String("name", "", "Current operator name (required, used to look up the row)")
 	newName := fs.String("new-name", "", "New operator name (rename)")
 	opURL := fs.String("url", "", "New operator URL")
+	baseURL := fs.String("base-url", "", "New VICE landing-domain base URL")
 	tlsSkip := fs.Bool("tls-skip-verify", false, "Set TLS skip-verify flag")
 	priority := fs.Int("priority", 0, "Set scheduling priority")
 	// ExitOnError means Parse calls os.Exit on failure; it never returns a non-nil error.
@@ -182,6 +194,8 @@ func runUpdate(baseURLStr string, args []string) {
 			req.Name = newName
 		case "url":
 			req.URL = opURL
+		case "base-url":
+			req.BaseURL = baseURL
 		case "tls-skip-verify":
 			req.TLSSkipVerify = tlsSkip
 		case "priority":
@@ -189,8 +203,8 @@ func runUpdate(baseURLStr string, args []string) {
 		}
 	})
 
-	if req.Name == nil && req.URL == nil && req.TLSSkipVerify == nil && req.Priority == nil {
-		fmt.Fprintln(os.Stderr, "error: at least one of --new-name, --url, --tls-skip-verify, --priority must be set")
+	if req.Name == nil && req.URL == nil && req.BaseURL == nil && req.TLSSkipVerify == nil && req.Priority == nil {
+		fmt.Fprintln(os.Stderr, "error: at least one of --new-name, --url, --base-url, --tls-skip-verify, --priority must be set")
 		os.Exit(1)
 	}
 
@@ -217,11 +231,11 @@ func runUpdate(baseURLStr string, args []string) {
 	// "old → new" only when they differ to keep the steady-state path
 	// terse.
 	if *name != summary.Name {
-		fmt.Printf("Operator %q → %q updated successfully (id=%s, url=%s, priority=%d, tls_skip_verify=%v)\n",
-			*name, summary.Name, summary.ID, summary.URL, summary.Priority, summary.TLSSkipVerify)
+		fmt.Printf("Operator %q → %q updated successfully (id=%s, url=%s, base_url=%s, priority=%d, tls_skip_verify=%v)\n",
+			*name, summary.Name, summary.ID, summary.URL, derefOr(summary.BaseURL, "-"), summary.Priority, summary.TLSSkipVerify)
 	} else {
-		fmt.Printf("Operator %q updated successfully (id=%s, url=%s, priority=%d, tls_skip_verify=%v)\n",
-			summary.Name, summary.ID, summary.URL, summary.Priority, summary.TLSSkipVerify)
+		fmt.Printf("Operator %q updated successfully (id=%s, url=%s, base_url=%s, priority=%d, tls_skip_verify=%v)\n",
+			summary.Name, summary.ID, summary.URL, derefOr(summary.BaseURL, "-"), summary.Priority, summary.TLSSkipVerify)
 	}
 }
 
