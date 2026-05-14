@@ -26,6 +26,7 @@ require (
 	github.com/cyverse-de/go-mod/otelutils v0.0.3
 	github.com/cyverse-de/go-mod/pbinit v0.1.11
 	github.com/cyverse-de/go-mod/protobufjson v0.0.3
+	github.com/cyverse-de/go-mod/viceauth v0.0.0-20260514164934-ce1628b2909f
 	github.com/cyverse-de/messaging/v12 v12.0.0
 	github.com/cyverse-de/model/v10 v10.0.0
 	github.com/cyverse-de/p/go/qms v0.1.13

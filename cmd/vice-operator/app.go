@@ -29,8 +29,9 @@ type App struct {
 // must additionally carry adminRole in realm_access.roles or at least one
 // value in adminEntitlements in its entitlement claim — the API is admin-only.
 // swaggerCfg controls the Swagger UI login gate; when disabled, docs are served
-// without authentication.
-func NewApp(op *operator.Operator, verifier *oidc.IDTokenVerifier, expectedClientID string, swaggerCfg *SwaggerAuthConfig, adminRole string, adminEntitlements []string) *App {
+// without authentication. When viceUsersCfg is non-nil, the unauthenticated
+// vice-users OAuth callback relay is registered.
+func NewApp(op *operator.Operator, verifier *oidc.IDTokenVerifier, expectedClientID string, swaggerCfg *SwaggerAuthConfig, adminRole string, adminEntitlements []string, viceUsersCfg *ViceUsersAuthConfig) *App {
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
@@ -57,6 +58,14 @@ func NewApp(op *operator.Operator, verifier *oidc.IDTokenVerifier, expectedClien
 		docs.GET("/*", echoSwagger.EchoWrapHandler(echoSwagger.InstanceName("operator")))
 	} else {
 		e.GET("/docs/*", echoSwagger.EchoWrapHandler(echoSwagger.InstanceName("operator")))
+	}
+
+	// vice-users OAuth callback relay — unauthenticated and outside both the
+	// Bearer auth group and the /docs login gate, since Keycloak redirects the
+	// end user's browser here directly. Registered only when a state HMAC
+	// secret is configured.
+	if viceUsersCfg != nil {
+		e.GET(viceUsersCallbackPath, handleViceUsersCallback(viceUsersCfg))
 	}
 
 	// All API routes go through an optional auth group.

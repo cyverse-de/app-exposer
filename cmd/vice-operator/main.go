@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operator"
+	"github.com/cyverse-de/go-mod/viceauth"
 	"github.com/sirupsen/logrus"
 )
 
@@ -56,6 +58,8 @@ func main() {
 		swaggerClientID       string
 		swaggerClientSecret   string
 		swaggerCookieSecret   string
+		publicURL             string
+		stateHMACSecret       string
 		apiSubdomain          string
 		apiServiceName        string
 		serviceCIDR           string
@@ -104,6 +108,8 @@ func main() {
 	flag.StringVar(&swaggerClientID, "swagger-client-id", "", "OAuth2 client ID for the Swagger UI login flow (must support authorization code flow in Keycloak)")
 	flag.StringVar(&swaggerClientSecret, "swagger-client-secret", "", "OAuth2 client secret for the Swagger UI login flow (or SWAGGER_CLIENT_SECRET env var)")
 	flag.StringVar(&swaggerCookieSecret, "swagger-cookie-secret", "", "Secret for signing session cookies (random string; auto-generated if empty; or SWAGGER_COOKIE_SECRET env var)")
+	flag.StringVar(&publicURL, "public-url", "", "Public base URL of this operator (e.g. https://vice-operator-qa.cyverse.org); combined with the vice-users callback path to form the static OAuth redirect_uri")
+	flag.StringVar(&stateHMACSecret, "state-hmac-secret", "", "Shared HMAC secret for signing the vice-proxy OAuth state parameter (or STATE_HMAC_SECRET env var); must be stable across operator restarts")
 	flag.StringVar(&apiSubdomain, "api-subdomain", "vice-api", "Subdomain prefix for the vice-operator API HTTPRoute; combined with --vice-base-url host to form the full hostname")
 	flag.StringVar(&apiServiceName, "api-service-name", "vice-operator", "K8s Service name for the vice-operator API HTTPRoute backend")
 	flag.StringVar(&serviceCIDR, "service-cidr", "", "Cluster service CIDR to block in egress (auto-detected from kubernetes API server if empty)")
@@ -127,6 +133,7 @@ func main() {
 	envFallback(&keycloakClientSecret, "KEYCLOAK_CLIENT_SECRET")
 	envFallback(&swaggerClientSecret, "SWAGGER_CLIENT_SECRET")
 	envFallback(&swaggerCookieSecret, "SWAGGER_COOKIE_SECRET")
+	envFallback(&stateHMACSecret, "STATE_HMAC_SECRET")
 	envFallback(&adminEntitlementsRaw, "ADMIN_ENTITLEMENTS")
 	// --admin-role has a non-empty default, so the envFallback "is empty?"
 	// trick can't distinguish "user passed default" from "user didn't pass
@@ -180,6 +187,16 @@ func main() {
 		log.Fatalf("%v", err)
 	}
 
+	// operatorCallbackURL is the single static redirect_uri vice-proxy sends to
+	// Keycloak for the vice-users client. vice-proxy carries the real app URL
+	// in a signed state blob; this operator relays the authorization code back
+	// to it (see handleViceUsersCallback). Left empty when --public-url is
+	// unset so vice-proxy's own startup validation can flag the gap.
+	var operatorCallbackURL string
+	if publicURL != "" {
+		operatorCallbackURL = strings.TrimSuffix(publicURL, "/") + viceUsersCallbackPath
+	}
+
 	// Build the cluster config map from flags. All keys are always written so
 	// that stale values from a previous run are overwritten. The secret update
 	// replaces the entire data map — omitting a key here removes it from the
@@ -190,6 +207,10 @@ func main() {
 		"KEYCLOAK_REALM":         keycloakRealm,
 		"KEYCLOAK_CLIENT_ID":     keycloakClientID,
 		"KEYCLOAK_CLIENT_SECRET": keycloakClientSecret,
+		// Static OAuth redirect_uri and the shared secret signing the state
+		// parameter that round-trips through the operator's callback relay.
+		"OPERATOR_CALLBACK_URL": operatorCallbackURL,
+		"STATE_HMAC_SECRET":     stateHMACSecret,
 		// Propagated to vice-proxy (via EnvFrom) so it can grant admins
 		// access to running analyses regardless of the per-analysis
 		// allowed-users list.
@@ -200,10 +221,13 @@ func main() {
 	} else {
 		clusterConfig["DISABLE_AUTH"] = "false"
 
-		// Warn early if auth is enabled but Keycloak settings are missing,
+		// Warn early if auth is enabled but required settings are missing,
 		// since vice-proxy pods will crash-loop with a fatal validation error.
 		if keycloakBaseURL == "" || keycloakRealm == "" || keycloakClientID == "" || keycloakClientSecret == "" {
 			log.Warn("auth is enabled (--disable-vice-proxy-auth not set) but one or more Keycloak flags are empty; vice-proxy pods will fail to start")
+		}
+		if publicURL == "" || stateHMACSecret == "" {
+			log.Warn("auth is enabled but --public-url or --state-hmac-secret is empty; vice-proxy pods will fail to start and the OAuth callback relay is disabled")
 		}
 	}
 
@@ -353,7 +377,17 @@ func main() {
 		log.Fatalf("%v", err)
 	}
 
-	app := NewApp(op, verifier, apiAuthClientID, swaggerCfg, adminRole, adminEntitlements)
+	// The vice-users OAuth callback relay is enabled only when a state HMAC
+	// secret is configured; baseDomain bounds where the relay may redirect.
+	var viceUsersCfg *ViceUsersAuthConfig
+	if stateHMACSecret != "" {
+		viceUsersCfg = &ViceUsersAuthConfig{
+			StateCodec: viceauth.NewCodec([]byte(stateHMACSecret)),
+			BaseDomain: baseDomain,
+		}
+	}
+
+	app := NewApp(op, verifier, apiAuthClientID, swaggerCfg, adminRole, adminEntitlements, viceUsersCfg)
 	loadingApp := NewLoadingApp(op)
 
 	apiAddr := fmt.Sprintf(":%d", port)
