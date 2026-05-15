@@ -2978,7 +2978,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "base_url": {
-                    "description": "BaseURL is the VICE landing-domain base URL for analyses launched on\nthis operator. A pointer because the column is nullable: legacy rows\npredate it. Required when creating an operator.",
+                    "description": "required at create; nil only for legacy rows",
                     "type": "string"
                 },
                 "id": {
@@ -3002,7 +3002,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "base_url": {
-                    "description": "BaseURL is the VICE landing-domain base URL for analyses launched on\nthis operator. A pointer because the column is nullable: legacy rows\npredate it. Required when creating an operator.",
+                    "description": "required at create; nil only for legacy rows",
                     "type": "string"
                 },
                 "name": {
