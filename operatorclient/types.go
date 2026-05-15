@@ -276,18 +276,19 @@ type URLReadyResponse struct {
 // access that needs the write-only fields (timestamps, reconciliation
 // state, etc.) that don't belong on the wire.
 type OperatorConfig struct {
-	Name          string `json:"name"            db:"name"`
-	URL           string `json:"url"             db:"url"`
-	TLSSkipVerify bool   `json:"tls_skip_verify" db:"tls_skip_verify"`
-	Priority      int    `json:"priority"        db:"priority"`
+	Name          string  `json:"name"               db:"name"`
+	URL           string  `json:"url"                db:"url"`
+	TLSSkipVerify bool    `json:"tls_skip_verify"    db:"tls_skip_verify"`
+	Priority      int     `json:"priority"           db:"priority"`
+	BaseURL       *string `json:"base_url,omitempty" db:"base_url"` // required at create; nil only for legacy rows
 }
 
 // OperatorAdminSummary is the admin-facing listing shape for operators.
 // It extends OperatorConfig (via embedding) with the row's UUID so admin
 // clients can address an operator by id — which is stable across renames
 // — rather than by name. JSON marshalling and sqlx column scans both
-// flatten the embedded struct, so the wire format is the five fields
-// {id, name, url, tls_skip_verify, priority}.
+// flatten the embedded struct, so the wire format is the six fields
+// {id, name, url, base_url, tls_skip_verify, priority}.
 type OperatorAdminSummary struct {
 	ID uuid.UUID `json:"id" db:"id"`
 	OperatorConfig
@@ -304,4 +305,5 @@ type UpdateOperatorRequest struct {
 	URL           *string `json:"url,omitempty"`
 	TLSSkipVerify *bool   `json:"tls_skip_verify,omitempty"`
 	Priority      *int    `json:"priority,omitempty"`
+	BaseURL       *string `json:"base_url,omitempty"`
 }

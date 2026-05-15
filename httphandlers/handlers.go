@@ -522,24 +522,35 @@ func (h *HTTPHandlers) AdminOperatorCapacitiesHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, results)
 }
 
-// validateOperatorFields validates the optional name and url for an
-// operator request. nil pointers indicate the field is absent (a valid
+// validateOperatorFields validates the optional name, url, and base_url for
+// an operator request. nil pointers indicate the field is absent (a valid
 // state for a partial update); non-nil pointers are validated against the
 // same rules the operators table's CHECK and UNIQUE constraints enforce —
-// non-whitespace text, and for url an HTTP(S) URL with a host. Uniqueness
-// is checked at the DB layer rather than here.
-func validateOperatorFields(name, urlStr *string) error {
+// non-whitespace text, and for the URL fields an HTTP(S) URL with a host.
+// Uniqueness is checked at the DB layer rather than here. Requiredness (e.g.
+// base_url at create time) is enforced by the calling handler, not here.
+func validateOperatorFields(name, urlStr, baseURL *string) error {
 	if name != nil && strings.TrimSpace(*name) == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "name must not be empty or whitespace")
 	}
-	if urlStr != nil {
-		if strings.TrimSpace(*urlStr) == "" {
-			return echo.NewHTTPError(http.StatusBadRequest, "url must not be empty or whitespace")
-		}
-		parsed, err := url.Parse(*urlStr)
-		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-			return echo.NewHTTPError(http.StatusBadRequest, "url must be a valid HTTP(S) URL")
-		}
+	if err := validateHTTPURL("url", urlStr); err != nil {
+		return err
+	}
+	return validateHTTPURL("base_url", baseURL)
+}
+
+// validateHTTPURL checks that a non-nil pointer holds a non-whitespace
+// HTTP(S) URL with a host. A nil pointer (absent field) is valid.
+func validateHTTPURL(field string, urlStr *string) error {
+	if urlStr == nil {
+		return nil
+	}
+	if strings.TrimSpace(*urlStr) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, field+" must not be empty or whitespace")
+	}
+	parsed, err := url.Parse(*urlStr)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, field+" must be a valid HTTP(S) URL")
 	}
 	return nil
 }
@@ -586,9 +597,15 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	// Both fields are required at create time, so pass them as non-nil to
-	// reuse the same validator the update path uses for present-fields.
-	if err := validateOperatorFields(&req.Name, &req.URL); err != nil {
+	// name, url, and base_url are all required at create time. base_url is a
+	// pointer (nullable column), so its presence is checked explicitly here;
+	// name and url are value types and always "present". Format/whitespace
+	// validation is left to validateOperatorFields so the error messages
+	// stay consistent across all three fields.
+	if req.BaseURL == nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "base_url is required")
+	}
+	if err := validateOperatorFields(&req.Name, &req.URL, req.BaseURL); err != nil {
 		return err
 	}
 
@@ -597,6 +614,7 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 		URL:           req.URL,
 		TLSSkipVerify: req.TLSSkipVerify,
 		Priority:      req.Priority,
+		BaseURL:       req.BaseURL,
 	}
 
 	created, err := h.db.InsertOperator(ctx, op)
@@ -604,8 +622,8 @@ func (h *HTTPHandlers) CreateOperatorHandler(c echo.Context) error {
 		return operatorWriteError("insert", req.Name, err)
 	}
 
-	// Project to the admin-summary shape: id plus the four public config
-	// fields. Drops timestamps and reconciliation state.
+	// Project to the admin-summary shape, dropping timestamps and
+	// reconciliation state.
 	return c.JSON(http.StatusCreated, created.ToOperatorAdminSummary())
 }
 
@@ -641,11 +659,11 @@ func (h *HTTPHandlers) UpdateOperatorHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	if req.Name == nil && req.URL == nil && req.TLSSkipVerify == nil && req.Priority == nil {
+	if req.Name == nil && req.URL == nil && req.TLSSkipVerify == nil && req.Priority == nil && req.BaseURL == nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "request body must update at least one field")
 	}
 
-	if err := validateOperatorFields(req.Name, req.URL); err != nil {
+	if err := validateOperatorFields(req.Name, req.URL, req.BaseURL); err != nil {
 		return err
 	}
 
@@ -654,6 +672,7 @@ func (h *HTTPHandlers) UpdateOperatorHandler(c echo.Context) error {
 		URL:           req.URL,
 		TLSSkipVerify: req.TLSSkipVerify,
 		Priority:      req.Priority,
+		BaseURL:       req.BaseURL,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusNotFound, "operator not found")

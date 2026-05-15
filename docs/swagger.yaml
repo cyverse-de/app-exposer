@@ -920,6 +920,12 @@ definitions:
     type: object
   operatorclient.OperatorAdminSummary:
     properties:
+      base_url:
+        description: |-
+          BaseURL is the VICE landing-domain base URL for analyses launched on
+          this operator. A pointer because the column is nullable: legacy rows
+          predate it. Required when creating an operator.
+        type: string
       id:
         type: string
       name:
@@ -933,6 +939,12 @@ definitions:
     type: object
   operatorclient.OperatorConfig:
     properties:
+      base_url:
+        description: |-
+          BaseURL is the VICE landing-domain base URL for analyses launched on
+          this operator. A pointer because the column is nullable: legacy rows
+          predate it. Required when creating an operator.
+        type: string
       name:
         type: string
       priority:
@@ -951,6 +963,8 @@ definitions:
     type: object
   operatorclient.UpdateOperatorRequest:
     properties:
+      base_url:
+        type: string
       name:
         type: string
       priority:

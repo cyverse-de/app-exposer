@@ -16,10 +16,11 @@ func TestValidateOperatorFields(t *testing.T) {
 	strPtr := func(s string) *string { return &s }
 
 	tests := []struct {
-		name    string
-		nameArg *string
-		urlArg  *string
-		wantErr bool
+		name       string
+		nameArg    *string
+		urlArg     *string
+		baseURLArg *string
+		wantErr    bool
 		// wantStatus is checked only when wantErr is true.
 		wantStatus int
 	}{
@@ -95,11 +96,28 @@ func TestValidateOperatorFields(t *testing.T) {
 			urlArg:  strPtr("http://op.example.com"),
 			wantErr: false,
 		},
+		{
+			name:       "valid base_url accepted",
+			baseURLArg: strPtr("https://sandbox.cyverse.rocks"),
+			wantErr:    false,
+		},
+		{
+			name:       "whitespace base_url rejected",
+			baseURLArg: strPtr("   "),
+			wantErr:    true,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "non-HTTP base_url rejected",
+			baseURLArg: strPtr("ftp://sandbox.cyverse.rocks"),
+			wantErr:    true,
+			wantStatus: http.StatusBadRequest,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateOperatorFields(tt.nameArg, tt.urlArg)
+			err := validateOperatorFields(tt.nameArg, tt.urlArg, tt.baseURLArg)
 			if tt.wantErr {
 				if assert.Error(t, err) {
 					httpErr, ok := err.(*echo.HTTPError)

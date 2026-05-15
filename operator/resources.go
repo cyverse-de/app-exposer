@@ -53,10 +53,46 @@ func upsert[T metav1.Object](ctx context.Context, client k8sResource[T], kind, n
 	return nil
 }
 
+// normalizeNamespaces forces metadata.namespace on every namespaced bundle
+// resource to the operator's namespace. app-exposer builds bundles without
+// knowledge of the target cluster's namespace; most resources arrive with it
+// unset, but the HTTPRoute carries the source cluster's VICE namespace. The
+// K8s API rejects a Create/Update whose object namespace differs from the
+// request namespace, so any stray value must be overwritten here.
+// PersistentVolumes are cluster-scoped and intentionally left alone.
+func (o *Operator) normalizeNamespaces(bundle *operatorclient.AnalysisBundle) {
+	for _, cm := range bundle.ConfigMaps {
+		if cm != nil {
+			cm.Namespace = o.namespace
+		}
+	}
+	for _, pvc := range bundle.PersistentVolumeClaims {
+		if pvc != nil {
+			pvc.Namespace = o.namespace
+		}
+	}
+	if bundle.Deployment != nil {
+		bundle.Deployment.Namespace = o.namespace
+	}
+	if bundle.Service != nil {
+		bundle.Service.Namespace = o.namespace
+	}
+	if bundle.HTTPRoute != nil {
+		bundle.HTTPRoute.Namespace = o.namespace
+	}
+	if bundle.PodDisruptionBudget != nil {
+		bundle.PodDisruptionBudget.Namespace = o.namespace
+	}
+}
+
 // applyBundle creates or updates all K8s resources in the bundle.
 func (o *Operator) applyBundle(ctx context.Context, bundle *operatorclient.AnalysisBundle) error {
 	log.Infof("applying bundle for analysis %s (%d configmaps, %d pvs, %d pvcs)",
 		bundle.AnalysisID, len(bundle.ConfigMaps), len(bundle.PersistentVolumes), len(bundle.PersistentVolumeClaims))
+
+	// Resources arrive with namespaces that may not match this cluster; align
+	// them with the operator's namespace before any Create/Update call.
+	o.normalizeNamespaces(bundle)
 
 	for _, cm := range bundle.ConfigMaps {
 		if cm == nil {

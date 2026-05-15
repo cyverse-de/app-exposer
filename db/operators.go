@@ -18,6 +18,7 @@ type Operator struct {
 	URL              string     `db:"url"`
 	TLSSkipVerify    bool       `db:"tls_skip_verify"`
 	Priority         int        `db:"priority"`
+	BaseURL          *string    `db:"base_url"`
 	LastReconciledAt *time.Time `db:"last_reconciled_at"`
 	ReconciledBy     *string    `db:"reconciled_by"`
 	CreatedAt        time.Time  `db:"created_at"`
@@ -49,11 +50,12 @@ func (o *Operator) ToOperatorConfig() operatorclient.OperatorConfig {
 		URL:           o.URL,
 		TLSSkipVerify: o.TLSSkipVerify,
 		Priority:      o.Priority,
+		BaseURL:       o.BaseURL,
 	}
 }
 
 // ToOperatorAdminSummary projects the DB's full Operator row down to the
-// admin-facing summary shape (id plus the four public config fields).
+// admin-facing summary shape.
 // Reuses ToOperatorConfig for the embedded config so the projection stays
 // in lock-step if OperatorConfig gains a new field. Used by handlers that
 // return a single row's identity to admin clients — notably create and
@@ -70,7 +72,7 @@ func (o *Operator) ToOperatorAdminSummary() operatorclient.OperatorAdminSummary 
 func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 	var ops []Operator
 	const query = `
-		SELECT id, name, url, tls_skip_verify, priority,
+		SELECT id, name, url, tls_skip_verify, priority, base_url,
 		       last_reconciled_at, reconciled_by, created_at, updated_at
 		FROM operators
 		ORDER BY priority ASC, created_at ASC
@@ -80,14 +82,14 @@ func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 }
 
 // ListOperatorAdminSummaries returns the admin-listing fields of every
-// operator (id plus the four public config fields), ordered by priority
-// (lower values first) with creation time as tiebreaker. Including id lets
-// admin clients address an operator by its stable UUID rather than by name,
-// which is important for PATCH where the operator may be renamed.
+// operator, ordered by priority (lower values first) with creation time as
+// tiebreaker. Including id lets admin clients address an operator by its
+// stable UUID rather than by name, which is important for PATCH where the
+// operator may be renamed.
 func (d *Database) ListOperatorAdminSummaries(ctx context.Context) ([]operatorclient.OperatorAdminSummary, error) {
 	ops := make([]operatorclient.OperatorAdminSummary, 0)
 	const query = `
-		SELECT id, name, url, tls_skip_verify, priority
+		SELECT id, name, url, tls_skip_verify, priority, base_url
 		FROM operators
 		ORDER BY priority ASC, created_at ASC
 	`
@@ -99,13 +101,13 @@ func (d *Database) ListOperatorAdminSummaries(ctx context.Context) ([]operatorcl
 // created row with DB-generated fields (id, created_at, updated_at) populated.
 func (d *Database) InsertOperator(ctx context.Context, op *Operator) (*Operator, error) {
 	const query = `
-		INSERT INTO operators (name, url, tls_skip_verify, priority)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, name, url, tls_skip_verify, priority,
+		INSERT INTO operators (name, url, tls_skip_verify, priority, base_url)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, name, url, tls_skip_verify, priority, base_url,
 		          last_reconciled_at, reconciled_by, created_at, updated_at
 	`
 	var created Operator
-	err := d.db.QueryRowxContext(ctx, query, op.Name, op.URL, op.TLSSkipVerify, op.Priority).StructScan(&created)
+	err := d.db.QueryRowxContext(ctx, query, op.Name, op.URL, op.TLSSkipVerify, op.Priority, op.BaseURL).StructScan(&created)
 	if err != nil {
 		return nil, err
 	}
@@ -124,15 +126,22 @@ func (d *Database) DeleteOperatorByID(ctx context.Context, id uuid.UUID) error {
 }
 
 // OperatorUpdate carries the optional fields for a partial-update of an
-// operator row. A nil pointer leaves the column unchanged. Only fields that
-// the AFTER UPDATE NOTIFY trigger covers (name, url, tls_skip_verify,
-// priority) are exposed here; reconciliation columns are intentionally
-// reconciler-only.
+// operator row. A nil pointer leaves the column unchanged. The name, url,
+// tls_skip_verify, and priority columns are covered by the AFTER UPDATE
+// NOTIFY trigger; base_url is not (it is consumed by the apps service, not
+// app-exposer's scheduler). Reconciliation columns are intentionally
+// reconciler-only and not exposed here.
+//
+// Because UpdateOperatorByID applies fields with COALESCE, a nil pointer
+// means "leave unchanged" — there is no way to clear base_url back to NULL
+// once set. That is intentional: base_url is required from creation onward,
+// so the only NULL rows are legacy operators that predate the column.
 type OperatorUpdate struct {
 	Name          *string
 	URL           *string
 	TLSSkipVerify *bool
 	Priority      *int
+	BaseURL       *string
 }
 
 // UpdateOperatorByID applies a partial update to the operator row identified
@@ -154,13 +163,14 @@ func (d *Database) UpdateOperatorByID(ctx context.Context, id uuid.UUID, upd Ope
 		SET name            = COALESCE($2, name),
 		    url             = COALESCE($3, url),
 		    tls_skip_verify = COALESCE($4, tls_skip_verify),
-		    priority        = COALESCE($5, priority)
+		    priority        = COALESCE($5, priority),
+		    base_url        = COALESCE($6, base_url)
 		WHERE id = $1
-		RETURNING id, name, url, tls_skip_verify, priority,
+		RETURNING id, name, url, tls_skip_verify, priority, base_url,
 		          last_reconciled_at, reconciled_by, created_at, updated_at
 	`
 	var updated Operator
-	err := d.db.QueryRowxContext(ctx, query, id, upd.Name, upd.URL, upd.TLSSkipVerify, upd.Priority).StructScan(&updated)
+	err := d.db.QueryRowxContext(ctx, query, id, upd.Name, upd.URL, upd.TLSSkipVerify, upd.Priority, upd.BaseURL).StructScan(&updated)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +190,7 @@ func (d *Database) ClaimAndReconcile(ctx context.Context, hostname string, recon
 	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
 	const claimQuery = `
-		SELECT id, name, url, tls_skip_verify, priority,
+		SELECT id, name, url, tls_skip_verify, priority, base_url,
 		       last_reconciled_at, reconciled_by, created_at, updated_at
 		FROM operators
 		WHERE last_reconciled_at IS NULL OR last_reconciled_at < $1
