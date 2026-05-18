@@ -136,6 +136,11 @@ definitions:
       subdomain:
         type: string
     type: object
+  httphandlers.CanonicalURLResponse:
+    properties:
+      url:
+        type: string
+    type: object
   httphandlers.ExternalIDResp:
     properties:
       external_id:
@@ -237,6 +242,15 @@ definitions:
       vice:
         items:
           type: string
+        type: array
+    type: object
+  httphandlers.aggregatedFailureResponse:
+    properties:
+      error:
+        type: string
+      operator_errors:
+        items:
+          $ref: '#/definitions/httphandlers.OperatorError'
         type: array
     type: object
   httphandlers.uuidBody:
@@ -11811,6 +11825,37 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Triggers output uploads from an analysis
+  /vice/admin/{host}/canonical-url:
+    get:
+      description: |-
+        Searches every configured operator for the analysis with the
+        given subdomain. On match, returns the URL built from that
+        operator's base_url. Returns 404 when no operator owns the
+        subdomain or the owning operator has no base_url. Returns
+        502 when every operator was unreachable.
+      operationId: admin-canonical-url
+      parameters:
+      - description: The analysis subdomain
+        in: path
+        name: host
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httphandlers.CanonicalURLResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/httphandlers.aggregatedFailureResponse'
+      summary: Resolve a VICE subdomain to its canonical cross-cluster URL
   /vice/admin/{host}/description:
     get:
       description: |-

@@ -101,14 +101,16 @@ const (
 	// DefaultSyncInterval is the periodic-poll cadence used as a fallback
 	// when NOTIFY-driven syncs are unavailable.
 	DefaultSyncInterval = 5 * time.Minute
-	// DefaultReconcileInterval is the per-operator reconciliation cadence;
-	// tighter than the sync cadence because reconciliation runs per
-	// operator while sync just refreshes the operator list.
-	DefaultReconcileInterval = 30 * time.Second
+	// DefaultReconcileInterval is the per-operator reconciliation cadence.
+	// The push-based status informer in vice-operator is the hot path;
+	// reconciliation runs as a safety net that catches transitions missed
+	// during operator outages or leader-election gaps, so a coarse interval
+	// is fine and reduces operator-API + DB load.
+	DefaultReconcileInterval = 5 * time.Minute
 	// DefaultClaimTTL bounds how soon a previously-reconciled operator is
 	// eligible for re-reconciliation; must be comfortably larger than
 	// DefaultReconcileInterval to avoid back-to-back claims on one operator.
-	DefaultClaimTTL = 60 * time.Second
+	DefaultClaimTTL = 10 * time.Minute
 )
 
 // startListener returns a channel that fires whenever this process should
@@ -374,7 +376,7 @@ func (r *Reconciler) reconcileAnalysis(ctx context.Context, tx *sqlx.Tx, pod rep
 		return nil
 	}
 
-	clusterStatus := mapPodPhaseToStatus(pod.Phase)
+	clusterStatus := common.MapPodPhaseToStatus(pod.Phase)
 
 	// Compare against the most recent job_status_updates row rather than
 	// the jobs table — there can be lag between recording a status update
@@ -402,21 +404,6 @@ func (r *Reconciler) reconcileAnalysis(ctx context.Context, tx *sqlx.Tx, pod rep
 	}
 
 	return nil
-}
-
-func mapPodPhaseToStatus(phase string) messaging.JobState {
-	switch phase {
-	case "Pending":
-		return messaging.SubmittedState
-	case "Running":
-		return messaging.RunningState
-	case "Succeeded":
-		return messaging.SucceededState
-	case "Failed":
-		return messaging.FailedState
-	default:
-		return messaging.SubmittedState
-	}
 }
 
 func (r *Reconciler) recordStatusUpdate(ctx context.Context, tx *sqlx.Tx, externalID constants.ExternalID, status messaging.JobState, message string) error {

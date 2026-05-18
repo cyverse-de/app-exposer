@@ -739,6 +739,45 @@ const docTemplate = `{
                 }
             }
         },
+        "/vice/admin/{host}/canonical-url": {
+            "get": {
+                "description": "Searches every configured operator for the analysis with the\ngiven subdomain. On match, returns the URL built from that\noperator's base_url. Returns 404 when no operator owns the\nsubdomain or the owning operator has no base_url. Returns\n502 when every operator was unreachable.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Resolve a VICE subdomain to its canonical cross-cluster URL",
+                "operationId": "admin-canonical-url",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The analysis subdomain",
+                        "name": "host",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.CanonicalURLResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/httphandlers.aggregatedFailureResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/vice/admin/{host}/description": {
             "get": {
                 "description": "Returns a listing entry for a single analysis\nassociated with the host/subdomain passed in as 'host' from the URL.",
@@ -1888,6 +1927,14 @@ const docTemplate = `{
                 }
             }
         },
+        "httphandlers.CanonicalURLResponse": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "httphandlers.ExternalIDResp": {
             "type": "object",
             "properties": {
@@ -2043,6 +2090,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
+                    }
+                }
+            }
+        },
+        "httphandlers.aggregatedFailureResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "operator_errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/httphandlers.OperatorError"
                     }
                 }
             }

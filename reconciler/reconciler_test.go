@@ -52,26 +52,6 @@ func TestNewReconciler(t *testing.T) {
 	_ = r.hostname
 }
 
-func TestMapPodPhaseToStatus(t *testing.T) {
-	tests := []struct {
-		phase    string
-		expected messaging.JobState
-	}{
-		{"Pending", messaging.SubmittedState},
-		{"Running", messaging.RunningState},
-		{"Succeeded", messaging.SucceededState},
-		{"Failed", messaging.FailedState},
-		{"Unknown", messaging.SubmittedState},
-		{"", messaging.SubmittedState},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.phase, func(t *testing.T) {
-			assert.Equal(t, tt.expected, mapPodPhaseToStatus(tt.phase))
-		})
-	}
-}
-
 // fakeReconcilerDB implements db.ReconcilerDB for unit tests. It records
 // calls so assertions can be made against the side effects the reconciler
 // produces, and per-method errors can be injected to exercise failure paths.

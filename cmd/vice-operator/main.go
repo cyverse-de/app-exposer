@@ -15,6 +15,7 @@ import (
 	"github.com/cyverse-de/app-exposer/operator"
 	"github.com/cyverse-de/go-mod/viceauth"
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
 )
 
 var log = common.Log
@@ -70,6 +71,10 @@ func main() {
 		disableInternetAccess bool
 		userSuffix            string
 		localStorageClass     string
+		statusListenerURL     string
+		statusLeaseNamespace  string
+		statusLeaseName       string
+		clusterName           string
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -121,6 +126,10 @@ func main() {
 	flag.BoolVar(&disableInternetAccess, "disable-internet-access", false, "Block analysis pods from reaching the public internet; only DNS, explicit host/CIDR exceptions, and pod exceptions are allowed")
 	flag.StringVar(&userSuffix, "user-suffix", constants.DefaultUserSuffix, "Domain suffix appended to usernames if not already present")
 	flag.StringVar(&localStorageClass, "local-storage-class", "", "StorageClass for the per-analysis working-dir PVC (e.g. openebs-hostpath, gp3); empty means use the cluster's default storage class")
+	flag.StringVar(&statusListenerURL, "status-listener-url", "", "Base URL of job-status-listener (e.g. https://de.example.org/job); empty disables the push-based status informer and falls back to the reconciler's polling")
+	flag.StringVar(&statusLeaseNamespace, "status-lease-namespace", "", "Namespace for the status-publisher coordination Lease (defaults to --namespace)")
+	flag.StringVar(&statusLeaseName, "status-lease-name", "vice-operator-status-publisher", "Name of the coordination Lease used to elect the status-publisher leader")
+	flag.StringVar(&clusterName, "cluster-name", "", "Cluster identifier sent as the Host field on status updates (defaults to the operator's hostname)")
 	flag.Parse()
 
 	// Allow secrets to come from environment variables when not set on the
@@ -418,9 +427,63 @@ func main() {
 		}
 	}()
 
+	// Start the leader-elected status informer in a goroutine when the
+	// listener URL is configured. When the URL is empty (e.g. local dev or a
+	// deployment that wants to keep relying on the reconciler's polling), the
+	// informer is skipped entirely.
+	if statusListenerURL != "" {
+		startStatusInformer(clientset, namespace, statusListenerURL, statusLeaseNamespace, statusLeaseName, clusterName)
+	} else {
+		log.Info("--status-listener-url is empty; status informer disabled (reconciler polling will remain the sole status source)")
+	}
+
 	// API server blocks on the main goroutine.
 	if err := app.Start(apiAddr); err != nil {
 		log.Error(err)
 		os.Exit(1)
 	}
+}
+
+// startStatusInformer constructs the publisher + informer and launches the
+// leader-election loop in a background goroutine. Validation failures are
+// fatal — they indicate a misconfigured deployment that wouldn't recover by
+// retrying.
+func startStatusInformer(clientset kubernetes.Interface, namespace, listenerURL, leaseNamespace, leaseName, clusterName string) {
+	identity, err := os.Hostname()
+	if err != nil || identity == "" {
+		log.Fatalf("status informer requires a hostname for the lease identity: %v", err)
+	}
+	host := clusterName
+	if host == "" {
+		host = identity
+	}
+
+	publisher, err := operator.NewStatusPublisher(listenerURL, host)
+	if err != nil {
+		log.Fatalf("status informer: %v", err)
+	}
+
+	if leaseNamespace == "" {
+		leaseNamespace = namespace
+	}
+
+	informer, err := operator.NewStatusInformer(operator.StatusInformerConfig{
+		Clientset:      clientset,
+		Publisher:      publisher,
+		Namespace:      namespace,
+		LeaseNamespace: leaseNamespace,
+		LeaseName:      leaseName,
+		Identity:       identity,
+	})
+	if err != nil {
+		log.Fatalf("status informer: %v", err)
+	}
+
+	log.Infof("status informer starting (listener=%s, lease=%s/%s, identity=%s, host=%s)",
+		listenerURL, leaseNamespace, leaseName, identity, host)
+	go func() {
+		if err := informer.Run(context.Background()); err != nil && err != context.Canceled {
+			log.Errorf("status informer exited: %v", err)
+		}
+	}()
 }
