@@ -86,7 +86,6 @@ func main() {
 		namespace                            = flag.String("namespace", "default", "The namespace scope this process operates on for non-VICE calls")
 		viceNamespace                        = flag.String("vice-namespace", "vice-apps", "The namespace that VICE apps are launched within")
 		listenPort                           = flag.Int("port", 60000, "(optional) The port to listen on")
-		localStorageClass                    = flag.String("local-storage-class", "openebs-hostpath", "The storage class to use for the persistent host path volume")
 		viceProxy                            = flag.String("vice-proxy", "harbor.cyverse.org/de/vice-proxy", "The image name of the proxy to use for VICE apps. The image tag is set in the config.")
 		transferImage                        = flag.String("transfer-image", "harbor.cyverse.org/de/gocmd:latest", "(optional) Image used to transfer files to/from the data store")
 		transferWorkingDir                   = flag.String("transfer-working-dir", "/de-app-work", "The working directory within the file transfer image.")
@@ -380,7 +379,6 @@ func main() {
 		batchadapter:            jexAdapter,
 		dbase:                   dbase,
 		ImagePullSecretName:     imagePullSecretName,
-		LocalStorageClass:       *localStorageClass,
 		ClusterConfigSecretName: *clusterConfigSecret,
 		BypassUsers:             bypassUsers,
 		MaxConcurrentLaunches:   *maxConcurrentLaunches,

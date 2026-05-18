@@ -55,8 +55,6 @@ spec:
             - "$(APP_EXPOSER_NAMESPACE)"
             - --user-suffix
             - "$(USER_SUFFIX)"
-            - --local-storage-class
-            - "$(VICE_LOCAL_STORAGE_CLASS)"
             - --log-level
             - debug
             - --cluster-config-secret
@@ -93,11 +91,6 @@ spec:
                 secretKeyRef:
                   name: configs
                   key: NATS_URLS
-            - name: VICE_LOCAL_STORAGE_CLASS
-              valueFrom:
-                secretKeyRef:
-                  name: configs
-                  key: VICE_LOCAL_STORAGE_CLASS
             - name: CLUSTER_CONFIG_SECRET
               valueFrom:
                 secretKeyRef:

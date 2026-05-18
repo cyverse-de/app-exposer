@@ -262,7 +262,9 @@ func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*api
 			AccessModes: []apiv1.PersistentVolumeAccessMode{
 				apiv1.ReadWriteOnce,
 			},
-			StorageClassName: &i.LocalStorageClass,
+			// StorageClassName is intentionally left unset. vice-operator
+			// fills it in per-cluster via its --local-storage-class flag;
+			// an empty value here means "use the cluster default".
 			Resources: apiv1.VolumeResourceRequirements{
 				Requests: apiv1.ResourceList{
 					apiv1.ResourceStorage: i.getPersistentVolumeCapacity(job),

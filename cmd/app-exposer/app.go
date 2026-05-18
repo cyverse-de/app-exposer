@@ -54,7 +54,6 @@ type ExposerAppInit struct {
 	dbase                   *db.Database
 	MaxConcurrentLaunches   int
 	ImagePullSecretName     string
-	LocalStorageClass       string
 	ClusterConfigSecretName string
 	BypassUsers             []string
 }
@@ -127,7 +126,6 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		GatewayProvider:               c.String("vice.gateway_provider"),
 		ClusterConfigSecretName:       init.ClusterConfigSecretName,
 		NATSEncodedConn:               conn,
-		LocalStorageClass:             init.LocalStorageClass,
 		BypassUsers:                   init.BypassUsers,
 		TimeLimitExtensionSeconds:     timeLimitExtensionSeconds,
 	}
