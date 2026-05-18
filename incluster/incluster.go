@@ -53,7 +53,6 @@ type Init struct {
 	PermissionsURL                string
 	IRODSZone                     string
 	GatewayProvider               string
-	LocalStorageClass             string
 	ClusterConfigSecretName       string
 	NATSEncodedConn               *nats.EncodedConn
 	BypassUsers                   []string

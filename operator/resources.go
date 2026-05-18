@@ -94,6 +94,11 @@ func (o *Operator) applyBundle(ctx context.Context, bundle *operatorclient.Analy
 	// them with the operator's namespace before any Create/Update call.
 	o.normalizeNamespaces(bundle)
 
+	// Pick a cluster-appropriate StorageClass for the analysis working-dir
+	// PVC. app-exposer leaves it unset since the right class is cluster-
+	// specific (e.g. openebs-hostpath on-prem, gp3 on EKS).
+	TransformWorkingDirStorageClass(bundle, o.localStorageClass)
+
 	for _, cm := range bundle.ConfigMaps {
 		if cm == nil {
 			continue

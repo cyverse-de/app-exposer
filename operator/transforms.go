@@ -78,6 +78,31 @@ func TransformGPUVendor(deployment *appsv1.Deployment, vendor GPUVendor) {
 	})
 }
 
+// TransformWorkingDirStorageClass overrides the StorageClassName on the
+// per-analysis working-directory PVC (name prefix "working-dir-") with the
+// operator's configured value. app-exposer leaves StorageClassName unset so
+// each operator can pick a class appropriate to its own cluster (e.g. "gp3"
+// on EKS, "openebs-hostpath" on-prem). When storageClass is empty the PVC
+// is left alone, which lets Kubernetes fall back to the cluster's default
+// storage class. Other PVCs in the bundle — notably the iRODS CSI claim
+// (prefix "csi-data-volume-claim-") which must keep its "irods-sc" class
+// to bind to its pre-built PV — are not touched.
+func TransformWorkingDirStorageClass(bundle *operatorclient.AnalysisBundle, storageClass string) {
+	if bundle == nil || storageClass == "" {
+		return
+	}
+	prefix := constants.WorkingDirVolumeName + "-"
+	for _, pvc := range bundle.PersistentVolumeClaims {
+		if pvc == nil {
+			continue
+		}
+		if strings.HasPrefix(pvc.Name, prefix) {
+			sc := storageClass
+			pvc.Spec.StorageClassName = &sc
+		}
+	}
+}
+
 // forEachContainerResources calls fn on the ResourceRequirements of every
 // container and init container in the deployment.
 func forEachContainerResources(deployment *appsv1.Deployment, fn func(*apiv1.ResourceRequirements)) {

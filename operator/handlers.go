@@ -63,6 +63,7 @@ type Operator struct {
 	egressConfig        NetworkPolicyConfig // Egress policy config for per-analysis policies.
 	httpClient          HTTPClient          // Client for contacting the vice-proxy sidecar.
 	userSuffix          string              // Domain suffix for usernames (e.g. "@iplantcollaborative.org").
+	localStorageClass   string              // StorageClass for the per-analysis working-dir PVC; empty means cluster default.
 }
 
 // OperatorOptions aggregates everything NewOperator needs. Held as a
@@ -85,6 +86,7 @@ type OperatorOptions struct {
 	ClusterConfigSecret string              // Name of the Secret holding cluster config for vice-proxy envFrom.
 	EgressConfig        NetworkPolicyConfig // Egress policy config for per-analysis policies.
 	UserSuffix          string              // Domain suffix for usernames (e.g. "@iplantcollaborative.org").
+	LocalStorageClass   string              // StorageClass for the per-analysis working-dir PVC; empty means cluster default.
 }
 
 // Validate confirms the wiring-critical fields are present. The caller
@@ -138,6 +140,7 @@ func NewOperator(opts OperatorOptions) (*Operator, error) {
 		egressConfig:        opts.EgressConfig,
 		httpClient:          noRedirectHTTPClient,
 		userSuffix:          opts.UserSuffix,
+		localStorageClass:   opts.LocalStorageClass,
 	}, nil
 }
 

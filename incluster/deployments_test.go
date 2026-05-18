@@ -33,7 +33,6 @@ func baseInit() *Init {
 		PermissionsURL:                "http://permissions.prod",
 		IRODSZone:                     "example",
 		GatewayProvider:               "traefik",
-		LocalStorageClass:             "example",
 	}
 }
 

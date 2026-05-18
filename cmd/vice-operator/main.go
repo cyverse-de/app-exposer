@@ -69,6 +69,7 @@ func main() {
 		ingressPodExceptions  stringSliceFlag
 		disableInternetAccess bool
 		userSuffix            string
+		localStorageClass     string
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -119,6 +120,7 @@ func main() {
 	flag.Var(&ingressPodExceptions, "ingress-pod-exception", "Cross-namespace ingress source as kubernetes.io/metadata.name=<ns>,pod-label=val (repeatable). The kubernetes.io/metadata.name pair selects the namespace; remaining pairs select pods.")
 	flag.BoolVar(&disableInternetAccess, "disable-internet-access", false, "Block analysis pods from reaching the public internet; only DNS, explicit host/CIDR exceptions, and pod exceptions are allowed")
 	flag.StringVar(&userSuffix, "user-suffix", constants.DefaultUserSuffix, "Domain suffix appended to usernames if not already present")
+	flag.StringVar(&localStorageClass, "local-storage-class", "", "StorageClass for the per-analysis working-dir PVC (e.g. openebs-hostpath, gp3); empty means use the cluster's default storage class")
 	flag.Parse()
 
 	// Allow secrets to come from environment variables when not set on the
@@ -361,6 +363,7 @@ func main() {
 		ClusterConfigSecret: clusterConfigSecret,
 		EgressConfig:        egressConfig,
 		UserSuffix:          userSuffix,
+		LocalStorageClass:   localStorageClass,
 	})
 	if err != nil {
 		log.Fatalf("failed to construct operator: %v", err)
