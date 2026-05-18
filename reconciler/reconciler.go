@@ -365,29 +365,36 @@ func (r *Reconciler) ReconcileNext(ctx context.Context) error {
 }
 
 func (r *Reconciler) reconcileAnalysis(ctx context.Context, tx *sqlx.Tx, pod reporting.PodInfo) error {
-	// Skip pods that are missing required labels — these may be from a
-	// different system or were created before labels were populated.
+	// Skip pods missing the labels that identify them as a DE analysis —
+	// these may belong to a different system or predate label population.
+	// The label check is the "is this one of ours" gate; everything past
+	// here is treated as a DE analysis we own status for.
 	if pod.AnalysisID == "" || pod.ExternalID == "" {
 		log.Debugf("pod %s missing analysis-id or external-id label, skipping", pod.Name)
 		return nil
 	}
 
-	// Compare against the most recent job_status_updates row rather than the
-	// jobs table. There can be lag between recording a status update and
-	// propagating it to jobs, which would cause duplicate reconciliation
-	// updates if we compared against the jobs table.
+	clusterStatus := mapPodPhaseToStatus(pod.Phase)
+
+	// Compare against the most recent job_status_updates row rather than
+	// the jobs table — there can be lag between recording a status update
+	// and propagating it to jobs.
 	dbStatus, err := r.db.GetLatestStatusByExternalID(ctx, tx, pod.ExternalID)
-	if err != nil {
-		// No status updates yet — the pod may have been created before any
-		// status was recorded, or it may belong to a different system.
-		if errors.Is(err, sql.ErrNoRows) {
-			log.Debugf("no status updates for analysis %s (external %s), skipping", pod.AnalysisID, pod.ExternalID)
-			return nil
-		}
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// No prior status row. Probable cause: the analysis was launched
+		// against a remote-cluster operator (e.g. AWS) where
+		// vice-status-listener isn't running, so nothing else ever
+		// published an initial Submitted/Running update. Seed the table
+		// with the cluster's current state so downstream consumers like
+		// job-status-to-apps-adapter pick it up; subsequent ticks then
+		// fall through to the normal change-detection path.
+		log.Infof("analysis %s (external %s) has no prior status; recording initial %s from cluster",
+			pod.AnalysisID, pod.ExternalID, clusterStatus)
+		return r.recordStatusUpdate(ctx, tx, pod.ExternalID, clusterStatus, pod.Message)
+	case err != nil:
 		return err
 	}
-
-	clusterStatus := mapPodPhaseToStatus(pod.Phase)
 
 	if clusterStatus != dbStatus {
 		log.Infof("analysis %s status change: %s -> %s (cluster truth)", pod.AnalysisID, dbStatus, clusterStatus)
