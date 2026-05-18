@@ -234,13 +234,29 @@ func TestReconcileAnalysis(t *testing.T) {
 			wantInserts: 0,
 		},
 		{
-			name: "skips when no prior status row (ErrNoRows)",
+			// Bootstraps the job_status_updates row from the cluster state
+			// when nothing else has published one — the only way analyses
+			// on remote-cluster operators (e.g. AWS, where
+			// vice-status-listener isn't running) ever leave Submitted.
+			name: "seeds initial status when no prior row exists",
 			pod: reporting.PodInfo{
 				MetaInfo: reporting.MetaInfo{AnalysisID: "an-1", ExternalID: "ext-1"},
 				Phase:    "Running",
 			},
 			hasPrior:    false,
-			wantInserts: 0,
+			wantInserts: 1,
+			wantStatus:  messaging.RunningState,
+		},
+		{
+			name: "seeds initial Failed status when no prior row exists",
+			pod: reporting.PodInfo{
+				MetaInfo: reporting.MetaInfo{AnalysisID: "an-1", ExternalID: "ext-1"},
+				Phase:    "Failed",
+				Message:  "pod OOMKilled",
+			},
+			hasPrior:    false,
+			wantInserts: 1,
+			wantStatus:  messaging.FailedState,
 		},
 		{
 			name: "records update on status change",
