@@ -81,6 +81,23 @@ func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 	return ops, err
 }
 
+// GetOperatorByID returns the operator row with the given id, or sql.ErrNoRows
+// when no such row exists. Returning the typed not-found lets callers map the
+// miss to a 404 without string-matching the error.
+func (d *Database) GetOperatorByID(ctx context.Context, id uuid.UUID) (*Operator, error) {
+	var op Operator
+	const query = `
+		SELECT id, name, url, tls_skip_verify, priority, base_url,
+		       last_reconciled_at, reconciled_by, created_at, updated_at
+		FROM operators
+		WHERE id = $1
+	`
+	if err := d.db.GetContext(ctx, &op, query, id); err != nil {
+		return nil, err
+	}
+	return &op, nil
+}
+
 // ListOperatorAdminSummaries returns the admin-listing fields of every
 // operator, ordered by priority (lower values first) with creation time as
 // tiebreaker. Including id lets admin clients address an operator by its

@@ -228,6 +228,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 	viceadmin.POST("/terminate-all", app.handlers.TerminateAllAnalysesHandler)
 	viceadmin.GET("/:host/description", app.handlers.AdminDescribeAnalysisHandler)
 	viceadmin.GET("/:host/url-ready", app.handlers.AdminURLReadyHandler)
+	viceadmin.GET("/:host/canonical-url", app.handlers.AdminCanonicalURLHandler)
 	viceadmin.GET("/is-deployed/external-id/:external-id", app.handlers.AdminAnalysisInClusterByExternalID)
 	viceadmin.GET("/is-deployed/analysis-id/:analysis-id", app.handlers.AdminAnalysisInClusterByID)
 
