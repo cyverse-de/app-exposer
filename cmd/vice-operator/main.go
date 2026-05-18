@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/url"
@@ -482,7 +483,7 @@ func startStatusInformer(clientset kubernetes.Interface, namespace, listenerURL,
 	log.Infof("status informer starting (listener=%s, lease=%s/%s, identity=%s, host=%s)",
 		listenerURL, leaseNamespace, leaseName, identity, host)
 	go func() {
-		if err := informer.Run(context.Background()); err != nil && err != context.Canceled {
+		if err := informer.Run(context.Background()); err != nil && !errors.Is(err, context.Canceled) {
 			log.Errorf("status informer exited: %v", err)
 		}
 	}()

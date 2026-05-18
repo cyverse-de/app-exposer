@@ -57,7 +57,7 @@ func TestStatusPublisherPublish(t *testing.T) {
 		serverBody   string
 		wantError    bool
 		wantPath     string
-		wantBody     AnalysisStatus
+		wantBody     StatusUpdatePayload
 	}{
 		{
 			name:         "happy path running",
@@ -65,7 +65,7 @@ func TestStatusPublisherPublish(t *testing.T) {
 			message:      "deployment X is running",
 			serverStatus: http.StatusOK,
 			wantPath:     "/" + string(externalID) + "/status",
-			wantBody:     AnalysisStatus{Host: hostname, State: messaging.RunningState, Message: "deployment X is running"},
+			wantBody:     StatusUpdatePayload{Host: hostname, State: messaging.RunningState, Message: "deployment X is running"},
 		},
 		{
 			name:         "happy path with base path",
@@ -74,7 +74,7 @@ func TestStatusPublisherPublish(t *testing.T) {
 			basePath:     "/job",
 			serverStatus: http.StatusAccepted,
 			wantPath:     "/job/" + string(externalID) + "/status",
-			wantBody:     AnalysisStatus{Host: hostname, State: messaging.SucceededState, Message: "done"},
+			wantBody:     StatusUpdatePayload{Host: hostname, State: messaging.SucceededState, Message: "done"},
 		},
 		{
 			name:         "listener returns 500",
@@ -96,7 +96,7 @@ func TestStatusPublisherPublish(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var gotPath, gotMethod, gotContentType string
-			var gotBody AnalysisStatus
+			var gotBody StatusUpdatePayload
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				gotPath = r.URL.Path
 				gotMethod = r.Method

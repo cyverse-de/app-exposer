@@ -26,10 +26,11 @@ const statusPublisherTimeout = 10 * time.Second
 // tests can substitute a client whose Transport redirects to an httptest.Server.
 var statusHTTPClient = &http.Client{Timeout: statusPublisherTimeout}
 
-// AnalysisStatus is the body shape expected by job-status-listener's
+// StatusUpdatePayload is the body shape expected by job-status-listener's
 // POST /{external-id}/status endpoint. Matches vice-status-listener's
-// AnalysisStatus so the listener doesn't need a new contract.
-type AnalysisStatus struct {
+// payload so the listener doesn't need a new contract. Named to avoid
+// shadowing constants.AnalysisStatus, an unrelated apps-service enum.
+type StatusUpdatePayload struct {
 	Host    string             `json:"Host"`
 	State   messaging.JobState `json:"State"`
 	Message string             `json:"Message"`
@@ -37,15 +38,17 @@ type AnalysisStatus struct {
 
 // StatusPublisher posts VICE analysis status updates to job-status-listener.
 // One instance is shared across the operator process; safe for concurrent use.
+// The HTTP client lives at package scope (statusHTTPClient) so tests can
+// substitute it; capturing it on the struct would freeze the substitution
+// timing and lose that hook.
 type StatusPublisher struct {
 	baseURL  *url.URL
 	hostname string
-	client   *http.Client
 }
 
 // NewStatusPublisher parses listenerURL and returns a publisher that posts
 // updates to <listenerURL>/<external-id>/status. The hostname is sent as the
-// AnalysisStatus.Host field so the downstream pipeline can identify which
+// payload's Host field so the downstream pipeline can identify which
 // publisher emitted each update; pass the cluster name (or pod hostname) to
 // disambiguate multi-cluster operators.
 func NewStatusPublisher(listenerURL, hostname string) (*StatusPublisher, error) {
@@ -59,7 +62,6 @@ func NewStatusPublisher(listenerURL, hostname string) (*StatusPublisher, error) 
 	return &StatusPublisher{
 		baseURL:  u,
 		hostname: hostname,
-		client:   statusHTTPClient,
 	}, nil
 }
 
@@ -67,7 +69,7 @@ func NewStatusPublisher(listenerURL, hostname string) (*StatusPublisher, error) 
 // error if the request couldn't be sent or the listener returned a non-2xx/3xx
 // response; the caller decides whether to retry or drop the update.
 func (p *StatusPublisher) Publish(ctx context.Context, externalID constants.ExternalID, state messaging.JobState, message string) error {
-	body, err := json.Marshal(AnalysisStatus{
+	body, err := json.Marshal(StatusUpdatePayload{
 		Host:    p.hostname,
 		State:   state,
 		Message: message,
@@ -85,7 +87,7 @@ func (p *StatusPublisher) Publish(ctx context.Context, externalID constants.Exte
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.client.Do(req)
+	resp, err := statusHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("posting %s status for %s to %s: %w", state, externalID, target.String(), err)
 	}

@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -57,22 +58,22 @@ type StatusInformer struct {
 // to Run.
 func NewStatusInformer(cfg StatusInformerConfig) (*StatusInformer, error) {
 	if cfg.Clientset == nil {
-		return nil, fmt.Errorf("StatusInformerConfig.Clientset is required")
+		return nil, errors.New("clientset is required")
 	}
 	if cfg.Publisher == nil {
-		return nil, fmt.Errorf("StatusInformerConfig.Publisher is required")
+		return nil, errors.New("publisher is required")
 	}
 	if cfg.Namespace == "" {
-		return nil, fmt.Errorf("StatusInformerConfig.Namespace is required")
+		return nil, errors.New("namespace is required")
 	}
 	if cfg.LeaseNamespace == "" {
-		return nil, fmt.Errorf("StatusInformerConfig.LeaseNamespace is required")
+		return nil, errors.New("lease namespace is required")
 	}
 	if cfg.LeaseName == "" {
-		return nil, fmt.Errorf("StatusInformerConfig.LeaseName is required")
+		return nil, errors.New("lease name is required")
 	}
 	if cfg.Identity == "" {
-		return nil, fmt.Errorf("StatusInformerConfig.Identity is required")
+		return nil, errors.New("identity is required")
 	}
 	return &StatusInformer{
 		cfg:       cfg,
@@ -244,9 +245,12 @@ func (s *StatusInformer) handleAddOrUpdate(ctx context.Context, dep *appsv1.Depl
 }
 
 // handleDelete publishes a Succeeded update when a Deployment is removed.
-// Mirrors vice-status-listener's assumption that deletion implies the
-// analysis finished cleanly; truly failed analyses surface their failure
-// before deletion (or get caught by the reconciler safety net).
+// Mirrors vice-status-listener's assumption that deletion implies a clean
+// finish. Known gap: a crashed pod (replicas 1 → 0) generates no event here
+// because handleAddOrUpdate skips on AvailableReplicas < 1, so the eventual
+// delete reports Succeeded over what was actually a failure. The reconciler
+// safety net catches this only if it observes the Failed pod phase before
+// the pod is gone; closing the gap fully needs a pod-level informer.
 func (s *StatusInformer) handleDelete(ctx context.Context, dep *appsv1.Deployment) {
 	externalID, ok := dep.Labels[constants.ExternalIDLabel]
 	if !ok || externalID == "" {

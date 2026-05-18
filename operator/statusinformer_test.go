@@ -23,13 +23,13 @@ import (
 // updates the informer actually emitted.
 type recordingListener struct {
 	mu       sync.Mutex
-	requests []AnalysisStatus
+	requests []StatusUpdatePayload
 }
 
 func (r *recordingListener) handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		body, _ := io.ReadAll(req.Body)
-		var status AnalysisStatus
+		var status StatusUpdatePayload
 		_ = json.Unmarshal(body, &status)
 		r.mu.Lock()
 		r.requests = append(r.requests, status)
@@ -38,10 +38,10 @@ func (r *recordingListener) handler() http.Handler {
 	})
 }
 
-func (r *recordingListener) snapshot() []AnalysisStatus {
+func (r *recordingListener) snapshot() []StatusUpdatePayload {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := make([]AnalysisStatus, len(r.requests))
+	out := make([]StatusUpdatePayload, len(r.requests))
 	copy(out, r.requests)
 	return out
 }
