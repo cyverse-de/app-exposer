@@ -14,6 +14,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -65,6 +66,31 @@ func triggerFileTransferFixture(t *testing.T, handler http.Handler) *httptest.Se
 	return srv
 }
 
+// createTransferDeployment registers a Deployment whose container set
+// determines whether triggerFileTransfer treats this analysis as having
+// a file-transfer sidecar. Pass withSidecar=false to simulate a CSI-driver
+// deployment.
+func createTransferDeployment(t *testing.T, op *Operator, analysisID, depName string, withSidecar bool) {
+	t.Helper()
+	containers := []apiv1.Container{{Name: "analysis"}}
+	if withSidecar {
+		containers = append(containers, apiv1.Container{Name: constants.FileTransfersContainerName})
+	}
+	_, err := op.clientset.AppsV1().Deployments(op.namespace).Create(context.Background(), &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      depName,
+			Namespace: op.namespace,
+			Labels:    map[string]string{constants.AnalysisIDLabel: analysisID},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Template: apiv1.PodTemplateSpec{
+				Spec: apiv1.PodSpec{Containers: containers},
+			},
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+}
+
 // createTransferService registers a Service the transfer code will find
 // via its analysis-id label and use to build the sidecar URL.
 func createTransferService(t *testing.T, op *Operator, analysisID, svcName string) {
@@ -80,13 +106,27 @@ func createTransferService(t *testing.T, op *Operator, analysisID, svcName strin
 }
 
 func TestTriggerFileTransferMissingService(t *testing.T) {
-	// No Service for the analysis — transfer code should surface a
-	// descriptive error without hitting the HTTP layer.
+	// Deployment exists with the sidecar but the Service has been deleted —
+	// transfer code should surface a descriptive error without hitting the
+	// HTTP layer.
 	op, _, _ := newTestOperator(t, 10)
+	createTransferDeployment(t, op, "an-missing", "dep-missing", true)
 
 	err := op.triggerFileTransfer(context.Background(), "an-missing", "/upload")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no service found")
+}
+
+func TestTriggerFileTransferNoSidecarIsNoop(t *testing.T) {
+	// CSI-driver deployments omit the file-transfer sidecar; transfer code
+	// must short-circuit to nil so save-and-exit cleanup can proceed.
+	// The fixture is intentionally not wired so any HTTP attempt would fail.
+	op, _, _ := newTestOperator(t, 10)
+	createTransferDeployment(t, op, "an-csi", "dep-csi", false)
+	createTransferService(t, op, "an-csi", "svc-csi")
+
+	err := op.triggerFileTransfer(context.Background(), "an-csi", "/upload")
+	require.NoError(t, err)
 }
 
 func TestTriggerFileTransferCompletedFirstPoll(t *testing.T) {
@@ -110,6 +150,7 @@ func TestTriggerFileTransferCompletedFirstPoll(t *testing.T) {
 	triggerFileTransferFixture(t, handler)
 
 	op, _, _ := newTestOperator(t, 10)
+	createTransferDeployment(t, op, "an-ok", "dep-ok", true)
 	createTransferService(t, op, "an-ok", "svc-ok")
 
 	err := op.triggerFileTransfer(context.Background(), "an-ok", "/upload")
@@ -136,6 +177,7 @@ func TestTriggerFileTransferFailedStatus(t *testing.T) {
 	triggerFileTransferFixture(t, handler)
 
 	op, _, _ := newTestOperator(t, 10)
+	createTransferDeployment(t, op, "an-fail", "dep-fail", true)
 	createTransferService(t, op, "an-fail", "svc-fail")
 
 	err := op.triggerFileTransfer(context.Background(), "an-fail", "/upload")
@@ -161,6 +203,7 @@ func TestTriggerFileTransferContextCancel(t *testing.T) {
 	triggerFileTransferFixture(t, handler)
 
 	op, _, _ := newTestOperator(t, 10)
+	createTransferDeployment(t, op, "an-cancel", "dep-cancel", true)
 	createTransferService(t, op, "an-cancel", "svc-cancel")
 
 	// Start the loop in the background so we can cancel it.
@@ -202,6 +245,7 @@ func TestTriggerFileTransferMalformedStatusJSON(t *testing.T) {
 	triggerFileTransferFixture(t, handler)
 
 	op, _, _ := newTestOperator(t, 10)
+	createTransferDeployment(t, op, "an-bad", "dep-bad", true)
 	createTransferService(t, op, "an-bad", "svc-bad")
 
 	err := op.triggerFileTransfer(context.Background(), "an-bad", "/upload")
@@ -221,6 +265,7 @@ func TestTriggerFileTransferInitialRequestFailure(t *testing.T) {
 	triggerFileTransferFixture(t, handler)
 
 	op, _, _ := newTestOperator(t, 10)
+	createTransferDeployment(t, op, "an-500", "dep-500", true)
 	createTransferService(t, op, "an-500", "svc-500")
 
 	err := op.triggerFileTransfer(context.Background(), "an-500", "/upload")

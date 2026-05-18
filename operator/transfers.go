@@ -12,6 +12,7 @@ import (
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/labstack/echo/v4"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // fileTransfersPort is the port used by the file-transfer sidecar container.
@@ -156,8 +157,23 @@ func (o *Operator) handleAsyncTransfer(c echo.Context, action, transferPath stri
 
 // triggerFileTransfer finds the analysis Service by label and POSTs to the
 // file-transfer sidecar to initiate a transfer, then polls until complete.
+// When the analysis runs with the iRODS CSI driver, the file-transfer sidecar
+// is omitted from the Deployment (incluster/deployments.go skips it under
+// UseCSIDriver) — iRODS is mounted directly so no porklock transfer is
+// required. In that case this returns nil so save-and-exit can proceed to
+// resource cleanup.
 func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath string) error {
 	opts := analysisLabelSelector(analysisID)
+
+	hasSidecar, err := o.analysisHasFileTransferSidecar(ctx, analysisID, opts)
+	if err != nil {
+		return err
+	}
+	if !hasSidecar {
+		log.Infof("no file-transfer sidecar for analysis %s; skipping transfer (CSI-driver deployment)", analysisID)
+		return nil
+	}
+
 	svcClient := o.clientset.CoreV1().Services(o.namespace)
 	svcList, err := svcClient.List(ctx, opts)
 	if err != nil {
@@ -251,6 +267,29 @@ func (o *Operator) triggerFileTransfer(ctx context.Context, analysisID, reqpath 
 	}
 	log.Infof("file transfer complete for analysis %s (uuid %s)", analysisID, xferResp.UUID)
 	return nil
+}
+
+// analysisHasFileTransferSidecar reports whether the analysis Deployment
+// includes the file-transfer (porklock) sidecar container. CSI-driver
+// deployments omit the sidecar entirely, in which case any caller-side
+// transfer request should become a no-op rather than dialing a port no
+// pod is listening on. Returns (false, nil) when no Deployment exists
+// — by the time save-and-exit fires the Deployment is expected to be
+// present, but absence is treated as "nothing to transfer" so cleanup
+// can still proceed.
+func (o *Operator) analysisHasFileTransferSidecar(ctx context.Context, analysisID string, opts metav1.ListOptions) (bool, error) {
+	depList, err := o.clientset.AppsV1().Deployments(o.namespace).List(ctx, opts)
+	if err != nil {
+		return false, fmt.Errorf("listing deployments for analysis %s: %w", analysisID, err)
+	}
+	for _, dep := range depList.Items {
+		for _, c := range dep.Spec.Template.Spec.Containers {
+			if c.Name == constants.FileTransfersContainerName {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 // pollTransferStatus issues a single GET against the sidecar's transfer-
