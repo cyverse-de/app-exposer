@@ -240,3 +240,97 @@ func TestRequestedGPUVendor(t *testing.T) {
 		assert.Equal(t, "", b.RequestedGPUVendor())
 	})
 }
+
+// gpuModelBundle builds an AnalysisBundle whose deployment carries the
+// given GPU model match expressions on its required node affinity. Each
+// entry in `terms` becomes a separate NodeSelectorTerm; values within a
+// term become a single In match expression with key
+// nvidia.com/gpu.product. Used to drive RequestedGPUModels test cases.
+func gpuModelBundle(terms [][]string) *AnalysisBundle {
+	dep := &appsv1.Deployment{Spec: appsv1.DeploymentSpec{Template: apiv1.PodTemplateSpec{}}}
+	if len(terms) > 0 {
+		nst := make([]apiv1.NodeSelectorTerm, 0, len(terms))
+		for _, vals := range terms {
+			nst = append(nst, apiv1.NodeSelectorTerm{
+				MatchExpressions: []apiv1.NodeSelectorRequirement{{
+					Key:      gpuModelAffinityKey,
+					Operator: apiv1.NodeSelectorOpIn,
+					Values:   vals,
+				}},
+			})
+		}
+		dep.Spec.Template.Spec.Affinity = &apiv1.Affinity{
+			NodeAffinity: &apiv1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &apiv1.NodeSelector{
+					NodeSelectorTerms: nst,
+				},
+			},
+		}
+	}
+	return &AnalysisBundle{AnalysisID: AnalysisID("test"), Deployment: dep}
+}
+
+func TestRequestedGPUModels(t *testing.T) {
+	tests := []struct {
+		name  string
+		terms [][]string
+		want  []string
+	}{
+		{"no affinity returns nil", nil, nil},
+		{"single model", [][]string{{"NVIDIA-A10G"}}, []string{"NVIDIA-A10G"}},
+		{"multiple values in one term", [][]string{{"NVIDIA-A10G", "NVIDIA-L4"}}, []string{"NVIDIA-A10G", "NVIDIA-L4"}},
+		{"multiple terms unioned and deduped", [][]string{{"NVIDIA-A10G"}, {"NVIDIA-A10G", "NVIDIA-L4"}}, []string{"NVIDIA-A10G", "NVIDIA-L4"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := gpuModelBundle(tt.terms)
+			assert.Equal(t, tt.want, b.RequestedGPUModels())
+		})
+	}
+
+	t.Run("preferred-only affinity is ignored", func(t *testing.T) {
+		b := &AnalysisBundle{
+			AnalysisID: "test",
+			Deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Template: apiv1.PodTemplateSpec{
+						Spec: apiv1.PodSpec{
+							Affinity: &apiv1.Affinity{
+								NodeAffinity: &apiv1.NodeAffinity{
+									PreferredDuringSchedulingIgnoredDuringExecution: []apiv1.PreferredSchedulingTerm{{
+										Weight: 1,
+										Preference: apiv1.NodeSelectorTerm{
+											MatchExpressions: []apiv1.NodeSelectorRequirement{{
+												Key:      gpuModelAffinityKey,
+												Operator: apiv1.NodeSelectorOpIn,
+												Values:   []string{"NVIDIA-A10G"},
+											}},
+										},
+									}},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		assert.Nil(t, b.RequestedGPUModels())
+	})
+
+	t.Run("non-In operator is ignored", func(t *testing.T) {
+		b := gpuModelBundle([][]string{{"NVIDIA-A10G"}})
+		b.Deployment.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Operator = apiv1.NodeSelectorOpNotIn
+		assert.Nil(t, b.RequestedGPUModels())
+	})
+
+	t.Run("nil bundle returns nil", func(t *testing.T) {
+		var b *AnalysisBundle
+		assert.Nil(t, b.RequestedGPUModels())
+	})
+
+	t.Run("bundle with no deployment returns nil", func(t *testing.T) {
+		b := &AnalysisBundle{AnalysisID: "test"}
+		assert.Nil(t, b.RequestedGPUModels())
+	})
+}

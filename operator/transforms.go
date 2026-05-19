@@ -78,6 +78,101 @@ func TransformGPUVendor(deployment *appsv1.Deployment, vendor GPUVendor) {
 	})
 }
 
+// TransformGPUModels rewrites the bundle's required node-affinity GPU
+// model match expressions for the local cluster. Bundles arrive with the
+// canonical (GFD-style) key nvidia.com/gpu.product and canonical model
+// values (e.g. NVIDIA-A10G). Each operator translates these into the key
+// and values its cluster understands:
+//
+//   - On-prem with NVIDIA GFD: leave the key alone and pass values
+//     through untouched. Default config (key=="nvidia.com/gpu.product"
+//     and empty mapping) is treated as the identity transform so
+//     upgrading the operator without re-configuring is a no-op.
+//   - EKS Auto Mode (no GFD): set key to
+//     eks.amazonaws.com/instance-gpu-name and mapping to translate each
+//     canonical name to its EKS label value (NVIDIA-A10G → a10g, etc.).
+//
+// Values not present in mapping are dropped. If translation empties an
+// entry's Values, the whole match expression is removed so we don't
+// emit a Values: [] that would match nothing. Surrounding match
+// expressions (e.g. analysis Exists, gpu In [true]) are preserved.
+// Runs on required + preferred affinity. Modifies the deployment in
+// place. Must be called BEFORE TransformGPUVendor on AMD clusters,
+// because that pass renames nvidia.com/gpu.product → amd.com/gpu.product
+// and this transform's lookup would no longer find its key.
+func TransformGPUModels(deployment *appsv1.Deployment, key string, mapping map[string]string) {
+	if deployment == nil {
+		return
+	}
+	// Default config (canonical key, no mapping) is the identity — leave
+	// the deployment alone so untouched operators preserve today's behavior.
+	if (key == "" || key == nvidiaModelAffinityK) && len(mapping) == 0 {
+		return
+	}
+	affinity := deployment.Spec.Template.Spec.Affinity
+	if affinity == nil || affinity.NodeAffinity == nil {
+		return
+	}
+	if req := affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution; req != nil {
+		for i := range req.NodeSelectorTerms {
+			req.NodeSelectorTerms[i].MatchExpressions = rewriteGPUModelExprs(
+				req.NodeSelectorTerms[i].MatchExpressions, key, mapping,
+			)
+		}
+	}
+	for i := range affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+		pref := &affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution[i]
+		pref.Preference.MatchExpressions = rewriteGPUModelExprs(
+			pref.Preference.MatchExpressions, key, mapping,
+		)
+	}
+}
+
+// rewriteGPUModelExprs returns a new slice with each nvidia.com/gpu.product
+// match expression rewritten according to `key` and `mapping`. Entries
+// whose translated value list is empty are dropped. Non-GPU-model
+// expressions pass through unchanged.
+func rewriteGPUModelExprs(exprs []apiv1.NodeSelectorRequirement, key string, mapping map[string]string) []apiv1.NodeSelectorRequirement {
+	out := make([]apiv1.NodeSelectorRequirement, 0, len(exprs))
+	for _, expr := range exprs {
+		if expr.Key != nvidiaModelAffinityK {
+			out = append(out, expr)
+			continue
+		}
+		newValues := translateValues(expr.Values, mapping)
+		if len(newValues) == 0 {
+			// All canonical values map to nothing on this cluster; drop
+			// the entire match expression so we don't end up with a
+			// Values: [] requirement that K8s treats as unsatisfiable.
+			continue
+		}
+		newExpr := expr
+		if key != "" {
+			newExpr.Key = key
+		}
+		newExpr.Values = newValues
+		out = append(out, newExpr)
+	}
+	return out
+}
+
+// translateValues maps each canonical GPU model name through mapping.
+// Values not present in mapping are dropped. An empty mapping is the
+// identity (used only on the GFD-default path, which never reaches
+// here because TransformGPUModels short-circuits earlier).
+func translateValues(values []string, mapping map[string]string) []string {
+	if len(mapping) == 0 {
+		return values
+	}
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if mapped, ok := mapping[v]; ok {
+			out = append(out, mapped)
+		}
+	}
+	return out
+}
+
 // TransformWorkingDirStorageClass overrides the StorageClassName on the
 // per-analysis working-directory PVC (name prefix "working-dir-") with the
 // operator's configured value. app-exposer leaves StorageClassName unset so

@@ -53,6 +53,9 @@ type Operator struct {
 	gatewayNamespace    string
 	gatewayName         string
 	gpuVendor           GPUVendor
+	gpuModels           []string          // Canonical GFD-style GPU model names this cluster can deliver; empty means model-agnostic.
+	gpuModelAffinityKey string            // Node-label key this cluster uses for GPU-model affinity; empty means use the canonical nvidia.com/gpu.product.
+	gpuModelMapping     map[string]string // Canonical NVIDIA-* model name → cluster-side value (e.g. NVIDIA-A10G → a10g on EKS).
 	capacityCalc        *CapacityCalculator
 	imageCache          *ImageCacheManager
 	loadingServiceName  string
@@ -77,6 +80,9 @@ type OperatorOptions struct {
 	GatewayNamespace    string
 	GatewayName         string
 	GPUVendor           GPUVendor
+	GPUModels           []string          // Canonical GFD-style GPU model names this cluster can deliver; empty means model-agnostic.
+	GPUModelAffinityKey string            // Node-label key this cluster uses for GPU-model affinity; empty means use the canonical nvidia.com/gpu.product.
+	GPUModelMapping     map[string]string // Canonical NVIDIA-* model name → cluster-side value (e.g. NVIDIA-A10G → a10g on EKS).
 	CapacityCalc        *CapacityCalculator
 	ImageCache          *ImageCacheManager
 	LoadingServiceName  string
@@ -130,6 +136,9 @@ func NewOperator(opts OperatorOptions) (*Operator, error) {
 		gatewayNamespace:    opts.GatewayNamespace,
 		gatewayName:         opts.GatewayName,
 		gpuVendor:           opts.GPUVendor,
+		gpuModels:           opts.GPUModels,
+		gpuModelAffinityKey: opts.GPUModelAffinityKey,
+		gpuModelMapping:     opts.GPUModelMapping,
 		capacityCalc:        opts.CapacityCalc,
 		imageCache:          opts.ImageCache,
 		loadingServiceName:  opts.LoadingServiceName,
@@ -197,6 +206,7 @@ func (o *Operator) HandleCapacity(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	cap.GPUVendor = string(o.gpuVendor)
+	cap.SupportedGPUModels = o.gpuModels
 	return c.JSON(http.StatusOK, cap)
 }
 
@@ -261,6 +271,12 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 	// Inject per-analysis vice-proxy args and ensure the cluster config secret
 	// is referenced as envFrom so vice-proxy gets cluster-level env vars.
 	TransformViceProxyArgs(bundle.Deployment, string(bundle.AnalysisID), o.clusterConfigSecret)
+
+	// Translate the bundle's canonical GPU-model node affinity into the
+	// key and values this cluster's nodes label themselves with. Must run
+	// BEFORE TransformGPUVendor: on AMD clusters that pass renames the
+	// nvidia.com/gpu.product key out from under this transform's lookup.
+	TransformGPUModels(bundle.Deployment, o.gpuModelAffinityKey, o.gpuModelMapping)
 
 	// Rewrite GPU resource names to match the cluster's GPU vendor.
 	TransformGPUVendor(bundle.Deployment, o.gpuVendor)

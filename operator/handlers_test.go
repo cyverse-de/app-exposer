@@ -90,6 +90,35 @@ func newTestOperator(t *testing.T, maxAnalyses int, vendor ...GPUVendor) (*Opera
 	return op, clientset, gwClientset
 }
 
+// newTestOperatorWithModels is the variant used by tests that need to
+// assert behavior driven by the operator's configured GPU model list.
+func newTestOperatorWithModels(t *testing.T, maxAnalyses int, models []string) (*Operator, *fake.Clientset, *gatewayfake.Clientset) {
+	t.Helper()
+	clientset := fake.NewSimpleClientset()
+	gwClientset := gatewayfake.NewSimpleClientset()
+	calc, err := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
+	require.NoError(t, err)
+	cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
+	op, err := NewOperator(OperatorOptions{
+		Clientset:           clientset,
+		GatewayClient:       gwClientset.GatewayV1(),
+		Namespace:           "vice-apps",
+		GatewayNamespace:    "vice-apps",
+		GatewayName:         "vice",
+		GPUVendor:           GPUVendorNvidia,
+		GPUModels:           models,
+		CapacityCalc:        calc,
+		ImageCache:          cache,
+		LoadingServiceName:  "vice-operator-loading",
+		LoadingServicePort:  80,
+		LoadingTimeoutMs:    600000,
+		ClusterConfigSecret: "cluster-config-secret",
+		UserSuffix:          constants.DefaultUserSuffix,
+	})
+	require.NoError(t, err)
+	return op, clientset, gwClientset
+}
+
 func TestOperatorOptionsValidate(t *testing.T) {
 	// valid is the minimum set of fields that satisfies Validate; each
 	// row below mutates a single field so the assertion can isolate

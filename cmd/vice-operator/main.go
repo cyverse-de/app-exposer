@@ -69,6 +69,9 @@ func main() {
 		egressHostExceptions  stringSliceFlag
 		egressCIDRExceptions  stringSliceFlag
 		ingressPodExceptions  stringSliceFlag
+		gpuModels             stringSliceFlag
+		gpuModelMapping       nameValueMapFlag
+		gpuModelAffinityKey   string
 		disableInternetAccess bool
 		userSuffix            string
 		localStorageClass     string
@@ -82,6 +85,9 @@ func main() {
 	flag.StringVar(&namespace, "namespace", "vice-apps", "Namespace for VICE resources")
 	flag.IntVar(&port, "port", 60001, "Listen port")
 	flag.StringVar(&gpuVendorFlag, "gpu-vendor", "nvidia", "GPU vendor: nvidia or amd")
+	flag.Var(&gpuModels, "gpu-model", "Canonical (GFD-style) GPU model this cluster can deliver, e.g. NVIDIA-A10G (repeatable). Advertised to the scheduler so model-specific analyses route here. Empty means model-agnostic.")
+	flag.Var(&gpuModelMapping, "gpu-model-mapping", "NAME:VALUE pair mapping a canonical GPU model name to this cluster's node-label value, e.g. NVIDIA-A10G:a10g on EKS (repeatable). Applied during launch to rewrite the deployment's GPU model affinity.")
+	flag.StringVar(&gpuModelAffinityKey, "gpu-model-affinity-key", "", "Node-label key this cluster uses for GPU-model affinity (e.g. eks.amazonaws.com/instance-gpu-name on EKS). Empty leaves the bundle's canonical nvidia.com/gpu.product key untouched.")
 	flag.IntVar(&maxAnalyses, "max-analyses", 50, "Max concurrent analyses (0 disables the limit for autoscaling clusters)")
 	flag.StringVar(&nodeLabelSelector, "node-label-selector", "", "Filter schedulable nodes by label")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level")
@@ -364,6 +370,9 @@ func main() {
 		GatewayNamespace:    gatewayNamespace,
 		GatewayName:         gatewayName,
 		GPUVendor:           gpuVendor,
+		GPUModels:           gpuModels,
+		GPUModelAffinityKey: gpuModelAffinityKey,
+		GPUModelMapping:     gpuModelMapping,
 		CapacityCalc:        capacityCalc,
 		ImageCache:          imageCache,
 		LoadingServiceName:  loadingServiceName,

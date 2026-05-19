@@ -51,16 +51,20 @@ type AnalysisBundle struct {
 // place. GPUVendor is the cluster's configured GPU vendor (e.g.
 // "nvidia", "amd"); empty when the operator has no GPU configured or
 // pre-dates the field, in which case the scheduler treats it as
-// vendor-agnostic for backwards compatibility.
+// vendor-agnostic for backwards compatibility. SupportedGPUModels lists
+// canonical GFD-style model names (e.g. "NVIDIA-A10G", "NVIDIA-L4") that
+// this cluster can deliver; empty means the operator does not filter on
+// model and is treated as model-agnostic for backwards compatibility.
 type CapacityResponse struct {
-	MaxAnalyses       int    `json:"maxAnalyses"`
-	RunningAnalyses   int    `json:"runningAnalyses"`
-	AvailableSlots    int    `json:"availableSlots"`
-	AllocatableCPU    int64  `json:"allocatableCPU"`    // millicores
-	AllocatableMemory int64  `json:"allocatableMemory"` // bytes
-	UsedCPU           int64  `json:"usedCPU"`           // millicores
-	UsedMemory        int64  `json:"usedMemory"`        // bytes
-	GPUVendor         string `json:"gpuVendor,omitempty"`
+	MaxAnalyses        int      `json:"maxAnalyses"`
+	RunningAnalyses    int      `json:"runningAnalyses"`
+	AvailableSlots     int      `json:"availableSlots"`
+	AllocatableCPU     int64    `json:"allocatableCPU"`    // millicores
+	AllocatableMemory  int64    `json:"allocatableMemory"` // bytes
+	UsedCPU            int64    `json:"usedCPU"`           // millicores
+	UsedMemory         int64    `json:"usedMemory"`        // bytes
+	GPUVendor          string   `json:"gpuVendor,omitempty"`
+	SupportedGPUModels []string `json:"supportedGPUModels,omitempty"`
 }
 
 // HasCapacity reports whether this operator can accept a new analysis.
@@ -89,6 +93,12 @@ const (
 
 	gpuVendorNvidia = "nvidia"
 	gpuVendorAMD    = "amd"
+
+	// gpuModelAffinityKey is the canonical (GFD-style) node label key that
+	// app-exposer emits as a required match expression when an analysis
+	// has GPU model preferences. Each operator may later rewrite this key
+	// for its cluster's label scheme.
+	gpuModelAffinityKey = "nvidia.com/gpu.product"
 )
 
 // RequestedGPUVendor inspects the bundle's containers (and init
@@ -125,6 +135,42 @@ func vendorFromResources(rl apiv1.ResourceList) string {
 		}
 	}
 	return ""
+}
+
+// RequestedGPUModels returns the union of canonical GPU model names the
+// bundle's required node affinity asks for (key == "nvidia.com/gpu.product",
+// operator In). Returns an empty slice when the bundle has no model
+// constraint. Preferred-only affinities are ignored on purpose — the
+// scheduler filters strictly on what the analysis _requires_.
+func (b *AnalysisBundle) RequestedGPUModels() []string {
+	if b == nil || b.Deployment == nil {
+		return nil
+	}
+	affinity := b.Deployment.Spec.Template.Spec.Affinity
+	if affinity == nil || affinity.NodeAffinity == nil {
+		return nil
+	}
+	required := affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+	if required == nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	var out []string
+	for _, term := range required.NodeSelectorTerms {
+		for _, expr := range term.MatchExpressions {
+			if expr.Key != gpuModelAffinityKey || expr.Operator != apiv1.NodeSelectorOpIn {
+				continue
+			}
+			for _, v := range expr.Values {
+				if _, dup := seen[v]; dup {
+					continue
+				}
+				seen[v] = struct{}{}
+				out = append(out, v)
+			}
+		}
+	}
+	return out
 }
 
 // Validate checks the bundle's top-level required fields and then

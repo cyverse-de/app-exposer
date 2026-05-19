@@ -63,6 +63,12 @@ var (
 	// ErrAllOperatorsExhausted so callers can tell a routing-policy failure
 	// apart from a capacity failure.
 	ErrNoCompatibleOperator = errors.New("no operator with compatible GPU vendor")
+
+	// ErrNoCompatibleModel means every operator with capacity advertises a
+	// SupportedGPUModels list that does not intersect the analysis's
+	// requested GPU model(s). Distinct from ErrNoCompatibleOperator so the
+	// caller can tell "wrong vendor" apart from "right vendor, wrong model".
+	ErrNoCompatibleModel = errors.New("no operator advertises a compatible GPU model")
 )
 
 // vendorCompatible reports whether an operator advertising vendor `have`
@@ -75,6 +81,28 @@ func vendorCompatible(want, have string) bool {
 		return true
 	}
 	return want == have
+}
+
+// modelCompatible reports whether an operator advertising `have` GPU
+// models can run a bundle requesting any of `want`. An empty `want`
+// means the bundle has no GPU model preference (any operator works).
+// An empty `have` means the operator does not filter on model (pre-
+// upgrade or model-agnostic by config); treated as compatible for
+// backwards compatibility.
+func modelCompatible(want, have []string) bool {
+	if len(want) == 0 || len(have) == 0 {
+		return true
+	}
+	supported := make(map[string]struct{}, len(have))
+	for _, m := range have {
+		supported[m] = struct{}{}
+	}
+	for _, m := range want {
+		if _, ok := supported[m]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // Scheduler manages a priority-ordered list of operator clients and
@@ -147,18 +175,21 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 		return uuid.Nil, "", ErrNoOperators
 	}
 
-	// Track capacity-check errors, transient launch failures, and vendor
-	// mismatches separately so we can distinguish "all operators
-	// unreachable" / "all operators at capacity" / "no compatible vendor"
-	// and preserve the last underlying error for diagnostics.
+	// Track capacity-check errors, transient launch failures, vendor
+	// mismatches, and GPU-model mismatches separately so we can
+	// distinguish "all operators unreachable" / "all operators at
+	// capacity" / "no compatible vendor" / "no compatible model" and
+	// preserve the last underlying error for diagnostics.
 	var (
 		capacityErrors   int
 		transientErrors  int
 		vendorMismatches int
+		modelMismatches  int
 		lastTransient    error
 	)
 
 	wantVendor := bundle.RequestedGPUVendor()
+	wantModels := bundle.RequestedGPUModels()
 
 	for _, op := range clients {
 		// Check capacity first.
@@ -182,6 +213,18 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 			vendorMismatches++
 			log.Infof("operator %s vendor mismatch (analysis needs %s, operator is %s); skipping",
 				op.Name(), wantVendor, cap.GPUVendor)
+			continue
+		}
+
+		// Skip operators whose advertised GPU model set doesn't
+		// intersect the bundle's requested models. Empty wantModels
+		// (no model preference) and empty cap.SupportedGPUModels
+		// (operator pre-dates the field or doesn't filter) both mean
+		// "any" and pass through.
+		if !modelCompatible(wantModels, cap.SupportedGPUModels) {
+			modelMismatches++
+			log.Infof("operator %s model mismatch (analysis needs %v, operator supports %v); skipping",
+				op.Name(), wantModels, cap.SupportedGPUModels)
 			continue
 		}
 
@@ -220,10 +263,18 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 			wantVendor, bundle.AnalysisID, ErrNoCompatibleOperator)
 	}
 
+	// No operator advertised a compatible GPU model. Surface this distinctly
+	// so callers can tell "right vendor, wrong model" apart from
+	// ErrNoCompatibleOperator and ErrAllOperatorsExhausted.
+	if len(wantModels) > 0 && modelMismatches > 0 && capacityErrors+vendorMismatches+modelMismatches == len(clients) {
+		return uuid.Nil, "", fmt.Errorf("no operator with model %v for analysis %s: %w",
+			wantModels, bundle.AnalysisID, ErrNoCompatibleModel)
+	}
+
 	// Every operator that passed capacity check then failed the launch for
 	// transient reasons. Surface the last underlying error so the caller
 	// can distinguish it from a real "all at capacity" situation.
-	if transientErrors > 0 && capacityErrors+transientErrors+vendorMismatches == len(clients) {
+	if transientErrors > 0 && capacityErrors+transientErrors+vendorMismatches+modelMismatches == len(clients) {
 		return uuid.Nil, "", fmt.Errorf("all %d operators unhealthy; last error: %w", len(clients), lastTransient)
 	}
 
