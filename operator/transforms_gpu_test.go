@@ -3,6 +3,7 @@ package operator
 import (
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -67,7 +68,7 @@ func makeGPUDeployment() *appsv1.Deployment {
 									{
 										MatchExpressions: []apiv1.NodeSelectorRequirement{
 											{Key: "gpu", Operator: apiv1.NodeSelectorOpIn, Values: []string{"true"}},
-											{Key: nvidiaModelAffinityK, Operator: apiv1.NodeSelectorOpIn, Values: []string{"NVIDIA-A100"}},
+											{Key: constants.GPUModelAffinityKey, Operator: apiv1.NodeSelectorOpIn, Values: []string{"NVIDIA-A100"}},
 										},
 									},
 								},
@@ -94,7 +95,7 @@ func TestTransformGPUVendor(t *testing.T) {
 			deployment:        makeGPUDeployment(),
 			vendor:            GPUVendorNvidia,
 			wantGPUResource:   nvidiaGPUResource,
-			wantAffinityKey:   nvidiaModelAffinityK,
+			wantAffinityKey:   constants.GPUModelAffinityKey,
 			wantNoGPUResource: amdGPUResource,
 		},
 		{
@@ -211,6 +212,128 @@ func TestTransformGPUVendor(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestTransformGPUModels verifies that per-cluster GPU-model translation
+// rewrites the key and values of the nvidia.com/gpu.product match
+// expression, drops entries whose values translate to nothing, and
+// leaves surrounding match expressions intact.
+func TestTransformGPUModels(t *testing.T) {
+	tests := []struct {
+		name         string
+		key          string
+		mapping      map[string]string
+		wantKey      string   // expected key on the model entry; "" means entry should be removed
+		wantValues   []string // expected values when the entry survives
+		wantOtherKey string   // expected key of the surrounding "gpu" match expression
+	}{
+		{
+			name:         "default config is identity",
+			key:          "",
+			mapping:      nil,
+			wantKey:      constants.GPUModelAffinityKey,
+			wantValues:   []string{"NVIDIA-A100"},
+			wantOtherKey: "gpu",
+		},
+		{
+			name:         "default key with mapping rewrites values only",
+			key:          "",
+			mapping:      map[string]string{"NVIDIA-A100": "renamed-a100"},
+			wantKey:      constants.GPUModelAffinityKey,
+			wantValues:   []string{"renamed-a100"},
+			wantOtherKey: "gpu",
+		},
+		{
+			name:         "EKS-style rewrites key and values",
+			key:          "eks.amazonaws.com/instance-gpu-name",
+			mapping:      map[string]string{"NVIDIA-A100": "a100", "NVIDIA-A10G": "a10g"},
+			wantKey:      "eks.amazonaws.com/instance-gpu-name",
+			wantValues:   []string{"a100"},
+			wantOtherKey: "gpu",
+		},
+		{
+			name:         "value not in mapping is dropped (entry removed)",
+			key:          "eks.amazonaws.com/instance-gpu-name",
+			mapping:      map[string]string{"NVIDIA-A10G": "a10g"},
+			wantKey:      "", // entry removed because A100 has no mapping
+			wantOtherKey: "gpu",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dep := makeGPUDeployment()
+			TransformGPUModels(dep, tt.key, tt.mapping)
+
+			require.NotNil(t, dep.Spec.Template.Spec.Affinity)
+			terms := dep.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
+			require.Len(t, terms, 1)
+
+			var gotModel *apiv1.NodeSelectorRequirement
+			var gotOther *apiv1.NodeSelectorRequirement
+			for i, expr := range terms[0].MatchExpressions {
+				switch expr.Key {
+				case constants.GPUModelAffinityKey, "eks.amazonaws.com/instance-gpu-name":
+					gotModel = &terms[0].MatchExpressions[i]
+				case tt.wantOtherKey:
+					gotOther = &terms[0].MatchExpressions[i]
+				}
+			}
+
+			if tt.wantKey == "" {
+				assert.Nil(t, gotModel, "model entry should have been dropped")
+			} else {
+				require.NotNil(t, gotModel, "expected a model match expression with key %s", tt.wantKey)
+				assert.Equal(t, tt.wantKey, gotModel.Key)
+				assert.Equal(t, tt.wantValues, gotModel.Values)
+			}
+
+			require.NotNil(t, gotOther, "surrounding gpu match expression must be preserved")
+			assert.Equal(t, []string{"true"}, gotOther.Values)
+		})
+	}
+
+	t.Run("nil deployment does not panic", func(t *testing.T) {
+		TransformGPUModels(nil, "k", map[string]string{"a": "b"})
+	})
+
+	t.Run("deployment with no affinity does not panic", func(t *testing.T) {
+		dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "no-affinity"}}
+		TransformGPUModels(dep, "k", map[string]string{"a": "b"})
+		assert.Nil(t, dep.Spec.Template.Spec.Affinity)
+	})
+
+	t.Run("preferred-only affinity is rewritten", func(t *testing.T) {
+		dep := &appsv1.Deployment{
+			Spec: appsv1.DeploymentSpec{
+				Template: apiv1.PodTemplateSpec{
+					Spec: apiv1.PodSpec{
+						Affinity: &apiv1.Affinity{
+							NodeAffinity: &apiv1.NodeAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: []apiv1.PreferredSchedulingTerm{{
+									Weight: 1,
+									Preference: apiv1.NodeSelectorTerm{
+										MatchExpressions: []apiv1.NodeSelectorRequirement{{
+											Key:      constants.GPUModelAffinityKey,
+											Operator: apiv1.NodeSelectorOpIn,
+											Values:   []string{"NVIDIA-A10G"},
+										}},
+									},
+								}},
+							},
+						},
+					},
+				},
+			},
+		}
+		TransformGPUModels(dep, "eks.amazonaws.com/instance-gpu-name", map[string]string{"NVIDIA-A10G": "a10g"})
+
+		pref := dep.Spec.Template.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution
+		require.Len(t, pref, 1)
+		require.Len(t, pref[0].Preference.MatchExpressions, 1)
+		assert.Equal(t, "eks.amazonaws.com/instance-gpu-name", pref[0].Preference.MatchExpressions[0].Key)
+		assert.Equal(t, []string{"a10g"}, pref[0].Preference.MatchExpressions[0].Values)
+	})
 }
 
 // TestEqualizeGPUResources verifies that mismatched GPU requests/limits are

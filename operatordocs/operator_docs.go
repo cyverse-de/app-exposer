@@ -1327,6 +1327,12 @@ const docTemplateoperator = `{
                 "runningAnalyses": {
                     "type": "integer"
                 },
+                "supportedGPUModels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "usedCPU": {
                     "description": "millicores",
                     "type": "integer"

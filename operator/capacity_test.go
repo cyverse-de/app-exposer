@@ -241,3 +241,36 @@ func TestHandleCapacityIncludesGPUVendor(t *testing.T) {
 		})
 	}
 }
+
+// TestHandleCapacityIncludesGPUModels confirms that HandleCapacity copies
+// the operator's configured GPU model list into the response so the
+// scheduler can filter capability at routing time.
+func TestHandleCapacityIncludesGPUModels(t *testing.T) {
+	tests := []struct {
+		name   string
+		models []string
+		want   []string
+	}{
+		{"no models advertised", nil, nil},
+		{"single model", []string{"NVIDIA-A10G"}, []string{"NVIDIA-A10G"}},
+		{"multiple models", []string{"NVIDIA-A10G", "NVIDIA-L4", "NVIDIA-L40S"}, []string{"NVIDIA-A10G", "NVIDIA-L4", "NVIDIA-L40S"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, _, _ := newTestOperatorWithModels(t, 10, tt.models)
+
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, "/capacity", nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			require.NoError(t, op.HandleCapacity(c))
+			require.Equal(t, http.StatusOK, rec.Code)
+
+			var resp operatorclient.CapacityResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+			assert.Equal(t, tt.want, resp.SupportedGPUModels)
+		})
+	}
+}

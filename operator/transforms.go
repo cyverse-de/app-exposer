@@ -16,12 +16,12 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-// GPU resource and affinity key constants used by TransformGPUVendor.
+// GPU resource and affinity key constants used by TransformGPUVendor. The
+// canonical NVIDIA GPU-model affinity key is constants.GPUModelAffinityKey.
 const (
-	nvidiaGPUResource    apiv1.ResourceName = "nvidia.com/gpu"
-	amdGPUResource       apiv1.ResourceName = "amd.com/gpu"
-	nvidiaModelAffinityK                    = "nvidia.com/gpu.product"
-	amdModelAffinityK                       = "amd.com/gpu.product"
+	nvidiaGPUResource apiv1.ResourceName = "nvidia.com/gpu"
+	amdGPUResource    apiv1.ResourceName = "amd.com/gpu"
+	amdModelAffinityK                    = "amd.com/gpu.product"
 )
 
 // GPUVendor describes which GPU vendor the operator's cluster uses.
@@ -76,6 +76,90 @@ func TransformGPUVendor(deployment *appsv1.Deployment, vendor GPUVendor) {
 	forEachContainerResources(deployment, func(res *apiv1.ResourceRequirements) {
 		equalizeGPUResources(res, gpuKey)
 	})
+}
+
+// TransformGPUModels rewrites the bundle's GPU-model node-affinity match
+// expressions (canonical key nvidia.com/gpu.product, canonical values like
+// NVIDIA-A10G) into the key and values the local cluster uses, across both
+// required and preferred affinity. The default config (canonical key, empty
+// mapping) is the identity, so on-prem NVIDIA-GFD operators stay no-ops; EKS
+// Auto Mode sets key to eks.amazonaws.com/instance-gpu-name with a mapping
+// like NVIDIA-A10G→a10g. Values absent from a non-empty mapping are dropped,
+// and an expression left with no values is removed so we never emit an
+// unsatisfiable Values: []. Modifies the deployment in place. Must run BEFORE
+// TransformGPUVendor, which on AMD clusters renames nvidia.com/gpu.product and
+// would hide the key from this transform's lookup.
+func TransformGPUModels(deployment *appsv1.Deployment, key string, mapping map[string]string) {
+	if deployment == nil {
+		return
+	}
+	// Default config (canonical key, no mapping) is the identity — leave
+	// the deployment alone so untouched operators preserve today's behavior.
+	if (key == "" || key == constants.GPUModelAffinityKey) && len(mapping) == 0 {
+		return
+	}
+	affinity := deployment.Spec.Template.Spec.Affinity
+	if affinity == nil || affinity.NodeAffinity == nil {
+		return
+	}
+	if req := affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution; req != nil {
+		for i := range req.NodeSelectorTerms {
+			req.NodeSelectorTerms[i].MatchExpressions = rewriteGPUModelExprs(
+				req.NodeSelectorTerms[i].MatchExpressions, key, mapping,
+			)
+		}
+	}
+	for i := range affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+		pref := &affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution[i]
+		pref.Preference.MatchExpressions = rewriteGPUModelExprs(
+			pref.Preference.MatchExpressions, key, mapping,
+		)
+	}
+}
+
+// rewriteGPUModelExprs returns a new slice with each nvidia.com/gpu.product
+// match expression rewritten according to `key` and `mapping`. Entries
+// whose translated value list is empty are dropped. Non-GPU-model
+// expressions pass through unchanged.
+func rewriteGPUModelExprs(exprs []apiv1.NodeSelectorRequirement, key string, mapping map[string]string) []apiv1.NodeSelectorRequirement {
+	out := make([]apiv1.NodeSelectorRequirement, 0, len(exprs))
+	for _, expr := range exprs {
+		if expr.Key != constants.GPUModelAffinityKey {
+			out = append(out, expr)
+			continue
+		}
+		newValues := translateValues(expr.Values, mapping)
+		if len(newValues) == 0 {
+			// All canonical values map to nothing on this cluster; drop
+			// the entire match expression so we don't end up with a
+			// Values: [] requirement that K8s treats as unsatisfiable.
+			continue
+		}
+		newExpr := expr
+		if key != "" {
+			newExpr.Key = key
+		}
+		newExpr.Values = newValues
+		out = append(out, newExpr)
+	}
+	return out
+}
+
+// translateValues maps each canonical GPU model name through mapping.
+// Values not present in mapping are dropped. An empty mapping is the
+// identity (values pass through unchanged) — reached when a cluster
+// renames the affinity key but keeps the canonical model values.
+func translateValues(values []string, mapping map[string]string) []string {
+	if len(mapping) == 0 {
+		return values
+	}
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if mapped, ok := mapping[v]; ok {
+			out = append(out, mapped)
+		}
+	}
+	return out
 }
 
 // TransformWorkingDirStorageClass overrides the StorageClassName on the
@@ -134,7 +218,7 @@ func rewriteNodeAffinityKeys(affinity *apiv1.Affinity) {
 // equivalent in a slice of NodeSelectorRequirements.
 func rewriteMatchExpressions(exprs []apiv1.NodeSelectorRequirement) {
 	for i := range exprs {
-		if exprs[i].Key == nvidiaModelAffinityK {
+		if exprs[i].Key == constants.GPUModelAffinityKey {
 			exprs[i].Key = amdModelAffinityK
 		}
 	}

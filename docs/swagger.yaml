@@ -925,6 +925,10 @@ definitions:
         type: integer
       runningAnalyses:
         type: integer
+      supportedGPUModels:
+        items:
+          type: string
+        type: array
       usedCPU:
         description: millicores
         type: integer

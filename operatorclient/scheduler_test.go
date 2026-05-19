@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
+	apiv1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // schedulerWithConfigs builds a Scheduler whose operators come from the
@@ -48,6 +50,13 @@ func mockOperatorServerWithVendor(capacitySlots int, vendor string) *httptest.Se
 	return mockOperatorServerWithStatuses(capacitySlots, false, 0, 0, vendor)
 }
 
+// mockOperatorServerWithModels is a mock that advertises a specific set
+// of supported GPU models (and an Nvidia vendor) and is otherwise healthy
+// with the given capacity.
+func mockOperatorServerWithModels(capacitySlots int, models []string) *httptest.Server {
+	return mockOperatorServerFull(capacitySlots, false, 0, 0, "nvidia", models)
+}
+
 // mockOperatorServerWithStatuses is the explicit variant that also lets a
 // test inject non-2xx responses for the capacity and launch endpoints —
 // used by cases that exercise error-classification paths in the scheduler.
@@ -56,6 +65,14 @@ func mockOperatorServerWithVendor(capacitySlots int, vendor string) *httptest.Se
 // CapacityResponse.GPUVendor field; "" means "operator does not report
 // a vendor" (treated as compatible by the scheduler).
 func mockOperatorServerWithStatuses(capacitySlots int, rejectLaunch bool, capacityStatus, launchStatus int, vendor string) *httptest.Server {
+	return mockOperatorServerFull(capacitySlots, rejectLaunch, capacityStatus, launchStatus, vendor, nil)
+}
+
+// mockOperatorServerFull is the most explicit form: same as
+// mockOperatorServerWithStatuses plus a SupportedGPUModels list to
+// advertise. The narrower helpers above delegate here so the per-test
+// signatures stay readable.
+func mockOperatorServerFull(capacitySlots int, rejectLaunch bool, capacityStatus, launchStatus int, vendor string, models []string) *httptest.Server {
 	var launchCount atomic.Int32
 
 	mux := http.NewServeMux()
@@ -65,10 +82,11 @@ func mockOperatorServerWithStatuses(capacitySlots int, rejectLaunch bool, capaci
 			return
 		}
 		resp := CapacityResponse{
-			MaxAnalyses:     10,
-			RunningAnalyses: 10 - capacitySlots,
-			AvailableSlots:  capacitySlots,
-			GPUVendor:       vendor,
+			MaxAnalyses:        10,
+			RunningAnalyses:    10 - capacitySlots,
+			AvailableSlots:     capacitySlots,
+			GPUVendor:          vendor,
+			SupportedGPUModels: models,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp) //nolint:errcheck
@@ -355,6 +373,131 @@ func TestSchedulerLaunchOperatorWithoutVendorIsCompatible(t *testing.T) {
 	_, name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
 	require.NoError(t, err)
 	assert.Equal(t, "no-vendor", name)
+}
+
+// gpuModelLaunchBundle builds a bundle whose deployment carries the given
+// GPU model node-affinity values and (when nvidiaGPU is true) an
+// nvidia.com/gpu resource request. Used by the model-routing scheduler
+// tests so the bundle exercises both RequestedGPUVendor (still nvidia)
+// and RequestedGPUModels (the supplied list).
+func gpuModelLaunchBundle(models []string) *AnalysisBundle {
+	b := gpuModelBundle([][]string{models})
+	// Add an nvidia.com/gpu request so the vendor check sees the bundle as
+	// an Nvidia GPU job; otherwise RequestedGPUVendor returns "" and
+	// vendorCompatible treats every operator as a match, so the vendor
+	// check is never exercised.
+	b.Deployment.Spec.Template.Spec.Containers = []apiv1.Container{{
+		Name: "main",
+		Resources: apiv1.ResourceRequirements{
+			Requests: apiv1.ResourceList{apiv1.ResourceName(gpuResourceNvidia): resource.MustParse("1")},
+		},
+	}}
+	return b
+}
+
+// TestSchedulerLaunchModelMismatchAllDisjoint covers the case where the
+// analysis requests a GPU model that no operator advertises. The scheduler
+// must surface ErrNoCompatibleModel — distinct from
+// ErrNoCompatibleOperator so callers can tell "right vendor, wrong model"
+// apart from "wrong vendor".
+func TestSchedulerLaunchModelMismatchAllDisjoint(t *testing.T) {
+	srv0 := mockOperatorServerWithModels(5, []string{"NVIDIA-A10G"})
+	defer srv0.Close()
+	srv1 := mockOperatorServerWithModels(5, []string{"NVIDIA-L4"})
+	defer srv1.Close()
+
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
+		{Name: "op-a10g", URL: srv0.URL},
+		{Name: "op-l4", URL: srv1.URL},
+	})
+
+	bundle := gpuModelLaunchBundle([]string{"NVIDIA-H100"})
+	_, _, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNoCompatibleModel)
+	assert.Contains(t, err.Error(), "NVIDIA-H100", "error must name the requested model")
+}
+
+// TestSchedulerLaunchMixedVendorAndModelMismatch covers a fleet where one
+// operator is the wrong vendor and another is the right vendor but the wrong
+// model, while the analysis requests a model no operator can satisfy. The
+// model guard counts the vendor-mismatched operator too, so the mixed case
+// still resolves to the most specific routing error, ErrNoCompatibleModel.
+func TestSchedulerLaunchMixedVendorAndModelMismatch(t *testing.T) {
+	srvAMD := mockOperatorServerWithVendor(5, "amd")
+	defer srvAMD.Close()
+	srvL4 := mockOperatorServerWithModels(5, []string{"NVIDIA-L4"})
+	defer srvL4.Close()
+
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
+		{Name: "op-amd", URL: srvAMD.URL},
+		{Name: "op-l4", URL: srvL4.URL},
+	})
+
+	bundle := gpuModelLaunchBundle([]string{"NVIDIA-H100"})
+	_, _, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNoCompatibleModel)
+	assert.Contains(t, err.Error(), "NVIDIA-H100", "error must name the requested model")
+}
+
+// TestSchedulerLaunchModelMismatchSkipsToCompatible exercises the
+// "first operator's model doesn't match, second one does" path. The
+// scheduler must skip the A10G-only operator and land on the L4 one.
+func TestSchedulerLaunchModelMismatchSkipsToCompatible(t *testing.T) {
+	srv0 := mockOperatorServerWithModels(5, []string{"NVIDIA-A10G"})
+	defer srv0.Close()
+	srv1 := mockOperatorServerWithModels(5, []string{"NVIDIA-L4", "NVIDIA-L40S"})
+	defer srv1.Close()
+
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
+		{Name: "op-a10g", URL: srv0.URL},
+		{Name: "op-l4", URL: srv1.URL},
+	})
+
+	bundle := gpuModelLaunchBundle([]string{"NVIDIA-L4"})
+	_, name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	require.NoError(t, err)
+	assert.Equal(t, "op-l4", name, "must skip A10G-only operator and land on the one that advertises L4")
+}
+
+// TestSchedulerLaunchOperatorWithoutModelsIsCompatible covers the
+// backwards-compatibility case: an operator that has not been upgraded
+// reports an empty SupportedGPUModels list. The scheduler must treat
+// that as compatible regardless of what model the bundle requests,
+// since "I don't advertise" is indistinguishable from
+// "I support everything" for routing-policy purposes.
+func TestSchedulerLaunchOperatorWithoutModelsIsCompatible(t *testing.T) {
+	srv0 := mockOperatorServerWithVendor(5, "nvidia")
+	defer srv0.Close()
+
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
+		{Name: "no-models", URL: srv0.URL},
+	})
+
+	bundle := gpuModelLaunchBundle([]string{"NVIDIA-A10G"})
+	_, name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	require.NoError(t, err)
+	assert.Equal(t, "no-models", name)
+}
+
+// TestSchedulerLaunchNoModelRequestSkipsModelCheck covers the common
+// "this analysis has no model preference" case. The scheduler must NOT
+// reject operators just because the deployment has no model affinity at
+// all — model filtering applies only when the bundle requests one.
+func TestSchedulerLaunchNoModelRequestSkipsModelCheck(t *testing.T) {
+	srv0 := mockOperatorServerWithModels(5, []string{"NVIDIA-A10G"})
+	defer srv0.Close()
+
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
+		{Name: "op-a10g", URL: srv0.URL},
+	})
+
+	// Bundle has an Nvidia GPU request but no model affinity.
+	bundle := gpuBundle("nvidia.com/gpu", "main", "requests")
+	_, name, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	require.NoError(t, err)
+	assert.Equal(t, "op-a10g", name)
 }
 
 func TestSchedulerNoOperators(t *testing.T) {

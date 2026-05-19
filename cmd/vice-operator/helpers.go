@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -60,5 +61,34 @@ type stringSliceFlag []string
 func (s *stringSliceFlag) String() string { return strings.Join(*s, ",") }
 func (s *stringSliceFlag) Set(val string) error {
 	*s = append(*s, val)
+	return nil
+}
+
+// nameValueMapFlag implements flag.Value for repeatable NAME:VALUE pairs
+// that build up a map. Used for --gpu-model-mapping. Repeated keys
+// overwrite earlier values (documented behavior; the last Set wins).
+type nameValueMapFlag map[string]string
+
+func (m *nameValueMapFlag) String() string {
+	if *m == nil {
+		return ""
+	}
+	pairs := make([]string, 0, len(*m))
+	for k, v := range *m {
+		pairs = append(pairs, k+":"+v)
+	}
+	slices.Sort(pairs)
+	return strings.Join(pairs, ",")
+}
+
+func (m *nameValueMapFlag) Set(val string) error {
+	name, value, ok := strings.Cut(val, ":")
+	if !ok || name == "" || value == "" {
+		return fmt.Errorf("invalid NAME:VALUE pair %q (expected NAME:VALUE with non-empty halves)", val)
+	}
+	if *m == nil {
+		*m = make(map[string]string)
+	}
+	(*m)[name] = value
 	return nil
 }

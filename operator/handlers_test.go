@@ -66,6 +66,20 @@ func newTestOperator(t *testing.T, maxAnalyses int, vendor ...GPUVendor) (*Opera
 	if len(vendor) > 0 {
 		gpuVendor = vendor[0]
 	}
+	return newTestOperatorWith(t, maxAnalyses, gpuVendor, nil)
+}
+
+// newTestOperatorWithModels builds a test Operator that advertises the given
+// GPU model list (vendor fixed to NVIDIA, since models are NVIDIA-specific).
+func newTestOperatorWithModels(t *testing.T, maxAnalyses int, models []string) (*Operator, *fake.Clientset, *gatewayfake.Clientset) {
+	t.Helper()
+	return newTestOperatorWith(t, maxAnalyses, GPUVendorNvidia, models)
+}
+
+// newTestOperatorWith is the shared constructor behind newTestOperator and
+// newTestOperatorWithModels.
+func newTestOperatorWith(t *testing.T, maxAnalyses int, vendor GPUVendor, models []string) (*Operator, *fake.Clientset, *gatewayfake.Clientset) {
+	t.Helper()
 	clientset := fake.NewSimpleClientset()
 	gwClientset := gatewayfake.NewSimpleClientset()
 	calc, err := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
@@ -77,7 +91,8 @@ func newTestOperator(t *testing.T, maxAnalyses int, vendor ...GPUVendor) (*Opera
 		Namespace:           "vice-apps",
 		GatewayNamespace:    "vice-apps",
 		GatewayName:         "vice",
-		GPUVendor:           gpuVendor,
+		GPUVendor:           vendor,
+		GPUModels:           models,
 		CapacityCalc:        calc,
 		ImageCache:          cache,
 		LoadingServiceName:  "vice-operator-loading",
