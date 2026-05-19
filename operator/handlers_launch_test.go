@@ -231,6 +231,78 @@ func TestHandleLaunchGPUVendorAMD(t *testing.T) {
 	assert.False(t, hasNvidia, "deployed deployment should not have nvidia.com/gpu in requests")
 }
 
+// TestHandleLaunchGPUModelTranslation verifies that HandleLaunch rewrites the
+// bundle's canonical GPU-model node affinity (nvidia.com/gpu.product) into the
+// cluster-local key and values configured on the operator (the EKS case).
+func TestHandleLaunchGPUModelTranslation(t *testing.T) {
+	op, clientset, _ := newTestOperatorWith(t, 10, GPUVendorNvidia, []string{"NVIDIA-A10G"})
+	op.gpuModelAffinityKey = "eks.amazonaws.com/instance-gpu-name"
+	op.gpuModelMapping = map[string]string{"NVIDIA-A10G": "a10g"}
+
+	bundle := operatorclient.AnalysisBundle{
+		AnalysisID: "gpu-model-test",
+		Deployment: &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "gpu-model-dep",
+				Labels: map[string]string{constants.AnalysisIDLabel: "gpu-model-test"},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "test"}},
+				Template: apiv1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "test"}},
+					Spec: apiv1.PodSpec{
+						Affinity: &apiv1.Affinity{
+							NodeAffinity: &apiv1.NodeAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &apiv1.NodeSelector{
+									NodeSelectorTerms: []apiv1.NodeSelectorTerm{{
+										MatchExpressions: []apiv1.NodeSelectorRequirement{{
+											Key:      constants.GPUModelAffinityKey,
+											Operator: apiv1.NodeSelectorOpIn,
+											Values:   []string{"NVIDIA-A10G"},
+										}},
+									}},
+								},
+							},
+						},
+						Containers: []apiv1.Container{{Name: "analysis", Image: "img"}},
+					},
+				},
+			},
+		},
+		Service: &apiv1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "gpu-model-svc",
+				Labels: map[string]string{constants.AnalysisIDLabel: "gpu-model-test"},
+			},
+			Spec: apiv1.ServiceSpec{Ports: []apiv1.ServicePort{{Port: 80}}},
+		},
+	}
+
+	body, err := json.Marshal(bundle)
+	require.NoError(t, err)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/analyses", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err = op.HandleLaunch(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	ctx := context.Background()
+	dep, err := clientset.AppsV1().Deployments("vice-apps").Get(ctx, "gpu-model-dep", metav1.GetOptions{})
+	require.NoError(t, err)
+
+	terms := dep.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
+	require.Len(t, terms, 1)
+	require.Len(t, terms[0].MatchExpressions, 1)
+	expr := terms[0].MatchExpressions[0]
+	assert.Equal(t, "eks.amazonaws.com/instance-gpu-name", expr.Key, "affinity key should be rewritten to the cluster-local key")
+	assert.Equal(t, []string{"a10g"}, expr.Values, "model values should be translated to cluster-local values")
+}
+
 func TestHandleLaunchFullBundle(t *testing.T) {
 	op, clientset, gwClientset := newTestOperator(t, 10)
 

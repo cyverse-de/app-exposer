@@ -383,8 +383,9 @@ func TestSchedulerLaunchOperatorWithoutVendorIsCompatible(t *testing.T) {
 func gpuModelLaunchBundle(models []string) *AnalysisBundle {
 	b := gpuModelBundle([][]string{models})
 	// Add an nvidia.com/gpu request so the vendor check sees the bundle as
-	// an Nvidia GPU job; otherwise modelCompatible's "no GPU requirement"
-	// short-circuit would never trip the vendor check at all.
+	// an Nvidia GPU job; otherwise RequestedGPUVendor returns "" and
+	// vendorCompatible treats every operator as a match, so the vendor
+	// check is never exercised.
 	b.Deployment.Spec.Template.Spec.Containers = []apiv1.Container{{
 		Name: "main",
 		Resources: apiv1.ResourceRequirements{
@@ -408,6 +409,29 @@ func TestSchedulerLaunchModelMismatchAllDisjoint(t *testing.T) {
 	scheduler := schedulerWithConfigs(t, []OperatorConfig{
 		{Name: "op-a10g", URL: srv0.URL},
 		{Name: "op-l4", URL: srv1.URL},
+	})
+
+	bundle := gpuModelLaunchBundle([]string{"NVIDIA-H100"})
+	_, _, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNoCompatibleModel)
+	assert.Contains(t, err.Error(), "NVIDIA-H100", "error must name the requested model")
+}
+
+// TestSchedulerLaunchMixedVendorAndModelMismatch covers a fleet where one
+// operator is the wrong vendor and another is the right vendor but the wrong
+// model, while the analysis requests a model no operator can satisfy. The
+// model guard counts the vendor-mismatched operator too, so the mixed case
+// still resolves to the most specific routing error, ErrNoCompatibleModel.
+func TestSchedulerLaunchMixedVendorAndModelMismatch(t *testing.T) {
+	srvAMD := mockOperatorServerWithVendor(5, "amd")
+	defer srvAMD.Close()
+	srvL4 := mockOperatorServerWithModels(5, []string{"NVIDIA-L4"})
+	defer srvL4.Close()
+
+	scheduler := schedulerWithConfigs(t, []OperatorConfig{
+		{Name: "op-amd", URL: srvAMD.URL},
+		{Name: "op-l4", URL: srvL4.URL},
 	})
 
 	bundle := gpuModelLaunchBundle([]string{"NVIDIA-H100"})

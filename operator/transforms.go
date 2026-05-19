@@ -16,12 +16,12 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-// GPU resource and affinity key constants used by TransformGPUVendor.
+// GPU resource and affinity key constants used by TransformGPUVendor. The
+// canonical NVIDIA GPU-model affinity key is constants.GPUModelAffinityKey.
 const (
-	nvidiaGPUResource    apiv1.ResourceName = "nvidia.com/gpu"
-	amdGPUResource       apiv1.ResourceName = "amd.com/gpu"
-	nvidiaModelAffinityK                    = "nvidia.com/gpu.product"
-	amdModelAffinityK                       = "amd.com/gpu.product"
+	nvidiaGPUResource apiv1.ResourceName = "nvidia.com/gpu"
+	amdGPUResource    apiv1.ResourceName = "amd.com/gpu"
+	amdModelAffinityK                    = "amd.com/gpu.product"
 )
 
 // GPUVendor describes which GPU vendor the operator's cluster uses.
@@ -78,35 +78,24 @@ func TransformGPUVendor(deployment *appsv1.Deployment, vendor GPUVendor) {
 	})
 }
 
-// TransformGPUModels rewrites the bundle's required node-affinity GPU
-// model match expressions for the local cluster. Bundles arrive with the
-// canonical (GFD-style) key nvidia.com/gpu.product and canonical model
-// values (e.g. NVIDIA-A10G). Each operator translates these into the key
-// and values its cluster understands:
-//
-//   - On-prem with NVIDIA GFD: leave the key alone and pass values
-//     through untouched. Default config (key=="nvidia.com/gpu.product"
-//     and empty mapping) is treated as the identity transform so
-//     upgrading the operator without re-configuring is a no-op.
-//   - EKS Auto Mode (no GFD): set key to
-//     eks.amazonaws.com/instance-gpu-name and mapping to translate each
-//     canonical name to its EKS label value (NVIDIA-A10G → a10g, etc.).
-//
-// Values not present in mapping are dropped. If translation empties an
-// entry's Values, the whole match expression is removed so we don't
-// emit a Values: [] that would match nothing. Surrounding match
-// expressions (e.g. analysis Exists, gpu In [true]) are preserved.
-// Runs on required + preferred affinity. Modifies the deployment in
-// place. Must be called BEFORE TransformGPUVendor on AMD clusters,
-// because that pass renames nvidia.com/gpu.product → amd.com/gpu.product
-// and this transform's lookup would no longer find its key.
+// TransformGPUModels rewrites the bundle's GPU-model node-affinity match
+// expressions (canonical key nvidia.com/gpu.product, canonical values like
+// NVIDIA-A10G) into the key and values the local cluster uses, across both
+// required and preferred affinity. The default config (canonical key, empty
+// mapping) is the identity, so on-prem NVIDIA-GFD operators stay no-ops; EKS
+// Auto Mode sets key to eks.amazonaws.com/instance-gpu-name with a mapping
+// like NVIDIA-A10G→a10g. Values absent from a non-empty mapping are dropped,
+// and an expression left with no values is removed so we never emit an
+// unsatisfiable Values: []. Modifies the deployment in place. Must run BEFORE
+// TransformGPUVendor, which on AMD clusters renames nvidia.com/gpu.product and
+// would hide the key from this transform's lookup.
 func TransformGPUModels(deployment *appsv1.Deployment, key string, mapping map[string]string) {
 	if deployment == nil {
 		return
 	}
 	// Default config (canonical key, no mapping) is the identity — leave
 	// the deployment alone so untouched operators preserve today's behavior.
-	if (key == "" || key == nvidiaModelAffinityK) && len(mapping) == 0 {
+	if (key == "" || key == constants.GPUModelAffinityKey) && len(mapping) == 0 {
 		return
 	}
 	affinity := deployment.Spec.Template.Spec.Affinity
@@ -135,7 +124,7 @@ func TransformGPUModels(deployment *appsv1.Deployment, key string, mapping map[s
 func rewriteGPUModelExprs(exprs []apiv1.NodeSelectorRequirement, key string, mapping map[string]string) []apiv1.NodeSelectorRequirement {
 	out := make([]apiv1.NodeSelectorRequirement, 0, len(exprs))
 	for _, expr := range exprs {
-		if expr.Key != nvidiaModelAffinityK {
+		if expr.Key != constants.GPUModelAffinityKey {
 			out = append(out, expr)
 			continue
 		}
@@ -158,8 +147,8 @@ func rewriteGPUModelExprs(exprs []apiv1.NodeSelectorRequirement, key string, map
 
 // translateValues maps each canonical GPU model name through mapping.
 // Values not present in mapping are dropped. An empty mapping is the
-// identity (used only on the GFD-default path, which never reaches
-// here because TransformGPUModels short-circuits earlier).
+// identity (values pass through unchanged) — reached when a cluster
+// renames the affinity key but keeps the canonical model values.
 func translateValues(values []string, mapping map[string]string) []string {
 	if len(mapping) == 0 {
 		return values
@@ -229,7 +218,7 @@ func rewriteNodeAffinityKeys(affinity *apiv1.Affinity) {
 // equivalent in a slice of NodeSelectorRequirements.
 func rewriteMatchExpressions(exprs []apiv1.NodeSelectorRequirement) {
 	for i := range exprs {
-		if exprs[i].Key == nvidiaModelAffinityK {
+		if exprs[i].Key == constants.GPUModelAffinityKey {
 			exprs[i].Key = amdModelAffinityK
 		}
 	}

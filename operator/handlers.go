@@ -274,7 +274,7 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 
 	// Translate the bundle's canonical GPU-model node affinity into the
 	// key and values this cluster's nodes label themselves with. Must run
-	// BEFORE TransformGPUVendor: on AMD clusters that pass renames the
+	// BEFORE TransformGPUVendor, which on AMD clusters renames the
 	// nvidia.com/gpu.product key out from under this transform's lookup.
 	TransformGPUModels(bundle.Deployment, o.gpuModelAffinityKey, o.gpuModelMapping)
 

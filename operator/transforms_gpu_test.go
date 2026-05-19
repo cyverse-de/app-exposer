@@ -3,6 +3,7 @@ package operator
 import (
 	"testing"
 
+	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -67,7 +68,7 @@ func makeGPUDeployment() *appsv1.Deployment {
 									{
 										MatchExpressions: []apiv1.NodeSelectorRequirement{
 											{Key: "gpu", Operator: apiv1.NodeSelectorOpIn, Values: []string{"true"}},
-											{Key: nvidiaModelAffinityK, Operator: apiv1.NodeSelectorOpIn, Values: []string{"NVIDIA-A100"}},
+											{Key: constants.GPUModelAffinityKey, Operator: apiv1.NodeSelectorOpIn, Values: []string{"NVIDIA-A100"}},
 										},
 									},
 								},
@@ -94,7 +95,7 @@ func TestTransformGPUVendor(t *testing.T) {
 			deployment:        makeGPUDeployment(),
 			vendor:            GPUVendorNvidia,
 			wantGPUResource:   nvidiaGPUResource,
-			wantAffinityKey:   nvidiaModelAffinityK,
+			wantAffinityKey:   constants.GPUModelAffinityKey,
 			wantNoGPUResource: amdGPUResource,
 		},
 		{
@@ -230,7 +231,7 @@ func TestTransformGPUModels(t *testing.T) {
 			name:         "default config is identity",
 			key:          "",
 			mapping:      nil,
-			wantKey:      nvidiaModelAffinityK,
+			wantKey:      constants.GPUModelAffinityKey,
 			wantValues:   []string{"NVIDIA-A100"},
 			wantOtherKey: "gpu",
 		},
@@ -238,7 +239,7 @@ func TestTransformGPUModels(t *testing.T) {
 			name:         "default key with mapping rewrites values only",
 			key:          "",
 			mapping:      map[string]string{"NVIDIA-A100": "renamed-a100"},
-			wantKey:      nvidiaModelAffinityK,
+			wantKey:      constants.GPUModelAffinityKey,
 			wantValues:   []string{"renamed-a100"},
 			wantOtherKey: "gpu",
 		},
@@ -272,7 +273,7 @@ func TestTransformGPUModels(t *testing.T) {
 			var gotOther *apiv1.NodeSelectorRequirement
 			for i, expr := range terms[0].MatchExpressions {
 				switch expr.Key {
-				case nvidiaModelAffinityK, "eks.amazonaws.com/instance-gpu-name":
+				case constants.GPUModelAffinityKey, "eks.amazonaws.com/instance-gpu-name":
 					gotModel = &terms[0].MatchExpressions[i]
 				case tt.wantOtherKey:
 					gotOther = &terms[0].MatchExpressions[i]
@@ -313,7 +314,7 @@ func TestTransformGPUModels(t *testing.T) {
 									Weight: 1,
 									Preference: apiv1.NodeSelectorTerm{
 										MatchExpressions: []apiv1.NodeSelectorRequirement{{
-											Key:      nvidiaModelAffinityK,
+											Key:      constants.GPUModelAffinityKey,
 											Operator: apiv1.NodeSelectorOpIn,
 											Values:   []string{"NVIDIA-A10G"},
 										}},

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -76,6 +77,7 @@ func (m *nameValueMapFlag) String() string {
 	for k, v := range *m {
 		pairs = append(pairs, k+":"+v)
 	}
+	slices.Sort(pairs)
 	return strings.Join(pairs, ",")
 }
 

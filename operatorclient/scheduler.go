@@ -64,10 +64,11 @@ var (
 	// apart from a capacity failure.
 	ErrNoCompatibleOperator = errors.New("no operator with compatible GPU vendor")
 
-	// ErrNoCompatibleModel means every operator with capacity advertises a
-	// SupportedGPUModels list that does not intersect the analysis's
-	// requested GPU model(s). Distinct from ErrNoCompatibleOperator so the
-	// caller can tell "wrong vendor" apart from "right vendor, wrong model".
+	// ErrNoCompatibleModel means the analysis requested specific GPU
+	// model(s), at least one operator was skipped for advertising a
+	// SupportedGPUModels list that does not intersect them, and no operator
+	// could run it. Distinct from ErrNoCompatibleOperator so the caller can
+	// tell "wrong vendor" apart from "right vendor, wrong model".
 	ErrNoCompatibleModel = errors.New("no operator advertises a compatible GPU model")
 )
 

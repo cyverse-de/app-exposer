@@ -66,33 +66,19 @@ func newTestOperator(t *testing.T, maxAnalyses int, vendor ...GPUVendor) (*Opera
 	if len(vendor) > 0 {
 		gpuVendor = vendor[0]
 	}
-	clientset := fake.NewSimpleClientset()
-	gwClientset := gatewayfake.NewSimpleClientset()
-	calc, err := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
-	require.NoError(t, err)
-	cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
-	op, err := NewOperator(OperatorOptions{
-		Clientset:           clientset,
-		GatewayClient:       gwClientset.GatewayV1(),
-		Namespace:           "vice-apps",
-		GatewayNamespace:    "vice-apps",
-		GatewayName:         "vice",
-		GPUVendor:           gpuVendor,
-		CapacityCalc:        calc,
-		ImageCache:          cache,
-		LoadingServiceName:  "vice-operator-loading",
-		LoadingServicePort:  80,
-		LoadingTimeoutMs:    600000,
-		ClusterConfigSecret: "cluster-config-secret",
-		UserSuffix:          constants.DefaultUserSuffix,
-	})
-	require.NoError(t, err)
-	return op, clientset, gwClientset
+	return newTestOperatorWith(t, maxAnalyses, gpuVendor, nil)
 }
 
-// newTestOperatorWithModels is the variant used by tests that need to
-// assert behavior driven by the operator's configured GPU model list.
+// newTestOperatorWithModels builds a test Operator that advertises the given
+// GPU model list (vendor fixed to NVIDIA, since models are NVIDIA-specific).
 func newTestOperatorWithModels(t *testing.T, maxAnalyses int, models []string) (*Operator, *fake.Clientset, *gatewayfake.Clientset) {
+	t.Helper()
+	return newTestOperatorWith(t, maxAnalyses, GPUVendorNvidia, models)
+}
+
+// newTestOperatorWith is the shared constructor behind newTestOperator and
+// newTestOperatorWithModels.
+func newTestOperatorWith(t *testing.T, maxAnalyses int, vendor GPUVendor, models []string) (*Operator, *fake.Clientset, *gatewayfake.Clientset) {
 	t.Helper()
 	clientset := fake.NewSimpleClientset()
 	gwClientset := gatewayfake.NewSimpleClientset()
@@ -105,7 +91,7 @@ func newTestOperatorWithModels(t *testing.T, maxAnalyses int, models []string) (
 		Namespace:           "vice-apps",
 		GatewayNamespace:    "vice-apps",
 		GatewayName:         "vice",
-		GPUVendor:           GPUVendorNvidia,
+		GPUVendor:           vendor,
 		GPUModels:           models,
 		CapacityCalc:        calc,
 		ImageCache:          cache,

@@ -93,12 +93,6 @@ const (
 
 	gpuVendorNvidia = "nvidia"
 	gpuVendorAMD    = "amd"
-
-	// gpuModelAffinityKey is the canonical (GFD-style) node label key that
-	// app-exposer emits as a required match expression when an analysis
-	// has GPU model preferences. Each operator may later rewrite this key
-	// for its cluster's label scheme.
-	gpuModelAffinityKey = "nvidia.com/gpu.product"
 )
 
 // RequestedGPUVendor inspects the bundle's containers (and init
@@ -158,7 +152,7 @@ func (b *AnalysisBundle) RequestedGPUModels() []string {
 	var out []string
 	for _, term := range required.NodeSelectorTerms {
 		for _, expr := range term.MatchExpressions {
-			if expr.Key != gpuModelAffinityKey || expr.Operator != apiv1.NodeSelectorOpIn {
+			if expr.Key != constants.GPUModelAffinityKey || expr.Operator != apiv1.NodeSelectorOpIn {
 				continue
 			}
 			for _, v := range expr.Values {

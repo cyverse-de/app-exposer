@@ -253,7 +253,7 @@ func gpuModelBundle(terms [][]string) *AnalysisBundle {
 		for _, vals := range terms {
 			nst = append(nst, apiv1.NodeSelectorTerm{
 				MatchExpressions: []apiv1.NodeSelectorRequirement{{
-					Key:      gpuModelAffinityKey,
+					Key:      constants.GPUModelAffinityKey,
 					Operator: apiv1.NodeSelectorOpIn,
 					Values:   vals,
 				}},
@@ -302,7 +302,7 @@ func TestRequestedGPUModels(t *testing.T) {
 										Weight: 1,
 										Preference: apiv1.NodeSelectorTerm{
 											MatchExpressions: []apiv1.NodeSelectorRequirement{{
-												Key:      gpuModelAffinityKey,
+												Key:      constants.GPUModelAffinityKey,
 												Operator: apiv1.NodeSelectorOpIn,
 												Values:   []string{"NVIDIA-A10G"},
 											}},
