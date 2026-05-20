@@ -2,10 +2,8 @@ package operator
 
 import (
 	"context"
-	"embed"
 	"errors"
 	"fmt"
-	"html/template"
 	"net/http"
 	"strings"
 
@@ -20,21 +18,6 @@ import (
 // matches the subdomain. Callers use this to distinguish "not found" (404)
 // from infrastructure errors (500).
 var errAnalysisNotFound = errors.New("analysis not found")
-
-//go:embed templates/loading.html
-var loadingTemplateFS embed.FS
-
-// loadingTemplate is the parsed loading page template. Parsed once at init
-// time rather than on every request.
-var loadingTemplate = template.Must(template.ParseFS(loadingTemplateFS, "templates/loading.html"))
-
-//go:embed templates/waiting.html
-var waitingTemplateFS embed.FS
-
-// waitingTemplate is the waiting page served when no analysis matches the
-// requested subdomain yet. It periodically reloads until the analysis-specific
-// HTTPRoute takes over.
-var waitingTemplate = template.Must(template.ParseFS(waitingTemplateFS, "templates/waiting.html"))
 
 // waitingRefreshSeconds is the interval between page reloads on the waiting page.
 const waitingRefreshSeconds = 5

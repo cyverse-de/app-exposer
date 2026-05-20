@@ -57,10 +57,9 @@ func NewApp(cfg AppConfig) *App {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
-	// Health check is always unauthenticated.
-	e.GET("/", func(c echo.Context) error {
-		return c.String(http.StatusOK, "Hello from vice-operator.")
-	})
+	// Landing page; unauthenticated so it also serves as the health check. Its
+	// API-docs link goes through the existing Swagger auth gate.
+	e.GET("/", op.HandleLandingPage)
 
 	// Swagger UI docs — gated by a session-based login flow when configured,
 	// otherwise served openly. These routes are outside the Bearer auth group

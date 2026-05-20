@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>VICE Operator | Discovery Environment</title>
+    {{template "head-common" .}}
+    <style>
+{{template "styles-common" .}}
+
+        .card-body p {
+            font-size: 0.875rem;
+            color: var(--de-blue-grey);
+            line-height: 1.43;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header class="appbar">
+        {{template "brand" .}}
+    </header>
+
+    <main>
+        <div class="card">
+            <div class="card-header">
+                <span class="material-symbols-outlined">api</span>
+                <h1>VICE Operator</h1>
+            </div>
+            <div class="card-body">
+                <p>This service manages VICE analyses on this cluster.</p>
+                <a class="btn outlined" href="/docs/index.html">
+                    <span class="material-symbols-outlined">description</span>
+                    API Documentation
+                </a>
+            </div>
+        </div>
+    </main>
+
+    {{template "footer" .}}
+</body>
+</html>
