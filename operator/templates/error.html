@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>{{.Code}} {{.Title}} | Discovery Environment</title>
+    {{template "head-common" .}}
+    <style>{{template "styles-common" .}}</style>
+</head>
+<body>
+    <header class="appbar">{{template "brand" .}}</header>
+    <main>
+        <div class="card">
+            <div class="card-header">
+                <span class="material-symbols-outlined">error</span>
+                <h1>{{.Code}} · {{.Title}}</h1>
+            </div>
+            <div class="card-body">
+                {{if .Message}}<p>{{.Message}}</p>{{end}}
+            </div>
+        </div>
+    </main>
+    {{template "footer" .}}
+</body>
+</html>

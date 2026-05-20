@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Log in | VICE Operator</title>
+    {{template "head-common" .}}
+    <style>{{template "styles-common" .}}</style>
+</head>
+<body>
+    <header class="appbar">{{template "brand" .}}</header>
+    <main>
+        <div class="card">
+            <div class="card-header">
+                <span class="material-symbols-outlined">lock</span>
+                <h1>VICE Operator</h1>
+            </div>
+            <div class="card-body">
+                <p>Log in to access the Swagger documentation.</p>
+                <a class="btn outlined" href="{{.AuthLink}}">
+                    <span class="material-symbols-outlined">login</span>
+                    Login with Keycloak
+                </a>
+            </div>
+        </div>
+    </main>
+    {{template "footer" .}}
+</body>
+</html>

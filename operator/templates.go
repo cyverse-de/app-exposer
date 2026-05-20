@@ -21,4 +21,6 @@ var (
 	loadingTemplate = mustParsePage("loading.html")
 	waitingTemplate = mustParsePage("waiting.html")
 	landingTemplate = mustParsePage("landing.html")
+	errorTemplate   = mustParsePage("error.html")
+	loginTemplate   = mustParsePage("login.html")
 )
