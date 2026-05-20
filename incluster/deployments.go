@@ -292,7 +292,10 @@ func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 				HTTPGet: &apiv1.HTTPGetAction{
 					Port:   intstr.FromInt(int(constants.VICEProxyPort)),
 					Scheme: apiv1.URISchemeHTTP,
-					Path:   "/",
+					// vice-proxy's unauthenticated health endpoint. Probing "/"
+					// instead returns a cross-host redirect to Keycloak, which the
+					// kubelet won't follow and logs as a ProbeWarning every period.
+					Path: "/url-ready",
 				},
 			},
 		},
