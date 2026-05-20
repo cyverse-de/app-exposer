@@ -53,6 +53,7 @@ func NewApp(cfg AppConfig) *App {
 	viceUsersCfg := cfg.ViceUsersCfg
 
 	e := echo.New()
+	e.HTTPErrorHandler = htmlErrorHandler(e.HTTPErrorHandler)
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
@@ -139,6 +140,7 @@ type LoadingApp struct {
 // loading pages on analysis subdomains.
 func NewLoadingApp(op *operator.Operator) *LoadingApp {
 	e := echo.New()
+	e.HTTPErrorHandler = htmlErrorHandler(e.HTTPErrorHandler)
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 

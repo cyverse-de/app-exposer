@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/cyverse-de/app-exposer/operator"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/oauth2"
 )
@@ -156,7 +157,12 @@ func handleLogin(cfg *SwaggerAuthConfig) echo.HandlerFunc {
 		// in one place.
 		authLink := cfg.oauth2Config(buildRedirectURI(c)).AuthCodeURL(state)
 
-		return c.HTML(http.StatusOK, loginPage(authLink))
+		html, err := operator.LoginPageHTML(authLink)
+		if err != nil {
+			log.Errorf("rendering login page: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to render login page")
+		}
+		return c.HTML(http.StatusOK, html)
 	}
 }
 
@@ -267,57 +273,4 @@ func extractTokenFromCookie(c echo.Context, key []byte) (string, error) {
 		return "", fmt.Errorf("no session cookie: %w", err)
 	}
 	return verifyAndExtractToken(cookie.Value, key)
-}
-
-// loginPage returns the HTML for the login page.
-func loginPage(authLink string) string {
-	return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>vice-operator — Login</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #fafafa;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-    }
-    .card {
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-      padding: 3rem;
-      text-align: center;
-      max-width: 400px;
-      width: 90%;
-    }
-    h1 { font-size: 1.5rem; color: #333; margin-bottom: 0.5rem; }
-    p { color: #666; margin-bottom: 2rem; font-size: 0.95rem; }
-    .btn {
-      display: inline-block;
-      padding: 0.75rem 2rem;
-      background: #4a90d9;
-      color: #fff;
-      text-decoration: none;
-      border-radius: 4px;
-      font-size: 1rem;
-      font-weight: 500;
-      transition: background 0.2s;
-    }
-    .btn:hover { background: #357abd; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>vice-operator API</h1>
-    <p>Log in to access the Swagger documentation.</p>
-    <a class="btn" href="` + authLink + `">Login with Keycloak</a>
-  </div>
-</body>
-</html>`
 }
