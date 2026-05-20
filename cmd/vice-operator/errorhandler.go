@@ -11,8 +11,8 @@ import (
 )
 
 // wantsHTML reports whether the request prefers an HTML response. Browsers send
-// an Accept header containing text/html; API clients (curl, the Swagger UI's
-// fetch, operatorclient) send application/json or */*.
+// an Accept header containing text/html; API clients send application/json, */*,
+// or no Accept header at all (e.g. operatorclient), none of which match.
 func wantsHTML(c echo.Context) bool {
 	return strings.Contains(c.Request().Header.Get(echo.HeaderAccept), echo.MIMETextHTML)
 }

@@ -14,7 +14,7 @@ func TestLoginPageHTML(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, s := range []string{
-		"Login with Keycloak",
+		"Log in",
 		"Powered by CyVerse at The University of Arizona",
 		`viewBox="0 0 157.37 37.79"`,
 	} {
