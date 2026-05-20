@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/model/v10"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -116,4 +117,27 @@ func TestViceProxyCommand(t *testing.T) {
 
 	// The command should just be the binary name with no args.
 	assert.Equal(t, []string{"vice-proxy"}, command)
+}
+
+// The vice-proxy readiness probe must hit /url-ready rather than "/", which
+// redirects unauthenticated requests to Keycloak and spams ProbeWarning events.
+func TestViceProxyReadinessProbePath(t *testing.T) {
+	i := New(baseInit(), nil, nil, nil, nil)
+	job := &model.Job{Steps: make([]model.Step, 1)}
+	job.Steps[0].Component.Container.Ports = []model.Ports{{ContainerPort: 7681}}
+
+	containers := i.deploymentContainers(job)
+
+	var proxy *apiv1.Container
+	for idx := range containers {
+		if containers[idx].Name == constants.VICEProxyContainerName {
+			proxy = &containers[idx]
+			break
+		}
+	}
+	require.NotNil(t, proxy, "vice-proxy container not found")
+	require.NotNil(t, proxy.ReadinessProbe)
+	require.NotNil(t, proxy.ReadinessProbe.HTTPGet)
+	assert.Equal(t, "/url-ready", proxy.ReadinessProbe.HTTPGet.Path)
+	assert.Equal(t, int(constants.VICEProxyPort), proxy.ReadinessProbe.HTTPGet.Port.IntValue())
 }
