@@ -10,12 +10,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 )
-
-// k8sMaxNameLen is the maximum length of a Kubernetes object name.
-const k8sMaxNameLen = 253
 
 // refreshJobTTLSeconds is the TTLSecondsAfterFinished applied to refresh
 // Jobs so they self-clean a few minutes after completing.
@@ -48,13 +44,6 @@ func NewCronJobImageCacheManager(clientset kubernetes.Interface, namespace, imag
 	}
 }
 
-func (m *CronJobImageCacheManager) imagePullSecrets() []apiv1.LocalObjectReference {
-	if m.imagePullSecretName == "" {
-		return nil
-	}
-	return []apiv1.LocalObjectReference{{Name: m.imagePullSecretName}}
-}
-
 // buildCacheCronJob constructs a CronJob that pulls the given image on its
 // configured schedule. The Job runs a single container with the target
 // image and command ["true"]; K8s pulls the image before running the
@@ -66,11 +55,7 @@ func (m *CronJobImageCacheManager) imagePullSecrets() []apiv1.LocalObjectReferen
 // before the entrypoint runs). The status API surfaces those as
 // "cached-with-errors".
 func (m *CronJobImageCacheManager) buildCacheCronJob(image, slug string) *batchv1.CronJob {
-	cjLabels := map[string]string{
-		labelManagedBy:    valueManagedBy,
-		labelPurpose:      valuePurpose,
-		labelImageCacheID: slug,
-	}
+	cjLabels := cacheResourceLabels(slug)
 
 	pullResources := apiv1.ResourceRequirements{
 		Requests: apiv1.ResourceList{
@@ -85,7 +70,7 @@ func (m *CronJobImageCacheManager) buildCacheCronJob(image, slug string) *batchv
 
 	podSpec := apiv1.PodSpec{
 		RestartPolicy:    apiv1.RestartPolicyNever,
-		ImagePullSecrets: m.imagePullSecrets(),
+		ImagePullSecrets: imagePullSecretsFor(m.imagePullSecretName),
 		Containers: []apiv1.Container{
 			{
 				Name:            "pull",
@@ -95,18 +80,7 @@ func (m *CronJobImageCacheManager) buildCacheCronJob(image, slug string) *batchv
 				Resources:       pullResources,
 			},
 		},
-		Tolerations: []apiv1.Toleration{
-			{
-				Key:      "analysis",
-				Operator: apiv1.TolerationOpExists,
-			},
-			{
-				Key:      "gpu",
-				Operator: apiv1.TolerationOpEqual,
-				Value:    "true",
-				Effect:   apiv1.TaintEffectNoSchedule,
-			},
-		},
+		Tolerations: cachePodTolerations(),
 	}
 
 	jobSpec := batchv1.JobSpec{
@@ -202,11 +176,7 @@ func (m *CronJobImageCacheManager) RefreshCachedImage(ctx context.Context, image
 	jobSpec := cj.Spec.JobTemplate.Spec.DeepCopy()
 	jobSpec.TTLSecondsAfterFinished = constants.Int32Ptr(refreshJobTTLSeconds)
 
-	jobLabels := map[string]string{
-		labelManagedBy:    valueManagedBy,
-		labelPurpose:      valuePurpose,
-		labelImageCacheID: slug,
-	}
+	jobLabels := cacheResourceLabels(slug)
 
 	// generateName lets the API server append a 5-char suffix so the name is
 	// unique even across rapid back-to-back refreshes. The prefix is
@@ -321,12 +291,7 @@ func deriveCronJobCacheStatus(cj *batchv1.CronJob) (desired, ready int32, status
 // ListCachedImages returns the status of all image cache CronJobs in the
 // namespace.
 func (m *CronJobImageCacheManager) ListCachedImages(ctx context.Context) ([]ImageCacheStatus, error) {
-	sel := labels.SelectorFromSet(labels.Set{
-		labelManagedBy: valueManagedBy,
-		labelPurpose:   valuePurpose,
-	})
-
-	list, err := m.clientset.BatchV1().CronJobs(m.namespace).List(ctx, metav1.ListOptions{LabelSelector: sel.String()})
+	list, err := m.clientset.BatchV1().CronJobs(m.namespace).List(ctx, metav1.ListOptions{LabelSelector: cacheManagedBySelector().String()})
 	if err != nil {
 		return nil, fmt.Errorf("listing image cache CronJobs: %w", err)
 	}
@@ -349,4 +314,3 @@ func (m *CronJobImageCacheManager) GetCachedImageStatus(ctx context.Context, id 
 	status := cacheStatusFromCronJob(cj)
 	return &status, nil
 }
-

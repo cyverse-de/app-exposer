@@ -10,7 +10,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -35,16 +34,6 @@ func NewDaemonSetImageCacheManager(clientset kubernetes.Interface, namespace, im
 	}
 }
 
-// imagePullSecrets returns the image pull secrets list for cache DaemonSets.
-// Returns nil when no secret name is configured, which omits the field from
-// the pod spec entirely (allowing public images to be cached without credentials).
-func (m *DaemonSetImageCacheManager) imagePullSecrets() []apiv1.LocalObjectReference {
-	if m.imagePullSecretName == "" {
-		return nil
-	}
-	return []apiv1.LocalObjectReference{{Name: m.imagePullSecretName}}
-}
-
 // buildCacheDaemonSet constructs a DaemonSet that pre-pulls the given image
 // onto every node. The init container references the target image and runs
 // "true" to exit immediately; K8s pulls the image before running the command.
@@ -53,12 +42,7 @@ func (m *DaemonSetImageCacheManager) imagePullSecrets() []apiv1.LocalObjectRefer
 // will fail with CrashLoopBackOff. This is expected — the image is still pulled
 // and cached on each node. The status API reports these as "cached-with-errors".
 func (m *DaemonSetImageCacheManager) buildCacheDaemonSet(image, slug string) *appsv1.DaemonSet {
-	// dsLabels is named to avoid shadowing the imported "k8s.io/apimachinery/pkg/labels" package.
-	dsLabels := map[string]string{
-		labelManagedBy:    valueManagedBy,
-		labelPurpose:      valuePurpose,
-		labelImageCacheID: slug,
-	}
+	dsLabels := cacheResourceLabels(slug)
 
 	// The init container needs enough memory to start the entrypoint process
 	// (even just "true") without being OOM-killed. The pause container is a
@@ -102,7 +86,7 @@ func (m *DaemonSetImageCacheManager) buildCacheDaemonSet(image, slug string) *ap
 					Labels: dsLabels,
 				},
 				Spec: apiv1.PodSpec{
-					ImagePullSecrets: m.imagePullSecrets(),
+					ImagePullSecrets: imagePullSecretsFor(m.imagePullSecretName),
 					InitContainers: []apiv1.Container{
 						{
 							Name:            "pull",
@@ -120,18 +104,7 @@ func (m *DaemonSetImageCacheManager) buildCacheDaemonSet(image, slug string) *ap
 							Resources:       pauseResources,
 						},
 					},
-					Tolerations: []apiv1.Toleration{
-						{
-							Key:      "analysis",
-							Operator: apiv1.TolerationOpExists,
-						},
-						{
-							Key:      "gpu",
-							Operator: apiv1.TolerationOpEqual,
-							Value:    "true",
-							Effect:   apiv1.TaintEffectNoSchedule,
-						},
-					},
+					Tolerations: cachePodTolerations(),
 				},
 			},
 		},
@@ -164,7 +137,6 @@ func (m *DaemonSetImageCacheManager) EnsureImageCached(ctx context.Context, imag
 		return fmt.Errorf("checking for existing image cache DaemonSet %s: %w", dsName, err)
 	}
 
-	// DaemonSet exists — check if the image annotation matches.
 	if existing.Annotations[annotationImage] == image {
 		log.Debugf("image cache DaemonSet %s already has correct image", dsName)
 		return nil
@@ -201,9 +173,6 @@ func (m *DaemonSetImageCacheManager) RefreshCachedImage(ctx context.Context, ima
 		return fmt.Errorf("getting cache DaemonSet %s: %w", dsName, err)
 	}
 
-	// Restart the DaemonSet by adding/updating a restart annotation on the
-	// pod template. This triggers a rolling update of all pods, which forces
-	// containerd to re-pull the image due to PullAlways on the init container.
 	if ds.Spec.Template.Annotations == nil {
 		ds.Spec.Template.Annotations = make(map[string]string)
 	}
@@ -255,12 +224,7 @@ func cacheStatusFromDS(ds *appsv1.DaemonSet) ImageCacheStatus {
 // ListCachedImages returns the status of all image cache DaemonSets in the
 // namespace.
 func (m *DaemonSetImageCacheManager) ListCachedImages(ctx context.Context) ([]ImageCacheStatus, error) {
-	sel := labels.SelectorFromSet(labels.Set{
-		labelManagedBy: valueManagedBy,
-		labelPurpose:   valuePurpose,
-	})
-
-	list, err := m.clientset.AppsV1().DaemonSets(m.namespace).List(ctx, metav1.ListOptions{LabelSelector: sel.String()})
+	list, err := m.clientset.AppsV1().DaemonSets(m.namespace).List(ctx, metav1.ListOptions{LabelSelector: cacheManagedBySelector().String()})
 	if err != nil {
 		return nil, fmt.Errorf("listing image cache DaemonSets: %w", err)
 	}

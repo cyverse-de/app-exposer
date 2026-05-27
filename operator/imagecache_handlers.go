@@ -148,8 +148,10 @@ func (o *Operator) HandleListCachedImages(c echo.Context) error {
 func (o *Operator) HandleGetCachedImage(c echo.Context) error {
 	ctx := c.Request().Context()
 	id := c.Param("id")
-	if id == "" {
-		return c.JSON(http.StatusBadRequest, common.ErrorResponse{Message: "image cache id is required"})
+	if err := validateImageCacheID(id); err != nil {
+		// Treat malformed IDs as not-found so we don't echo K8s API errors
+		// back through the response body.
+		return c.JSON(http.StatusNotFound, common.ErrorResponse{Message: fmt.Sprintf("no cached image with id %q", id)})
 	}
 
 	status, err := o.imageCache.GetCachedImageStatus(ctx, id)
@@ -181,8 +183,10 @@ func (o *Operator) HandleGetCachedImage(c echo.Context) error {
 func (o *Operator) HandleDeleteCachedImage(c echo.Context) error {
 	ctx := c.Request().Context()
 	id := c.Param("id")
-	if id == "" {
-		return c.JSON(http.StatusBadRequest, common.ErrorResponse{Message: "image cache id is required"})
+	if err := validateImageCacheID(id); err != nil {
+		// DELETE is idempotent: a malformed ID is treated the same as a
+		// missing one, returning success without contacting the API server.
+		return c.NoContent(http.StatusOK)
 	}
 
 	if err := o.imageCache.RemoveCachedImageByID(ctx, id); err != nil {

@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	apiv1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 const (
@@ -28,16 +31,27 @@ const (
 	// appended to slugs for uniqueness (12 hex chars = 48 bits).
 	slugHashLen = 12
 
+	// k8sMaxNameLen is the maximum length of a Kubernetes object name.
+	k8sMaxNameLen = 253
+
 	// pauseImage is the minimal container that runs as the main container
 	// in cache DaemonSets. Cron mode uses a Job and does not need it.
 	pauseImage = "registry.k8s.io/pause:3.10"
 )
 
-// imageRefPattern is a basic validation pattern for container image references.
-// It requires the reference to start with an alphanumeric character and contain
-// only alphanumeric characters, dots, underscores, slashes, colons, at-signs,
-// and hyphens.
+// imageRefPattern accepts well-formed image references and rejects strings
+// containing whitespace or shell-unsafe characters.
 var imageRefPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$`)
+
+// imageCacheIDPattern matches the slug IDs produced by slugifyImage so
+// the path-parameter handlers can reject obvious garbage before forwarding
+// it to the K8s API server. Bound is k8sMaxNameLen minus cacheNamePrefix.
+var imageCacheIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,240}$`)
+
+// maxImageRefLen caps the image reference length so a caller can't park a
+// huge string in CronJob/DaemonSet annotations (each annotation value can
+// be up to 256KiB; a real OCI ref tops out near 700 chars).
+const maxImageRefLen = 1024
 
 // ImageCacheRequest is the request body for bulk cache operations.
 type ImageCacheRequest struct {
@@ -83,13 +97,76 @@ type ImageCacheManager interface {
 	GetCachedImageStatus(ctx context.Context, id string) (*ImageCacheStatus, error)
 }
 
+// imagePullSecretsFor returns a pull-secret list for the given secret name, or
+// nil when the name is empty (omits the field from the pod spec for public images).
+func imagePullSecretsFor(name string) []apiv1.LocalObjectReference {
+	if name == "" {
+		return nil
+	}
+	return []apiv1.LocalObjectReference{{Name: name}}
+}
+
+// cachePodTolerations returns the standard tolerations applied to every cache
+// pod (DaemonSet init-container or CronJob pod). Tolerates the analysis taint
+// so pods land on analysis nodes, and the GPU taint so image pulls still reach
+// GPU-only nodes.
+func cachePodTolerations() []apiv1.Toleration {
+	return []apiv1.Toleration{
+		{
+			Key:      "analysis",
+			Operator: apiv1.TolerationOpExists,
+		},
+		{
+			Key:      "gpu",
+			Operator: apiv1.TolerationOpEqual,
+			Value:    "true",
+			Effect:   apiv1.TaintEffectNoSchedule,
+		},
+	}
+}
+
+// cacheResourceLabels returns the standard label set for a cache resource
+// identified by slug.
+func cacheResourceLabels(slug string) map[string]string {
+	return map[string]string{
+		labelManagedBy:    valueManagedBy,
+		labelPurpose:      valuePurpose,
+		labelImageCacheID: slug,
+	}
+}
+
+// cacheManagedBySelector returns a label selector that matches all resources
+// managed by this operator's image cache.
+func cacheManagedBySelector() labels.Selector {
+	return labels.SelectorFromSet(labels.Set{
+		labelManagedBy: valueManagedBy,
+		labelPurpose:   valuePurpose,
+	})
+}
+
 // validateImageRef checks that an image reference is minimally valid.
 func validateImageRef(image string) error {
 	if image == "" {
 		return errors.New("image reference must not be empty")
 	}
+	if len(image) > maxImageRefLen {
+		return fmt.Errorf("image reference too long: %d chars (max %d)", len(image), maxImageRefLen)
+	}
 	if !imageRefPattern.MatchString(image) {
 		return fmt.Errorf("invalid image reference: %q", image)
+	}
+	return nil
+}
+
+// validateImageCacheID rejects slug IDs that don't match the format
+// slugifyImage produces, so handlers can return 404 immediately instead of
+// forwarding malformed input to the K8s API.
+func validateImageCacheID(id string) error {
+	if id == "" {
+		return errors.New("image cache id must not be empty")
+	}
+	if !imageCacheIDPattern.MatchString(id) {
+		return fmt.Errorf("invalid image cache id: %q", id)
 	}
 	return nil
 }
@@ -109,8 +186,8 @@ func slugifyImage(image string) string {
 	slug = collapseRuns(slug, '-')
 	slug = strings.Trim(slug, "-")
 
-	// Truncate so cacheNamePrefix + slug + "-" + hash fits in 253 chars.
-	maxSlugLen := 253 - len(cacheNamePrefix) - 1 - slugHashLen
+	// Truncate so cacheNamePrefix + slug + "-" + hash fits within k8sMaxNameLen.
+	maxSlugLen := k8sMaxNameLen - len(cacheNamePrefix) - 1 - slugHashLen
 	if len(slug) > maxSlugLen {
 		slug = slug[:maxSlugLen]
 		slug = strings.TrimRight(slug, "-")
@@ -134,15 +211,11 @@ func collapseRuns(s string, c byte) string {
 	return b.String()
 }
 
-// deriveCacheStatus computes the cache status string from "ready" and
-// "desired" counts. Both backends populate these fields; in cron mode they
-// take values 0 or 1 derived from CronJob success state. Evaluated in order:
-// error, ready, cached-with-errors, pulling.
-//
-// "cached-with-errors" is returned when ready==0 and desired>0. For
-// DaemonSets this covers distroless images where the init container
-// CrashLoopBackOffs (image still cached) and newly created DaemonSets where
-// pods haven't started yet. For CronJobs it covers a failed last run.
+// deriveCacheStatus maps (desired, ready) counts to a status string shared by
+// both backends. In cron mode desired and ready are 0 or 1 derived from
+// CronJob success state. "cached-with-errors" covers distroless images
+// (CrashLoopBackOff after pull) and failed CronJob runs — the image is
+// present even though the container exited non-zero.
 func deriveCacheStatus(desired, ready int32) string {
 	if desired == 0 {
 		return "error"

@@ -54,6 +54,12 @@ func TestBuildCacheDaemonSet(t *testing.T) {
 	assert.Len(t, ds.Spec.Template.Spec.Tolerations, 2)
 }
 
+func TestBuildCacheDaemonSetOmitsPullSecretWhenEmpty(t *testing.T) {
+	mgr := NewDaemonSetImageCacheManager(nil, "vice-apps", "")
+	ds := mgr.buildCacheDaemonSet("nginx:1.27", slugifyImage("nginx:1.27"))
+	assert.Empty(t, ds.Spec.Template.Spec.ImagePullSecrets)
+}
+
 func TestEnsureImageCached(t *testing.T) {
 	const (
 		ns     = "vice-apps"

@@ -157,8 +157,12 @@ Job operations. Add to the `batch` apiGroup:
 ```yaml
 - apiGroups: ["batch"]
   resources: ["cronjobs", "jobs"]
-  verbs: ["get", "list", "watch", "create", "update", "delete"]
+  verbs: ["get", "list", "create", "update", "delete"]
 ```
+
+`watch` is intentionally omitted — the operator never opens a watch stream
+on CronJobs or Jobs, and granting the verb would unnecessarily widen the
+service account's reach. Add it later if an informer is introduced.
 
 This is a deployment-manifest change in the cluster's vice-operator
 install, not a code change in app-exposer. Roll it out before flipping

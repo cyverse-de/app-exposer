@@ -245,3 +245,54 @@ func TestHandleGetCachedImageNotFound(t *testing.T) {
 	require.NoError(t, err) // handler writes response directly
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
+
+// TestImageCacheIDValidation covers the path-parameter validation on the
+// per-image endpoints. Malformed IDs must not be forwarded to the K8s API.
+func TestImageCacheIDValidation(t *testing.T) {
+	tests := []struct {
+		name     string
+		id       string
+		wantGet  int // expected status from HandleGetCachedImage
+		wantDel  int // expected status from HandleDeleteCachedImage
+	}{
+		{name: "empty id", id: "", wantGet: http.StatusNotFound, wantDel: http.StatusOK},
+		{name: "uppercase rejected", id: "Bad-Slug", wantGet: http.StatusNotFound, wantDel: http.StatusOK},
+		{name: "shell-unsafe chars rejected", id: "a;b", wantGet: http.StatusNotFound, wantDel: http.StatusOK},
+		{name: "slash rejected", id: "a/b", wantGet: http.StatusNotFound, wantDel: http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op, _, _ := newTestOperator(t, 10)
+			e := echo.New()
+
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.SetParamNames("id")
+			c.SetParamValues(tt.id)
+			require.NoError(t, op.HandleGetCachedImage(c))
+			assert.Equal(t, tt.wantGet, rec.Code, "GET")
+
+			req = httptest.NewRequest(http.MethodDelete, "/", nil)
+			rec = httptest.NewRecorder()
+			c = e.NewContext(req, rec)
+			c.SetParamNames("id")
+			c.SetParamValues(tt.id)
+			require.NoError(t, op.HandleDeleteCachedImage(c))
+			assert.Equal(t, tt.wantDel, rec.Code, "DELETE")
+		})
+	}
+}
+
+// TestValidateImageRefLength bounds the input so a caller can't park a
+// huge string in CronJob/DaemonSet annotations.
+func TestValidateImageRefLength(t *testing.T) {
+	long := make([]byte, maxImageRefLen+1)
+	for i := range long {
+		long[i] = 'a'
+	}
+	err := validateImageRef(string(long))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "too long")
+}
