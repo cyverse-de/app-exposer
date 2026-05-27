@@ -9,11 +9,30 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/cyverse-de/app-exposer/operator"
+	"github.com/robfig/cron/v3"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
+
+// buildImageCache returns the ImageCacheManager implementation selected by
+// the --image-cache-mode flag. The cron mode validates the schedule
+// expression up front so a misconfigured flag fails at boot rather than at
+// the first ensure call.
+func buildImageCache(mode, schedule string, clientset kubernetes.Interface, namespace, imagePullSecret string) (operator.ImageCacheManager, error) {
+	switch mode {
+	case "daemonset":
+		return operator.NewDaemonSetImageCacheManager(clientset, namespace, imagePullSecret), nil
+	case "cron":
+		if _, err := cron.ParseStandard(schedule); err != nil {
+			return nil, fmt.Errorf("invalid --image-cache-schedule %q: %w", schedule, err)
+		}
+		return operator.NewCronJobImageCacheManager(clientset, namespace, imagePullSecret, schedule), nil
+	default:
+		return nil, fmt.Errorf("invalid --image-cache-mode %q (want \"daemonset\" or \"cron\")", mode)
+	}
+}
 
 // buildKubeClients constructs the Kubernetes core and Gateway API clients.
 // An empty kubeconfig falls back to in-cluster config.

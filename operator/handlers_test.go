@@ -84,7 +84,7 @@ func newTestOperatorWith(t *testing.T, maxAnalyses int, vendor GPUVendor, models
 	gwClientset := gatewayfake.NewSimpleClientset()
 	calc, err := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
 	require.NoError(t, err)
-	cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
+	cache := NewDaemonSetImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
 	op, err := NewOperator(OperatorOptions{
 		Clientset:           clientset,
 		GatewayClient:       gwClientset.GatewayV1(),
@@ -117,7 +117,7 @@ func TestOperatorOptionsValidate(t *testing.T) {
 			GatewayClient: gw.GatewayV1(),
 			Namespace:     "vice-apps",
 			CapacityCalc:  &CapacityCalculator{},
-			ImageCache:    &ImageCacheManager{},
+			ImageCache:    &DaemonSetImageCacheManager{},
 		}
 	}
 

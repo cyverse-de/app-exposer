@@ -79,6 +79,8 @@ func main() {
 		statusLeaseNamespace  string
 		statusLeaseName       string
 		clusterName           string
+		imageCacheMode        string
+		imageCacheSchedule    string
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -137,6 +139,8 @@ func main() {
 	flag.StringVar(&statusLeaseNamespace, "status-lease-namespace", "", "Namespace for the status-publisher coordination Lease (defaults to --namespace)")
 	flag.StringVar(&statusLeaseName, "status-lease-name", "vice-operator-status-publisher", "Name of the coordination Lease used to elect the status-publisher leader")
 	flag.StringVar(&clusterName, "cluster-name", "", "Cluster identifier sent as the Host field on status updates (defaults to the operator's hostname)")
+	flag.StringVar(&imageCacheMode, "image-cache-mode", "daemonset", "Image cache implementation: 'daemonset' for one DaemonSet per image (node-local containerd warming) or 'cron' for one CronJob per image (e.g. periodic pulls routed through an ECR pull-through cache on EKS Auto Mode)")
+	flag.StringVar(&imageCacheSchedule, "image-cache-schedule", "0 2 * * *", "Cron schedule applied to every cached image when --image-cache-mode=cron (5-field standard cron expression in UTC)")
 	flag.Parse()
 
 	// Allow secrets to come from environment variables when not set on the
@@ -362,7 +366,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("creating capacity calculator: %v", err)
 	}
-	imageCache := operator.NewImageCacheManager(clientset, namespace, imagePullSecret)
+	imageCache, err := buildImageCache(imageCacheMode, imageCacheSchedule, clientset, namespace, imagePullSecret)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
 	op, err := operator.NewOperator(operator.OperatorOptions{
 		Clientset:           clientset,
 		GatewayClient:       gwClient,

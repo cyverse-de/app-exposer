@@ -57,7 +57,7 @@ type Operator struct {
 	gpuModelAffinityKey string            // Node-label key this cluster uses for GPU-model affinity; empty means use the canonical nvidia.com/gpu.product.
 	gpuModelMapping     map[string]string // Canonical NVIDIA-* model name → cluster-side value (e.g. NVIDIA-A10G → a10g on EKS).
 	capacityCalc        *CapacityCalculator
-	imageCache          *ImageCacheManager
+	imageCache          ImageCacheManager
 	loadingServiceName  string
 	loadingServicePort  int32
 	loadingTimeoutMs    int64
@@ -84,7 +84,7 @@ type OperatorOptions struct {
 	GPUModelAffinityKey string            // Node-label key this cluster uses for GPU-model affinity; empty means use the canonical nvidia.com/gpu.product.
 	GPUModelMapping     map[string]string // Canonical NVIDIA-* model name → cluster-side value (e.g. NVIDIA-A10G → a10g on EKS).
 	CapacityCalc        *CapacityCalculator
-	ImageCache          *ImageCacheManager
+	ImageCache          ImageCacheManager
 	LoadingServiceName  string
 	LoadingServicePort  int32
 	LoadingTimeoutMs    int64
