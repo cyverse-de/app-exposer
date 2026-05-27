@@ -84,10 +84,11 @@ type ImageCacheListResponse struct {
 	Images []ImageCacheStatus `json:"images"`
 }
 
-// ImageCacheManager is the interface implemented by both backends: the
-// DaemonSet-per-image cache (node-local containerd warming) and the
+// ImageCacheManager is the interface implemented by the cache backends:
+// the DaemonSet-per-image cache (node-local containerd warming), the
 // CronJob-per-image cache (periodic pulls routed through an upstream
-// pull-through registry such as AWS ECR in EKS Auto Mode).
+// pull-through registry such as AWS ECR), and the manual-mirror manager
+// (read-only window onto a static mapping file maintained externally).
 type ImageCacheManager interface {
 	EnsureImageCached(ctx context.Context, image string) error
 	RefreshCachedImage(ctx context.Context, image string) error
@@ -95,7 +96,28 @@ type ImageCacheManager interface {
 	RemoveCachedImageByID(ctx context.Context, id string) error
 	ListCachedImages(ctx context.Context) ([]ImageCacheStatus, error)
 	GetCachedImageStatus(ctx context.Context, id string) (*ImageCacheStatus, error)
+	// ReadOnly reports whether the backing cache is externally managed,
+	// in which case mutating HTTP endpoints short-circuit to 400 rather
+	// than calling into the manager.
+	ReadOnly() bool
 }
+
+// ImageRewriter rewrites image references at launch time. Orthogonal to
+// ImageCacheManager: daemonset/cron modes contribute no rewriter (the
+// operator launches whatever images the bundle carries); manual-mirror
+// contributes one that swaps upstream refs for their mirrored counterparts
+// using a static JSON map.
+type ImageRewriter interface {
+	// RewriteImage returns the substitute ref when image has a mapping and
+	// ok=true; otherwise returns image unchanged and ok=false.
+	RewriteImage(image string) (rewritten string, ok bool)
+}
+
+// ErrCacheReadOnly is returned by manual-mirror's mutating cache methods.
+// Handlers detect ReadOnly() at the request level and don't normally call
+// into the manager when it's set, but this is the canonical error for any
+// path that does reach the methods.
+var ErrCacheReadOnly = errors.New("image cache is externally managed in this mode")
 
 // imagePullSecretsFor returns a pull-secret list for the given secret name, or
 // nil when the name is empty (omits the field from the pod spec for public images).

@@ -44,6 +44,10 @@ func NewCronJobImageCacheManager(clientset kubernetes.Interface, namespace, imag
 	}
 }
 
+// ReadOnly is false: cron mode actively manages CronJob/Job resources via
+// the full mutating API.
+func (*CronJobImageCacheManager) ReadOnly() bool { return false }
+
 // buildCacheCronJob constructs a CronJob that pulls the given image on its
 // configured schedule. The Job runs a single container with the target
 // image and command ["true"]; K8s pulls the image before running the

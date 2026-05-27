@@ -16,21 +16,38 @@ import (
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
 )
 
-// buildImageCache returns the ImageCacheManager implementation selected by
-// the --image-cache-mode flag. The cron mode validates the schedule
-// expression up front so a misconfigured flag fails at boot rather than at
-// the first ensure call.
-func buildImageCache(mode, schedule string, clientset kubernetes.Interface, namespace, imagePullSecret string) (operator.ImageCacheManager, error) {
+// buildImageCache returns the ImageCacheManager (and, where applicable, an
+// ImageRewriter) selected by the --image-cache-mode flag. Cron mode
+// validates the schedule up front; manual-mirror mode loads and validates
+// the repos file up front. Misconfigurations fail fast at startup rather
+// than at first use.
+func buildImageCache(mode, schedule, reposFile string, clientset kubernetes.Interface, namespace, imagePullSecret string) (operator.ImageCacheManager, operator.ImageRewriter, error) {
 	switch mode {
 	case "daemonset":
-		return operator.NewDaemonSetImageCacheManager(clientset, namespace, imagePullSecret), nil
-	case "cron":
-		if _, err := cron.ParseStandard(schedule); err != nil {
-			return nil, fmt.Errorf("invalid --image-cache-schedule %q: %w", schedule, err)
+		if reposFile != "" {
+			return nil, nil, fmt.Errorf("--repos-file is only valid with --image-cache-mode=manual-mirror")
 		}
-		return operator.NewCronJobImageCacheManager(clientset, namespace, imagePullSecret, schedule), nil
+		return operator.NewDaemonSetImageCacheManager(clientset, namespace, imagePullSecret), nil, nil
+	case "cron":
+		if reposFile != "" {
+			return nil, nil, fmt.Errorf("--repos-file is only valid with --image-cache-mode=manual-mirror")
+		}
+		if _, err := cron.ParseStandard(schedule); err != nil {
+			return nil, nil, fmt.Errorf("invalid --image-cache-schedule %q: %w", schedule, err)
+		}
+		return operator.NewCronJobImageCacheManager(clientset, namespace, imagePullSecret, schedule), nil, nil
+	case "manual-mirror":
+		if reposFile == "" {
+			return nil, nil, fmt.Errorf("--repos-file is required when --image-cache-mode=manual-mirror")
+		}
+		mappings, err := operator.LoadImageMirrorMap(reposFile)
+		if err != nil {
+			return nil, nil, err
+		}
+		mgr := operator.NewManualMirrorImageCacheManager(mappings)
+		return mgr, mgr, nil
 	default:
-		return nil, fmt.Errorf("invalid --image-cache-mode %q (want \"daemonset\" or \"cron\")", mode)
+		return nil, nil, fmt.Errorf("invalid --image-cache-mode %q (want \"daemonset\", \"cron\", or \"manual-mirror\")", mode)
 	}
 }
 

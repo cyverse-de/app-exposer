@@ -34,6 +34,10 @@ func NewDaemonSetImageCacheManager(clientset kubernetes.Interface, namespace, im
 	}
 }
 
+// ReadOnly is false: the daemonset backend manages cache state via real
+// K8s resources and supports the full mutating API.
+func (*DaemonSetImageCacheManager) ReadOnly() bool { return false }
+
 // buildCacheDaemonSet constructs a DaemonSet that pre-pulls the given image
 // onto every node. The init container references the target image and runs
 // "true" to exit immediately; K8s pulls the image before running the command.

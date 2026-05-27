@@ -285,6 +285,75 @@ func TestImageCacheIDValidation(t *testing.T) {
 	}
 }
 
+// TestManualMirrorHandlers400 confirms that mutating cache endpoints
+// return 400 in manual-mirror mode without reaching into the manager.
+// HandleListCachedImages / HandleGetCachedImage are still expected to
+// work as a read-only window onto the mapping.
+func TestManualMirrorHandlers400(t *testing.T) {
+	upstream := "harbor.cyverse.org/de/vice-proxy:latest"
+	mappings := map[string]string{
+		upstream: "123456789012.dkr.ecr.us-east-1.amazonaws.com/de/vice-proxy:latest",
+	}
+	op := newManualMirrorTestOperator(t, mappings)
+
+	mutatingHandlers := []struct {
+		name    string
+		method  string
+		invoke  func(c echo.Context) error
+		body    string
+		hasBody bool
+	}{
+		{name: "PUT /image-cache", method: http.MethodPut, invoke: op.HandleCacheImages, body: `{"images":["nginx:latest"]}`, hasBody: true},
+		{name: "DELETE /image-cache", method: http.MethodDelete, invoke: op.HandleRemoveCachedImages, body: `{"images":["nginx:latest"]}`, hasBody: true},
+		{name: "POST /image-cache/refresh", method: http.MethodPost, invoke: op.HandleRefreshCachedImages, body: `{"images":["nginx:latest"]}`, hasBody: true},
+		{name: "DELETE /image-cache/:id", method: http.MethodDelete, invoke: op.HandleDeleteCachedImage, hasBody: false},
+	}
+
+	for _, tt := range mutatingHandlers {
+		t.Run(tt.name, func(t *testing.T) {
+			e := echo.New()
+			var req *http.Request
+			if tt.hasBody {
+				req = httptest.NewRequest(tt.method, "/", bytes.NewReader([]byte(tt.body)))
+				req.Header.Set("Content-Type", "application/json")
+			} else {
+				req = httptest.NewRequest(tt.method, "/", nil)
+			}
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			if !tt.hasBody {
+				c.SetParamNames("id")
+				c.SetParamValues(slugifyImage(upstream))
+			}
+			require.NoError(t, tt.invoke(c))
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Contains(t, rec.Body.String(), "externally managed")
+		})
+	}
+
+	// Read-only handlers still work.
+	t.Run("GET /image-cache returns the mapping", func(t *testing.T) {
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		require.NoError(t, op.HandleListCachedImages(c))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), upstream)
+	})
+
+	t.Run("GET /image-cache/:id returns one entry", func(t *testing.T) {
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues(slugifyImage(upstream))
+		require.NoError(t, op.HandleGetCachedImage(c))
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+}
+
 // TestValidateImageRefLength bounds the input so a caller can't park a
 // huge string in CronJob/DaemonSet annotations.
 func TestValidateImageRefLength(t *testing.T) {

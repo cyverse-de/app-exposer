@@ -23,6 +23,11 @@ import (
 // because it forces every caller to parse the body just to know whether
 // anything went wrong.
 func (o *Operator) bulkImageOp(c echo.Context, fn func(ctx context.Context, image string) error) error {
+	if o.imageCache.ReadOnly() {
+		return c.JSON(http.StatusBadRequest, common.ErrorResponse{
+			Message: "image cache is externally managed in this mode; update the --repos-file and restart instead",
+		})
+	}
 	ctx := c.Request().Context()
 
 	var req ImageCacheRequest
@@ -156,11 +161,14 @@ func (o *Operator) HandleGetCachedImage(c echo.Context) error {
 
 	status, err := o.imageCache.GetCachedImageStatus(ctx, id)
 	if err != nil {
-		// GetCachedImageStatus wraps the K8s error with fmt.Errorf(%w), so
-		// unwrap explicitly with errors.As before comparing the reason. This
-		// matches the pattern used in gateway.go for CORS middleware lookups.
+		// Two paths to a not-found: a wrapped K8s StatusError from the
+		// daemonset/cron backends, or the manual-mirror sentinel for a
+		// slug that doesn't match any mapping entry.
 		var statusErr *apierrors.StatusError
 		if errors.As(err, &statusErr) && statusErr.ErrStatus.Reason == metav1.StatusReasonNotFound {
+			return c.JSON(http.StatusNotFound, common.ErrorResponse{Message: fmt.Sprintf("no cached image with id %q", id)})
+		}
+		if errors.Is(err, errImageCacheEntryNotFound) {
 			return c.JSON(http.StatusNotFound, common.ErrorResponse{Message: fmt.Sprintf("no cached image with id %q", id)})
 		}
 		return c.JSON(http.StatusInternalServerError, common.ErrorResponse{Message: err.Error()})
@@ -181,6 +189,11 @@ func (o *Operator) HandleGetCachedImage(c echo.Context) error {
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/image-cache/{id} [delete]
 func (o *Operator) HandleDeleteCachedImage(c echo.Context) error {
+	if o.imageCache.ReadOnly() {
+		return c.JSON(http.StatusBadRequest, common.ErrorResponse{
+			Message: "image cache is externally managed in this mode; update the --repos-file and restart instead",
+		})
+	}
 	ctx := c.Request().Context()
 	id := c.Param("id")
 	if err := validateImageCacheID(id); err != nil {
