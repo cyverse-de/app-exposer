@@ -3,7 +3,7 @@ package operator
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -135,6 +135,23 @@ func TestLoadImageMirrorMap(t *testing.T) {
 		{name: "missing file is a clear error", path: filepath.Join(tmp, "does-not-exist.json"), wantErr: true, wantErrPart: "reading repos file"},
 		{name: "malformed JSON surfaces parse error", path: writeFile(t, "malformed.json", "{not valid"), wantErr: true, wantErrPart: "parsing repos file"},
 		{name: "empty object is rejected", path: writeFile(t, "empty.json", "{}"), wantErr: true, wantErrPart: "is empty"},
+		{
+			name: "entry-count cap is enforced",
+			path: func() string {
+				m := make(map[string]string, maxRepoFileEntries+1)
+				for i := 0; i <= maxRepoFileEntries; i++ {
+					// validateImageRef requires alnum-start refs.
+					k := fmt.Sprintf("upstream%d:tag", i)
+					v := fmt.Sprintf("mirror%d:tag", i)
+					m[k] = v
+				}
+				b, err := json.Marshal(m)
+				require.NoError(t, err)
+				return writeFile(t, "too-many.json", string(b))
+			}(),
+			wantErr:     true,
+			wantErrPart: "maximum is",
+		},
 		{name: "empty key is rejected", path: writeFile(t, "empty-key.json", `{"":"x:1"}`), wantErr: true, wantErrPart: "invalid upstream key"},
 		{name: "key with spaces is rejected", path: writeFile(t, "bad-key.json", `{"bad image":"x:1"}`), wantErr: true, wantErrPart: "invalid upstream key"},
 		{name: "value with spaces is rejected", path: writeFile(t, "bad-value.json", `{"harbor.cyverse.org/x:1":"bad ref"}`), wantErr: true, wantErrPart: "invalid mirrored value"},
@@ -156,13 +173,11 @@ func TestLoadImageMirrorMap(t *testing.T) {
 	}
 }
 
-func TestManualMirrorSatisfiesInterfaces(t *testing.T) {
-	// Compile-time confirmation that the concrete type satisfies both
-	// interfaces. Test body intentionally trivial — the assertions live
-	// in the var declarations.
+func TestManualMirrorSatisfiesInterfaces(_ *testing.T) {
+	// Compile-time check that ManualMirrorImageCacheManager implements both
+	// interfaces; runtime body is intentionally empty.
 	var (
 		_ ImageCacheManager = (*ManualMirrorImageCacheManager)(nil)
 		_ ImageRewriter     = (*ManualMirrorImageCacheManager)(nil)
 	)
-	require.True(t, errors.Is(ErrCacheReadOnly, ErrCacheReadOnly))
 }

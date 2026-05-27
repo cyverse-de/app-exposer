@@ -8,18 +8,22 @@ import (
 // TransformImageRefs walks the deployment's container and init-container
 // image fields and substitutes any that have a mapping in rewriter. Images
 // without a mapping pass through unchanged so non-VICE sidecars or
-// not-yet-mirrored images don't block a launch. Returns the number of
-// substitutions, so the caller can log when rewriting actually happened.
-func TransformImageRefs(deployment *appsv1.Deployment, rewriter ImageRewriter) int {
+// not-yet-mirrored images don't block a launch. Always emits an info log
+// summarizing the pass: an admin can grep for "image-ref rewrite" to see
+// whether manual-mirror engaged for a given launch, including the
+// drift-warning case where the rewriter is configured but matched
+// nothing.
+func TransformImageRefs(deployment *appsv1.Deployment, rewriter ImageRewriter) {
 	if deployment == nil || rewriter == nil {
-		return 0
+		return
 	}
-	return rewriteContainerImages(deployment.Spec.Template.Spec.InitContainers, rewriter) +
+	n := rewriteContainerImages(deployment.Spec.Template.Spec.InitContainers, rewriter) +
 		rewriteContainerImages(deployment.Spec.Template.Spec.Containers, rewriter)
+	log.Infof("image-ref rewrite: %d substitution(s) in deployment %s", n, deployment.Name)
 }
 
 func rewriteContainerImages(containers []apiv1.Container, rewriter ImageRewriter) int {
-	count := 0
+	var count int
 	for i := range containers {
 		if mirrored, ok := rewriter.RewriteImage(containers[i].Image); ok {
 			containers[i].Image = mirrored

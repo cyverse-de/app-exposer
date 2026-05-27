@@ -288,9 +288,7 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 	// containers for their mirrored counterparts. Other modes contribute
 	// no rewriter; the bundle's images pass through unchanged.
 	if o.imageRewriter != nil {
-		if n := TransformImageRefs(bundle.Deployment, o.imageRewriter); n > 0 {
-			log.Infof("rewrote %d image ref(s) for analysis %s", n, bundle.AnalysisID)
-		}
+		TransformImageRefs(bundle.Deployment, o.imageRewriter)
 	}
 
 	// Apply all resources via upsert pattern.

@@ -39,8 +39,7 @@ func NewManualMirrorImageCacheManager(mappings map[string]string) *ManualMirrorI
 	}
 }
 
-// ReadOnly is true: the operator can't update the mapping at runtime; it
-// has to be edited in the JSON file and the operator restarted.
+// ReadOnly returns true; the mapping is owned externally and requires a restart to update.
 func (*ManualMirrorImageCacheManager) ReadOnly() bool { return true }
 
 // RewriteImage looks up image in the mapping. If found, returns the
@@ -53,22 +52,22 @@ func (m *ManualMirrorImageCacheManager) RewriteImage(image string) (string, bool
 	return target, true
 }
 
-// EnsureImageCached, RefreshCachedImage, RemoveCachedImage, and
-// RemoveCachedImageByID all return ErrCacheReadOnly. Handlers normally
-// detect ReadOnly() before reaching these, but having the methods return
-// a typed error keeps direct callers honest.
+// EnsureImageCached always returns ErrCacheReadOnly; the mapping is externally managed.
 func (*ManualMirrorImageCacheManager) EnsureImageCached(context.Context, string) error {
 	return ErrCacheReadOnly
 }
 
+// RefreshCachedImage always returns ErrCacheReadOnly; the mapping is externally managed.
 func (*ManualMirrorImageCacheManager) RefreshCachedImage(context.Context, string) error {
 	return ErrCacheReadOnly
 }
 
+// RemoveCachedImage always returns ErrCacheReadOnly; the mapping is externally managed.
 func (*ManualMirrorImageCacheManager) RemoveCachedImage(context.Context, string) error {
 	return ErrCacheReadOnly
 }
 
+// RemoveCachedImageByID always returns ErrCacheReadOnly; the mapping is externally managed.
 func (*ManualMirrorImageCacheManager) RemoveCachedImageByID(context.Context, string) error {
 	return ErrCacheReadOnly
 }
@@ -116,9 +115,17 @@ func (m *ManualMirrorImageCacheManager) GetCachedImageStatus(_ context.Context, 
 // 404 outcome — see HandleGetCachedImage.
 var errImageCacheEntryNotFound = errors.New("manual-mirror entry not found")
 
+// maxRepoFileEntries caps the number of mapping entries accepted from a
+// single repos file. Production mappings are expected to be in the low
+// double digits; a much larger file likely indicates a misconfiguration
+// (e.g. an accidentally-concatenated file) and should fail at startup
+// rather than silently allocating O(N) memory.
+const maxRepoFileEntries = 10000
+
 // LoadImageMirrorMap reads and validates a JSON file mapping upstream
 // image refs to mirrored refs. Both keys and values must pass
-// validateImageRef; the map must be non-empty.
+// validateImageRef; the map must be non-empty and at most
+// maxRepoFileEntries entries long.
 func LoadImageMirrorMap(path string) (map[string]string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -131,6 +138,9 @@ func LoadImageMirrorMap(path string) (map[string]string, error) {
 	}
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("repos file %s is empty", path)
+	}
+	if len(raw) > maxRepoFileEntries {
+		return nil, fmt.Errorf("repos file %s has %d entries; maximum is %d", path, len(raw), maxRepoFileEntries)
 	}
 
 	for k, v := range raw {

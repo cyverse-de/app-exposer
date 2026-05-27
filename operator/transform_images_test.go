@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,7 +53,6 @@ func TestTransformImageRefs(t *testing.T) {
 		name           string
 		initIn, mainIn []string
 		wantInit, wantMain []string
-		wantCount      int
 	}{
 		{
 			name: "no images match: deployment unchanged",
@@ -62,7 +60,6 @@ func TestTransformImageRefs(t *testing.T) {
 			mainIn: []string{"harbor.cyverse.org/de/also-unrelated:2"},
 			wantInit: []string{"harbor.cyverse.org/de/unrelated:1"},
 			wantMain: []string{"harbor.cyverse.org/de/also-unrelated:2"},
-			wantCount: 0,
 		},
 		{
 			name: "init container is rewritten",
@@ -70,7 +67,6 @@ func TestTransformImageRefs(t *testing.T) {
 			mainIn: []string{"harbor.cyverse.org/de/vice-app:latest"},
 			wantInit: []string{"ecr/porklock:latest"},
 			wantMain: []string{"harbor.cyverse.org/de/vice-app:latest"},
-			wantCount: 1,
 		},
 		{
 			name: "main container is rewritten",
@@ -78,7 +74,6 @@ func TestTransformImageRefs(t *testing.T) {
 			mainIn: []string{"harbor.cyverse.org/de/vice-proxy:latest"},
 			wantInit: []string{},
 			wantMain: []string{"ecr/vice-proxy:latest"},
-			wantCount: 1,
 		},
 		{
 			name: "both kinds of containers rewritten in one pass",
@@ -86,15 +81,13 @@ func TestTransformImageRefs(t *testing.T) {
 			mainIn: []string{"harbor.cyverse.org/de/vice-proxy:latest", "harbor.cyverse.org/de/unrelated:3"},
 			wantInit: []string{"ecr/porklock:latest"},
 			wantMain: []string{"ecr/vice-proxy:latest", "harbor.cyverse.org/de/unrelated:3"},
-			wantCount: 2,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dep := makeDeploymentWithImages(tt.initIn, tt.mainIn)
-			got := TransformImageRefs(dep, rewriter)
-			assert.Equal(t, tt.wantCount, got)
+			TransformImageRefs(dep, rewriter)
 
 			gotInit := make([]string, 0, len(dep.Spec.Template.Spec.InitContainers))
 			for _, c := range dep.Spec.Template.Spec.InitContainers {
@@ -112,8 +105,9 @@ func TestTransformImageRefs(t *testing.T) {
 
 func TestTransformImageRefsNilSafe(t *testing.T) {
 	rewriter := stubRewriter{m: map[string]string{"a": "b"}}
-	require.Equal(t, 0, TransformImageRefs(nil, rewriter), "nil deployment is a no-op")
+	// nil deployment and nil rewriter must both be no-ops; panic would fail the test.
+	TransformImageRefs(nil, rewriter)
 	dep := makeDeploymentWithImages(nil, []string{"a"})
-	require.Equal(t, 0, TransformImageRefs(dep, nil), "nil rewriter is a no-op")
-	assert.Equal(t, "a", dep.Spec.Template.Spec.Containers[0].Image)
+	TransformImageRefs(dep, nil)
+	assert.Equal(t, "a", dep.Spec.Template.Spec.Containers[0].Image, "nil rewriter must leave image unchanged")
 }

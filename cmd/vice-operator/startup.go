@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -25,12 +26,12 @@ func buildImageCache(mode, schedule, reposFile string, clientset kubernetes.Inte
 	switch mode {
 	case "daemonset":
 		if reposFile != "" {
-			return nil, nil, fmt.Errorf("--repos-file is only valid with --image-cache-mode=manual-mirror")
+			return nil, nil, errors.New("--repos-file is only valid with --image-cache-mode=manual-mirror")
 		}
 		return operator.NewDaemonSetImageCacheManager(clientset, namespace, imagePullSecret), nil, nil
 	case "cron":
 		if reposFile != "" {
-			return nil, nil, fmt.Errorf("--repos-file is only valid with --image-cache-mode=manual-mirror")
+			return nil, nil, errors.New("--repos-file is only valid with --image-cache-mode=manual-mirror")
 		}
 		if _, err := cron.ParseStandard(schedule); err != nil {
 			return nil, nil, fmt.Errorf("invalid --image-cache-schedule %q: %w", schedule, err)
