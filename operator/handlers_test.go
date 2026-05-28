@@ -76,6 +76,37 @@ func newTestOperatorWithModels(t *testing.T, maxAnalyses int, models []string) (
 	return newTestOperatorWith(t, maxAnalyses, GPUVendorNvidia, models)
 }
 
+// newManualMirrorTestOperator builds a test Operator whose ImageCache and
+// ImageRewriter are both a ManualMirrorImageCacheManager wrapping the given
+// mappings. Used to exercise the read-only cache surface and the
+// launch-time image-rewriting path.
+func newManualMirrorTestOperator(t *testing.T, mappings map[string]string) *Operator {
+	t.Helper()
+	clientset := fake.NewSimpleClientset()
+	gwClientset := gatewayfake.NewSimpleClientset()
+	calc, err := NewCapacityCalculator(clientset, "vice-apps", 10, "")
+	require.NoError(t, err)
+	mgr := NewManualMirrorImageCacheManager(mappings)
+	op, err := NewOperator(OperatorOptions{
+		Clientset:           clientset,
+		GatewayClient:       gwClientset.GatewayV1(),
+		Namespace:           "vice-apps",
+		GatewayNamespace:    "vice-apps",
+		GatewayName:         "vice",
+		GPUVendor:           GPUVendorNvidia,
+		CapacityCalc:        calc,
+		ImageCache:          mgr,
+		ImageRewriter:       mgr,
+		LoadingServiceName:  "vice-operator-loading",
+		LoadingServicePort:  80,
+		LoadingTimeoutMs:    600000,
+		ClusterConfigSecret: "cluster-config-secret",
+		UserSuffix:          constants.DefaultUserSuffix,
+	})
+	require.NoError(t, err)
+	return op
+}
+
 // newTestOperatorWith is the shared constructor behind newTestOperator and
 // newTestOperatorWithModels.
 func newTestOperatorWith(t *testing.T, maxAnalyses int, vendor GPUVendor, models []string) (*Operator, *fake.Clientset, *gatewayfake.Clientset) {
@@ -84,7 +115,7 @@ func newTestOperatorWith(t *testing.T, maxAnalyses int, vendor GPUVendor, models
 	gwClientset := gatewayfake.NewSimpleClientset()
 	calc, err := NewCapacityCalculator(clientset, "vice-apps", maxAnalyses, "")
 	require.NoError(t, err)
-	cache := NewImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
+	cache := NewDaemonSetImageCacheManager(clientset, "vice-apps", "vice-image-pull-secret")
 	op, err := NewOperator(OperatorOptions{
 		Clientset:           clientset,
 		GatewayClient:       gwClientset.GatewayV1(),
@@ -117,7 +148,7 @@ func TestOperatorOptionsValidate(t *testing.T) {
 			GatewayClient: gw.GatewayV1(),
 			Namespace:     "vice-apps",
 			CapacityCalc:  &CapacityCalculator{},
-			ImageCache:    &ImageCacheManager{},
+			ImageCache:    &DaemonSetImageCacheManager{},
 		}
 	}
 

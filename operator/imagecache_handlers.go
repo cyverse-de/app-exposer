@@ -12,6 +12,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// readOnlyResponse writes and returns a 400 when the cache is read-only;
+// returns nil otherwise so callers can use "if err := o.readOnlyResponse(c); err != nil { return err }".
+func (o *Operator) readOnlyResponse(c echo.Context) error {
+	if !o.imageCache.ReadOnly() {
+		return nil
+	}
+	return c.JSON(http.StatusBadRequest, common.ErrorResponse{
+		Message: "image cache is externally managed in this mode; update the --repos-file and restart instead",
+	})
+}
+
 // bulkImageOp binds the request, validates it, applies fn to each image,
 // and returns a 200 (all ok) or 207 Multi-Status (partial failure).
 //
@@ -23,6 +34,9 @@ import (
 // because it forces every caller to parse the body just to know whether
 // anything went wrong.
 func (o *Operator) bulkImageOp(c echo.Context, fn func(ctx context.Context, image string) error) error {
+	if err := o.readOnlyResponse(c); err != nil {
+		return err
+	}
 	ctx := c.Request().Context()
 
 	var req ImageCacheRequest
@@ -132,6 +146,17 @@ func (o *Operator) HandleListCachedImages(c echo.Context) error {
 	return c.JSON(http.StatusOK, ImageCacheListResponse{Images: images})
 }
 
+// isCacheEntryNotFound reports whether err represents a "not found" outcome
+// from any cache backend: a K8s StatusError with reason NotFound (daemonset /
+// cron backends) or the manual-mirror sentinel errImageCacheEntryNotFound.
+func isCacheEntryNotFound(err error) bool {
+	var statusErr *apierrors.StatusError
+	if errors.As(err, &statusErr) && statusErr.ErrStatus.Reason == metav1.StatusReasonNotFound {
+		return true
+	}
+	return errors.Is(err, errImageCacheEntryNotFound)
+}
+
 // HandleGetCachedImage returns the status of a single cached image.
 //
 //	@Summary		Get cached image status
@@ -148,17 +173,17 @@ func (o *Operator) HandleListCachedImages(c echo.Context) error {
 func (o *Operator) HandleGetCachedImage(c echo.Context) error {
 	ctx := c.Request().Context()
 	id := c.Param("id")
-	if id == "" {
-		return c.JSON(http.StatusBadRequest, common.ErrorResponse{Message: "image cache id is required"})
+	if err := validateImageCacheID(id); err != nil {
+		// Treat malformed IDs as not-found so we don't echo K8s API errors
+		// back through the response body.
+		return c.JSON(http.StatusNotFound, common.ErrorResponse{Message: fmt.Sprintf("no cached image with id %q", id)})
 	}
 
 	status, err := o.imageCache.GetCachedImageStatus(ctx, id)
 	if err != nil {
-		// GetCachedImageStatus wraps the K8s error with fmt.Errorf(%w), so
-		// unwrap explicitly with errors.As before comparing the reason. This
-		// matches the pattern used in gateway.go for CORS middleware lookups.
-		var statusErr *apierrors.StatusError
-		if errors.As(err, &statusErr) && statusErr.ErrStatus.Reason == metav1.StatusReasonNotFound {
+		if isCacheEntryNotFound(err) {
+			// Two paths to a not-found: a wrapped K8s StatusError from the
+			// daemonset/cron backends, or the manual-mirror sentinel.
 			return c.JSON(http.StatusNotFound, common.ErrorResponse{Message: fmt.Sprintf("no cached image with id %q", id)})
 		}
 		return c.JSON(http.StatusInternalServerError, common.ErrorResponse{Message: err.Error()})
@@ -179,10 +204,15 @@ func (o *Operator) HandleGetCachedImage(c echo.Context) error {
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/image-cache/{id} [delete]
 func (o *Operator) HandleDeleteCachedImage(c echo.Context) error {
+	if err := o.readOnlyResponse(c); err != nil {
+		return err
+	}
 	ctx := c.Request().Context()
 	id := c.Param("id")
-	if id == "" {
-		return c.JSON(http.StatusBadRequest, common.ErrorResponse{Message: "image cache id is required"})
+	if err := validateImageCacheID(id); err != nil {
+		// DELETE is idempotent: a malformed ID is treated the same as a
+		// missing one, returning success without contacting the API server.
+		return c.NoContent(http.StatusOK)
 	}
 
 	if err := o.imageCache.RemoveCachedImageByID(ctx, id); err != nil {

@@ -57,7 +57,8 @@ type Operator struct {
 	gpuModelAffinityKey string            // Node-label key this cluster uses for GPU-model affinity; empty means use the canonical nvidia.com/gpu.product.
 	gpuModelMapping     map[string]string // Canonical NVIDIA-* model name → cluster-side value (e.g. NVIDIA-A10G → a10g on EKS).
 	capacityCalc        *CapacityCalculator
-	imageCache          *ImageCacheManager
+	imageCache          ImageCacheManager
+	imageRewriter       ImageRewriter // optional; manual-mirror mode supplies one
 	loadingServiceName  string
 	loadingServicePort  int32
 	loadingTimeoutMs    int64
@@ -84,7 +85,8 @@ type OperatorOptions struct {
 	GPUModelAffinityKey string            // Node-label key this cluster uses for GPU-model affinity; empty means use the canonical nvidia.com/gpu.product.
 	GPUModelMapping     map[string]string // Canonical NVIDIA-* model name → cluster-side value (e.g. NVIDIA-A10G → a10g on EKS).
 	CapacityCalc        *CapacityCalculator
-	ImageCache          *ImageCacheManager
+	ImageCache          ImageCacheManager
+	ImageRewriter       ImageRewriter // optional; nil disables image-ref rewriting at launch time
 	LoadingServiceName  string
 	LoadingServicePort  int32
 	LoadingTimeoutMs    int64
@@ -141,6 +143,7 @@ func NewOperator(opts OperatorOptions) (*Operator, error) {
 		gpuModelMapping:     opts.GPUModelMapping,
 		capacityCalc:        opts.CapacityCalc,
 		imageCache:          opts.ImageCache,
+		imageRewriter:       opts.ImageRewriter,
 		loadingServiceName:  opts.LoadingServiceName,
 		loadingServicePort:  opts.LoadingServicePort,
 		loadingTimeoutMs:    opts.LoadingTimeoutMs,
@@ -280,6 +283,13 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 
 	// Rewrite GPU resource names to match the cluster's GPU vendor.
 	TransformGPUVendor(bundle.Deployment, o.gpuVendor)
+
+	// In manual-mirror mode, swap upstream image refs in the deployment's
+	// containers for their mirrored counterparts. Other modes contribute
+	// no rewriter; the bundle's images pass through unchanged.
+	if o.imageRewriter != nil {
+		TransformImageRefs(bundle.Deployment, o.imageRewriter)
+	}
 
 	// Apply all resources via upsert pattern.
 	if err := o.applyBundle(ctx, &bundle); err != nil {
