@@ -27,13 +27,14 @@ import (
 // values even in fixtures.
 var operatorRowColumns = []string{
 	"id", "name", "url", "tls_skip_verify", "priority", "base_url",
+	"accepting_launches", "deactivated",
 	"last_reconciled_at", "reconciled_by", "created_at", "updated_at",
 }
 
 func operatorRow(id uuid.UUID, name, opURL string, baseURL any) *sqlmock.Rows {
 	now := time.Now()
 	return sqlmock.NewRows(operatorRowColumns).
-		AddRow(id, name, opURL, false, 0, baseURL,
+		AddRow(id, name, opURL, false, 0, baseURL, true, false,
 			sql.NullTime{}, sql.NullString{}, now, now)
 }
 
@@ -199,7 +200,7 @@ func TestAdminCanonicalURLHandler(t *testing.T) {
 			bystander.summary(nil),
 		})
 
-		mock.ExpectQuery(`SELECT id, name, url, tls_skip_verify, priority, base_url, last_reconciled_at, reconciled_by, created_at, updated_at FROM operators WHERE id = $1`).
+		mock.ExpectQuery(`SELECT id, name, url, tls_skip_verify, priority, base_url, accepting_launches, deactivated, last_reconciled_at, reconciled_by, created_at, updated_at FROM operators WHERE id = $1`).
 			WithArgs(owner.id).
 			WillReturnRows(operatorRow(owner.id, "aws", owner.server.URL, baseURL))
 
@@ -245,7 +246,7 @@ func TestAdminCanonicalURLHandler(t *testing.T) {
 			owner.summary(nil),
 		})
 
-		mock.ExpectQuery(`SELECT id, name, url, tls_skip_verify, priority, base_url, last_reconciled_at, reconciled_by, created_at, updated_at FROM operators WHERE id = $1`).
+		mock.ExpectQuery(`SELECT id, name, url, tls_skip_verify, priority, base_url, accepting_launches, deactivated, last_reconciled_at, reconciled_by, created_at, updated_at FROM operators WHERE id = $1`).
 			WithArgs(owner.id).
 			WillReturnRows(operatorRow(owner.id, "legacy", owner.server.URL, sql.NullString{}))
 
@@ -262,7 +263,7 @@ func TestAdminCanonicalURLHandler(t *testing.T) {
 			owner.summary(nil),
 		})
 
-		mock.ExpectQuery(`SELECT id, name, url, tls_skip_verify, priority, base_url, last_reconciled_at, reconciled_by, created_at, updated_at FROM operators WHERE id = $1`).
+		mock.ExpectQuery(`SELECT id, name, url, tls_skip_verify, priority, base_url, accepting_launches, deactivated, last_reconciled_at, reconciled_by, created_at, updated_at FROM operators WHERE id = $1`).
 			WithArgs(owner.id).
 			WillReturnError(sql.ErrNoRows)
 

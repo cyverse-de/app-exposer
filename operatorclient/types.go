@@ -332,6 +332,14 @@ type OperatorConfig struct {
 type OperatorAdminSummary struct {
 	ID uuid.UUID `json:"id" db:"id"`
 	OperatorConfig
+	// AcceptingLaunches and Deactivated are operational state, not part of the
+	// create-time OperatorConfig: new operators take the DB defaults
+	// (accepting_launches=true, deactivated=false). When false,
+	// AcceptingLaunches drains the operator (no new launches, otherwise in
+	// service); Deactivated fully removes it from the live pool and takes
+	// precedence over AcceptingLaunches.
+	AcceptingLaunches bool `json:"accepting_launches" db:"accepting_launches"`
+	Deactivated       bool `json:"deactivated" db:"deactivated"`
 }
 
 // UpdateOperatorRequest is the body for PATCH
@@ -341,9 +349,11 @@ type OperatorAdminSummary struct {
 // set it to the zero value" — a value-typed shape would silently force
 // priority=0 / tls_skip_verify=false on every PATCH that omitted them.
 type UpdateOperatorRequest struct {
-	Name          *string `json:"name,omitempty"`
-	URL           *string `json:"url,omitempty"`
-	TLSSkipVerify *bool   `json:"tls_skip_verify,omitempty"`
-	Priority      *int    `json:"priority,omitempty"`
-	BaseURL       *string `json:"base_url,omitempty"`
+	Name              *string `json:"name,omitempty"`
+	URL               *string `json:"url,omitempty"`
+	TLSSkipVerify     *bool   `json:"tls_skip_verify,omitempty"`
+	Priority          *int    `json:"priority,omitempty"`
+	BaseURL           *string `json:"base_url,omitempty"`
+	AcceptingLaunches *bool   `json:"accepting_launches,omitempty"`
+	Deactivated       *bool   `json:"deactivated,omitempty"`
 }

@@ -16,10 +16,15 @@ import (
 const usage = `Usage: vice-operator-tool [--app-exposer-url URL] <command> [flags]
 
 Commands:
-  add      Add a new operator
-  list     List configured operators
-  update   Update an existing operator (partial update by name)
-  delete   Delete an operator by name
+  add         Add a new operator
+  list        List configured operators
+  update      Update an existing operator (partial update by name)
+  delete      Delete an operator by name
+  activate    Re-activate an operator (clear its deactivated flag)
+  deactivate  Deactivate an operator (remove it from the live pool)
+
+The "update" command can also set --accepting-launches (drain) and
+--deactivated alongside other fields.
 
 Use "vice-operator-tool <command> -h" for help on a command.
 `
@@ -53,6 +58,10 @@ func main() {
 		runUpdate(*appExposerURL, subcmdArgs)
 	case "delete":
 		runDelete(*appExposerURL, subcmdArgs)
+	case "activate":
+		runActivate(*appExposerURL, subcmdArgs)
+	case "deactivate":
+		runDeactivate(*appExposerURL, subcmdArgs)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", subcmd)
 		fmt.Fprint(os.Stderr, usage)
@@ -155,9 +164,9 @@ func runList(baseURLStr string, args []string) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tURL\tBASE_URL\tPRIORITY\tTLS_SKIP_VERIFY") //nolint:errcheck
+	fmt.Fprintln(w, "ID\tNAME\tURL\tBASE_URL\tPRIORITY\tTLS_SKIP_VERIFY\tACCEPTING_LAUNCHES\tDEACTIVATED") //nolint:errcheck
 	for _, op := range ops {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%v\n", op.ID, op.Name, op.URL, derefOr(op.BaseURL, "-"), op.Priority, op.TLSSkipVerify) //nolint:errcheck
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%v\t%v\t%v\n", op.ID, op.Name, op.URL, derefOr(op.BaseURL, "-"), op.Priority, op.TLSSkipVerify, op.AcceptingLaunches, op.Deactivated) //nolint:errcheck
 	}
 	if err := w.Flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: flushing tabwriter: %v\n", err)
@@ -174,6 +183,8 @@ func runUpdate(baseURLStr string, args []string) {
 	baseURL := fs.String("base-url", "", "New VICE landing-domain base URL")
 	tlsSkip := fs.Bool("tls-skip-verify", false, "Set TLS skip-verify flag")
 	priority := fs.Int("priority", 0, "Set scheduling priority")
+	acceptingLaunches := fs.Bool("accepting-launches", true, "Set whether the operator accepts new launches (false drains it)")
+	deactivated := fs.Bool("deactivated", false, "Set whether the operator is deactivated (true removes it from the live pool)")
 	// ExitOnError means Parse calls os.Exit on failure; it never returns a non-nil error.
 	_ = fs.Parse(args) //nolint:errcheck // see comment above
 
@@ -200,11 +211,16 @@ func runUpdate(baseURLStr string, args []string) {
 			req.TLSSkipVerify = tlsSkip
 		case "priority":
 			req.Priority = priority
+		case "accepting-launches":
+			req.AcceptingLaunches = acceptingLaunches
+		case "deactivated":
+			req.Deactivated = deactivated
 		}
 	})
 
-	if req.Name == nil && req.URL == nil && req.BaseURL == nil && req.TLSSkipVerify == nil && req.Priority == nil {
-		fmt.Fprintln(os.Stderr, "error: at least one of --new-name, --url, --base-url, --tls-skip-verify, --priority must be set")
+	if req.Name == nil && req.URL == nil && req.BaseURL == nil && req.TLSSkipVerify == nil &&
+		req.Priority == nil && req.AcceptingLaunches == nil && req.Deactivated == nil {
+		fmt.Fprintln(os.Stderr, "error: at least one of --new-name, --url, --base-url, --tls-skip-verify, --priority, --accepting-launches, --deactivated must be set")
 		os.Exit(1)
 	}
 
@@ -231,11 +247,11 @@ func runUpdate(baseURLStr string, args []string) {
 	// "old → new" only when they differ to keep the steady-state path
 	// terse.
 	if *name != summary.Name {
-		fmt.Printf("Operator %q → %q updated successfully (id=%s, url=%s, base_url=%s, priority=%d, tls_skip_verify=%v)\n",
-			*name, summary.Name, summary.ID, summary.URL, derefOr(summary.BaseURL, "-"), summary.Priority, summary.TLSSkipVerify)
+		fmt.Printf("Operator %q → %q updated successfully (id=%s, url=%s, base_url=%s, priority=%d, tls_skip_verify=%v, accepting_launches=%v, deactivated=%v)\n",
+			*name, summary.Name, summary.ID, summary.URL, derefOr(summary.BaseURL, "-"), summary.Priority, summary.TLSSkipVerify, summary.AcceptingLaunches, summary.Deactivated)
 	} else {
-		fmt.Printf("Operator %q updated successfully (id=%s, url=%s, base_url=%s, priority=%d, tls_skip_verify=%v)\n",
-			summary.Name, summary.ID, summary.URL, derefOr(summary.BaseURL, "-"), summary.Priority, summary.TLSSkipVerify)
+		fmt.Printf("Operator %q updated successfully (id=%s, url=%s, base_url=%s, priority=%d, tls_skip_verify=%v, accepting_launches=%v, deactivated=%v)\n",
+			summary.Name, summary.ID, summary.URL, derefOr(summary.BaseURL, "-"), summary.Priority, summary.TLSSkipVerify, summary.AcceptingLaunches, summary.Deactivated)
 	}
 }
 
@@ -270,4 +286,47 @@ func runDelete(baseURLStr string, args []string) {
 	}
 
 	fmt.Printf("Operator %q (id=%s) deleted.\n", name, id)
+}
+
+func runActivate(baseURLStr string, args []string) {
+	setDeactivated(baseURLStr, args, false, "activate")
+}
+
+func runDeactivate(baseURLStr string, args []string) {
+	setDeactivated(baseURLStr, args, true, "deactivate")
+}
+
+// setDeactivated toggles the operator's deactivated flag via the same
+// id-keyed PATCH endpoint as update, so a concurrent rename can't redirect
+// the change to a different row. deactivated is the target value; verb names
+// the command for usage/output text.
+func setDeactivated(baseURLStr string, args []string, deactivated bool, verb string) {
+	u := requireBaseURL(baseURLStr)
+
+	fs := flag.NewFlagSet(verb, flag.ExitOnError)
+	// ExitOnError means Parse calls os.Exit on failure; it never returns a non-nil error.
+	_ = fs.Parse(args) //nolint:errcheck // see comment above
+
+	if fs.NArg() != 1 {
+		fmt.Fprintf(os.Stderr, "usage: vice-operator-tool %s <operator-name>\n", verb)
+		os.Exit(1)
+	}
+	name := fs.Arg(0)
+
+	client := NewOperatorClient(u, http.DefaultClient)
+
+	id, err := resolveOperatorID(client, name)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	summary, err := client.UpdateOperator(context.Background(), id, &operatorclient.UpdateOperatorRequest{Deactivated: &deactivated})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Operator %q (id=%s) %sd (deactivated=%v, accepting_launches=%v).\n",
+		summary.Name, summary.ID, verb, summary.Deactivated, summary.AcceptingLaunches)
 }

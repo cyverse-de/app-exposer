@@ -3044,9 +3044,16 @@ const docTemplate = `{
         "operatorclient.OperatorAdminSummary": {
             "type": "object",
             "properties": {
+                "accepting_launches": {
+                    "description": "AcceptingLaunches and Deactivated are operational state, not part of the\ncreate-time OperatorConfig: new operators take the DB defaults\n(accepting_launches=true, deactivated=false). When false,\nAcceptingLaunches drains the operator (no new launches, otherwise in\nservice); Deactivated fully removes it from the live pool and takes\nprecedence over AcceptingLaunches.",
+                    "type": "boolean"
+                },
                 "base_url": {
                     "description": "required at create; nil only for legacy rows",
                     "type": "string"
+                },
+                "deactivated": {
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "string"
@@ -3100,8 +3107,14 @@ const docTemplate = `{
         "operatorclient.UpdateOperatorRequest": {
             "type": "object",
             "properties": {
+                "accepting_launches": {
+                    "type": "boolean"
+                },
                 "base_url": {
                     "type": "string"
+                },
+                "deactivated": {
+                    "type": "boolean"
                 },
                 "name": {
                     "type": "string"

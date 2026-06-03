@@ -28,8 +28,9 @@ func schedulerWithConfigs(t *testing.T, configs []OperatorConfig) *Scheduler {
 	summaries := make([]OperatorAdminSummary, len(configs))
 	for i, cfg := range configs {
 		summaries[i] = OperatorAdminSummary{
-			ID:             uuid.New(),
-			OperatorConfig: cfg,
+			ID:                uuid.New(),
+			OperatorConfig:    cfg,
+			AcceptingLaunches: true,
 		}
 	}
 	s := NewScheduler(nil)
@@ -191,6 +192,68 @@ func TestSchedulerLaunchAnalysis(t *testing.T) {
 
 			bundle := &AnalysisBundle{AnalysisID: "test-123"}
 			_, operatorName, err := scheduler.LaunchAnalysis(context.Background(), bundle)
+
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantOperator, operatorName)
+			}
+		})
+	}
+}
+
+// TestSchedulerLaunchSkipsDrainingOperators verifies that operators with
+// AcceptingLaunches=false are skipped for new launches: a following operator
+// that is accepting receives the analysis, and when every operator is draining
+// the scheduler reports ErrAllOperatorsDraining rather than a misleading
+// capacity error.
+func TestSchedulerLaunchSkipsDrainingOperators(t *testing.T) {
+	type op struct {
+		accepting bool
+		slots     int
+	}
+	tests := []struct {
+		name         string
+		operators    []op
+		wantOperator string
+		wantErr      error
+	}{
+		{
+			name:         "draining first operator is skipped for accepting second",
+			operators:    []op{{accepting: false, slots: 5}, {accepting: true, slots: 5}},
+			wantOperator: "op-1",
+		},
+		{
+			name:      "all draining returns ErrAllOperatorsDraining",
+			operators: []op{{accepting: false, slots: 5}, {accepting: false, slots: 5}},
+			wantErr:   ErrAllOperatorsDraining,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summaries := make([]OperatorAdminSummary, 0, len(tt.operators))
+			var servers []*httptest.Server
+			for i, o := range tt.operators {
+				srv := mockOperatorServer(o.slots, false)
+				servers = append(servers, srv)
+				summaries = append(summaries, OperatorAdminSummary{
+					ID:                uuid.New(),
+					OperatorConfig:    OperatorConfig{Name: fmt.Sprintf("op-%d", i), URL: srv.URL},
+					AcceptingLaunches: o.accepting,
+				})
+			}
+			defer func() {
+				for _, srv := range servers {
+					srv.Close()
+				}
+			}()
+
+			scheduler := NewScheduler(nil)
+			require.NoError(t, scheduler.Sync(summaries))
+
+			_, operatorName, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "drain-test"})
 
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
@@ -540,7 +603,7 @@ func TestSchedulerClientByID(t *testing.T) {
 	id := uuid.New()
 	scheduler := NewScheduler(nil)
 	require.NoError(t, scheduler.Sync([]OperatorAdminSummary{
-		{ID: id, OperatorConfig: OperatorConfig{Name: "test-op", URL: srv.URL}},
+		{ID: id, OperatorConfig: OperatorConfig{Name: "test-op", URL: srv.URL}, AcceptingLaunches: true},
 	}))
 
 	client := scheduler.ClientByID(id)
@@ -552,7 +615,7 @@ func TestSchedulerClientByID(t *testing.T) {
 
 	// Rename the operator (same id) and verify the lookup still works.
 	require.NoError(t, scheduler.Sync([]OperatorAdminSummary{
-		{ID: id, OperatorConfig: OperatorConfig{Name: "renamed", URL: srv.URL}},
+		{ID: id, OperatorConfig: OperatorConfig{Name: "renamed", URL: srv.URL}, AcceptingLaunches: true},
 	}))
 	client = scheduler.ClientByID(id)
 	require.NotNil(t, client, "id-keyed lookup must survive a rename")
@@ -606,7 +669,7 @@ func TestSchedulerSyncAndSetTokenSource(t *testing.T) {
 	defer srv0.Close()
 
 	origSummaries := []OperatorAdminSummary{
-		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "original-op", URL: srv0.URL}},
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "original-op", URL: srv0.URL}, AcceptingLaunches: true},
 	}
 	scheduler := NewScheduler(nil)
 	require.NoError(t, scheduler.Sync(origSummaries))
@@ -621,8 +684,8 @@ func TestSchedulerSyncAndSetTokenSource(t *testing.T) {
 	defer srv2.Close()
 
 	newSummaries := []OperatorAdminSummary{
-		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "new-op-0", URL: srv1.URL}},
-		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "new-op-1", URL: srv2.URL}},
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "new-op-0", URL: srv1.URL}, AcceptingLaunches: true},
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "new-op-1", URL: srv2.URL}, AcceptingLaunches: true},
 	}
 	require.NoError(t, scheduler.Sync(newSummaries))
 
