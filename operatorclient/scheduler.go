@@ -274,8 +274,10 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 			len(clients), bundle.AnalysisID, ErrAllOperatorsDraining)
 	}
 
-	// Every operator's capacity check failed (all returned errors).
-	if capacityErrors == len(clients) {
+	// Every non-draining operator's capacity check failed. Draining operators
+	// are folded into the accounted-for total so this precise diagnostic still
+	// fires when the remaining operators all failed their capacity check.
+	if capacityErrors > 0 && capacityErrors+drainingSkips == len(clients) {
 		return uuid.Nil, "", fmt.Errorf("all %d operators failed capacity check: %w", len(clients), ErrAllOperatorsExhausted)
 	}
 
@@ -297,11 +299,15 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 			wantModels, bundle.AnalysisID, ErrNoCompatibleModel)
 	}
 
-	// Every operator that passed capacity check then failed the launch for
-	// transient reasons. Surface the last underlying error so the caller
-	// can distinguish it from a real "all at capacity" situation.
+	// At least one operator passed capacity check then failed the launch for
+	// transient reasons, and every operator is now accounted for by some
+	// skip/failure bucket. Surface the last transient error so the caller can
+	// distinguish it from a real "all at capacity" situation. The message says
+	// "could not accept" rather than "unhealthy" because the accounted-for set
+	// may also include draining or at-capacity operators, which aren't unhealthy.
 	if transientErrors > 0 && capacityErrors+transientErrors+vendorMismatches+modelMismatches+drainingSkips == len(clients) {
-		return uuid.Nil, "", fmt.Errorf("all %d operators unhealthy; last error: %w", len(clients), lastTransient)
+		return uuid.Nil, "", fmt.Errorf("no operator could accept analysis %s (%d operators, last transient error): %w",
+			bundle.AnalysisID, len(clients), lastTransient)
 	}
 
 	return uuid.Nil, "", ErrAllOperatorsExhausted

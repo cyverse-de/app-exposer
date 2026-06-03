@@ -287,6 +287,29 @@ func TestSchedulerLaunchAllCapacityChecksFail(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed capacity check", "message should distinguish capacity-failure from at-capacity")
 }
 
+// TestSchedulerLaunchDrainingPlusCapacityFail covers the mixed pool where one
+// operator is draining and every remaining operator fails its capacity check.
+// The draining operator is folded into the accounted-for total so the precise
+// "failed capacity check" diagnostic still fires rather than falling through to
+// the bare ErrAllOperatorsExhausted.
+func TestSchedulerLaunchDrainingPlusCapacityFail(t *testing.T) {
+	draining := mockOperatorServer(5, false) // healthy, but not accepting launches
+	defer draining.Close()
+	broken := mockOperatorServerWithStatuses(0, false, http.StatusInternalServerError, 0, "")
+	defer broken.Close()
+
+	scheduler := NewScheduler(nil)
+	require.NoError(t, scheduler.Sync([]OperatorAdminSummary{
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "op-drain", URL: draining.URL}, AcceptingLaunches: false},
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "op-broken", URL: broken.URL}, AcceptingLaunches: true},
+	}))
+
+	_, _, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrAllOperatorsExhausted)
+	assert.Contains(t, err.Error(), "failed capacity check", "draining operators must not suppress the capacity-failure diagnostic")
+}
+
 // TestSchedulerLaunchTransientErrorFalthrough covers the case added along
 // with isTransientLaunchError: the first operator accepts capacity but then
 // returns a 5xx on Launch. The scheduler should fall through to the next
@@ -345,7 +368,7 @@ func TestSchedulerLaunchAllTransient(t *testing.T) {
 
 	_, _, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unhealthy", "message should distinguish from at-capacity")
+	assert.Contains(t, err.Error(), "could accept", "message should distinguish from at-capacity")
 
 	var statusErr *HTTPStatusError
 	require.ErrorAs(t, err, &statusErr, "last transient error must be preserved in the chain")

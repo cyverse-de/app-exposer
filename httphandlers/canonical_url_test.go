@@ -155,6 +155,7 @@ func (f *fakeOperator) summary(baseURL *string) operatorclient.OperatorAdminSumm
 			URL:     f.server.URL,
 			BaseURL: baseURL,
 		},
+		AcceptingLaunches: true,
 	}
 }
 

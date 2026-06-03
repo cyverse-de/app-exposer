@@ -43,8 +43,17 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "valid URL",
 			summary: OperatorAdminSummary{
-				ID:             uuid.New(),
-				OperatorConfig: OperatorConfig{Name: "op-a", URL: "http://op-a.example.invalid"},
+				ID:                uuid.New(),
+				OperatorConfig:    OperatorConfig{Name: "op-a", URL: "http://op-a.example.invalid"},
+				AcceptingLaunches: true,
+			},
+		},
+		{
+			name: "draining operator carries AcceptingLaunches=false",
+			summary: OperatorAdminSummary{
+				ID:                uuid.New(),
+				OperatorConfig:    OperatorConfig{Name: "op-drain", URL: "http://op-drain.example.invalid"},
+				AcceptingLaunches: false,
 			},
 		},
 		{
@@ -82,6 +91,7 @@ func TestNewClient(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.summary.Name, c.Name())
 			assert.Equal(t, tt.summary.ID, c.ID())
+			assert.Equal(t, tt.summary.AcceptingLaunches, c.AcceptingLaunches())
 			assert.NotNil(t, c.http, "http client must be initialized")
 			assert.Equal(t, 30*time.Second, c.http.Timeout)
 		})

@@ -289,18 +289,18 @@ func runDelete(baseURLStr string, args []string) {
 }
 
 func runActivate(baseURLStr string, args []string) {
-	setDeactivated(baseURLStr, args, false, "activate")
+	setDeactivated(baseURLStr, args, false, "activate", "activated")
 }
 
 func runDeactivate(baseURLStr string, args []string) {
-	setDeactivated(baseURLStr, args, true, "deactivate")
+	setDeactivated(baseURLStr, args, true, "deactivate", "deactivated")
 }
 
 // setDeactivated toggles the operator's deactivated flag via the same
 // id-keyed PATCH endpoint as update, so a concurrent rename can't redirect
 // the change to a different row. deactivated is the target value; verb names
-// the command for usage/output text.
-func setDeactivated(baseURLStr string, args []string, deactivated bool, verb string) {
+// the command for usage text and pastTense labels the success message.
+func setDeactivated(baseURLStr string, args []string, deactivated bool, verb, pastTense string) {
 	u := requireBaseURL(baseURLStr)
 
 	fs := flag.NewFlagSet(verb, flag.ExitOnError)
@@ -327,6 +327,6 @@ func setDeactivated(baseURLStr string, args []string, deactivated bool, verb str
 		os.Exit(1)
 	}
 
-	fmt.Printf("Operator %q (id=%s) %sd (deactivated=%v, accepting_launches=%v).\n",
-		summary.Name, summary.ID, verb, summary.Deactivated, summary.AcceptingLaunches)
+	fmt.Printf("Operator %q (id=%s) %s (deactivated=%v, accepting_launches=%v).\n",
+		summary.Name, summary.ID, pastTense, summary.Deactivated, summary.AcceptingLaunches)
 }
