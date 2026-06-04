@@ -13,16 +13,18 @@ import (
 
 // Operator models the operators table.
 type Operator struct {
-	ID               uuid.UUID  `db:"id"`
-	Name             string     `db:"name"`
-	URL              string     `db:"url"`
-	TLSSkipVerify    bool       `db:"tls_skip_verify"`
-	Priority         int        `db:"priority"`
-	BaseURL          *string    `db:"base_url"`
-	LastReconciledAt *time.Time `db:"last_reconciled_at"`
-	ReconciledBy     *string    `db:"reconciled_by"`
-	CreatedAt        time.Time  `db:"created_at"`
-	UpdatedAt        time.Time  `db:"updated_at"`
+	ID                uuid.UUID  `db:"id"`
+	Name              string     `db:"name"`
+	URL               string     `db:"url"`
+	TLSSkipVerify     bool       `db:"tls_skip_verify"`
+	Priority          int        `db:"priority"`
+	BaseURL           *string    `db:"base_url"`
+	AcceptingLaunches bool       `db:"accepting_launches"`
+	Deactivated       bool       `db:"deactivated"`
+	LastReconciledAt  *time.Time `db:"last_reconciled_at"`
+	ReconciledBy      *string    `db:"reconciled_by"`
+	CreatedAt         time.Time  `db:"created_at"`
+	UpdatedAt         time.Time  `db:"updated_at"`
 }
 
 // JobStatusUpdate models a row in the job_status_updates table. The
@@ -62,19 +64,27 @@ func (o *Operator) ToOperatorConfig() operatorclient.OperatorConfig {
 // update, where the caller needs the row's id without an extra list call.
 func (o *Operator) ToOperatorAdminSummary() operatorclient.OperatorAdminSummary {
 	return operatorclient.OperatorAdminSummary{
-		ID:             o.ID,
-		OperatorConfig: o.ToOperatorConfig(),
+		ID:                o.ID,
+		OperatorConfig:    o.ToOperatorConfig(),
+		AcceptingLaunches: o.AcceptingLaunches,
+		Deactivated:       o.Deactivated,
 	}
 }
 
-// ListOperators returns all operators from the database, ordered by priority
-// (lower values first) with creation time as tiebreaker.
+// ListOperators returns the operators eligible for the live scheduler pool,
+// ordered by priority (lower values first) with creation time as tiebreaker.
+// Deactivated operators are excluded entirely: they take no launches, are not
+// reconciled, and drop out of every scheduler.Clients() fan-out (listing,
+// search, quota, capacity). Drained operators (accepting_launches=false) are
+// retained here — they stay in service and are skipped only at launch time.
 func (d *Database) ListOperators(ctx context.Context) ([]Operator, error) {
 	var ops []Operator
 	const query = `
 		SELECT id, name, url, tls_skip_verify, priority, base_url,
+		       accepting_launches, deactivated,
 		       last_reconciled_at, reconciled_by, created_at, updated_at
 		FROM operators
+		WHERE deactivated = false
 		ORDER BY priority ASC, created_at ASC
 	`
 	err := d.db.SelectContext(ctx, &ops, query)
@@ -88,6 +98,7 @@ func (d *Database) GetOperatorByID(ctx context.Context, id uuid.UUID) (*Operator
 	var op Operator
 	const query = `
 		SELECT id, name, url, tls_skip_verify, priority, base_url,
+		       accepting_launches, deactivated,
 		       last_reconciled_at, reconciled_by, created_at, updated_at
 		FROM operators
 		WHERE id = $1
@@ -106,7 +117,8 @@ func (d *Database) GetOperatorByID(ctx context.Context, id uuid.UUID) (*Operator
 func (d *Database) ListOperatorAdminSummaries(ctx context.Context) ([]operatorclient.OperatorAdminSummary, error) {
 	ops := make([]operatorclient.OperatorAdminSummary, 0)
 	const query = `
-		SELECT id, name, url, tls_skip_verify, priority, base_url
+		SELECT id, name, url, tls_skip_verify, priority, base_url,
+		       accepting_launches, deactivated
 		FROM operators
 		ORDER BY priority ASC, created_at ASC
 	`
@@ -121,6 +133,7 @@ func (d *Database) InsertOperator(ctx context.Context, op *Operator) (*Operator,
 		INSERT INTO operators (name, url, tls_skip_verify, priority, base_url)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, name, url, tls_skip_verify, priority, base_url,
+		          accepting_launches, deactivated,
 		          last_reconciled_at, reconciled_by, created_at, updated_at
 	`
 	var created Operator
@@ -144,8 +157,9 @@ func (d *Database) DeleteOperatorByID(ctx context.Context, id uuid.UUID) error {
 
 // OperatorUpdate carries the optional fields for a partial-update of an
 // operator row. A nil pointer leaves the column unchanged. The name, url,
-// tls_skip_verify, and priority columns are covered by the AFTER UPDATE
-// NOTIFY trigger; base_url is not (it is consumed by the apps service, not
+// tls_skip_verify, priority, accepting_launches, and deactivated columns are
+// covered by the AFTER UPDATE NOTIFY trigger so scheduler-relevant changes
+// resync immediately; base_url is not (it is consumed by the apps service, not
 // app-exposer's scheduler). Reconciliation columns are intentionally
 // reconciler-only and not exposed here.
 //
@@ -154,11 +168,13 @@ func (d *Database) DeleteOperatorByID(ctx context.Context, id uuid.UUID) error {
 // once set. That is intentional: base_url is required from creation onward,
 // so the only NULL rows are legacy operators that predate the column.
 type OperatorUpdate struct {
-	Name          *string
-	URL           *string
-	TLSSkipVerify *bool
-	Priority      *int
-	BaseURL       *string
+	Name              *string
+	URL               *string
+	TLSSkipVerify     *bool
+	Priority          *int
+	BaseURL           *string
+	AcceptingLaunches *bool
+	Deactivated       *bool
 }
 
 // UpdateOperatorByID applies a partial update to the operator row identified
@@ -170,24 +186,28 @@ type OperatorUpdate struct {
 // the underlying *pq.Error (with Code 23505) on UNIQUE collisions for name
 // or url so the handler layer can map it to 409 Conflict.
 //
-// The AFTER UPDATE OF (name, url, tls_skip_verify, priority) trigger on
-// the operators table fires NOTIFY operator_changed automatically, which
-// the reconciler's pq.Listener picks up to drive an immediate scheduler
-// resync — no explicit pg_notify call is required here.
+// The AFTER UPDATE OF (name, url, tls_skip_verify, priority,
+// accepting_launches, deactivated) trigger on the operators table fires
+// NOTIFY operator_changed automatically, which the reconciler's pq.Listener
+// picks up to drive an immediate scheduler resync — no explicit pg_notify
+// call is required here.
 func (d *Database) UpdateOperatorByID(ctx context.Context, id uuid.UUID, upd OperatorUpdate) (*Operator, error) {
 	const query = `
 		UPDATE operators
-		SET name            = COALESCE($2, name),
-		    url             = COALESCE($3, url),
-		    tls_skip_verify = COALESCE($4, tls_skip_verify),
-		    priority        = COALESCE($5, priority),
-		    base_url        = COALESCE($6, base_url)
+		SET name               = COALESCE($2, name),
+		    url                = COALESCE($3, url),
+		    tls_skip_verify    = COALESCE($4, tls_skip_verify),
+		    priority           = COALESCE($5, priority),
+		    base_url           = COALESCE($6, base_url),
+		    accepting_launches = COALESCE($7, accepting_launches),
+		    deactivated        = COALESCE($8, deactivated)
 		WHERE id = $1
 		RETURNING id, name, url, tls_skip_verify, priority, base_url,
+		          accepting_launches, deactivated,
 		          last_reconciled_at, reconciled_by, created_at, updated_at
 	`
 	var updated Operator
-	err := d.db.QueryRowxContext(ctx, query, id, upd.Name, upd.URL, upd.TLSSkipVerify, upd.Priority, upd.BaseURL).StructScan(&updated)
+	err := d.db.QueryRowxContext(ctx, query, id, upd.Name, upd.URL, upd.TLSSkipVerify, upd.Priority, upd.BaseURL, upd.AcceptingLaunches, upd.Deactivated).StructScan(&updated)
 	if err != nil {
 		return nil, err
 	}
@@ -208,9 +228,11 @@ func (d *Database) ClaimAndReconcile(ctx context.Context, hostname string, recon
 
 	const claimQuery = `
 		SELECT id, name, url, tls_skip_verify, priority, base_url,
+		       accepting_launches, deactivated,
 		       last_reconciled_at, reconciled_by, created_at, updated_at
 		FROM operators
-		WHERE last_reconciled_at IS NULL OR last_reconciled_at < $1
+		WHERE deactivated = false
+		  AND (last_reconciled_at IS NULL OR last_reconciled_at < $1)
 		ORDER BY last_reconciled_at ASC NULLS FIRST
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1

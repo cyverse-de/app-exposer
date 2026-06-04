@@ -938,9 +938,20 @@ definitions:
     type: object
   operatorclient.OperatorAdminSummary:
     properties:
+      accepting_launches:
+        description: |-
+          AcceptingLaunches and Deactivated are operational state, not part of the
+          create-time OperatorConfig: new operators take the DB defaults
+          (accepting_launches=true, deactivated=false). When false,
+          AcceptingLaunches drains the operator (no new launches, otherwise in
+          service); Deactivated fully removes it from the live pool and takes
+          precedence over AcceptingLaunches.
+        type: boolean
       base_url:
         description: required at create; nil only for legacy rows
         type: string
+      deactivated:
+        type: boolean
       id:
         type: string
       name:
@@ -975,8 +986,12 @@ definitions:
     type: object
   operatorclient.UpdateOperatorRequest:
     properties:
+      accepting_launches:
+        type: boolean
       base_url:
         type: string
+      deactivated:
+        type: boolean
       name:
         type: string
       priority:

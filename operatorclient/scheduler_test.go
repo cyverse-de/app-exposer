@@ -28,8 +28,9 @@ func schedulerWithConfigs(t *testing.T, configs []OperatorConfig) *Scheduler {
 	summaries := make([]OperatorAdminSummary, len(configs))
 	for i, cfg := range configs {
 		summaries[i] = OperatorAdminSummary{
-			ID:             uuid.New(),
-			OperatorConfig: cfg,
+			ID:                uuid.New(),
+			OperatorConfig:    cfg,
+			AcceptingLaunches: true,
 		}
 	}
 	s := NewScheduler(nil)
@@ -202,6 +203,68 @@ func TestSchedulerLaunchAnalysis(t *testing.T) {
 	}
 }
 
+// TestSchedulerLaunchSkipsDrainingOperators verifies that operators with
+// AcceptingLaunches=false are skipped for new launches: a following operator
+// that is accepting receives the analysis, and when every operator is draining
+// the scheduler reports ErrAllOperatorsDraining rather than a misleading
+// capacity error.
+func TestSchedulerLaunchSkipsDrainingOperators(t *testing.T) {
+	type op struct {
+		accepting bool
+		slots     int
+	}
+	tests := []struct {
+		name         string
+		operators    []op
+		wantOperator string
+		wantErr      error
+	}{
+		{
+			name:         "draining first operator is skipped for accepting second",
+			operators:    []op{{accepting: false, slots: 5}, {accepting: true, slots: 5}},
+			wantOperator: "op-1",
+		},
+		{
+			name:      "all draining returns ErrAllOperatorsDraining",
+			operators: []op{{accepting: false, slots: 5}, {accepting: false, slots: 5}},
+			wantErr:   ErrAllOperatorsDraining,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summaries := make([]OperatorAdminSummary, 0, len(tt.operators))
+			var servers []*httptest.Server
+			for i, o := range tt.operators {
+				srv := mockOperatorServer(o.slots, false)
+				servers = append(servers, srv)
+				summaries = append(summaries, OperatorAdminSummary{
+					ID:                uuid.New(),
+					OperatorConfig:    OperatorConfig{Name: fmt.Sprintf("op-%d", i), URL: srv.URL},
+					AcceptingLaunches: o.accepting,
+				})
+			}
+			defer func() {
+				for _, srv := range servers {
+					srv.Close()
+				}
+			}()
+
+			scheduler := NewScheduler(nil)
+			require.NoError(t, scheduler.Sync(summaries))
+
+			_, operatorName, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "drain-test"})
+
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantOperator, operatorName)
+			}
+		})
+	}
+}
+
 // TestSchedulerLaunchAllCapacityChecksFail exercises the "every operator
 // errored on capacity check" branch — as distinct from "every operator is
 // at capacity," which the table above already covers. LaunchAnalysis must
@@ -222,6 +285,29 @@ func TestSchedulerLaunchAllCapacityChecksFail(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrAllOperatorsExhausted)
 	assert.Contains(t, err.Error(), "failed capacity check", "message should distinguish capacity-failure from at-capacity")
+}
+
+// TestSchedulerLaunchDrainingPlusCapacityFail covers the mixed pool where one
+// operator is draining and every remaining operator fails its capacity check.
+// The draining operator is folded into the accounted-for total so the precise
+// "failed capacity check" diagnostic still fires rather than falling through to
+// the bare ErrAllOperatorsExhausted.
+func TestSchedulerLaunchDrainingPlusCapacityFail(t *testing.T) {
+	draining := mockOperatorServer(5, false) // healthy, but not accepting launches
+	defer draining.Close()
+	broken := mockOperatorServerWithStatuses(0, false, http.StatusInternalServerError, 0, "")
+	defer broken.Close()
+
+	scheduler := NewScheduler(nil)
+	require.NoError(t, scheduler.Sync([]OperatorAdminSummary{
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "op-drain", URL: draining.URL}, AcceptingLaunches: false},
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "op-broken", URL: broken.URL}, AcceptingLaunches: true},
+	}))
+
+	_, _, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrAllOperatorsExhausted)
+	assert.Contains(t, err.Error(), "failed capacity check", "draining operators must not suppress the capacity-failure diagnostic")
 }
 
 // TestSchedulerLaunchTransientErrorFalthrough covers the case added along
@@ -282,7 +368,7 @@ func TestSchedulerLaunchAllTransient(t *testing.T) {
 
 	_, _, err := scheduler.LaunchAnalysis(context.Background(), &AnalysisBundle{AnalysisID: "test"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unhealthy", "message should distinguish from at-capacity")
+	assert.Contains(t, err.Error(), "could accept", "message should distinguish from at-capacity")
 
 	var statusErr *HTTPStatusError
 	require.ErrorAs(t, err, &statusErr, "last transient error must be preserved in the chain")
@@ -540,7 +626,7 @@ func TestSchedulerClientByID(t *testing.T) {
 	id := uuid.New()
 	scheduler := NewScheduler(nil)
 	require.NoError(t, scheduler.Sync([]OperatorAdminSummary{
-		{ID: id, OperatorConfig: OperatorConfig{Name: "test-op", URL: srv.URL}},
+		{ID: id, OperatorConfig: OperatorConfig{Name: "test-op", URL: srv.URL}, AcceptingLaunches: true},
 	}))
 
 	client := scheduler.ClientByID(id)
@@ -552,7 +638,7 @@ func TestSchedulerClientByID(t *testing.T) {
 
 	// Rename the operator (same id) and verify the lookup still works.
 	require.NoError(t, scheduler.Sync([]OperatorAdminSummary{
-		{ID: id, OperatorConfig: OperatorConfig{Name: "renamed", URL: srv.URL}},
+		{ID: id, OperatorConfig: OperatorConfig{Name: "renamed", URL: srv.URL}, AcceptingLaunches: true},
 	}))
 	client = scheduler.ClientByID(id)
 	require.NotNil(t, client, "id-keyed lookup must survive a rename")
@@ -606,7 +692,7 @@ func TestSchedulerSyncAndSetTokenSource(t *testing.T) {
 	defer srv0.Close()
 
 	origSummaries := []OperatorAdminSummary{
-		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "original-op", URL: srv0.URL}},
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "original-op", URL: srv0.URL}, AcceptingLaunches: true},
 	}
 	scheduler := NewScheduler(nil)
 	require.NoError(t, scheduler.Sync(origSummaries))
@@ -621,8 +707,8 @@ func TestSchedulerSyncAndSetTokenSource(t *testing.T) {
 	defer srv2.Close()
 
 	newSummaries := []OperatorAdminSummary{
-		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "new-op-0", URL: srv1.URL}},
-		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "new-op-1", URL: srv2.URL}},
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "new-op-0", URL: srv1.URL}, AcceptingLaunches: true},
+		{ID: uuid.New(), OperatorConfig: OperatorConfig{Name: "new-op-1", URL: srv2.URL}, AcceptingLaunches: true},
 	}
 	require.NoError(t, scheduler.Sync(newSummaries))
 

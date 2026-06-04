@@ -49,10 +49,11 @@ func (e *HTTPStatusError) Transient() bool {
 
 // Client communicates with a single vice-operator instance via HTTP.
 type Client struct {
-	id      uuid.UUID
-	name    string
-	baseURL *url.URL
-	http    *http.Client
+	id                uuid.UUID
+	name              string
+	baseURL           *url.URL
+	http              *http.Client
+	acceptingLaunches bool
 }
 
 // NewClient creates a new operator Client from an OperatorAdminSummary
@@ -85,9 +86,10 @@ func NewClient(summary OperatorAdminSummary, ts oauth2.TokenSource) (*Client, er
 	}
 
 	return &Client{
-		id:      summary.ID,
-		name:    summary.Name,
-		baseURL: u,
+		id:                summary.ID,
+		name:              summary.Name,
+		baseURL:           u,
+		acceptingLaunches: summary.AcceptingLaunches,
 		http: &http.Client{
 			Transport: otelhttp.NewTransport(transport),
 			Timeout:   30 * time.Second,
@@ -129,6 +131,13 @@ func (c *Client) Name() string {
 // by id rather than name.
 func (c *Client) ID() uuid.UUID {
 	return c.id
+}
+
+// AcceptingLaunches reports whether this operator should receive new launches.
+// When false the operator is draining: the scheduler skips it for new work but
+// it remains in the pool so its running analyses stay listable and reconciled.
+func (c *Client) AcceptingLaunches() bool {
+	return c.acceptingLaunches
 }
 
 // Capacity queries the operator for its current cluster capacity.

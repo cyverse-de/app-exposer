@@ -58,6 +58,12 @@ var (
 	// or returned a 409 Conflict during the launch attempt.
 	ErrAllOperatorsExhausted = errors.New("all operators at capacity")
 
+	// ErrAllOperatorsDraining means every operator in the pool is draining
+	// (accepting_launches=false), so none can take a new launch. Distinct
+	// from ErrAllOperatorsExhausted so callers can tell a deliberate drain
+	// apart from a genuine capacity shortfall.
+	ErrAllOperatorsDraining = errors.New("all operators draining (not accepting launches)")
+
 	// ErrNoCompatibleOperator means every operator with capacity reported
 	// a GPU vendor incompatible with the analysis's request. Distinct from
 	// ErrAllOperatorsExhausted so callers can tell a routing-policy failure
@@ -186,6 +192,7 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 		transientErrors  int
 		vendorMismatches int
 		modelMismatches  int
+		drainingSkips    int
 		lastTransient    error
 	)
 
@@ -193,6 +200,14 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 	wantModels := bundle.RequestedGPUModels()
 
 	for _, op := range clients {
+		// Skip operators that are draining: they stay in the pool to serve
+		// their existing analyses but must not receive new launches.
+		if !op.AcceptingLaunches() {
+			drainingSkips++
+			log.Infof("operator %s not accepting launches (draining); skipping", op.Name())
+			continue
+		}
+
 		// Check capacity first.
 		cap, err := op.Capacity(ctx)
 		if err != nil {
@@ -251,15 +266,27 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 		return op.ID(), op.Name(), nil
 	}
 
-	// Every operator's capacity check failed (all returned errors).
-	if capacityErrors == len(clients) {
+	// Every operator is draining: none could take the launch by policy, not
+	// because of capacity or health. Surface this distinctly so the caller
+	// isn't misled into reporting a capacity shortfall.
+	if drainingSkips == len(clients) {
+		return uuid.Nil, "", fmt.Errorf("all %d operators draining for analysis %s: %w",
+			len(clients), bundle.AnalysisID, ErrAllOperatorsDraining)
+	}
+
+	// Every non-draining operator's capacity check failed. Draining operators
+	// are folded into the accounted-for total so this precise diagnostic still
+	// fires when the remaining operators all failed their capacity check.
+	if capacityErrors > 0 && capacityErrors+drainingSkips == len(clients) {
 		return uuid.Nil, "", fmt.Errorf("all %d operators failed capacity check: %w", len(clients), ErrAllOperatorsExhausted)
 	}
 
 	// No operator advertised a compatible GPU vendor. Distinct from the
 	// at-capacity / unhealthy buckets so callers can surface a routing-
-	// policy error rather than a misleading "at capacity" message.
-	if wantVendor != "" && vendorMismatches > 0 && capacityErrors+vendorMismatches == len(clients) {
+	// policy error rather than a misleading "at capacity" message. Draining
+	// operators are folded into the accounted-for total so the precise error
+	// still fires when the non-draining operators are all vendor mismatches.
+	if wantVendor != "" && vendorMismatches > 0 && capacityErrors+vendorMismatches+drainingSkips == len(clients) {
 		return uuid.Nil, "", fmt.Errorf("no operator with vendor %s for analysis %s: %w",
 			wantVendor, bundle.AnalysisID, ErrNoCompatibleOperator)
 	}
@@ -267,16 +294,20 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 	// No operator advertised a compatible GPU model. Surface this distinctly
 	// so callers can tell "right vendor, wrong model" apart from
 	// ErrNoCompatibleOperator and ErrAllOperatorsExhausted.
-	if len(wantModels) > 0 && modelMismatches > 0 && capacityErrors+vendorMismatches+modelMismatches == len(clients) {
+	if len(wantModels) > 0 && modelMismatches > 0 && capacityErrors+vendorMismatches+modelMismatches+drainingSkips == len(clients) {
 		return uuid.Nil, "", fmt.Errorf("no operator with model %v for analysis %s: %w",
 			wantModels, bundle.AnalysisID, ErrNoCompatibleModel)
 	}
 
-	// Every operator that passed capacity check then failed the launch for
-	// transient reasons. Surface the last underlying error so the caller
-	// can distinguish it from a real "all at capacity" situation.
-	if transientErrors > 0 && capacityErrors+transientErrors+vendorMismatches+modelMismatches == len(clients) {
-		return uuid.Nil, "", fmt.Errorf("all %d operators unhealthy; last error: %w", len(clients), lastTransient)
+	// At least one operator passed capacity check then failed the launch for
+	// transient reasons, and every operator is now accounted for by some
+	// skip/failure bucket. Surface the last transient error so the caller can
+	// distinguish it from a real "all at capacity" situation. The message says
+	// "could not accept" rather than "unhealthy" because the accounted-for set
+	// may also include draining or at-capacity operators, which aren't unhealthy.
+	if transientErrors > 0 && capacityErrors+transientErrors+vendorMismatches+modelMismatches+drainingSkips == len(clients) {
+		return uuid.Nil, "", fmt.Errorf("no operator could accept analysis %s (%d operators, last transient error): %w",
+			bundle.AnalysisID, len(clients), lastTransient)
 	}
 
 	return uuid.Nil, "", ErrAllOperatorsExhausted

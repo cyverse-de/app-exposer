@@ -659,7 +659,8 @@ func (h *HTTPHandlers) UpdateOperatorHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	if req.Name == nil && req.URL == nil && req.TLSSkipVerify == nil && req.Priority == nil && req.BaseURL == nil {
+	if req.Name == nil && req.URL == nil && req.TLSSkipVerify == nil && req.Priority == nil &&
+		req.BaseURL == nil && req.AcceptingLaunches == nil && req.Deactivated == nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "request body must update at least one field")
 	}
 
@@ -668,11 +669,13 @@ func (h *HTTPHandlers) UpdateOperatorHandler(c echo.Context) error {
 	}
 
 	updated, err := h.db.UpdateOperatorByID(ctx, id, db.OperatorUpdate{
-		Name:          req.Name,
-		URL:           req.URL,
-		TLSSkipVerify: req.TLSSkipVerify,
-		Priority:      req.Priority,
-		BaseURL:       req.BaseURL,
+		Name:              req.Name,
+		URL:               req.URL,
+		TLSSkipVerify:     req.TLSSkipVerify,
+		Priority:          req.Priority,
+		BaseURL:           req.BaseURL,
+		AcceptingLaunches: req.AcceptingLaunches,
+		Deactivated:       req.Deactivated,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusNotFound, "operator not found")

@@ -259,6 +259,34 @@ func TestUpdateOperator(t *testing.T) {
 			respBody:   `{"id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","name":"renamed","url":"https://new.example.com","tls_skip_verify":true,"priority":7}`,
 		},
 		{
+			name: "drain — accepting_launches false only",
+			req:  &operatorclient.UpdateOperatorRequest{AcceptingLaunches: boolPtr(false)},
+			validate: func(t *testing.T, raw []byte, decoded operatorclient.UpdateOperatorRequest) {
+				t.Helper()
+				require.NotNil(t, decoded.AcceptingLaunches)
+				assert.False(t, *decoded.AcceptingLaunches)
+				assert.Nil(t, decoded.Deactivated)
+				assert.Contains(t, string(raw), "accepting_launches")
+				assert.NotContains(t, string(raw), "deactivated")
+			},
+			statusCode: http.StatusOK,
+			respBody:   `{"id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","name":"orig","url":"https://orig.example.com","tls_skip_verify":false,"priority":0,"accepting_launches":false,"deactivated":false}`,
+		},
+		{
+			name: "deactivate — deactivated true only",
+			req:  &operatorclient.UpdateOperatorRequest{Deactivated: boolPtr(true)},
+			validate: func(t *testing.T, raw []byte, decoded operatorclient.UpdateOperatorRequest) {
+				t.Helper()
+				require.NotNil(t, decoded.Deactivated)
+				assert.True(t, *decoded.Deactivated)
+				assert.Nil(t, decoded.AcceptingLaunches)
+				assert.Contains(t, string(raw), "deactivated")
+				assert.NotContains(t, string(raw), "accepting_launches")
+			},
+			statusCode: http.StatusOK,
+			respBody:   `{"id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","name":"orig","url":"https://orig.example.com","tls_skip_verify":false,"priority":0,"accepting_launches":true,"deactivated":true}`,
+		},
+		{
 			name:       "404 not found",
 			req:        &operatorclient.UpdateOperatorRequest{Priority: &newPriority},
 			statusCode: http.StatusNotFound,
@@ -327,6 +355,8 @@ func TestUpdateOperator(t *testing.T) {
 // strPtr returns a pointer to the given string. Used to build pointer-typed
 // fields concisely in test table entries.
 func strPtr(s string) *string { return &s }
+
+func boolPtr(b bool) *bool { return &b }
 
 // readAllAndRestore drains r.Body so the test can both inspect the raw
 // JSON and decode it. The body is replaced with a fresh reader so any

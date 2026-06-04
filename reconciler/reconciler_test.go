@@ -422,7 +422,7 @@ func TestReconcileNext(t *testing.T) {
 		// must match claimOp.ID because ReconcileNext looks up the
 		// scheduler client by id, not name.
 		require.NoError(t, r.scheduler.Sync([]operatorclient.OperatorAdminSummary{
-			{ID: opID, OperatorConfig: operatorclient.OperatorConfig{Name: "op-a", URL: srv.URL}},
+			{ID: opID, OperatorConfig: operatorclient.OperatorConfig{Name: "op-a", URL: srv.URL}, AcceptingLaunches: true},
 		}))
 
 		err := r.ReconcileNext(context.Background())
@@ -464,7 +464,7 @@ func TestReconcileNext(t *testing.T) {
 		}
 		r := newTestReconciler(t, fake)
 		require.NoError(t, r.scheduler.Sync([]operatorclient.OperatorAdminSummary{
-			{ID: opID, OperatorConfig: operatorclient.OperatorConfig{Name: "op-a", URL: srv.URL}},
+			{ID: opID, OperatorConfig: operatorclient.OperatorConfig{Name: "op-a", URL: srv.URL}, AcceptingLaunches: true},
 		}))
 
 		err := r.ReconcileNext(context.Background())
@@ -539,4 +539,3 @@ func TestNextBackoff(t *testing.T) {
 		})
 	}
 }
-
