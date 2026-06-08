@@ -145,6 +145,12 @@ const docTemplateoperator = `{
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
+                    },
+                    "503": {
+                        "description": "Spec launch disabled on this operator",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
                     }
                 }
             }

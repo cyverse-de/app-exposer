@@ -262,6 +262,27 @@ func TestHandleCapacityAdvertisesSpecVersion(t *testing.T) {
 	assert.True(t, resp.SupportsSpecVersion(operatorclient.CurrentVICESpecVersion))
 }
 
+// TestHandleCapacitySpecLaunchDisabled confirms that with spec launch disabled
+// the operator advertises SpecVersion 0, which the scheduler reads as "send a
+// legacy bundle" — the per-operator rollback lever.
+func TestHandleCapacitySpecLaunchDisabled(t *testing.T) {
+	op, _, _ := newTestOperator(t, 10)
+	op.disableSpecLaunch = true
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/capacity", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, op.HandleCapacity(c))
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp operatorclient.CapacityResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 0, resp.SpecVersion)
+	assert.False(t, resp.SupportsSpecVersion(operatorclient.CurrentVICESpecVersion))
+}
+
 // TestHandleCapacityIncludesGPUModels confirms that HandleCapacity copies
 // the operator's configured GPU model list into the response so the
 // scheduler can filter capability at routing time.

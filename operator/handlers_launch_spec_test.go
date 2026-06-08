@@ -161,6 +161,23 @@ func TestHandleLaunchSpecValidation(t *testing.T) {
 	}
 }
 
+// TestHandleLaunchSpecDisabled confirms the spec endpoint refuses launches when
+// spec launch is disabled, returning a transient 503 so a stray spec is retried
+// elsewhere rather than failing outright.
+func TestHandleLaunchSpecDisabled(t *testing.T) {
+	op, clientset, _ := newTestOperator(t, 10)
+	configureBuild(op)
+	op.disableSpecLaunch = true
+
+	rec, err := postSpec(t, op, specTestSpec())
+	assert.Equal(t, http.StatusServiceUnavailable, statusFromResult(t, rec, err))
+
+	// Nothing should have been created.
+	deps, listErr := clientset.AppsV1().Deployments("vice-apps").List(context.Background(), metav1.ListOptions{})
+	require.NoError(t, listErr)
+	assert.Empty(t, deps.Items, "no resources should be created when spec launch is disabled")
+}
+
 // prefillSlot occupies the operator's single capacity slot with an existing
 // VICE deployment.
 func prefillSlot(t *testing.T, op *Operator) {

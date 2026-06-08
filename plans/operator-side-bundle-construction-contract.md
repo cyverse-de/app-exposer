@@ -123,6 +123,13 @@ operator selection the scheduler treats version like any other fit check:
 This is the single switch that lets the object path and the spec path coexist
 and lets operators migrate one at a time. It is removed in Phase 6.
 
+**Rollback lever.** A new operator advertises `CurrentVICESpecVersion` by
+default. Starting it with `--disable-spec-launch` makes it advertise `0`
+instead, so the scheduler routes it legacy bundles without an app-exposer
+redeploy; the operator also rejects any spec that reaches `/analyses/spec`
+directly with a transient 503 (so a stray spec is retried elsewhere). This is
+the per-operator "flip back to object-mode" lever the migration plan calls for.
+
 ## Validation
 
 `AnalysisBundle.Validate()` re-walked each built child object asserting its

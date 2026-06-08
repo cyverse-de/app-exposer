@@ -3025,6 +3025,10 @@ const docTemplate = `{
                 "runningAnalyses": {
                     "type": "integer"
                 },
+                "specVersion": {
+                    "description": "SpecVersion is the maximum VICESpec wire-contract version this operator\ncan build. 0 (the zero value, also what pre-spec operators report) means\nthe operator does not support the spec path, so the scheduler must send\nit a legacy AnalysisBundle instead. See operatorclient.CurrentVICESpecVersion.",
+                    "type": "integer"
+                },
                 "supportedGPUModels": {
                     "type": "array",
                     "items": {

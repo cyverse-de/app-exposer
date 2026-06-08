@@ -83,6 +83,10 @@ type Operator struct {
 	gatewayProvider         string
 	imagePullSecretName     string
 	resourceDefaults        vicebuild.ResourceDefaults
+	// disableSpecLaunch turns off the operator-side spec build path: the
+	// operator advertises SpecVersion 0 (so app-exposer routes it a legacy
+	// bundle) and rejects direct spec launches. The per-operator rollback lever.
+	disableSpecLaunch bool
 }
 
 // OperatorOptions aggregates everything NewOperator needs. Held as a
@@ -123,6 +127,7 @@ type OperatorOptions struct {
 	GatewayProvider         string
 	ImagePullSecretName     string
 	ResourceDefaults        vicebuild.ResourceDefaults
+	DisableSpecLaunch       bool
 }
 
 // Validate confirms the wiring-critical fields are present. The caller
@@ -192,6 +197,7 @@ func NewOperator(opts OperatorOptions) (*Operator, error) {
 		gatewayProvider:         opts.GatewayProvider,
 		imagePullSecretName:     opts.ImagePullSecretName,
 		resourceDefaults:        opts.ResourceDefaults,
+		disableSpecLaunch:       opts.DisableSpecLaunch,
 	}, nil
 }
 
@@ -294,7 +300,11 @@ func (o *Operator) HandleCapacity(c echo.Context) error {
 	}
 	cap.GPUVendor = string(o.gpuVendor)
 	cap.SupportedGPUModels = o.gpuModels
-	cap.SpecVersion = operatorclient.CurrentVICESpecVersion
+	// Advertise spec support unless it's been switched off, in which case 0
+	// tells the scheduler to send this operator a legacy bundle instead.
+	if !o.disableSpecLaunch {
+		cap.SpecVersion = operatorclient.CurrentVICESpecVersion
+	}
 	return c.JSON(http.StatusOK, cap)
 }
 
@@ -425,9 +435,18 @@ func (o *Operator) applyBundleAndEgress(ctx context.Context, bundle *operatorcli
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		409		{object}	common.ErrorResponse
 //	@Failure		500		{object}	common.ErrorResponse
+//	@Failure		503		{object}	common.ErrorResponse	"Spec launch disabled on this operator"
 //	@Router			/analyses/spec [post]
 func (o *Operator) HandleLaunchSpec(c echo.Context) error {
 	ctx := c.Request().Context()
+
+	// Defensive backstop: with spec launch disabled the operator advertises
+	// SpecVersion 0, so the scheduler shouldn't route a spec here at all. A 503
+	// is transient, so a spec that arrives anyway is retried on another operator
+	// rather than failing the launch outright.
+	if o.disableSpecLaunch {
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "spec launch is disabled on this operator")
+	}
 
 	var spec operatorclient.VICESpec
 	if err := c.Bind(&spec); err != nil {

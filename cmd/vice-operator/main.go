@@ -114,6 +114,8 @@ func main() {
 		viceProxyStorageRequest      string
 		viceProxyStorageLimit        string
 		disableViceProxyStorageLimit bool
+
+		disableSpecLaunch bool
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -203,6 +205,8 @@ func main() {
 	flag.StringVar(&viceProxyStorageRequest, "vice-proxy-storage-resource-request", "16Gi", "Ephemeral storage request for the vice-proxy sidecar")
 	flag.StringVar(&viceProxyStorageLimit, "vice-proxy-storage-resource-limit", "100Gi", "Ephemeral storage limit for the vice-proxy sidecar")
 	flag.BoolVar(&disableViceProxyStorageLimit, "disable-vice-proxy-storage-resource-limit", true, "Disable the vice-proxy storage limit")
+
+	flag.BoolVar(&disableSpecLaunch, "disable-spec-launch", false, "Disable the operator-side VICESpec build path: advertise spec support off so app-exposer sends legacy bundles, and reject direct spec launches. Per-operator rollback lever during migration.")
 
 	flag.Parse()
 
@@ -490,6 +494,7 @@ func main() {
 		GatewayProvider:         gatewayProvider,
 		ImagePullSecretName:     imagePullSecret,
 		ResourceDefaults:        resourceDefaults,
+		DisableSpecLaunch:       disableSpecLaunch,
 	})
 	if err != nil {
 		log.Fatalf("failed to construct operator: %v", err)
