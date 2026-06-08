@@ -15,9 +15,9 @@ func TestHandleLandingPage(t *testing.T) {
 	// theme from the shared partials. Asserting on a marker from each confirms
 	// the partials parsed and rendered, not just that the page returned 200.
 	wantContains := []string{
-		"VICE Operator",                                  // page heading
-		"API Documentation",                              // docs link text
-		"/docs/index.html",                               // docs link target
+		"VICE Operator",     // page heading
+		"API Documentation", // docs link text
+		"/docs/index.html",  // docs link target
 		"Powered by CyVerse at The University of Arizona", // footer partial
 		`viewBox="0 0 157.37 37.79"`,                      // brand/logo partial
 	}

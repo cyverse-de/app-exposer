@@ -196,6 +196,37 @@ func (c *Client) Launch(ctx context.Context, bundle *AnalysisBundle) error {
 	return nil
 }
 
+// LaunchSpec sends a VICESpec to the operator's spec build path
+// (POST /analyses/spec). Returns ErrCapacityExhausted on 409 Conflict. The
+// scheduler only calls this for operators whose advertised SpecVersion covers
+// the spec; see Scheduler.LaunchAnalysisSpec.
+func (c *Client) LaunchSpec(ctx context.Context, spec *VICESpec) error {
+	body, err := json.Marshal(spec)
+	if err != nil {
+		return fmt.Errorf("marshalling spec: %w", err)
+	}
+
+	reqURL := c.baseURL.JoinPath("analyses", "spec").String()
+	log.Infof("operator %s: POST %s (analysis %s)", c.name, reqURL, spec.AnalysisID)
+
+	resp, err := c.doRequest(ctx, http.MethodPost, reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("spec launch request for analysis %s: %w", spec.AnalysisID, err)
+	}
+	defer common.CloseBody(resp)
+
+	if resp.StatusCode == http.StatusConflict {
+		log.Infof("operator %s: spec launch returned 409 Conflict for analysis %s", c.name, spec.AnalysisID)
+		return ErrCapacityExhausted
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		respBody, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		log.Errorf("operator %s: spec launch returned %d for analysis %s: %s", c.name, resp.StatusCode, spec.AnalysisID, string(respBody))
+		return &HTTPStatusError{StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+	return nil
+}
+
 // analysisURL builds a URL for an analysis-scoped endpoint.
 func (c *Client) analysisURL(analysisID AnalysisID, subpath string) string {
 	return c.baseURL.JoinPath("analyses", string(analysisID), subpath).String()

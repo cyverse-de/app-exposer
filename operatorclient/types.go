@@ -65,6 +65,18 @@ type CapacityResponse struct {
 	UsedMemory         int64    `json:"usedMemory"`        // bytes
 	GPUVendor          string   `json:"gpuVendor,omitempty"`
 	SupportedGPUModels []string `json:"supportedGPUModels,omitempty"`
+	// SpecVersion is the maximum VICESpec wire-contract version this operator
+	// can build. 0 (the zero value, also what pre-spec operators report) means
+	// the operator does not support the spec path, so the scheduler must send
+	// it a legacy AnalysisBundle instead. See operatorclient.CurrentVICESpecVersion.
+	SpecVersion int `json:"specVersion,omitempty"`
+}
+
+// SupportsSpecVersion reports whether this operator can build the given
+// VICESpec wire-contract version. Encapsulates the "operator too old → skip"
+// rule so the scheduler does not compare versions inline.
+func (c *CapacityResponse) SupportsSpecVersion(v int) bool {
+	return c.SpecVersion >= v
 }
 
 // HasCapacity reports whether this operator can accept a new analysis.
@@ -90,9 +102,16 @@ type PodsResponse struct {
 const (
 	gpuResourceNvidia = "nvidia.com/gpu"
 	gpuResourceAMD    = "amd.com/gpu"
+)
 
-	gpuVendorNvidia = "nvidia"
-	gpuVendorAMD    = "amd"
+// Canonical GPU vendor identifiers. These are the vendor-neutral names the
+// scheduler matches on and that GPUSpec.Vendor carries; the operator maps them
+// onto cluster-specific resource names (nvidia.com/gpu, amd.com/gpu) and
+// node-label schemes at build time. Exported so both the legacy AnalysisBundle
+// path and the VICESpec path share one canonical set.
+const (
+	GPUVendorNvidia = "nvidia"
+	GPUVendorAMD    = "amd"
 )
 
 // RequestedGPUVendor inspects the bundle's containers (and init
@@ -123,9 +142,9 @@ func vendorFromResources(rl apiv1.ResourceList) string {
 	for name := range rl {
 		switch string(name) {
 		case gpuResourceNvidia:
-			return gpuVendorNvidia
+			return GPUVendorNvidia
 		case gpuResourceAMD:
-			return gpuVendorAMD
+			return GPUVendorAMD
 		}
 	}
 	return ""

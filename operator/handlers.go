@@ -11,6 +11,7 @@ import (
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
+	"github.com/cyverse-de/app-exposer/vicebuild"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 
@@ -68,6 +69,24 @@ type Operator struct {
 	httpClient          HTTPClient          // Client for contacting the vice-proxy sidecar.
 	userSuffix          string              // Domain suffix for usernames (e.g. "@iplantcollaborative.org").
 	localStorageClass   string              // StorageClass for the per-analysis working-dir PVC; empty means cluster default.
+
+	// Construction config for the operator-side VICESpec build path. These are
+	// the cluster values vicebuild needs that the legacy transform path didn't
+	// require app-exposer to know. Populated from cmd/vice-operator flags.
+	porklockImage           string
+	porklockTag             string
+	viceProxyImage          string
+	useCSIDriver            bool
+	frontendBaseURL         string
+	irodsZone               string
+	inputPathListIdentifier string
+	gatewayProvider         string
+	imagePullSecretName     string
+	resourceDefaults        vicebuild.ResourceDefaults
+	// disableSpecLaunch turns off the operator-side spec build path: the
+	// operator advertises SpecVersion 0 (so app-exposer routes it a legacy
+	// bundle) and rejects direct spec launches. The per-operator rollback lever.
+	disableSpecLaunch bool
 }
 
 // OperatorOptions aggregates everything NewOperator needs. Held as a
@@ -95,6 +114,20 @@ type OperatorOptions struct {
 	EgressConfig        NetworkPolicyConfig // Egress policy config for per-analysis policies.
 	UserSuffix          string              // Domain suffix for usernames (e.g. "@iplantcollaborative.org").
 	LocalStorageClass   string              // StorageClass for the per-analysis working-dir PVC; empty means cluster default.
+
+	// VICESpec construction config (see Operator). These drive the
+	// operator-side build path; the legacy bundle path ignores them.
+	PorklockImage           string
+	PorklockTag             string
+	ViceProxyImage          string
+	UseCSIDriver            bool
+	FrontendBaseURL         string
+	IRODSZone               string
+	InputPathListIdentifier string
+	GatewayProvider         string
+	ImagePullSecretName     string
+	ResourceDefaults        vicebuild.ResourceDefaults
+	DisableSpecLaunch       bool
 }
 
 // Validate confirms the wiring-critical fields are present. The caller
@@ -153,7 +186,64 @@ func NewOperator(opts OperatorOptions) (*Operator, error) {
 		httpClient:          noRedirectHTTPClient,
 		userSuffix:          opts.UserSuffix,
 		localStorageClass:   opts.LocalStorageClass,
+
+		porklockImage:           opts.PorklockImage,
+		porklockTag:             opts.PorklockTag,
+		viceProxyImage:          opts.ViceProxyImage,
+		useCSIDriver:            opts.UseCSIDriver,
+		frontendBaseURL:         opts.FrontendBaseURL,
+		irodsZone:               opts.IRODSZone,
+		inputPathListIdentifier: opts.InputPathListIdentifier,
+		gatewayProvider:         opts.GatewayProvider,
+		imagePullSecretName:     opts.ImagePullSecretName,
+		resourceDefaults:        opts.ResourceDefaults,
+		disableSpecLaunch:       opts.DisableSpecLaunch,
 	}, nil
+}
+
+// viceBuildConfig assembles the vicebuild.Config from the operator's cluster
+// configuration. This is the single place the operator's scattered config
+// fields map onto the builder's input, so the spec launch path and any future
+// build callers stay consistent.
+func (o *Operator) viceBuildConfig() vicebuild.Config {
+	gwNamespace := o.gatewayNamespace
+	if gwNamespace == "" {
+		gwNamespace = o.namespace
+	}
+	var rewriter func(string) string
+	if o.imageRewriter != nil {
+		rewriter = func(ref string) string {
+			if mirrored, ok := o.imageRewriter.RewriteImage(ref); ok {
+				return mirrored
+			}
+			return ref
+		}
+	}
+	return vicebuild.Config{
+		PorklockImage:           o.porklockImage,
+		PorklockTag:             o.porklockTag,
+		ViceProxyImage:          o.viceProxyImage,
+		UseCSIDriver:            o.useCSIDriver,
+		IRODSZone:               o.irodsZone,
+		LocalStorageClass:       o.localStorageClass,
+		FrontendBaseURL:         o.frontendBaseURL,
+		BaseDomain:              o.baseDomain,
+		Namespace:               o.namespace,
+		GatewayNamespace:        gwNamespace,
+		GatewayName:             o.gatewayName,
+		GatewayProvider:         o.gatewayProvider,
+		ImagePullSecretName:     o.imagePullSecretName,
+		ClusterConfigSecretName: o.clusterConfigSecret,
+		UserSuffix:              o.userSuffix,
+		InputPathListIdentifier: o.inputPathListIdentifier,
+		GPUVendor:               string(o.gpuVendor),
+		GPUModelAffinityKey:     o.gpuModelAffinityKey,
+		GPUModelMapping:         o.gpuModelMapping,
+		LoadingServiceName:      o.loadingServiceName,
+		LoadingServicePort:      o.loadingServicePort,
+		ImageRewriter:           rewriter,
+		Resources:               o.resourceDefaults,
+	}
 }
 
 // getAccessURL contacts the vice-proxy sidecar through its in-cluster Service
@@ -210,6 +300,11 @@ func (o *Operator) HandleCapacity(c echo.Context) error {
 	}
 	cap.GPUVendor = string(o.gpuVendor)
 	cap.SupportedGPUModels = o.gpuModels
+	// Advertise spec support unless it's been switched off, in which case 0
+	// tells the scheduler to send this operator a legacy bundle instead.
+	if !o.disableSpecLaunch {
+		cap.SpecVersion = operatorclient.CurrentVICESpecVersion
+	}
 	return c.JSON(http.StatusOK, cap)
 }
 
@@ -291,31 +386,117 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 		TransformImageRefs(bundle.Deployment, o.imageRewriter)
 	}
 
-	// Apply all resources via upsert pattern.
-	if err := o.applyBundle(ctx, &bundle); err != nil {
+	if err := o.applyBundleAndEgress(ctx, &bundle); err != nil {
+		// Log the full error server-side; return a generic message so cluster
+		// internals don't leak in the response body (matches HandleLaunchSpec).
 		log.Errorf("launch failed for analysis %s: %v", bundle.AnalysisID, err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to apply analysis resources; see operator logs")
 	}
 
-	// Create a per-analysis egress NetworkPolicy using the cluster's egress
-	// config. This is done by vice-operator (not app-exposer) because only
-	// the operator knows the cluster environment (blocked CIDRs, Keycloak
-	// IPs, internet access setting, etc.). Deployment metadata labels are
-	// used (not pod template labels) because they always include analysis-id,
-	// which deleteAnalysisResources uses for label-based cleanup.
-	bundleLabels := bundle.Deployment.Labels
-	np := buildAnalysisEgressPolicy(string(bundle.AnalysisID), o.namespace, bundleLabels, o.egressConfig)
+	log.Infof("launch succeeded for analysis %s", bundle.AnalysisID)
+	return c.JSON(http.StatusCreated, map[string]string{"analysisID": string(bundle.AnalysisID)})
+}
+
+// applyBundleAndEgress applies every resource in the bundle and creates the
+// per-analysis egress NetworkPolicy. Shared by the legacy object launch path
+// and the VICESpec launch path, which differ only in how the bundle is
+// produced. The egress policy is built operator-side because only the operator
+// knows the cluster environment (blocked CIDRs, Keycloak IPs, internet-access
+// setting); it keys on the deployment's analysis-id label, which
+// deleteAnalysisResources also uses for cleanup.
+func (o *Operator) applyBundleAndEgress(ctx context.Context, bundle *operatorclient.AnalysisBundle) error {
+	if err := o.applyBundle(ctx, bundle); err != nil {
+		return err
+	}
+
+	np := buildAnalysisEgressPolicy(string(bundle.AnalysisID), o.namespace, bundle.Deployment.Labels, o.egressConfig)
 	if len(np.Spec.Egress) == 0 {
 		log.Warnf("analysis %s egress policy has no allow rules; pods will have DNS-only egress", bundle.AnalysisID)
 	}
 	npClient := o.clientset.NetworkingV1().NetworkPolicies(o.namespace)
 	if err := upsert(ctx, npClient, "NetworkPolicy", np.Name, np); err != nil {
-		log.Errorf("egress policy failed for analysis %s: %v", bundle.AnalysisID, err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return fmt.Errorf("egress policy failed for analysis %s: %w", bundle.AnalysisID, err)
+	}
+	return nil
+}
+
+// HandleLaunchSpec receives a cluster-agnostic VICESpec, builds the concrete
+// k8s objects for this cluster via vicebuild, and applies them. It is the
+// operator-side construction path that replaces the legacy "receive pre-built
+// objects + transform" flow; the two coexist during migration, selected by
+// app-exposer per the operator's advertised SpecVersion.
+//
+//	@Summary		Launch a VICE analysis from a spec
+//	@Description	Receives a cluster-agnostic VICESpec, builds the k8s objects for
+//	@Description	this cluster, and applies them. Returns 409 if at capacity.
+//	@Tags			analyses
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		operatorclient.VICESpec	true	"The analysis spec to launch"
+//	@Success		201		{object}	map[string]string
+//	@Failure		400		{object}	common.ErrorResponse
+//	@Failure		409		{object}	common.ErrorResponse
+//	@Failure		500		{object}	common.ErrorResponse
+//	@Failure		503		{object}	common.ErrorResponse	"Spec launch disabled on this operator"
+//	@Router			/analyses/spec [post]
+func (o *Operator) HandleLaunchSpec(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Defensive backstop: with spec launch disabled the operator advertises
+	// SpecVersion 0, so the scheduler never routes a spec here. This guards
+	// direct callers (admin tools, integration tests). A 503 is transient, so
+	// such a caller treats it as retryable rather than a permanent failure.
+	if o.disableSpecLaunch {
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "spec launch is disabled on this operator")
 	}
 
-	log.Infof("launch succeeded for analysis %s", bundle.AnalysisID)
-	return c.JSON(http.StatusCreated, map[string]string{"analysisID": string(bundle.AnalysisID)})
+	var spec operatorclient.VICESpec
+	if err := c.Bind(&spec); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	if err := spec.Validate(); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	// Reject specs newer than this operator can faithfully build. The scheduler
+	// should already have skipped us via the advertised SpecVersion; this is the
+	// defensive backstop, returning 400 so app-exposer fails fast rather than
+	// the operator silently mis-building.
+	if spec.SpecVersion > operatorclient.CurrentVICESpecVersion {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			fmt.Sprintf("unsupported spec version %d; this operator supports up to %d (upgrade the operator to launch this analysis)",
+				spec.SpecVersion, operatorclient.CurrentVICESpecVersion))
+	}
+
+	cap, err := o.capacityCalc.Calculate(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if !cap.HasCapacity() {
+		log.Infof("spec launch rejected: at capacity (analysis %s)", spec.AnalysisID)
+		return echo.NewHTTPError(http.StatusConflict, "operator at capacity")
+	}
+
+	log.Infof("launching analysis %s from spec", spec.AnalysisID)
+
+	cfg := o.viceBuildConfig()
+	bundle, err := cfg.BuildBundle(&spec)
+	if err != nil {
+		// Log the full error (may contain iRODS paths and internal mount
+		// layout) server-side; return a generic message so cluster internals
+		// don't leak in the response body.
+		log.Errorf("building objects for analysis %s failed: %v; this usually means a malformed spec (e.g. an unrecognized input type)", spec.AnalysisID, err)
+		return echo.NewHTTPError(http.StatusBadRequest, "failed to build k8s objects from spec; see operator logs")
+	}
+
+	if err := o.applyBundleAndEgress(ctx, bundle); err != nil {
+		// Log the full error (k8s resource/namespace detail) server-side; return
+		// a generic message so cluster internals don't leak in the response body.
+		log.Errorf("spec launch failed for analysis %s: %v", spec.AnalysisID, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to apply analysis resources; see operator logs")
+	}
+
+	log.Infof("spec launch succeeded for analysis %s", spec.AnalysisID)
+	return c.JSON(http.StatusCreated, map[string]string{"analysisID": string(spec.AnalysisID)})
 }
 
 // HandleExit deletes all K8s resources associated with an analysis by its

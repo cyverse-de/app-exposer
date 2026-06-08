@@ -95,6 +95,10 @@ func NewApp(cfg AppConfig) *App {
 	}
 	api.GET("/capacity", op.HandleCapacity)
 	api.POST("/analyses", op.HandleLaunch)
+	// Spec launch path (operator-side construction). Static "/analyses/spec"
+	// takes priority over the "/analyses/:analysis-id" group below in Echo's
+	// router, so it does not collide with the param routes.
+	api.POST("/analyses/spec", op.HandleLaunchSpec)
 	api.GET("/analyses", op.HandleListing)
 
 	analyses := api.Group("/analyses/:analysis-id")
