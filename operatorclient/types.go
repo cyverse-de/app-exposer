@@ -90,9 +90,16 @@ type PodsResponse struct {
 const (
 	gpuResourceNvidia = "nvidia.com/gpu"
 	gpuResourceAMD    = "amd.com/gpu"
+)
 
-	gpuVendorNvidia = "nvidia"
-	gpuVendorAMD    = "amd"
+// Canonical GPU vendor identifiers. These are the vendor-neutral names the
+// scheduler matches on and that GPUSpec.Vendor carries; the operator maps them
+// onto cluster-specific resource names (nvidia.com/gpu, amd.com/gpu) and
+// node-label schemes at build time. Exported so both the legacy AnalysisBundle
+// path and the VICESpec path share one canonical set.
+const (
+	GPUVendorNvidia = "nvidia"
+	GPUVendorAMD    = "amd"
 )
 
 // RequestedGPUVendor inspects the bundle's containers (and init
@@ -123,9 +130,9 @@ func vendorFromResources(rl apiv1.ResourceList) string {
 	for name := range rl {
 		switch string(name) {
 		case gpuResourceNvidia:
-			return gpuVendorNvidia
+			return GPUVendorNvidia
 		case gpuResourceAMD:
-			return gpuVendorAMD
+			return GPUVendorAMD
 		}
 	}
 	return ""

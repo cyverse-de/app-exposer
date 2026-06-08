@@ -134,7 +134,12 @@ Replace `AnalysisBundle` with a spec describing the analysis. The shape below is
 the initial sketch; the **field-level audit**
 ([operator-side-bundle-construction-field-audit.md](operator-side-bundle-construction-field-audit.md))
 hardens it against every input the builders actually read and is the
-authoritative schema. Two things the audit settled that this sketch did not:
+authoritative schema, and the **contract doc**
+([operator-side-bundle-construction-contract.md](operator-side-bundle-construction-contract.md))
+records field ownership, versioning, and the scheduler rule. The types now exist
+in `operatorclient/vicespec.go`; `GPUSpec` carries an explicit canonical
+`Vendor` (defaulting to nvidia) so multi-vendor scheduling is real plumbing —
+see the contract doc's GPU section. Two things the audit settled that this sketch did not:
 the spec carries **resolved** values (computed app-exposer-side, where the
 `model.Job` methods live) rather than raw job internals — that is what keeps the
 operator free of a `model.Job` dependency — and **raw resource asks** ride on the

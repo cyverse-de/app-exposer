@@ -149,6 +149,7 @@ type ResourceSpec struct {
     SharedMemoryBytes *int64 // nil when no /dev/shm device
 }
 type GPUSpec struct { // nil on VICESpec when GPURequested is false
+    Vendor string   // canonical GPUVendorNvidia | GPUVendorAMD; empty defaults to nvidia
     Count  int64
     Models []string // canonical, e.g. "NVIDIA-A10G"
 }
@@ -157,6 +158,12 @@ type GPUSpec struct { // nil on VICESpec when GPURequested is false
 Resolve legacy `/dev/nvidia` and modern `MinGPUs/MaxGPUs` into a single
 `GPU *GPUSpec` (nil = none) app-exposer-side, so the operator never inspects
 `Devices`. Likewise resolve `/dev/shm` into `SharedMemoryBytes`.
+
+`GPUSpec.Vendor` is carried explicitly even though `model.Job` has no vendor
+field (app-exposer defaults it to nvidia). This was a deliberate call to make
+multi-vendor scheduling real plumbing rather than a future scheduler rewrite —
+see the [contract doc](operator-side-bundle-construction-contract.md)'s GPU
+section. The scheduler reads it via `VICESpec.RequestedGPUVendor()`.
 
 **Decision (audit §8 item 4 — chased down): move the `resourcing` defaults to
 the operator.** Investigation confirms these are genuinely cluster policy, and

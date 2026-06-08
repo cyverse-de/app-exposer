@@ -48,11 +48,18 @@ migrate one at a time. It is removed in Phase 6.
 2. **Define `VICESpec`** (and `ContainerSpec`/`ResourceSpec`/`GPUSpec`/
    `InputSpec`) in `operatorclient/` next to the existing types. Add
    `SpecVersion`. No one builds or consumes it yet.
-3. **Write the contract doc**: which side owns which field, the versioning
-   policy, and the "operator too old → skip" scheduler rule.
+3. **Write the contract doc** —
+   [operator-side-bundle-construction-contract.md](operator-side-bundle-construction-contract.md):
+   which side owns which field, the versioning policy, and the "operator too old
+   → skip" scheduler rule. It also records the one decision deferred to Phase 3
+   (GPU vendor matching, now that `GPUSpec` carries no vendor).
 
 **Exit:** `VICESpec` compiles, is reviewed, and the audit checklist is complete.
 No runtime change. This is the natural review-with-coworkers checkpoint.
+
+*Status: done — `VICESpec` and friends are defined in
+`operatorclient/vicespec.go` (with `Validate()` and round-trip tests), and the
+contract doc is written.*
 
 ## Phase 1 — Operator can build from a spec (dark, behind capability)
 
