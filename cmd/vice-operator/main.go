@@ -90,7 +90,6 @@ func main() {
 		porklockTag             string
 		viceProxyImage          string
 		useCSIDriver            bool
-		frontendBaseURL         string
 		irodsZone               string
 		inputPathListIdentifier string
 		gatewayProvider         string
@@ -183,7 +182,6 @@ func main() {
 	flag.StringVar(&porklockTag, "porklock-tag", "latest", "Tag for the porklock image")
 	flag.StringVar(&viceProxyImage, "vice-proxy-image", "harbor.cyverse.org/de/vice-proxy:latest", "Image (with tag) for the vice-proxy sidecar")
 	flag.BoolVar(&useCSIDriver, "use-csi-driver", false, "Use the iRODS CSI driver for data volumes instead of porklock file transfers")
-	flag.StringVar(&frontendBaseURL, "frontend-base-url", "https://cyverse.run", "Base URL used to build each analysis's REDIRECT_URL")
 	flag.StringVar(&irodsZone, "irods-zone", "cyverse", "iRODS zone name")
 	flag.StringVar(&inputPathListIdentifier, "input-path-list-identifier", "# application/vnd.de.multi-input-path-list+csv; version=1", "First line of the porklock input-path-list file")
 	flag.StringVar(&gatewayProvider, "gateway-provider", "traefik", "Gateway API provider for HTTPRoute construction (e.g. traefik)")
@@ -464,31 +462,35 @@ func main() {
 	}
 
 	op, err := operator.NewOperator(operator.OperatorOptions{
-		Clientset:               clientset,
-		GatewayClient:           gwClient,
-		Namespace:               namespace,
-		GatewayNamespace:        gatewayNamespace,
-		GatewayName:             gatewayName,
-		GPUVendor:               gpuVendor,
-		GPUModels:               gpuModels,
-		GPUModelAffinityKey:     gpuModelAffinityKey,
-		GPUModelMapping:         gpuModelMapping,
-		CapacityCalc:            capacityCalc,
-		ImageCache:              imageCache,
-		ImageRewriter:           imageRewriter,
-		LoadingServiceName:      loadingServiceName,
-		LoadingServicePort:      int32(loadingServicePort),
-		LoadingTimeoutMs:        loadingTimeoutMs,
-		BaseDomain:              baseDomain,
-		ClusterConfigSecret:     clusterConfigSecret,
-		EgressConfig:            egressConfig,
-		UserSuffix:              userSuffix,
-		LocalStorageClass:       localStorageClass,
-		PorklockImage:           porklockImage,
-		PorklockTag:             porklockTag,
-		ViceProxyImage:          viceProxyImage,
-		UseCSIDriver:            useCSIDriver,
-		FrontendBaseURL:         frontendBaseURL,
+		Clientset:           clientset,
+		GatewayClient:       gwClient,
+		Namespace:           namespace,
+		GatewayNamespace:    gatewayNamespace,
+		GatewayName:         gatewayName,
+		GPUVendor:           gpuVendor,
+		GPUModels:           gpuModels,
+		GPUModelAffinityKey: gpuModelAffinityKey,
+		GPUModelMapping:     gpuModelMapping,
+		CapacityCalc:        capacityCalc,
+		ImageCache:          imageCache,
+		ImageRewriter:       imageRewriter,
+		LoadingServiceName:  loadingServiceName,
+		LoadingServicePort:  int32(loadingServicePort),
+		LoadingTimeoutMs:    loadingTimeoutMs,
+		BaseDomain:          baseDomain,
+		ClusterConfigSecret: clusterConfigSecret,
+		EgressConfig:        egressConfig,
+		UserSuffix:          userSuffix,
+		LocalStorageClass:   localStorageClass,
+		PorklockImage:       porklockImage,
+		PorklockTag:         porklockTag,
+		ViceProxyImage:      viceProxyImage,
+		UseCSIDriver:        useCSIDriver,
+		// REDIRECT_URL for each analysis is built from the vice base URL — the
+		// same value whose hostname is the routing domain (baseDomain), since a
+		// redirect must land on the host its HTTPRoute serves. No separate
+		// frontend-base-url flag is needed.
+		FrontendBaseURL:         viceBaseURL,
 		IRODSZone:               irodsZone,
 		InputPathListIdentifier: inputPathListIdentifier,
 		GatewayProvider:         gatewayProvider,
