@@ -204,6 +204,33 @@ func (h *HTTPHandlers) searchOperatorsForAnalysis(ctx context.Context, analysisI
 	return nil, nil
 }
 
+// operatorLabelParams is the set of query parameter names that the vice-operator
+// understands as K8s label selectors on the GET /analyses listing endpoint.
+// Any other params (pagination, sort, phase, etc.) must be stripped before
+// forwarding, as the operator passes all query params directly to the K8s API
+// as label selectors and unknown keys will cause list errors.
+var operatorLabelParams = map[string]struct{}{
+	constants.AnalysisIDLabel: {},
+	constants.AppIDLabel:      {},
+	constants.AppNameLabel:    {},
+	constants.ExternalIDLabel: {},
+	constants.UsernameLabel:   {},
+	constants.UserIDLabel:     {},
+	constants.SubdomainLabel:  {},
+}
+
+// operatorListingParams returns a copy of params containing only the keys
+// that the vice-operator listing endpoint understands.
+func operatorListingParams(params url.Values) url.Values {
+	filtered := url.Values{}
+	for k, v := range params {
+		if _, ok := operatorLabelParams[k]; ok {
+			filtered[k] = v
+		}
+	}
+	return filtered
+}
+
 // aggregateListing queries all configured operators in parallel, applying the
 // provided filters, and merges the results into a single ResourceInfo.
 // Partial results are returned if some operators are unreachable.
@@ -213,6 +240,8 @@ func (h *HTTPHandlers) aggregateListing(ctx context.Context, params url.Values) 
 	if len(clients) == 0 {
 		return merged, nil, nil
 	}
+
+	opParams := operatorListingParams(params)
 
 	type result struct {
 		info *reporting.ResourceInfo
@@ -224,7 +253,7 @@ func (h *HTTPHandlers) aggregateListing(ctx context.Context, params url.Values) 
 	var wg sync.WaitGroup
 	for i, client := range clients {
 		wg.Go(func() {
-			info, err := client.Listing(ctx, params)
+			info, err := client.Listing(ctx, opParams)
 			results[i] = result{info: info, name: client.Name(), err: err}
 		})
 	}
