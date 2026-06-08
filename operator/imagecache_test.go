@@ -250,10 +250,10 @@ func TestHandleGetCachedImageNotFound(t *testing.T) {
 // per-image endpoints. Malformed IDs must not be forwarded to the K8s API.
 func TestImageCacheIDValidation(t *testing.T) {
 	tests := []struct {
-		name     string
-		id       string
-		wantGet  int // expected status from HandleGetCachedImage
-		wantDel  int // expected status from HandleDeleteCachedImage
+		name    string
+		id      string
+		wantGet int // expected status from HandleGetCachedImage
+		wantDel int // expected status from HandleDeleteCachedImage
 	}{
 		{name: "empty id", id: "", wantGet: http.StatusNotFound, wantDel: http.StatusOK},
 		{name: "uppercase rejected", id: "Bad-Slug", wantGet: http.StatusNotFound, wantDel: http.StatusOK},

@@ -65,6 +65,18 @@ type CapacityResponse struct {
 	UsedMemory         int64    `json:"usedMemory"`        // bytes
 	GPUVendor          string   `json:"gpuVendor,omitempty"`
 	SupportedGPUModels []string `json:"supportedGPUModels,omitempty"`
+	// SpecVersion is the maximum VICESpec wire-contract version this operator
+	// can build. 0 (the zero value, also what pre-spec operators report) means
+	// the operator does not support the spec path, so the scheduler must send
+	// it a legacy AnalysisBundle instead. See operatorclient.CurrentVICESpecVersion.
+	SpecVersion int `json:"specVersion,omitempty"`
+}
+
+// SupportsSpecVersion reports whether this operator can build the given
+// VICESpec wire-contract version. Encapsulates the "operator too old → skip"
+// rule so the scheduler does not compare versions inline.
+func (c *CapacityResponse) SupportsSpecVersion(v int) bool {
+	return c.SpecVersion >= v
 }
 
 // HasCapacity reports whether this operator can accept a new analysis.

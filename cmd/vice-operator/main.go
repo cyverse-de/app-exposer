@@ -14,8 +14,10 @@ import (
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operator"
+	"github.com/cyverse-de/app-exposer/vicebuild"
 	"github.com/cyverse-de/go-mod/viceauth"
 	"github.com/sirupsen/logrus"
+	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -82,6 +84,36 @@ func main() {
 		imageCacheMode        string
 		imageCacheSchedule    string
 		reposFile             string
+
+		// VICESpec construction config (operator-side build path).
+		porklockImage           string
+		porklockTag             string
+		viceProxyImage          string
+		useCSIDriver            bool
+		frontendBaseURL         string
+		irodsZone               string
+		inputPathListIdentifier string
+		gatewayProvider         string
+
+		// Resource default/clamp policy ("what this cluster grants"). Flag
+		// names and defaults mirror app-exposer so a cluster behaves identically
+		// on the spec path and the legacy object path.
+		defaultCPURequest            string
+		defaultCPULimit              string
+		disableCPULimit              bool
+		defaultMemRequest            string
+		defaultMemLimit              string
+		disableMemLimit              bool
+		defaultStorageRequest        string
+		viceProxyCPURequest          string
+		viceProxyCPULimit            string
+		disableViceProxyCPULimit     bool
+		viceProxyMemRequest          string
+		viceProxyMemLimit            string
+		disableViceProxyMemLimit     bool
+		viceProxyStorageRequest      string
+		viceProxyStorageLimit        string
+		disableViceProxyStorageLimit bool
 	)
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig (empty for in-cluster)")
@@ -143,6 +175,35 @@ func main() {
 	flag.StringVar(&imageCacheMode, "image-cache-mode", "daemonset", "Image cache implementation: 'daemonset' for one DaemonSet per image (node-local containerd warming), 'cron' for one CronJob per image (periodic pulls), or 'manual-mirror' for read-only mapping driven by --repos-file (rewrites bundle image refs at launch time)")
 	flag.StringVar(&imageCacheSchedule, "image-cache-schedule", "0 2 * * *", "Cron schedule applied to every cached image when --image-cache-mode=cron (5-field standard cron expression in UTC)")
 	flag.StringVar(&reposFile, "repos-file", "", "Path to a JSON object mapping upstream image refs to mirrored refs (required when --image-cache-mode=manual-mirror; rejected otherwise)")
+
+	// VICESpec construction config (operator-side build path).
+	flag.StringVar(&porklockImage, "porklock-image", "discoenv/vice-file-transfers", "Image for the porklock file-transfer/init containers")
+	flag.StringVar(&porklockTag, "porklock-tag", "latest", "Tag for the porklock image")
+	flag.StringVar(&viceProxyImage, "vice-proxy-image", "harbor.cyverse.org/de/vice-proxy:latest", "Image (with tag) for the vice-proxy sidecar")
+	flag.BoolVar(&useCSIDriver, "use-csi-driver", false, "Use the iRODS CSI driver for data volumes instead of porklock file transfers")
+	flag.StringVar(&frontendBaseURL, "frontend-base-url", "https://cyverse.run", "Base URL used to build each analysis's REDIRECT_URL")
+	flag.StringVar(&irodsZone, "irods-zone", "cyverse", "iRODS zone name")
+	flag.StringVar(&inputPathListIdentifier, "input-path-list-identifier", "# application/vnd.de.multi-input-path-list+csv; version=1", "First line of the porklock input-path-list file")
+	flag.StringVar(&gatewayProvider, "gateway-provider", "traefik", "Gateway API provider for HTTPRoute construction (e.g. traefik)")
+
+	// Resource default/clamp policy. Defaults mirror app-exposer's flags.
+	flag.StringVar(&defaultCPURequest, "default-cpu-resource-request", "1000m", "Default CPU request for an analysis")
+	flag.StringVar(&defaultCPULimit, "default-cpu-resource-limit", "2000m", "Default CPU limit for an analysis")
+	flag.BoolVar(&disableCPULimit, "disable-cpu-resource-limit", false, "Disable the analysis CPU limit")
+	flag.StringVar(&defaultMemRequest, "default-memory-resource-request", "2Gi", "Default memory request for an analysis")
+	flag.StringVar(&defaultMemLimit, "default-memory-resource-limit", "8Gi", "Default memory limit for an analysis")
+	flag.BoolVar(&disableMemLimit, "disable-memory-resource-limit", false, "Disable the analysis memory limit")
+	flag.StringVar(&defaultStorageRequest, "default-storage-resource-request", "1Gi", "Default ephemeral storage request for an analysis")
+	flag.StringVar(&viceProxyCPURequest, "vice-proxy-cpu-resource-request", "100m", "CPU request for the vice-proxy sidecar")
+	flag.StringVar(&viceProxyCPULimit, "vice-proxy-cpu-resource-limit", "200m", "CPU limit for the vice-proxy sidecar")
+	flag.BoolVar(&disableViceProxyCPULimit, "disable-vice-proxy-cpu-resource-limit", false, "Disable the vice-proxy CPU limit")
+	flag.StringVar(&viceProxyMemRequest, "vice-proxy-memory-resource-request", "100Mi", "Memory request for the vice-proxy sidecar")
+	flag.StringVar(&viceProxyMemLimit, "vice-proxy-memory-resource-limit", "200Mi", "Memory limit for the vice-proxy sidecar")
+	flag.BoolVar(&disableViceProxyMemLimit, "disable-vice-proxy-memory-resource-limit", false, "Disable the vice-proxy memory limit")
+	flag.StringVar(&viceProxyStorageRequest, "vice-proxy-storage-resource-request", "16Gi", "Ephemeral storage request for the vice-proxy sidecar")
+	flag.StringVar(&viceProxyStorageLimit, "vice-proxy-storage-resource-limit", "100Gi", "Ephemeral storage limit for the vice-proxy sidecar")
+	flag.BoolVar(&disableViceProxyStorageLimit, "disable-vice-proxy-storage-resource-limit", true, "Disable the vice-proxy storage limit")
+
 	flag.Parse()
 
 	// Allow secrets to come from environment variables when not set on the
@@ -372,27 +433,63 @@ func main() {
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
+	parseQty := func(name, s string) resourcev1.Quantity {
+		q, err := resourcev1.ParseQuantity(s)
+		if err != nil {
+			log.Fatalf("invalid quantity for %s (%q): %v", name, s, err)
+		}
+		return q
+	}
+	resourceDefaults := vicebuild.ResourceDefaults{
+		DefaultCPURequest:   parseQty("--default-cpu-resource-request", defaultCPURequest),
+		DefaultCPULimit:     parseQty("--default-cpu-resource-limit", defaultCPULimit),
+		DefaultMemRequest:   parseQty("--default-memory-resource-request", defaultMemRequest),
+		DefaultMemLimit:     parseQty("--default-memory-resource-limit", defaultMemLimit),
+		DefaultStorage:      parseQty("--default-storage-resource-request", defaultStorageRequest),
+		DoCPULimit:          !disableCPULimit,
+		DoMemLimit:          !disableMemLimit,
+		ViceProxyCPURequest: parseQty("--vice-proxy-cpu-resource-request", viceProxyCPURequest),
+		ViceProxyCPULimit:   parseQty("--vice-proxy-cpu-resource-limit", viceProxyCPULimit),
+		ViceProxyMemRequest: parseQty("--vice-proxy-memory-resource-request", viceProxyMemRequest),
+		ViceProxyMemLimit:   parseQty("--vice-proxy-memory-resource-limit", viceProxyMemLimit),
+		ViceProxyStorage:    parseQty("--vice-proxy-storage-resource-request", viceProxyStorageRequest),
+		ViceProxyStorageLim: parseQty("--vice-proxy-storage-resource-limit", viceProxyStorageLimit),
+		DoViceProxyCPULimit: !disableViceProxyCPULimit,
+		DoViceProxyMemLimit: !disableViceProxyMemLimit,
+		DoViceProxyStorage:  !disableViceProxyStorageLimit,
+	}
+
 	op, err := operator.NewOperator(operator.OperatorOptions{
-		Clientset:           clientset,
-		GatewayClient:       gwClient,
-		Namespace:           namespace,
-		GatewayNamespace:    gatewayNamespace,
-		GatewayName:         gatewayName,
-		GPUVendor:           gpuVendor,
-		GPUModels:           gpuModels,
-		GPUModelAffinityKey: gpuModelAffinityKey,
-		GPUModelMapping:     gpuModelMapping,
-		CapacityCalc:        capacityCalc,
-		ImageCache:          imageCache,
-		ImageRewriter:       imageRewriter,
-		LoadingServiceName:  loadingServiceName,
-		LoadingServicePort:  int32(loadingServicePort),
-		LoadingTimeoutMs:    loadingTimeoutMs,
-		BaseDomain:          baseDomain,
-		ClusterConfigSecret: clusterConfigSecret,
-		EgressConfig:        egressConfig,
-		UserSuffix:          userSuffix,
-		LocalStorageClass:   localStorageClass,
+		Clientset:               clientset,
+		GatewayClient:           gwClient,
+		Namespace:               namespace,
+		GatewayNamespace:        gatewayNamespace,
+		GatewayName:             gatewayName,
+		GPUVendor:               gpuVendor,
+		GPUModels:               gpuModels,
+		GPUModelAffinityKey:     gpuModelAffinityKey,
+		GPUModelMapping:         gpuModelMapping,
+		CapacityCalc:            capacityCalc,
+		ImageCache:              imageCache,
+		ImageRewriter:           imageRewriter,
+		LoadingServiceName:      loadingServiceName,
+		LoadingServicePort:      int32(loadingServicePort),
+		LoadingTimeoutMs:        loadingTimeoutMs,
+		BaseDomain:              baseDomain,
+		ClusterConfigSecret:     clusterConfigSecret,
+		EgressConfig:            egressConfig,
+		UserSuffix:              userSuffix,
+		LocalStorageClass:       localStorageClass,
+		PorklockImage:           porklockImage,
+		PorklockTag:             porklockTag,
+		ViceProxyImage:          viceProxyImage,
+		UseCSIDriver:            useCSIDriver,
+		FrontendBaseURL:         frontendBaseURL,
+		IRODSZone:               irodsZone,
+		InputPathListIdentifier: inputPathListIdentifier,
+		GatewayProvider:         gatewayProvider,
+		ImagePullSecretName:     imagePullSecret,
+		ResourceDefaults:        resourceDefaults,
 	})
 	if err != nil {
 		log.Fatalf("failed to construct operator: %v", err)

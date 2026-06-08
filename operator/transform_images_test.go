@@ -50,35 +50,35 @@ func TestTransformImageRefs(t *testing.T) {
 	}}
 
 	tests := []struct {
-		name           string
-		initIn, mainIn []string
+		name               string
+		initIn, mainIn     []string
 		wantInit, wantMain []string
 	}{
 		{
-			name: "no images match: deployment unchanged",
-			initIn: []string{"harbor.cyverse.org/de/unrelated:1"},
-			mainIn: []string{"harbor.cyverse.org/de/also-unrelated:2"},
+			name:     "no images match: deployment unchanged",
+			initIn:   []string{"harbor.cyverse.org/de/unrelated:1"},
+			mainIn:   []string{"harbor.cyverse.org/de/also-unrelated:2"},
 			wantInit: []string{"harbor.cyverse.org/de/unrelated:1"},
 			wantMain: []string{"harbor.cyverse.org/de/also-unrelated:2"},
 		},
 		{
-			name: "init container is rewritten",
-			initIn: []string{"harbor.cyverse.org/de/porklock:latest"},
-			mainIn: []string{"harbor.cyverse.org/de/vice-app:latest"},
+			name:     "init container is rewritten",
+			initIn:   []string{"harbor.cyverse.org/de/porklock:latest"},
+			mainIn:   []string{"harbor.cyverse.org/de/vice-app:latest"},
 			wantInit: []string{"ecr/porklock:latest"},
 			wantMain: []string{"harbor.cyverse.org/de/vice-app:latest"},
 		},
 		{
-			name: "main container is rewritten",
-			initIn: []string{},
-			mainIn: []string{"harbor.cyverse.org/de/vice-proxy:latest"},
+			name:     "main container is rewritten",
+			initIn:   []string{},
+			mainIn:   []string{"harbor.cyverse.org/de/vice-proxy:latest"},
 			wantInit: []string{},
 			wantMain: []string{"ecr/vice-proxy:latest"},
 		},
 		{
-			name: "both kinds of containers rewritten in one pass",
-			initIn: []string{"harbor.cyverse.org/de/porklock:latest"},
-			mainIn: []string{"harbor.cyverse.org/de/vice-proxy:latest", "harbor.cyverse.org/de/unrelated:3"},
+			name:     "both kinds of containers rewritten in one pass",
+			initIn:   []string{"harbor.cyverse.org/de/porklock:latest"},
+			mainIn:   []string{"harbor.cyverse.org/de/vice-proxy:latest", "harbor.cyverse.org/de/unrelated:3"},
 			wantInit: []string{"ecr/porklock:latest"},
 			wantMain: []string{"ecr/vice-proxy:latest", "harbor.cyverse.org/de/unrelated:3"},
 		},
