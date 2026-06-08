@@ -36,16 +36,16 @@ func (j *DefaultJobInfo) JobLabels(ctx context.Context, job *model.Job) (map[str
 	}
 
 	return map[string]string{
-		constants.ExternalIDLabel: job.InvocationID,
-		constants.AnalysisIDLabel: job.ID,
-		constants.AppNameLabel:    common.LabelValueString(job.AppName),
-		constants.AppIDLabel:      job.AppID,
-		constants.UsernameLabel:   common.LabelValueString(job.Submitter),
-		constants.UserIDLabel:     job.UserID,
-		"analysis-name":           common.LabelValueString(string(name[:stringmax])),
-		constants.AppTypeLabel:    "interactive",
-		constants.SubdomainLabel:  common.Subdomain(job.UserID, job.InvocationID),
-		"login-ip":                ipAddr,
+		constants.ExternalIDLabel:   job.InvocationID,
+		constants.AnalysisIDLabel:   job.ID,
+		constants.AppNameLabel:      common.LabelValueString(job.AppName),
+		constants.AppIDLabel:        job.AppID,
+		constants.UsernameLabel:     common.LabelValueString(job.Submitter),
+		constants.UserIDLabel:       job.UserID,
+		constants.AnalysisNameLabel: common.LabelValueString(string(name[:stringmax])),
+		constants.AppTypeLabel:      string(constants.Interactive),
+		constants.SubdomainLabel:    common.Subdomain(job.UserID, job.InvocationID),
+		constants.LoginIPLabel:      ipAddr,
 	}, nil
 }
 
