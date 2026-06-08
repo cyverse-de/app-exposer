@@ -1,6 +1,7 @@
 package vicebuild
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cyverse-de/app-exposer/constants"
@@ -204,12 +205,8 @@ func TestImageRefsFolded(t *testing.T) {
 
 	dep := cfg.Deployment(spec)
 	for _, c := range append(dep.Spec.Template.Spec.InitContainers, dep.Spec.Template.Spec.Containers...) {
-		assert.Truef(t, hasPrefix(c.Image, "mirror.example.com/"), "image %q for container %q not rewritten", c.Image, c.Name)
+		assert.Truef(t, strings.HasPrefix(c.Image, "mirror.example.com/"), "image %q for container %q not rewritten", c.Image, c.Name)
 	}
-}
-
-func hasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }
 
 // TestDeploymentCSIvsNonCSI confirms the init container and sidecar set switches

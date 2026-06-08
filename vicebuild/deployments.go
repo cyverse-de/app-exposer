@@ -125,7 +125,7 @@ func (c *Config) analysisContainer(spec *operatorclient.VICESpec) apiv1.Containe
 			PeriodSeconds:       31,
 			ProbeHandler: apiv1.ProbeHandler{
 				HTTPGet: &apiv1.HTTPGetAction{
-					Port:   intstr.FromInt(spec.Container.Ports[0]),
+					Port:   intstr.FromInt32(int32(spec.Container.Ports[0])),
 					Scheme: apiv1.URISchemeHTTP,
 					Path:   "/",
 				},
@@ -183,7 +183,7 @@ func (c *Config) viceProxyContainer(spec *operatorclient.VICESpec) apiv1.Contain
 		ReadinessProbe: &apiv1.Probe{
 			ProbeHandler: apiv1.ProbeHandler{
 				HTTPGet: &apiv1.HTTPGetAction{
-					Port:   intstr.FromInt(int(constants.VICEProxyPort)),
+					Port:   intstr.FromInt32(constants.VICEProxyPort),
 					Scheme: apiv1.URISchemeHTTP,
 					Path:   "/url-ready",
 				},
@@ -224,7 +224,7 @@ func (c *Config) fileTransfersContainer(spec *operatorclient.VICESpec) apiv1.Con
 		ReadinessProbe: &apiv1.Probe{
 			ProbeHandler: apiv1.ProbeHandler{
 				HTTPGet: &apiv1.HTTPGetAction{
-					Port:   intstr.FromInt(int(constants.FileTransfersPort)),
+					Port:   intstr.FromInt32(constants.FileTransfersPort),
 					Scheme: apiv1.URISchemeHTTP,
 					Path:   "/",
 				},

@@ -11,7 +11,7 @@ import (
 // PodDisruptionBudget builds the analysis PDB with maxUnavailable=0, so a
 // voluntary disruption (node drain, etc.) never evicts the single analysis pod.
 func (c *Config) PodDisruptionBudget(spec *operatorclient.VICESpec) *policyv1.PodDisruptionBudget {
-	maxUnavailable := intstr.FromInt(0)
+	maxUnavailable := intstr.FromInt32(0)
 	return &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   pdbName(spec),

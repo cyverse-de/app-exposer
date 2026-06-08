@@ -387,8 +387,10 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 	}
 
 	if err := o.applyBundleAndEgress(ctx, &bundle); err != nil {
+		// Log the full error server-side; return a generic message so cluster
+		// internals don't leak in the response body (matches HandleLaunchSpec).
 		log.Errorf("launch failed for analysis %s: %v", bundle.AnalysisID, err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to apply analysis resources; see operator logs")
 	}
 
 	log.Infof("launch succeeded for analysis %s", bundle.AnalysisID)
@@ -441,9 +443,9 @@ func (o *Operator) HandleLaunchSpec(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	// Defensive backstop: with spec launch disabled the operator advertises
-	// SpecVersion 0, so the scheduler shouldn't route a spec here at all. A 503
-	// is transient, so a spec that arrives anyway is retried on another operator
-	// rather than failing the launch outright.
+	// SpecVersion 0, so the scheduler never routes a spec here. This guards
+	// direct callers (admin tools, integration tests). A 503 is transient, so
+	// such a caller treats it as retryable rather than a permanent failure.
 	if o.disableSpecLaunch {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "spec launch is disabled on this operator")
 	}
@@ -479,8 +481,11 @@ func (o *Operator) HandleLaunchSpec(c echo.Context) error {
 	cfg := o.viceBuildConfig()
 	bundle, err := cfg.BuildBundle(&spec)
 	if err != nil {
+		// Log the full error (may contain iRODS paths and internal mount
+		// layout) server-side; return a generic message so cluster internals
+		// don't leak in the response body.
 		log.Errorf("building objects for analysis %s failed: %v; this usually means a malformed spec (e.g. an unrecognized input type)", spec.AnalysisID, err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, "failed to build k8s objects from spec; see operator logs")
 	}
 
 	if err := o.applyBundleAndEgress(ctx, bundle); err != nil {
