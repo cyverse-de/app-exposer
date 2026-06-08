@@ -87,6 +87,61 @@
                 }
             }
         },
+        "/analyses/spec": {
+            "post": {
+                "description": "Receives a cluster-agnostic VICESpec, builds the k8s objects for\nthis cluster, and applies them. Returns 409 if at capacity.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analyses"
+                ],
+                "summary": "Launch a VICE analysis from a spec",
+                "parameters": [
+                    {
+                        "description": "The analysis spec to launch",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/operatorclient.VICESpec"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/analyses/{analysis-id}": {
             "delete": {
                 "description": "Deletes all K8s resources associated with an analysis.",
@@ -1320,6 +1375,10 @@
                 "runningAnalyses": {
                     "type": "integer"
                 },
+                "specVersion": {
+                    "description": "SpecVersion is the maximum VICESpec wire-contract version this operator\ncan build. 0 (the zero value, also what pre-spec operators report) means\nthe operator does not support the spec path, so the scheduler must send\nit a legacy AnalysisBundle instead. See operatorclient.CurrentVICESpecVersion.",
+                    "type": "integer"
+                },
                 "supportedGPUModels": {
                     "type": "array",
                     "items": {
@@ -1333,6 +1392,71 @@
                 "usedMemory": {
                     "description": "bytes",
                     "type": "integer"
+                }
+            }
+        },
+        "operatorclient.ContainerSpec": {
+            "type": "object",
+            "properties": {
+                "arguments": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "entryPoint": {
+                    "type": "string"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "ports": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "tag": {
+                    "type": "string"
+                },
+                "uid": {
+                    "type": "integer"
+                },
+                "workingDir": {
+                    "description": "raw; empty means use the image's WORKDIR. The working-dir volume still mounts at /de-app-work.",
+                    "type": "string"
+                }
+            }
+        },
+        "operatorclient.GPUSpec": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "description": "resolved from MinGPUs/MaxGPUs (or legacy /dev/nvidia*)",
+                    "type": "integer"
+                },
+                "models": {
+                    "description": "canonical GFD names, e.g. \"NVIDIA-A10G\"; empty = any",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "vendor": {
+                    "description": "canonical GPUVendorNvidia | GPUVendorAMD; empty defaults to nvidia",
+                    "type": "string"
+                }
+            }
+        },
+        "operatorclient.InputSpec": {
+            "type": "object",
+            "properties": {
+                "irodsPath": {
+                    "type": "string"
+                },
+                "type": {
+                    "description": "fileinput | multifileselector | folderinput",
+                    "type": "string"
                 }
             }
         },
@@ -1352,6 +1476,20 @@
                 }
             }
         },
+        "operatorclient.MetadataAVU": {
+            "type": "object",
+            "properties": {
+                "attribute": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
         "operatorclient.PodsResponse": {
             "type": "object",
             "properties": {
@@ -1360,6 +1498,35 @@
                     "items": {
                         "$ref": "#/definitions/operatorclient.StatusPod"
                     }
+                }
+            }
+        },
+        "operatorclient.ResourceSpec": {
+            "type": "object",
+            "properties": {
+                "maxCPUCores": {
+                    "description": "model MaxCPUCores (limit)",
+                    "type": "number"
+                },
+                "maxMemoryBytes": {
+                    "description": "model MemoryLimit (limit)",
+                    "type": "integer"
+                },
+                "minCPUCores": {
+                    "description": "model MinCPUCores (request)",
+                    "type": "number"
+                },
+                "minDiskBytes": {
+                    "description": "model MinDiskSpace; sizes the working-dir PVC",
+                    "type": "integer"
+                },
+                "minMemoryBytes": {
+                    "description": "model MinMemoryLimit (request)",
+                    "type": "integer"
+                },
+                "sharedMemoryBytes": {
+                    "description": "resolved /dev/shm device; nil when none",
+                    "type": "integer"
                 }
             }
         },
@@ -1410,6 +1577,106 @@
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "operatorclient.VICESpec": {
+            "type": "object",
+            "properties": {
+                "analysisID": {
+                    "description": "Identity \u0026 labels. These populate the fixed label set the operator\nstamps on every resource (the old jobInfo.JobLabels assembly). The\n\"subdomain\" label is not carried — the operator recomputes it from\nUserID + ExternalID via the shared common.Subdomain.",
+                    "type": "string"
+                },
+                "appID": {
+                    "type": "string"
+                },
+                "appName": {
+                    "type": "string"
+                },
+                "container": {
+                    "description": "The interactive analysis container. VICE is single-step by invariant,\nso this is one container, not a list.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/operatorclient.ContainerSpec"
+                        }
+                    ]
+                },
+                "environment": {
+                    "description": "Environment for the analysis container (model.Step.Environment).",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "excludeArguments": {
+                    "description": "resolved model.Job.ExcludeArguments()",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "externalID": {
+                    "description": "job.InvocationID; basis for resource names",
+                    "type": "string"
+                },
+                "fileMetadata": {
+                    "description": "porklock upload metadata triples",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operatorclient.MetadataAVU"
+                    }
+                },
+                "gpu": {
+                    "$ref": "#/definitions/operatorclient.GPUSpec"
+                },
+                "inputPathListPaths": {
+                    "description": "resolved ticketless subset",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "inputs": {
+                    "description": "all inputs — CSI volume mappings",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operatorclient.InputSpec"
+                    }
+                },
+                "jobName": {
+                    "description": "job.Name; label \"analysis-name\"; required, non-empty",
+                    "type": "string"
+                },
+                "outputDirectory": {
+                    "description": "resolved model.Job.OutputDirectory()",
+                    "type": "string"
+                },
+                "resources": {
+                    "description": "Resource asks (raw; the operator applies its own default/clamp policy)\nand GPU request. GPU is nil when the analysis requests no GPU.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/operatorclient.ResourceSpec"
+                        }
+                    ]
+                },
+                "specVersion": {
+                    "description": "SpecVersion identifies the wire-contract version. See\nCurrentVICESpecVersion. The operator rejects versions it cannot build.",
+                    "type": "integer"
+                },
+                "submitter": {
+                    "description": "raw username; operator applies UserSuffix",
+                    "type": "string"
+                },
+                "userHome": {
+                    "description": "Data movement. Inputs is the full input list used to build CSI input\nvolume mappings; InputPathListPaths is the resolved ticketless subset\nused to build the input-path-list ConfigMap. Ticket status never crosses\nthe wire — it is an iRODS access-control concern handled by porklock/CSI\nat transfer time, not in any k8s object.",
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "string"
+                },
+                "userLoginIP": {
+                    "description": "resolved via Apps.GetUserIP — the only DB-derived input",
+                    "type": "string"
                 }
             }
         },

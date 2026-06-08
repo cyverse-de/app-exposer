@@ -298,6 +298,13 @@ definitions:
         type: integer
       runningAnalyses:
         type: integer
+      specVersion:
+        description: |-
+          SpecVersion is the maximum VICESpec wire-contract version this operator
+          can build. 0 (the zero value, also what pre-spec operators report) means
+          the operator does not support the spec path, so the scheduler must send
+          it a legacy AnalysisBundle instead. See operatorclient.CurrentVICESpecVersion.
+        type: integer
       supportedGPUModels:
         items:
           type: string
@@ -309,6 +316,51 @@ definitions:
         description: bytes
         type: integer
     type: object
+  operatorclient.ContainerSpec:
+    properties:
+      arguments:
+        items:
+          type: string
+        type: array
+      entryPoint:
+        type: string
+      image:
+        type: string
+      ports:
+        items:
+          type: integer
+        type: array
+      tag:
+        type: string
+      uid:
+        type: integer
+      workingDir:
+        description: raw; empty means use the image's WORKDIR. The working-dir volume
+          still mounts at /de-app-work.
+        type: string
+    type: object
+  operatorclient.GPUSpec:
+    properties:
+      count:
+        description: resolved from MinGPUs/MaxGPUs (or legacy /dev/nvidia*)
+        type: integer
+      models:
+        description: canonical GFD names, e.g. "NVIDIA-A10G"; empty = any
+        items:
+          type: string
+        type: array
+      vendor:
+        description: canonical GPUVendorNvidia | GPUVendorAMD; empty defaults to nvidia
+        type: string
+    type: object
+  operatorclient.InputSpec:
+    properties:
+      irodsPath:
+        type: string
+      type:
+        description: fileinput | multifileselector | folderinput
+        type: string
+    type: object
   operatorclient.LogoutUserRequest:
     properties:
       username:
@@ -319,12 +371,42 @@ definitions:
       sessions_invalidated:
         type: integer
     type: object
+  operatorclient.MetadataAVU:
+    properties:
+      attribute:
+        type: string
+      unit:
+        type: string
+      value:
+        type: string
+    type: object
   operatorclient.PodsResponse:
     properties:
       pods:
         items:
           $ref: '#/definitions/operatorclient.StatusPod'
         type: array
+    type: object
+  operatorclient.ResourceSpec:
+    properties:
+      maxCPUCores:
+        description: model MaxCPUCores (limit)
+        type: number
+      maxMemoryBytes:
+        description: model MemoryLimit (limit)
+        type: integer
+      minCPUCores:
+        description: model MinCPUCores (request)
+        type: number
+      minDiskBytes:
+        description: model MinDiskSpace; sizes the working-dir PVC
+        type: integer
+      minMemoryBytes:
+        description: model MinMemoryLimit (request)
+        type: integer
+      sharedMemoryBytes:
+        description: resolved /dev/shm device; nil when none
+        type: integer
     type: object
   operatorclient.StatusDeployment:
     properties:
@@ -357,6 +439,89 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  operatorclient.VICESpec:
+    properties:
+      analysisID:
+        description: |-
+          Identity & labels. These populate the fixed label set the operator
+          stamps on every resource (the old jobInfo.JobLabels assembly). The
+          "subdomain" label is not carried — the operator recomputes it from
+          UserID + ExternalID via the shared common.Subdomain.
+        type: string
+      appID:
+        type: string
+      appName:
+        type: string
+      container:
+        allOf:
+        - $ref: '#/definitions/operatorclient.ContainerSpec'
+        description: |-
+          The interactive analysis container. VICE is single-step by invariant,
+          so this is one container, not a list.
+      environment:
+        additionalProperties:
+          type: string
+        description: Environment for the analysis container (model.Step.Environment).
+        type: object
+      excludeArguments:
+        description: resolved model.Job.ExcludeArguments()
+        items:
+          type: string
+        type: array
+      externalID:
+        description: job.InvocationID; basis for resource names
+        type: string
+      fileMetadata:
+        description: porklock upload metadata triples
+        items:
+          $ref: '#/definitions/operatorclient.MetadataAVU'
+        type: array
+      gpu:
+        $ref: '#/definitions/operatorclient.GPUSpec'
+      inputPathListPaths:
+        description: resolved ticketless subset
+        items:
+          type: string
+        type: array
+      inputs:
+        description: all inputs — CSI volume mappings
+        items:
+          $ref: '#/definitions/operatorclient.InputSpec'
+        type: array
+      jobName:
+        description: job.Name; label "analysis-name"; required, non-empty
+        type: string
+      outputDirectory:
+        description: resolved model.Job.OutputDirectory()
+        type: string
+      resources:
+        allOf:
+        - $ref: '#/definitions/operatorclient.ResourceSpec'
+        description: |-
+          Resource asks (raw; the operator applies its own default/clamp policy)
+          and GPU request. GPU is nil when the analysis requests no GPU.
+      specVersion:
+        description: |-
+          SpecVersion identifies the wire-contract version. See
+          CurrentVICESpecVersion. The operator rejects versions it cannot build.
+        type: integer
+      submitter:
+        description: raw username; operator applies UserSuffix
+        type: string
+      userHome:
+        description: |-
+          Data movement. Inputs is the full input list used to build CSI input
+          volume mappings; InputPathListPaths is the resolved ticketless subset
+          used to build the input-path-list ConfigMap. Ticket status never crosses
+          the wire — it is an iRODS access-control concern handled by porklock/CSI
+          at transfer time, not in any k8s object.
+        type: string
+      userID:
+        type: string
+      userLoginIP:
+        description: resolved via Apps.GetUserIP — the only DB-derived input
+        type: string
     type: object
   reporting.ConfigMapInfo:
     properties:
@@ -11187,6 +11352,44 @@ paths:
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       summary: Check if analysis URL is ready
+      tags:
+      - analyses
+  /analyses/spec:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Receives a cluster-agnostic VICESpec, builds the k8s objects for
+        this cluster, and applies them. Returns 409 if at capacity.
+      parameters:
+      - description: The analysis spec to launch
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/operatorclient.VICESpec'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Launch a VICE analysis from a spec
       tags:
       - analyses
   /capacity:
