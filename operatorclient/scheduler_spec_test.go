@@ -92,9 +92,10 @@ func TestSchedulerLaunchAnalysisSpecRouting(t *testing.T) {
 	}
 }
 
-// TestSchedulerLaunchAnalysisSpecFallsThrough verifies that a spec-unaware
-// operator is used when it is the only one available, and that a mixed fleet
-// prefers the higher-priority operator regardless of path.
+// TestSchedulerLaunchAnalysisSpecMixedFleet verifies that, in a fleet mixing
+// spec-aware and spec-unaware operators, a spec-aware operator appearing first
+// in priority order is preferred and receives the spec — without the legacy
+// bundle ever being built.
 func TestSchedulerLaunchAnalysisSpecMixedFleet(t *testing.T) {
 	specAware := newSpecRoutingServer(5, CurrentVICESpecVersion)
 	legacy := newSpecRoutingServer(5, 0)

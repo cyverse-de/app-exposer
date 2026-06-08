@@ -41,6 +41,7 @@ func TestVICESpecValidate(t *testing.T) {
 		{name: "missing jobName", mutate: func(s *VICESpec) { s.JobName = "" }, wantErr: "jobName is required"},
 		{name: "missing submitter", mutate: func(s *VICESpec) { s.Submitter = "" }, wantErr: "submitter is required"},
 		{name: "missing image", mutate: func(s *VICESpec) { s.Container.Image = "" }, wantErr: "container image is required"},
+		{name: "no ports", mutate: func(s *VICESpec) { s.Container.Ports = nil }, wantErr: "container must expose at least one port"},
 	}
 
 	for _, tt := range tests {

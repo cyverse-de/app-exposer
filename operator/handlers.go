@@ -465,8 +465,10 @@ func (o *Operator) HandleLaunchSpec(c echo.Context) error {
 	}
 
 	if err := o.applyBundleAndEgress(ctx, bundle); err != nil {
+		// Log the full error (k8s resource/namespace detail) server-side; return
+		// a generic message so cluster internals don't leak in the response body.
 		log.Errorf("spec launch failed for analysis %s: %v", spec.AnalysisID, err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to apply analysis resources; see operator logs")
 	}
 
 	log.Infof("spec launch succeeded for analysis %s", spec.AnalysisID)

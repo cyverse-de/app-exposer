@@ -129,6 +129,9 @@ func goldenJob(withGPU bool) *model.Job {
 		UserID:       "user-1",
 		Submitter:    "someuser",
 		UserHome:     "/example/home/someuser",
+		// Exercises the porklock file-transfer command's -m metadata args
+		// (non-CSI cases) and the FileMetadata mapping in the spec.
+		FileMetadata: []model.FileMetadata{{Attribute: "ipc-analysis-id", Value: "analysis-1", Unit: ""}},
 		Steps: []model.Step{{
 			Component:   model.StepComponent{Container: c},
 			Environment: map[string]string{"FOO": "bar"},
@@ -275,6 +278,14 @@ func assertContainersEquivalent(t *testing.T, legacy, spec []apiv1.Container) {
 		assert.Equalf(t, lc.Args, sc.Args, "%s args", name)
 		assert.Equalf(t, lc.Resources, sc.Resources, "%s resources", name)
 		assert.Equalf(t, lc.EnvFrom, sc.EnvFrom, "%s envFrom", name)
+		assert.Equalf(t, lc.Ports, sc.Ports, "%s ports", name)
+		assert.Equalf(t, lc.WorkingDir, sc.WorkingDir, "%s workingDir", name)
+		assert.Equalf(t, lc.SecurityContext, sc.SecurityContext, "%s securityContext", name)
+		assert.Equalf(t, lc.ReadinessProbe, sc.ReadinessProbe, "%s readinessProbe", name)
+		// Env is the most analysis-specific surface (REDIRECT_URL, IPLANT_*,
+		// plus the analysis's own vars); compare order-independently since the
+		// two builders may emit the map-derived vars in different orders.
+		assert.ElementsMatchf(t, lc.Env, sc.Env, "%s env", name)
 		assert.Equalf(t, volumeMountNames(lc.VolumeMounts), volumeMountNames(sc.VolumeMounts), "%s volume mounts", name)
 	}
 }

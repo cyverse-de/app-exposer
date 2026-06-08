@@ -154,6 +154,11 @@ func (s *VICESpec) Validate() error {
 	if s.Container.Image == "" {
 		return fmt.Errorf("container image is required")
 	}
+	// VICE apps are interactive web apps; the readiness probe and vice-proxy
+	// backend both target the first container port, so at least one is required.
+	if len(s.Container.Ports) == 0 {
+		return fmt.Errorf("container must expose at least one port")
+	}
 	return nil
 }
 

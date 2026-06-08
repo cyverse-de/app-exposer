@@ -132,7 +132,11 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 	defer cancel()
 
 	// Pre-build the deployment locally to calculate millicores reservation
-	// and validate resource requirements.
+	// and validate resource requirements. NOTE: this uses app-exposer's
+	// resourcing defaults, not the target operator's ResourceDefaults. For
+	// spec-path launches on an operator whose defaults differ, the reserved
+	// millicores may be slightly off; unifying this is Phase 4 follow-up work
+	// once every operator runs the spec path.
 	deployment, err := h.incluster.GetDeployment(ctx, job)
 	if err != nil {
 		log.Errorf("async launch %s: failed to get deployment: %v", job.ID, err)

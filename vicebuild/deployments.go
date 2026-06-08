@@ -251,11 +251,13 @@ func (c *Config) imagePullSecrets() []apiv1.LocalObjectReference {
 	return []apiv1.LocalObjectReference{}
 }
 
-// gpuModelAffinityKey returns the node-label key for GPU-model affinity on this
-// cluster, folding in TransformGPUModels (key override) and TransformGPUVendor
-// (AMD rename). The canonical key is used unless the cluster overrides it; an
-// AMD cluster that hasn't overridden the key gets the AMD rename.
-func (c *Config) gpuModelAffinityKey() string {
+// resolvedGPUModelAffinityKey returns the node-label key for GPU-model affinity
+// on this cluster, folding in TransformGPUModels (key override) and
+// TransformGPUVendor (AMD rename). The canonical key is used unless the cluster
+// overrides it via Config.GPUModelAffinityKey; an AMD cluster that hasn't
+// overridden the key gets the AMD rename. Distinct from the raw
+// Config.GPUModelAffinityKey field, which may be empty.
+func (c *Config) resolvedGPUModelAffinityKey() string {
 	if c.GPUModelAffinityKey != "" && c.GPUModelAffinityKey != constants.GPUModelAffinityKey {
 		return c.GPUModelAffinityKey
 	}
@@ -298,7 +300,7 @@ func (c *Config) nodeSelectorRequirements(spec *operatorclient.VICESpec) []apiv1
 	})
 	if values := c.gpuModelValues(spec.GPU.Models); len(values) > 0 {
 		reqs = append(reqs, apiv1.NodeSelectorRequirement{
-			Key:      c.gpuModelAffinityKey(),
+			Key:      c.resolvedGPUModelAffinityKey(),
 			Operator: apiv1.NodeSelectorOperator(constants.GPUModelAffinityOperator),
 			Values:   values,
 		})
