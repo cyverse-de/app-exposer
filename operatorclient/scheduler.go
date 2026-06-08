@@ -174,6 +174,48 @@ func (s *Scheduler) Sync(summaries []OperatorAdminSummary) error {
 // The first operator with available capacity gets the analysis. This
 // minimizes usage of later (potentially more expensive) clusters.
 func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) (uuid.UUID, string, error) {
+	return s.launchOnFirstCapable(ctx, bundle.AnalysisID, bundle.RequestedGPUVendor(), bundle.RequestedGPUModels(),
+		func(ctx context.Context, op *Client, _ *CapacityResponse) error {
+			return op.Launch(ctx, bundle)
+		})
+}
+
+// LaunchAnalysisSpec routes a VICESpec to the first capable operator, choosing
+// the wire format per operator: an operator whose advertised SpecVersion covers
+// the spec receives the spec (operator-side construction); an older,
+// spec-unaware operator receives a legacy AnalysisBundle instead. legacyBundle
+// builds that bundle on demand and is only called when a spec-unaware operator
+// is actually selected, so the common all-spec-aware path never pays to build
+// it. GPU vendor/model matching reads the spec directly rather than parsing a
+// built Deployment.
+func (s *Scheduler) LaunchAnalysisSpec(ctx context.Context, spec *VICESpec, legacyBundle func() (*AnalysisBundle, error)) (uuid.UUID, string, error) {
+	return s.launchOnFirstCapable(ctx, spec.AnalysisID, spec.RequestedGPUVendor(), spec.RequestedGPUModels(),
+		func(ctx context.Context, op *Client, capResp *CapacityResponse) error {
+			if capResp.SupportsSpecVersion(spec.SpecVersion) {
+				return op.LaunchSpec(ctx, spec)
+			}
+			log.Infof("operator %s does not support spec version %d (reports %d); falling back to legacy bundle",
+				op.Name(), spec.SpecVersion, capResp.SpecVersion)
+			bundle, err := legacyBundle()
+			if err != nil {
+				return fmt.Errorf("building legacy bundle for analysis %s: %w", spec.AnalysisID, err)
+			}
+			return op.Launch(ctx, bundle)
+		})
+}
+
+// launchOnFirstCapable tries operators in priority order and invokes launch on
+// the first one that passes the draining/capacity/GPU-vendor/GPU-model gates,
+// falling through on capacity races and transient failures. It is the shared
+// core of LaunchAnalysis (legacy bundle) and LaunchAnalysisSpec (spec); the two
+// differ only in how GPU requirements are sourced and what launch does.
+func (s *Scheduler) launchOnFirstCapable(
+	ctx context.Context,
+	analysisID AnalysisID,
+	wantVendor string,
+	wantModels []string,
+	launch func(context.Context, *Client, *CapacityResponse) error,
+) (uuid.UUID, string, error) {
 	s.mu.RLock()
 	clients := slices.Clone(s.operators)
 	s.mu.RUnlock()
@@ -195,9 +237,6 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 		drainingSkips    int
 		lastTransient    error
 	)
-
-	wantVendor := bundle.RequestedGPUVendor()
-	wantModels := bundle.RequestedGPUModels()
 
 	for _, op := range clients {
 		// Skip operators that are draining: they stay in the pool to serve
@@ -247,7 +286,7 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 		// Try to launch on this operator. Capacity races and transient
 		// operator-side failures fall through to the next operator; only
 		// errors that look like a bug in the request we built abort.
-		if err := op.Launch(ctx, bundle); err != nil {
+		if err := launch(ctx, op, cap); err != nil {
 			if errors.Is(err, ErrCapacityExhausted) {
 				// Race condition: capacity was available but filled before our launch.
 				log.Infof("operator %s returned 409, trying next; this usually means it reached capacity after the check but before our job was submitted", op.Name())
@@ -262,7 +301,7 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 			return uuid.Nil, "", fmt.Errorf("launch on operator %s failed: %w", op.Name(), err)
 		}
 
-		log.Infof("analysis %s launched on operator %s (id=%s)", bundle.AnalysisID, op.Name(), op.ID())
+		log.Infof("analysis %s launched on operator %s (id=%s)", analysisID, op.Name(), op.ID())
 		return op.ID(), op.Name(), nil
 	}
 
@@ -271,7 +310,7 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 	// isn't misled into reporting a capacity shortfall.
 	if drainingSkips == len(clients) {
 		return uuid.Nil, "", fmt.Errorf("all %d operators draining for analysis %s: %w",
-			len(clients), bundle.AnalysisID, ErrAllOperatorsDraining)
+			len(clients), analysisID, ErrAllOperatorsDraining)
 	}
 
 	// Every non-draining operator's capacity check failed. Draining operators
@@ -288,7 +327,7 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 	// still fires when the non-draining operators are all vendor mismatches.
 	if wantVendor != "" && vendorMismatches > 0 && capacityErrors+vendorMismatches+drainingSkips == len(clients) {
 		return uuid.Nil, "", fmt.Errorf("no operator with vendor %s for analysis %s: %w",
-			wantVendor, bundle.AnalysisID, ErrNoCompatibleOperator)
+			wantVendor, analysisID, ErrNoCompatibleOperator)
 	}
 
 	// No operator advertised a compatible GPU model. Surface this distinctly
@@ -296,7 +335,7 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 	// ErrNoCompatibleOperator and ErrAllOperatorsExhausted.
 	if len(wantModels) > 0 && modelMismatches > 0 && capacityErrors+vendorMismatches+modelMismatches+drainingSkips == len(clients) {
 		return uuid.Nil, "", fmt.Errorf("no operator with model %v for analysis %s: %w",
-			wantModels, bundle.AnalysisID, ErrNoCompatibleModel)
+			wantModels, analysisID, ErrNoCompatibleModel)
 	}
 
 	// At least one operator passed capacity check then failed the launch for
@@ -307,7 +346,7 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 	// may also include draining or at-capacity operators, which aren't unhealthy.
 	if transientErrors > 0 && capacityErrors+transientErrors+vendorMismatches+modelMismatches+drainingSkips == len(clients) {
 		return uuid.Nil, "", fmt.Errorf("no operator could accept analysis %s (%d operators, last transient error): %w",
-			bundle.AnalysisID, len(clients), lastTransient)
+			analysisID, len(clients), lastTransient)
 	}
 
 	return uuid.Nil, "", ErrAllOperatorsExhausted

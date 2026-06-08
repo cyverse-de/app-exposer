@@ -77,7 +77,7 @@ type ContainerSpec struct {
 	UID        int      `json:"uid"`
 	Ports      []int    `json:"ports,omitempty"`
 	EntryPoint string   `json:"entryPoint,omitempty"`
-	WorkingDir string   `json:"workingDir"` // resolved; default /de-app-work
+	WorkingDir string   `json:"workingDir,omitempty"` // raw; empty means use the image's WORKDIR. The working-dir volume still mounts at /de-app-work.
 	Arguments  []string `json:"arguments,omitempty"`
 }
 

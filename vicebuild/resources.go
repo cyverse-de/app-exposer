@@ -52,7 +52,15 @@ func (c *Config) analysisRequirements(spec *operatorclient.VICESpec) apiv1.Resou
 		if count <= 0 {
 			count = 1
 		}
-		qty := *resourcev1.NewQuantity(count, resourcev1.DecimalSI)
+		// Parse from the integer string (rather than NewQuantity) so the
+		// quantity's cached string form matches what the analysis definition
+		// path produces — keeps the emitted resource identical to the legacy
+		// build, which the golden-equivalence test asserts.
+		qty, err := resourcev1.ParseQuantity(fmt.Sprintf("%d", count))
+		if err != nil {
+			log.Warnf("malformed GPU quantity %d: %v; defaulting to 1", count, err)
+			qty = resourcev1.MustParse("1")
+		}
 		reqs[name] = qty
 		limits[name] = qty
 	}

@@ -153,19 +153,26 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 		return
 	}
 
-	// Build a bundle and route to an operator. Uses job.ID directly because
-	// job_steps rows don't exist yet at launch time.
-	bundle, err := h.incluster.BuildAnalysisBundle(ctx, job, constants.AnalysisID(job.ID))
+	// Build the cluster-agnostic spec and route to an operator. Uses job.ID
+	// directly because job_steps rows don't exist yet at launch time. The
+	// scheduler sends the spec to spec-aware operators and falls back to a
+	// legacy AnalysisBundle for older ones; the bundle is built on demand only
+	// if a spec-unaware operator is actually selected.
+	analysisID := constants.AnalysisID(job.ID)
+	spec, err := h.incluster.BuildVICESpec(ctx, job, analysisID)
 	if err != nil {
-		log.Errorf("async launch %s: failed to build analysis bundle: %v", job.ID, err)
-		h.failLaunch(ctx, job, fmt.Sprintf("failed to build analysis bundle: %v", err))
+		log.Errorf("async launch %s: failed to build VICE spec: %v", job.ID, err)
+		h.failLaunch(ctx, job, fmt.Sprintf("failed to build VICE spec: %v", err))
 		return
 	}
 
-	// Route the bundle to an available operator. The scheduler returns
-	// both the id (used for the DB write below) and the name (used in
-	// human-readable log lines).
-	operatorID, operatorName, err := h.scheduler.LaunchAnalysis(ctx, bundle)
+	legacyBundle := func() (*operatorclient.AnalysisBundle, error) {
+		return h.incluster.BuildAnalysisBundle(ctx, job, analysisID)
+	}
+
+	// Route to an available operator. The scheduler returns both the id (used
+	// for the DB write below) and the name (used in human-readable log lines).
+	operatorID, operatorName, err := h.scheduler.LaunchAnalysisSpec(ctx, spec, legacyBundle)
 	if err != nil {
 		log.Errorf("async launch %s: failed to launch analysis: %v", job.ID, err)
 		h.failLaunch(ctx, job, fmt.Sprintf("failed to schedule analysis on operator: %v", err))

@@ -207,9 +207,20 @@ func (c *Config) volumeClaims(spec *operatorclient.VICESpec) []*apiv1.Persistent
 	return claims
 }
 
-// workingDirMountPath is the in-container path the working-dir volume mounts at;
-// it is the resolved container working directory.
+// defaultWorkingDir is the working-dir volume mount path used when the job
+// submission did not specify a container working directory. Mirrors
+// model.Container.WorkingDirectory()'s default; the spec carries the raw
+// (possibly empty) WorkingDir so the analysis container's WorkingDir field is
+// only set when the job actually specified one (otherwise the image's own
+// WORKDIR applies), while the volume still mounts at a known path.
+const defaultWorkingDir = "/de-app-work"
+
+// workingDirMountPath is the in-container path the working-dir volume mounts at.
+// It resolves the default when the spec carries no explicit working directory.
 func workingDirMountPath(spec *operatorclient.VICESpec) string {
+	if spec.Container.WorkingDir == "" {
+		return defaultWorkingDir
+	}
 	return spec.Container.WorkingDir
 }
 
