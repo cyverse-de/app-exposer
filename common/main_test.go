@@ -3,7 +3,10 @@ package common
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // MockResponseWriter is a test implementation of http.ResponseWriter.
@@ -117,4 +120,28 @@ func TestDetailedErrorWithCode(t *testing.T) {
 	w.VerifyStatusCode(t, http.StatusBadRequest)
 	w.VerifyHeader(t, "Content-Type", "application/json")
 	w.VerifyBody(t, e.Error())
+}
+
+func TestFilterMap(t *testing.T) {
+	t.Run("empty values returns empty map", func(t *testing.T) {
+		result := FilterMap(url.Values{})
+		assert.Empty(t, result)
+	})
+
+	t.Run("single value per key", func(t *testing.T) {
+		values := url.Values{
+			"foo": []string{"bar"},
+			"baz": []string{"qux"},
+		}
+		result := FilterMap(values)
+		assert.Equal(t, map[string]string{"foo": "bar", "baz": "qux"}, result)
+	})
+
+	t.Run("only first value is kept when multiple values present for a key", func(t *testing.T) {
+		values := url.Values{
+			"key": []string{"first", "second", "third"},
+		}
+		result := FilterMap(values)
+		assert.Equal(t, map[string]string{"key": "first"}, result)
+	})
 }
