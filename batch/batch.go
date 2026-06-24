@@ -545,6 +545,8 @@ func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alph
 		"gocmd",
 		fmt.Sprintf("--log_level=%s", opts.FileTransferLogLevel),
 		"get",
+		"--retry", "10",
+		"--retry_interval", "20",
 	}
 	args = append(args, inputFilesAndFolders...)
 	args = append(args, ".")
@@ -639,6 +641,8 @@ func (w *WorkflowMaker) uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1
 		"gocmd",
 		fmt.Sprintf("--log_level=%s", opts.FileTransferLogLevel),
 		"put",
+		"--retry", "10",
+		"--retry_interval", "20",
 		"-f",
 		"--no_root",
 		".",
