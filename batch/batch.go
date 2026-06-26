@@ -547,6 +547,7 @@ func (w *WorkflowMaker) downloadFilesTemplate(opts *BatchSubmissionOpts) *v1alph
 		"get",
 		"--retry", "10",
 		"--retry_interval", "20",
+		"--webdav",
 	}
 	args = append(args, inputFilesAndFolders...)
 	args = append(args, ".")
@@ -643,6 +644,7 @@ func (w *WorkflowMaker) uploadFilesTemplate(opts *BatchSubmissionOpts) *v1alpha1
 		"put",
 		"--retry", "10",
 		"--retry_interval", "20",
+		"--webdav",
 		"-f",
 		"--no_root",
 		".",
