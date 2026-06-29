@@ -510,14 +510,6 @@ paths:
                     items:
                       $ref: '#/components/schemas/HTTPRoute'
 
-  /vice/apply-labels:
-    post:
-      summary: Apply extra labels
-      description: Tells app-exposer to apply the analysis-id and login-ip labels if on resources, but only if they're missing.
-      responses:
-        '200':
-          description: OK
-
   /vice/async-data:
     get:
       summary: Get asynchronously applied data about an analysis.
