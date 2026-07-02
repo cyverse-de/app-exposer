@@ -136,7 +136,6 @@ func main() {
 	flag.Parse()
 	logging.SetupLogging(*logLevel)
 
-
 	log := log.WithFields(logrus.Fields{"context": "main"})
 
 	if !strings.HasPrefix(*userSuffix, "@") {
