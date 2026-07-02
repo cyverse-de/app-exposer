@@ -13,7 +13,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf"
 	_ "github.com/lib/pq"
-	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/cyverse-de/app-exposer/adapter"
@@ -31,7 +30,6 @@ import (
 	"github.com/cyverse-de/go-mod/gotelnats"
 	"github.com/cyverse-de/go-mod/logging"
 	"github.com/cyverse-de/go-mod/otelutils"
-	"github.com/cyverse-de/go-mod/protobufjson"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2/clientcredentials"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
@@ -137,8 +135,6 @@ func main() {
 
 	flag.Parse()
 	logging.SetupLogging(*logLevel)
-
-	nats.RegisterEncoder("protojson", protobufjson.NewCodec(protobufjson.WithEmitUnpopulated()))
 
 	log := log.WithFields(logrus.Fields{"context": "main"})
 
