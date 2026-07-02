@@ -46,7 +46,7 @@ func New(init *Init) (*nats.EncodedConn, error) {
 	// log.Infof("configured servers: %s", strings.Join(nc.Servers(), " "))
 	// log.Infof("connected to NATS host: %s", nc.ConnectedServerName())
 
-	conn, err := nats.NewEncodedConn(nc, "protojson")
+	conn, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
 	if err != nil {
 		return nil, err
 	}

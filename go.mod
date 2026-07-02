@@ -21,15 +21,14 @@ require (
 	github.com/cockroachdb/apd v1.1.0
 	github.com/coreos/go-oidc/v3 v3.14.1
 	github.com/cyverse-de/go-mod/cfg v0.0.1
-	github.com/cyverse-de/go-mod/gotelnats v0.0.11
+	github.com/cyverse-de/go-mod/gotelnats v0.1.0
 	github.com/cyverse-de/go-mod/logging v0.0.2
 	github.com/cyverse-de/go-mod/otelutils v0.0.3
-	github.com/cyverse-de/go-mod/pbinit v0.1.11
-	github.com/cyverse-de/go-mod/protobufjson v0.0.3
+	github.com/cyverse-de/go-mod/pbinit v0.2.0
 	github.com/cyverse-de/go-mod/viceauth v1.0.0
 	github.com/cyverse-de/messaging/v12 v12.0.0
 	github.com/cyverse-de/model/v10 v10.0.0
-	github.com/cyverse-de/p/go/qms v0.1.13
+	github.com/cyverse-de/p/go/qms v0.3.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/gosimple/slug v1.15.0
@@ -75,13 +74,12 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/colinmarc/hdfs/v2 v2.4.0 // indirect
 	github.com/cyverse-de/configurate v0.0.0-20210914212501-fc18b48e00a9 // indirect
-	github.com/cyverse-de/p v0.0.0-20240228001927-426a6bd80191 // indirect
-	github.com/cyverse-de/p/go/analysis v0.0.16 // indirect
-	github.com/cyverse-de/p/go/containers v0.0.2 // indirect
-	github.com/cyverse-de/p/go/header v0.0.4 // indirect
-	github.com/cyverse-de/p/go/monitoring v0.0.5 // indirect
-	github.com/cyverse-de/p/go/svcerror v0.0.8 // indirect
-	github.com/cyverse-de/p/go/user v0.0.11 // indirect
+	github.com/cyverse-de/p/go/analysis v0.1.0 // indirect
+	github.com/cyverse-de/p/go/containers v0.1.0 // indirect
+	github.com/cyverse-de/p/go/header v0.1.0 // indirect
+	github.com/cyverse-de/p/go/monitoring v0.1.0 // indirect
+	github.com/cyverse-de/p/go/svcerror v0.1.0 // indirect
+	github.com/cyverse-de/p/go/user v0.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/doublerebel/bellows v0.0.0-20160303004610-f177d92a03d3 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
