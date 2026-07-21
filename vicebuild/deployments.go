@@ -237,7 +237,7 @@ func (c *Config) fileTransfersContainer(spec *operatorclient.VICESpec) apiv1.Con
 // sidecar (when not using CSI mounts), then the analysis container.
 func (c *Config) containers(spec *operatorclient.VICESpec) []apiv1.Container {
 	out := []apiv1.Container{c.viceProxyContainer(spec)}
-	if !(c.UseCSIDriver && spec.MountDataStore) {
+	if !c.UseCSIDriver || !spec.MountDataStore {
 		out = append(out, c.fileTransfersContainer(spec))
 	}
 	out = append(out, c.analysisContainer(spec))

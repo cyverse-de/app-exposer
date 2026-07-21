@@ -144,7 +144,7 @@ func workingDirMountPath(job *model.Job) string {
 func (i *Incluster) initContainers(job *model.Job) []apiv1.Container {
 	output := []apiv1.Container{}
 
-	if !(i.UseCSIDriver && job.MountDataStore) {
+	if !i.UseCSIDriver || !job.MountDataStore {
 		output = append(output, i.inputStagingContainer(job))
 	} else {
 		output = append(output, i.workingDirPrepContainer(job))
@@ -320,7 +320,7 @@ func (i *Incluster) deploymentContainers(job *model.Job) []apiv1.Container {
 
 	output = append(output, viceProxyContainer)
 
-	if !(i.UseCSIDriver && job.MountDataStore) {
+	if !i.UseCSIDriver || !job.MountDataStore {
 		output = append(output, apiv1.Container{
 			Name:            constants.FileTransfersContainerName,
 			Image:           fmt.Sprintf("%s:%s", i.PorklockImage, i.PorklockTag),
