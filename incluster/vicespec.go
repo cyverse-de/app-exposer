@@ -66,6 +66,7 @@ func buildVICESpec(job *model.Job, analysisID constants.AnalysisID, loginIP stri
 		Resources: buildResourceSpec(job),
 		GPU:       buildGPUSpec(job),
 
+		MountDataStore:     job.MountDataStore,
 		UserHome:           job.UserHome,
 		OutputDirectory:    job.OutputDirectory(),
 		ExcludeArguments:   job.ExcludeArguments(),

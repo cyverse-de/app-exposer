@@ -99,20 +99,42 @@ func TestPersistentVolumeCapacity(t *testing.T) {
 }
 
 // TestInputPathListVolumePresence confirms the input-path-list volume only
-// appears when there are ticketless inputs.
+// appears when the porklock path is active (CSI not in use) and there are
+// ticketless inputs.
 func TestInputPathListVolumePresence(t *testing.T) {
-	cfg := testConfig()
-	cfg.UseCSIDriver = true
-
-	t.Run("no ticketless inputs", func(t *testing.T) {
+	t.Run("no ticketless inputs, no CSI", func(t *testing.T) {
+		cfg := testConfig()
+		cfg.UseCSIDriver = false
 		vols := cfg.podVolumes(testSpec())
 		assert.NotContains(t, volumeNames(vols), constants.InputPathListVolumeName)
 	})
-	t.Run("with ticketless inputs", func(t *testing.T) {
+	t.Run("with ticketless inputs, no CSI", func(t *testing.T) {
+		cfg := testConfig()
+		cfg.UseCSIDriver = false
 		spec := testSpec()
 		spec.InputPathListPaths = []string{"/iplant/home/someuser/in.txt"}
 		vols := cfg.podVolumes(spec)
 		assert.Contains(t, volumeNames(vols), constants.InputPathListVolumeName)
+	})
+	t.Run("with ticketless inputs, CSI enabled and mount requested", func(t *testing.T) {
+		cfg := testConfig()
+		cfg.UseCSIDriver = true
+		spec := testSpec()
+		spec.MountDataStore = true
+		spec.InputPathListPaths = []string{"/iplant/home/someuser/in.txt"}
+		vols := cfg.podVolumes(spec)
+		assert.NotContains(t, volumeNames(vols), constants.InputPathListVolumeName,
+			"CSI path does not use the input-path-list volume")
+	})
+	t.Run("with ticketless inputs, CSI enabled but mount not requested", func(t *testing.T) {
+		cfg := testConfig()
+		cfg.UseCSIDriver = true
+		spec := testSpec()
+		spec.MountDataStore = false
+		spec.InputPathListPaths = []string{"/iplant/home/someuser/in.txt"}
+		vols := cfg.podVolumes(spec)
+		assert.Contains(t, volumeNames(vols), constants.InputPathListVolumeName,
+			"porklock path needs the input-path-list volume")
 	})
 }
 

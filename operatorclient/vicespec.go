@@ -58,6 +58,13 @@ type VICESpec struct {
 	// used to build the input-path-list ConfigMap. Ticket status never crosses
 	// the wire — it is an iRODS access-control concern handled by porklock/CSI
 	// at transfer time, not in any k8s object.
+	//
+	// MountDataStore controls whether the operator creates iRODS data-store
+	// mounts via the CSI driver. When true (and the cluster supports CSI),
+	// a CSI PersistentVolume is created. When false (or the cluster lacks
+	// CSI support), porklock handles input staging and output transfer
+	// instead. The working-dir PVC is always created regardless of this flag.
+	MountDataStore     bool          `json:"mountDataStore"`
 	UserHome           string        `json:"userHome"`
 	OutputDirectory    string        `json:"outputDirectory"`              // resolved model.Job.OutputDirectory()
 	ExcludeArguments   []string      `json:"excludeArguments,omitempty"`   // resolved model.Job.ExcludeArguments()

@@ -29,7 +29,8 @@ func testSpec() *operatorclient.VICESpec {
 			Ports:      []int{8888},
 			WorkingDir: "/de-app-work",
 		},
-		UserHome: "/iplant/home/someuser",
+		MountDataStore: true,
+		UserHome:       "/iplant/home/someuser",
 	}
 }
 

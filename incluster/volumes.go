@@ -147,83 +147,83 @@ func (i *Incluster) getCSIDataVolumeLabels(ctx context.Context, job *model.Job) 
 // getPersistentVolumes returns the PersistentVolumes for the VICE analysis. It does
 // not call the k8s API.
 func (i *Incluster) getPersistentVolumes(ctx context.Context, job *model.Job) ([]*apiv1.PersistentVolume, error) {
-	if i.UseCSIDriver {
-		dataPathMappings := []IRODSFSPathMapping{}
+	if !i.UseCSIDriver || !job.MountDataStore {
+		return nil, nil
+	}
 
-		// input output path
-		inputPathMappings, err := i.getInputPathMappings(job)
-		if err != nil {
-			return nil, err
-		}
-		dataPathMappings = append(dataPathMappings, inputPathMappings...)
+	dataPathMappings := []IRODSFSPathMapping{}
 
-		outputPathMapping := i.getOutputPathMapping(job)
-		dataPathMappings = append(dataPathMappings, outputPathMapping)
+	// input output path
+	inputPathMappings, err := i.getInputPathMappings(job)
+	if err != nil {
+		return nil, err
+	}
+	dataPathMappings = append(dataPathMappings, inputPathMappings...)
 
-		// home path
-		if job.UserHome != "" {
-			homePathMapping := i.getHomePathMapping(job)
-			dataPathMappings = append(dataPathMappings, homePathMapping)
-		}
+	outputPathMapping := i.getOutputPathMapping(job)
+	dataPathMappings = append(dataPathMappings, outputPathMapping)
 
-		// shared path
-		sharedPathMapping := i.getSharedPathMapping()
-		dataPathMappings = append(dataPathMappings, sharedPathMapping)
+	// home path
+	if job.UserHome != "" {
+		homePathMapping := i.getHomePathMapping(job)
+		dataPathMappings = append(dataPathMappings, homePathMapping)
+	}
 
-		// convert path mappings into json
-		dataPathMappingsJSONBytes, err := json.Marshal(dataPathMappings)
-		if err != nil {
-			return nil, err
-		}
+	// shared path
+	sharedPathMapping := i.getSharedPathMapping()
+	dataPathMappings = append(dataPathMappings, sharedPathMapping)
 
-		volmode := apiv1.PersistentVolumeFilesystem
-		persistentVolumes := []*apiv1.PersistentVolume{}
+	// convert path mappings into json
+	dataPathMappingsJSONBytes, err := json.Marshal(dataPathMappings)
+	if err != nil {
+		return nil, err
+	}
 
-		dataVolumeLabels, err := i.getCSIDataVolumeLabels(ctx, job)
-		if err != nil {
-			return nil, err
-		}
+	volmode := apiv1.PersistentVolumeFilesystem
+	persistentVolumes := []*apiv1.PersistentVolume{}
 
-		dataVolume := &apiv1.PersistentVolume{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   i.getCSIDataVolumeName(job),
-				Labels: dataVolumeLabels,
+	dataVolumeLabels, err := i.getCSIDataVolumeLabels(ctx, job)
+	if err != nil {
+		return nil, err
+	}
+
+	dataVolume := &apiv1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   i.getCSIDataVolumeName(job),
+			Labels: dataVolumeLabels,
+		},
+		Spec: apiv1.PersistentVolumeSpec{
+			Capacity: apiv1.ResourceList{
+				apiv1.ResourceStorage: defaultStorageCapacity,
 			},
-			Spec: apiv1.PersistentVolumeSpec{
-				Capacity: apiv1.ResourceList{
-					apiv1.ResourceStorage: defaultStorageCapacity,
-				},
-				VolumeMode: &volmode,
-				AccessModes: []apiv1.PersistentVolumeAccessMode{
-					apiv1.ReadWriteMany,
-				},
-				PersistentVolumeReclaimPolicy: apiv1.PersistentVolumeReclaimRetain,
-				StorageClassName:              constants.CSIDriverStorageClassName,
-				PersistentVolumeSource: apiv1.PersistentVolumeSource{
-					CSI: &apiv1.CSIPersistentVolumeSource{
-						Driver:       constants.CSIDriverName,
-						VolumeHandle: i.getCSIDataVolumeHandle(job),
-						VolumeAttributes: map[string]string{
-							"client":              "irodsfuse",
-							"path_mapping_json":   string(dataPathMappingsJSONBytes),
-							"no_permission_check": "true",
-							// use proxy access — iRODS expects the short username
-							// without the domain suffix (e.g. "wregglej" not
-							// "wregglej@iplantcollaborative.org").
-							"clientUser": strings.SplitN(job.Submitter, "@", 2)[0],
-							"uid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
-							"gid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
-						},
+			VolumeMode: &volmode,
+			AccessModes: []apiv1.PersistentVolumeAccessMode{
+				apiv1.ReadWriteMany,
+			},
+			PersistentVolumeReclaimPolicy: apiv1.PersistentVolumeReclaimRetain,
+			StorageClassName:              constants.CSIDriverStorageClassName,
+			PersistentVolumeSource: apiv1.PersistentVolumeSource{
+				CSI: &apiv1.CSIPersistentVolumeSource{
+					Driver:       constants.CSIDriverName,
+					VolumeHandle: i.getCSIDataVolumeHandle(job),
+					VolumeAttributes: map[string]string{
+						"client":              "irodsfuse",
+						"path_mapping_json":   string(dataPathMappingsJSONBytes),
+						"no_permission_check": "true",
+						// use proxy access — iRODS expects the short username
+						// without the domain suffix (e.g. "wregglej" not
+						// "wregglej@iplantcollaborative.org").
+						"clientUser": strings.SplitN(job.Submitter, "@", 2)[0],
+						"uid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
+						"gid":        fmt.Sprintf("%d", job.Steps[0].Component.Container.UID),
 					},
 				},
 			},
-		}
-
-		persistentVolumes = append(persistentVolumes, dataVolume)
-		return persistentVolumes, nil
+		},
 	}
 
-	return nil, nil
+	persistentVolumes = append(persistentVolumes, dataVolume)
+	return persistentVolumes, nil
 }
 
 // getPersistentVolumeCapacity returns the desired capacity of the local persistent volume for a job.
@@ -275,7 +275,7 @@ func (i *Incluster) getVolumeClaims(ctx context.Context, job *model.Job) ([]*api
 
 	volumeClaims = append(volumeClaims, persistentVolumeClaim)
 
-	if i.UseCSIDriver {
+	if i.UseCSIDriver && job.MountDataStore {
 		storageclassname := constants.CSIDriverStorageClassName
 
 		dataVolumeClaim := &apiv1.PersistentVolumeClaim{
@@ -318,7 +318,7 @@ func (i *Incluster) getPersistentVolumeSources(job *model.Job) ([]*apiv1.Volume,
 		},
 	}
 
-	if i.UseCSIDriver {
+	if i.UseCSIDriver && job.MountDataStore {
 		dataVolume := &apiv1.Volume{
 			Name: i.getCSIDataVolumeClaimName(job),
 			VolumeSource: apiv1.VolumeSource{
@@ -348,7 +348,7 @@ func (i *Incluster) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMou
 
 	volumeMounts = append(volumeMounts, analysisDataVolumeMount)
 
-	if i.UseCSIDriver {
+	if i.UseCSIDriver && job.MountDataStore {
 
 		dataVolumeMount := &apiv1.VolumeMount{
 			Name:      i.getCSIDataVolumeClaimName(job),
@@ -370,7 +370,9 @@ func (i *Incluster) getPersistentVolumeMounts(job *model.Job) []*apiv1.VolumeMou
 func (i *Incluster) deploymentVolumes(job *model.Job) ([]apiv1.Volume, error) {
 	output := []apiv1.Volume{}
 
-	if len(job.FilterInputsWithoutTickets()) > 0 {
+	useCSI := i.UseCSIDriver && job.MountDataStore
+
+	if !useCSI && len(job.FilterInputsWithoutTickets()) > 0 {
 		output = append(output, apiv1.Volume{
 			Name: constants.InputPathListVolumeName,
 			VolumeSource: apiv1.VolumeSource{
@@ -402,7 +404,7 @@ func (i *Incluster) deploymentVolumes(job *model.Job) ([]apiv1.Volume, error) {
 		output = append(output, *volumeSource)
 	}
 
-	if !i.UseCSIDriver {
+	if !useCSI {
 		output = append(output,
 			apiv1.Volume{
 				Name: constants.PorklockConfigVolumeName,
