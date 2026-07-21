@@ -32,14 +32,26 @@ func TestWorkingDirStorageClassFolded(t *testing.T) {
 }
 
 func TestVolumeClaimsCSI(t *testing.T) {
-	cfg := testConfig()
-	cfg.UseCSIDriver = true
-	claims := cfg.volumeClaims(testSpec())
-	require.Len(t, claims, 2)
-	assert.Equal(t, "working-dir-external-1", claims[0].Name)
-	assert.Equal(t, "csi-data-volume-claim-external-1", claims[1].Name)
-	require.NotNil(t, claims[1].Spec.StorageClassName)
-	assert.Equal(t, constants.CSIDriverStorageClassName, *claims[1].Spec.StorageClassName)
+	t.Run("CSI enabled, mount requested", func(t *testing.T) {
+		cfg := testConfig()
+		cfg.UseCSIDriver = true
+		claims := cfg.volumeClaims(testSpec())
+		require.Len(t, claims, 2)
+		assert.Equal(t, "working-dir-external-1", claims[0].Name)
+		assert.Equal(t, "csi-data-volume-claim-external-1", claims[1].Name)
+		require.NotNil(t, claims[1].Spec.StorageClassName)
+		assert.Equal(t, constants.CSIDriverStorageClassName, *claims[1].Spec.StorageClassName)
+	})
+	t.Run("CSI enabled, mount opted out", func(t *testing.T) {
+		// MountDataStore=false: only the working-dir PVC, no CSI data claim.
+		cfg := testConfig()
+		cfg.UseCSIDriver = true
+		spec := testSpec()
+		spec.MountDataStore = false
+		claims := cfg.volumeClaims(spec)
+		require.Len(t, claims, 1, "only working-dir PVC when mount opted out")
+		assert.Equal(t, "working-dir-external-1", claims[0].Name)
+	})
 }
 
 func TestPersistentVolumesCSIDisabled(t *testing.T) {
@@ -48,6 +60,17 @@ func TestPersistentVolumesCSIDisabled(t *testing.T) {
 	pvs, err := cfg.persistentVolumes(testSpec())
 	require.NoError(t, err)
 	assert.Nil(t, pvs)
+}
+
+func TestPersistentVolumesCSIMountOptOut(t *testing.T) {
+	// CSI capable cluster but user opted out: no PV should be created.
+	cfg := testConfig()
+	cfg.UseCSIDriver = true
+	spec := testSpec()
+	spec.MountDataStore = false
+	pvs, err := cfg.persistentVolumes(spec)
+	require.NoError(t, err)
+	assert.Nil(t, pvs, "no CSI PV when MountDataStore is false")
 }
 
 // TestPersistentVolumesCSIMappings confirms the CSI PV encodes the full input
