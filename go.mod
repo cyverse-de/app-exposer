@@ -27,7 +27,7 @@ require (
 	github.com/cyverse-de/go-mod/pbinit v0.2.0
 	github.com/cyverse-de/go-mod/viceauth v1.0.0
 	github.com/cyverse-de/messaging/v12 v12.0.0
-	github.com/cyverse-de/model/v10 v10.0.0
+	github.com/cyverse-de/model/v10 v10.0.2
 	github.com/cyverse-de/p/go/qms v0.3.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
