@@ -1665,6 +1665,10 @@ const docTemplateoperator = `{
                     "description": "job.Name; label \"analysis-name\"; required, non-empty",
                     "type": "string"
                 },
+                "mountDataStore": {
+                    "description": "Data movement. Inputs is the full input list used to build CSI input\nvolume mappings; InputPathListPaths is the resolved ticketless subset\nused to build the input-path-list ConfigMap. Ticket status never crosses\nthe wire — it is an iRODS access-control concern handled by porklock/CSI\nat transfer time, not in any k8s object.\n\nMountDataStore controls whether the operator creates iRODS data-store\nmounts via the CSI driver. When true (and the cluster supports CSI),\na CSI PersistentVolume is created. When false (or the cluster lacks\nCSI support), porklock handles input staging and output transfer\ninstead. The working-dir PVC is always created regardless of this flag.",
+                    "type": "boolean"
+                },
                 "outputDirectory": {
                     "description": "resolved model.Job.OutputDirectory()",
                     "type": "string"
@@ -1686,7 +1690,6 @@ const docTemplateoperator = `{
                     "type": "string"
                 },
                 "userHome": {
-                    "description": "Data movement. Inputs is the full input list used to build CSI input\nvolume mappings; InputPathListPaths is the resolved ticketless subset\nused to build the input-path-list ConfigMap. Ticket status never crosses\nthe wire — it is an iRODS access-control concern handled by porklock/CSI\nat transfer time, not in any k8s object.",
                     "type": "string"
                 },
                 "userID": {
