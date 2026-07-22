@@ -1690,6 +1690,7 @@ const docTemplateoperator = `{
                     "type": "string"
                 },
                 "userHome": {
+                    "description": "resolved iRODS home directory for user",
                     "type": "string"
                 },
                 "userID": {

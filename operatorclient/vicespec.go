@@ -65,7 +65,7 @@ type VICESpec struct {
 	// CSI support), porklock handles input staging and output transfer
 	// instead. The working-dir PVC is always created regardless of this flag.
 	MountDataStore     bool          `json:"mountDataStore"`
-	UserHome           string        `json:"userHome"`
+	UserHome           string        `json:"userHome"`                     // resolved iRODS home directory for user
 	OutputDirectory    string        `json:"outputDirectory"`              // resolved model.Job.OutputDirectory()
 	ExcludeArguments   []string      `json:"excludeArguments,omitempty"`   // resolved model.Job.ExcludeArguments()
 	Inputs             []InputSpec   `json:"inputs,omitempty"`             // all inputs — CSI volume mappings
