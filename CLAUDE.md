@@ -45,7 +45,6 @@ A single Docker image ships both `app-exposer` and `vice-operator`.
 - `incluster/` — k8s-native VICE launch logic (Deployments, Services, Ingresses)
 - `instantlaunches/` — quick-launch saved configs
 - `millicores/` — CPU quantity helpers
-- `natsconn/` — NATS connection helpers
 - `operator/` — vice-operator server-side logic (capacity calc, gateway/loading pages, status informer)
 - `operatorclient/` — HTTP client app-exposer uses to talk to vice-operator
 - `outcluster/` — **legacy** HTCondor path (Services/Endpoints/Ingresses for non-k8s apps); only touch if the task explicitly calls for it

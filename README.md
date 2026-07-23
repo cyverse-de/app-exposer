@@ -109,7 +109,7 @@ Each target runs `swag fmt` before `swag init`. Do not hand-edit the generated f
   Terrain/UI
       │
   app-exposer (QA cluster)
-  ├─ DB, NATS, Permissions, Quota
+  ├─ DB, Subscriptions, Permissions, Quota
   ├─ Builds K8s resources from model.Job
   ├─ Serializes into AnalysisBundle
   └─ Sends bundle to operator(s)
@@ -120,7 +120,7 @@ Each target runs `swag fmt` before `swag init`. Do not hand-edit the generated f
   └─ K8s API only      └─ K8s API only
 ```
 
-The operator has **no external dependencies** — no database, NATS, apps service, permissions, or quota. It only needs a K8s client and an HTTP server.
+The operator has **no external dependencies** — no database, apps service, permissions, or quota. It only needs a K8s client and an HTTP server.
 
 App-exposer builds all K8s resource objects (Deployment, Service, HTTPRoute, ConfigMaps, PVs, PVCs, PodDisruptionBudget) using its existing builder functions, serializes them into an `AnalysisBundle`, and sends the bundle to the operator via HTTP. The operator applies the resources to its local cluster, transforming routing as needed to attach to the local Gateway.
 

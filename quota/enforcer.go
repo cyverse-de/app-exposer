@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path"
 	"slices"
 	"sync"
 	"time"
@@ -28,7 +27,7 @@ import (
 
 var log = common.Log
 
-var overagesHTTPClient = &http.Client{Timeout: 30 * time.Second}
+const maxOveragesResponseBytes = 1 << 20
 
 // shouldCountStatus reports whether a job in the given status should
 // count against a user's concurrency quota. Terminal states are
@@ -50,6 +49,7 @@ type Enforcer struct {
 	// satisfies it structurally.
 	apps              apps.AnalysisStatusLookup
 	subscriptionsBase *url.URL
+	httpClient        *http.Client
 	scheduler         *operatorclient.Scheduler
 	userDomain        string
 }
@@ -69,6 +69,7 @@ func NewEnforcer(
 		db:                db,
 		apps:              a,
 		subscriptionsBase: subscriptionsBase,
+		httpClient:        &http.Client{Timeout: 30 * time.Second},
 		userDomain:        userDomain,
 	}
 }
@@ -232,21 +233,20 @@ func (e *Enforcer) getDefaultJobLimit(ctx context.Context) (int, error) {
 }
 
 func (e *Enforcer) getResourceOveragesForUser(ctx context.Context, username string) (*qms.OverageList, error) {
-	u := *e.subscriptionsBase
-	u.Path = path.Join(u.Path, "users", common.FixUsername(username, e.userDomain), "overages")
+	u := e.subscriptionsBase.JoinPath("users", common.FixUsername(username, e.userDomain), "overages")
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error creating overages request for URL %s", u.String())
 	}
 
-	resp, err := overagesHTTPClient.Do(req)
+	resp, err := e.httpClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error getting overages from %s; this usually means the subscriptions service is unreachable", u.String())
 	}
 	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // nothing to do with a close error on a read-only body
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxOveragesResponseBytes))
 	if err != nil {
 		return nil, errors.Wrapf(err, "error reading overages response from %s", u.String())
 	}
@@ -260,7 +260,7 @@ func (e *Enforcer) getResourceOveragesForUser(ctx context.Context, username stri
 		return nil, errors.Wrapf(err, "error parsing overages response from %s", u.String())
 	}
 
-	// The subscriptions service can return 200 with an error envelope in the body.
+	// Defensively treat an error envelope as a failure even on a 200 response.
 	if overages.Error != nil {
 		return nil, errors.Errorf("subscriptions service returned an error for %s: %s", u.String(), overages.Error.Message)
 	}

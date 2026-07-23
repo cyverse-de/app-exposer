@@ -238,6 +238,7 @@ func newOveragesServer(t *testing.T, status int, body string, gotPath *string) *
 func TestGetResourceOveragesForUser(t *testing.T) {
 	tests := []struct {
 		name            string
+		username        string
 		status          int
 		body            string
 		closeServer     bool
@@ -252,6 +253,13 @@ func TestGetResourceOveragesForUser(t *testing.T) {
 		},
 		{
 			name:         "empty list for unknown user or no overages",
+			status:       http.StatusOK,
+			body:         `{"header":null,"error":null,"overages":[]}`,
+			wantOverages: 0,
+		},
+		{
+			name:         "already-suffixed username is not double-suffixed",
+			username:     "testuser@iplantcollaborative.org",
 			status:       http.StatusOK,
 			body:         `{"header":null,"error":null,"overages":[]}`,
 			wantOverages: 0,
@@ -291,9 +299,14 @@ func TestGetResourceOveragesForUser(t *testing.T) {
 
 			base, err := url.Parse(srv.URL)
 			require.NoError(t, err)
-			e := &Enforcer{subscriptionsBase: base, userDomain: "@iplantcollaborative.org"}
+			e := &Enforcer{subscriptionsBase: base, httpClient: srv.Client(), userDomain: "@iplantcollaborative.org"}
 
-			overages, err := e.getResourceOveragesForUser(context.Background(), "testuser")
+			username := tc.username
+			if username == "" {
+				username = "testuser"
+			}
+
+			overages, err := e.getResourceOveragesForUser(context.Background(), username)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.wantErrContains)
@@ -344,7 +357,7 @@ func TestCheckOverages(t *testing.T) {
 
 			base, err := url.Parse(srv.URL)
 			require.NoError(t, err)
-			e := &Enforcer{subscriptionsBase: base, userDomain: "@iplantcollaborative.org"}
+			e := &Enforcer{subscriptionsBase: base, httpClient: srv.Client(), userDomain: "@iplantcollaborative.org"}
 
 			overages, err := e.getResourceOveragesForUser(context.Background(), "testuser")
 			require.NoError(t, err)
