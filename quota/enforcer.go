@@ -3,29 +3,32 @@ package quota
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	stderrors "errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
-	"github.com/cyverse-de/go-mod/gotelnats"
-	"github.com/cyverse-de/go-mod/pbinit"
 	"github.com/cyverse-de/model/v10"
 	"github.com/cyverse-de/p/go/qms"
 	"github.com/jmoiron/sqlx"
-	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 
 	"k8s.io/client-go/kubernetes"
 )
 
 var log = common.Log
+
+var overagesHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // shouldCountStatus reports whether a job in the given status should
 // count against a user's concurrency quota. Terminal states are
@@ -45,10 +48,10 @@ type Enforcer struct {
 	// apps is held as a narrow interface so countJobsForUser can be
 	// unit-tested with a fake; production passes *apps.Apps, which
 	// satisfies it structurally.
-	apps       apps.AnalysisStatusLookup
-	nec        *nats.EncodedConn
-	scheduler  *operatorclient.Scheduler
-	userDomain string
+	apps              apps.AnalysisStatusLookup
+	subscriptionsBase *url.URL
+	scheduler         *operatorclient.Scheduler
+	userDomain        string
 }
 
 // NewEnforcer constructs an Enforcer with its required dependencies.
@@ -58,15 +61,15 @@ func NewEnforcer(
 	clientset kubernetes.Interface,
 	db *sqlx.DB,
 	a apps.AnalysisStatusLookup,
-	ec *nats.EncodedConn,
+	subscriptionsBase *url.URL,
 	userDomain string,
 ) *Enforcer {
 	return &Enforcer{
-		clientset:  clientset,
-		db:         db,
-		apps:       a,
-		nec:        ec,
-		userDomain: userDomain,
+		clientset:         clientset,
+		db:                db,
+		apps:              a,
+		subscriptionsBase: subscriptionsBase,
+		userDomain:        userDomain,
 	}
 }
 
@@ -229,30 +232,40 @@ func (e *Enforcer) getDefaultJobLimit(ctx context.Context) (int, error) {
 }
 
 func (e *Enforcer) getResourceOveragesForUser(ctx context.Context, username string) (*qms.OverageList, error) {
-	var err error
+	u := *e.subscriptionsBase
+	u.Path = path.Join(u.Path, "users", common.FixUsername(username, e.userDomain), "overages")
 
-	subject := "cyverse.qms.user.overages.get"
-
-	req := &qms.AllUserOveragesRequest{
-		Username: common.FixUsername(username, e.userDomain),
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error creating overages request for URL %s", u.String())
 	}
 
-	_, span := pbinit.InitAllUserOveragesRequest(req, subject)
-	defer span.End()
+	resp, err := overagesHTTPClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error getting overages from %s; this usually means the subscriptions service is unreachable", u.String())
+	}
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // nothing to do with a close error on a read-only body
 
-	resp := pbinit.NewOverageList()
-
-	if err = gotelnats.Request(
-		ctx,
-		e.nec,
-		subject,
-		req,
-		resp,
-	); err != nil {
-		return nil, err
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading overages response from %s", u.String())
 	}
 
-	return resp, nil
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("overages request to %s returned status %d: %s", u.String(), resp.StatusCode, string(body))
+	}
+
+	overages := &qms.OverageList{}
+	if err = json.Unmarshal(body, overages); err != nil {
+		return nil, errors.Wrapf(err, "error parsing overages response from %s", u.String())
+	}
+
+	// The subscriptions service can return 200 with an error envelope in the body.
+	if overages.Error != nil {
+		return nil, errors.Errorf("subscriptions service returned an error for %s: %s", u.String(), overages.Error.Message)
+	}
+
+	return overages, nil
 }
 
 func buildLimitError(code, msg string, defaultJobLimit, jobCount int, jobLimit *int) error {

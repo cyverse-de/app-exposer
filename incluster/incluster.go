@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/cyverse-de/app-exposer/quota"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
@@ -54,7 +54,7 @@ type Init struct {
 	IRODSZone                     string
 	GatewayProvider               string
 	ClusterConfigSecretName       string
-	NATSEncodedConn               *nats.EncodedConn
+	SubscriptionsURL              *url.URL
 	BypassUsers                   []string
 	TimeLimitExtensionSeconds     int64
 }
@@ -83,7 +83,7 @@ func New(init *Init, db *sqlx.DB, clientset kubernetes.Interface, gatewayClient 
 			statusURL: init.JobStatusURL,
 		},
 		apps:          apps,
-		quotaEnforcer: quota.NewEnforcer(clientset, db, apps, init.NATSEncodedConn, init.UserSuffix),
+		quotaEnforcer: quota.NewEnforcer(clientset, db, apps, init.SubscriptionsURL, init.UserSuffix),
 		jobInfo:       jobinfo.NewJobInfo(apps),
 	}
 }
