@@ -9,7 +9,9 @@ on:
 
 jobs:
   call-workflow-passing-data:
-    uses: cyverse-de/github-workflows/.github/workflows/skaffold-build.yml@v0.4.0
+    uses: cyverse-de/github-workflows/.github/workflows/skaffold-build.yml@v0.4.1
+    with:
+      extra-service-names: vice-operator
     secrets:
       harbor-username: ${{ secrets.HARBOR_USERNAME }}
       harbor-password: ${{ secrets.HARBOR_PASSWORD }}
