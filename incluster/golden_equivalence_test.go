@@ -121,14 +121,15 @@ func goldenJob(withGPU bool) *model.Job {
 		c.GPUModels = []string{"NVIDIA-A10G"}
 	}
 	return &model.Job{
-		ID:           "analysis-1",
-		InvocationID: "external-1",
-		Name:         "My Analysis",
-		AppID:        "app-1",
-		AppName:      "JupyterLab",
-		UserID:       "user-1",
-		Submitter:    "someuser",
-		UserHome:     "/example/home/someuser",
+		ID:             "analysis-1",
+		InvocationID:   "external-1",
+		Name:           "My Analysis",
+		AppID:          "app-1",
+		AppName:        "JupyterLab",
+		UserID:         "user-1",
+		Submitter:      "someuser",
+		UserHome:       "/example/home/someuser",
+		MountDataStore: true,
 		// Exercises the porklock file-transfer command's -m metadata args
 		// (non-CSI cases) and the FileMetadata mapping in the spec.
 		FileMetadata: []model.FileMetadata{{Attribute: "ipc-analysis-id", Value: "analysis-1", Unit: ""}},

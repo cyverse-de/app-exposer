@@ -80,7 +80,7 @@ func (c *Config) workingDirPrepContainer(spec *operatorclient.VICESpec) apiv1.Co
 }
 
 func (c *Config) initContainers(spec *operatorclient.VICESpec) []apiv1.Container {
-	if c.UseCSIDriver {
+	if c.UseCSIDriver && spec.MountDataStore {
 		return []apiv1.Container{c.workingDirPrepContainer(spec)}
 	}
 	return []apiv1.Container{c.inputStagingContainer(spec)}
@@ -234,10 +234,10 @@ func (c *Config) fileTransfersContainer(spec *operatorclient.VICESpec) apiv1.Con
 }
 
 // containers returns the pod's containers: vice-proxy, the file-transfers
-// sidecar (non-CSI only), then the analysis container.
+// sidecar (when not using CSI mounts), then the analysis container.
 func (c *Config) containers(spec *operatorclient.VICESpec) []apiv1.Container {
 	out := []apiv1.Container{c.viceProxyContainer(spec)}
-	if !c.UseCSIDriver {
+	if !c.UseCSIDriver || !spec.MountDataStore {
 		out = append(out, c.fileTransfersContainer(spec))
 	}
 	out = append(out, c.analysisContainer(spec))

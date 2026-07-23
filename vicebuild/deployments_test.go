@@ -210,7 +210,7 @@ func TestImageRefsFolded(t *testing.T) {
 }
 
 // TestDeploymentCSIvsNonCSI confirms the init container and sidecar set switches
-// on the cluster's CSI capability.
+// on the cluster's CSI capability and the per-job MountDataStore flag.
 func TestDeploymentCSIvsNonCSI(t *testing.T) {
 	t.Run("CSI enabled", func(t *testing.T) {
 		cfg := testConfig()
@@ -229,6 +229,19 @@ func TestDeploymentCSIvsNonCSI(t *testing.T) {
 		dep := cfg.Deployment(testSpec())
 		require.Len(t, dep.Spec.Template.Spec.InitContainers, 1)
 		assert.Equal(t, constants.FileTransfersInitContainerName, dep.Spec.Template.Spec.InitContainers[0].Name)
+		findContainer(t, dep.Spec.Template.Spec.Containers, constants.FileTransfersContainerName)
+	})
+	t.Run("CSI enabled, mount opted out", func(t *testing.T) {
+		// MountDataStore=false on a CSI cluster should fall back to porklock,
+		// same as if the CSI driver were disabled.
+		cfg := testConfig()
+		cfg.UseCSIDriver = true
+		spec := testSpec()
+		spec.MountDataStore = false
+		dep := cfg.Deployment(spec)
+		require.Len(t, dep.Spec.Template.Spec.InitContainers, 1)
+		assert.Equal(t, constants.FileTransfersInitContainerName, dep.Spec.Template.Spec.InitContainers[0].Name,
+			"porklock init container used when mount opted out")
 		findContainer(t, dep.Spec.Template.Spec.Containers, constants.FileTransfersContainerName)
 	})
 }

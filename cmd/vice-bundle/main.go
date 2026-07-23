@@ -79,7 +79,7 @@ func runFromJob(args []string) {
 	}
 	defer common.LogClose("job file", f)
 
-	job := &model.Job{}
+	job := &model.Job{MountDataStore: true}
 	if err := json.NewDecoder(f).Decode(job); err != nil {
 		log.Fatalf("decoding job JSON: %v", err)
 	}

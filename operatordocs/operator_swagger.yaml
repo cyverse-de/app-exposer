@@ -469,7 +469,8 @@ definitions:
         description: Environment for the analysis container (model.Step.Environment).
         type: object
       excludeArguments:
-        description: resolved model.Job.ExcludeArguments()
+        description: ExcludeArguments is the resolved model.Job.ExcludeArguments()
+          for the job
         items:
           type: string
         type: array
@@ -477,27 +478,39 @@ definitions:
         description: job.InvocationID; basis for resource names
         type: string
       fileMetadata:
-        description: porklock upload metadata triples
+        description: |-
+          FileMetadata is the list of metadata triples to be added to uploaded
+          files by porklock
         items:
           $ref: '#/definitions/operatorclient.MetadataAVU'
         type: array
       gpu:
         $ref: '#/definitions/operatorclient.GPUSpec'
       inputPathListPaths:
-        description: resolved ticketless subset
+        description: |-
+          InputPathListPaths is the ticketless subset of the input list used
+          to build the input-path-list ConfigMap
         items:
           type: string
         type: array
       inputs:
-        description: all inputs — CSI volume mappings
+        description: Inputs is the full input list used to build CSI volume mappings
         items:
           $ref: '#/definitions/operatorclient.InputSpec'
         type: array
       jobName:
         description: job.Name; label "analysis-name"; required, non-empty
         type: string
+      mountDataStore:
+        description: |-
+          MountDataStore specifies whether the operator should create iRODS
+          mounts with the CSI driver, when supported, or if the user prefers
+          data transfer to be handled by separate data staging and archiving
+          steps.
+        type: boolean
       outputDirectory:
-        description: resolved model.Job.OutputDirectory()
+        description: OutputDirectory is the resolved model.Job.OutputDirectory() for
+          the job
         type: string
       resources:
         allOf:
@@ -514,12 +527,7 @@ definitions:
         description: raw username; operator applies UserSuffix
         type: string
       userHome:
-        description: |-
-          Data movement. Inputs is the full input list used to build CSI input
-          volume mappings; InputPathListPaths is the resolved ticketless subset
-          used to build the input-path-list ConfigMap. Ticket status never crosses
-          the wire — it is an iRODS access-control concern handled by porklock/CSI
-          at transfer time, not in any k8s object.
+        description: UserHome is the resolved iRODS home directory for the user
         type: string
       userID:
         type: string

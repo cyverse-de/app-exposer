@@ -450,7 +450,9 @@ func (o *Operator) HandleLaunchSpec(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "spec launch is disabled on this operator")
 	}
 
-	var spec operatorclient.VICESpec
+	// Default MountDataStore true so callers that predate the field keep CSI
+	// mount behaviour; an explicit false in the payload still takes effect.
+	spec := operatorclient.VICESpec{MountDataStore: true}
 	if err := c.Bind(&spec); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}

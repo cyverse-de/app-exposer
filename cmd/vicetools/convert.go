@@ -180,6 +180,7 @@ func ConvertToJob(export *VICEAppExport, params LaunchParams) (*model.Job, error
 		OutputDir:       params.OutputDir,
 		ExecutionTarget: "interapps",
 		Type:            "analysis",
+		MountDataStore:  true,
 		Steps:           []model.Step{step},
 	}
 

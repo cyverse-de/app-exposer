@@ -127,8 +127,8 @@ github.com/cyverse-de/go-mod/viceauth v1.0.0 h1:k5lCiBi7Lfa4eHZfkD1Msnez5kcAgoyU
 github.com/cyverse-de/go-mod/viceauth v1.0.0/go.mod h1:58UZ7WOFEAA3gy4Allc9NzVviiK10c4/2fwZDuQVXVo=
 github.com/cyverse-de/messaging/v12 v12.0.0 h1:fS+QMiFid0tSDFR5jDqSJLPqU9UlptPRs4kbjw5X4hM=
 github.com/cyverse-de/messaging/v12 v12.0.0/go.mod h1:psHZ100y28PAE06Aa/O8rLTf8ZLRba7zDoC9Q7efsiw=
-github.com/cyverse-de/model/v10 v10.0.0 h1:ukO7FMD4rtDt92THkOqeagEXlGQkI453BjqGIs0ja/U=
-github.com/cyverse-de/model/v10 v10.0.0/go.mod h1:WaJbaDVdVasq9HnK77LzkSy6FtTmykCLTwk7GAB11mo=
+github.com/cyverse-de/model/v10 v10.0.2 h1:tnHetsB0hWh863lVzmz9TdFsKQFaURa2eXAn+j5SAQA=
+github.com/cyverse-de/model/v10 v10.0.2/go.mod h1:qwjX1ryxtMGJKPUf4KRjw8kzkqMQuSzjYlrPyPuPxE4=
 github.com/cyverse-de/p/go/header v0.1.0 h1:GA3VBQGLXqmFld4ANAQ8p5xaiJq2mWNoG3Pvzvc0fPQ=
 github.com/cyverse-de/p/go/header v0.1.0/go.mod h1:8rcTyi4NIQOKo7JnqAEK13ABiDdni0eYpkDConf2ypQ=
 github.com/cyverse-de/p/go/ptypes v0.1.0 h1:NkrnU/YiSO+hwytMuq+jSV7DBkkVlk0pIvpxyizwySs=

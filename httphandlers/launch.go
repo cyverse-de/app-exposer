@@ -43,7 +43,7 @@ import (
 func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	job := &model.Job{}
+	job := &model.Job{MountDataStore: true}
 	if err := c.Bind(job); err != nil {
 		return err
 	}
@@ -228,7 +228,7 @@ func (h *HTTPHandlers) failLaunch(ctx context.Context, job *model.Job, msg strin
 func (h *HTTPHandlers) DryRunBundleHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	job := &model.Job{}
+	job := &model.Job{MountDataStore: true}
 	if err := c.Bind(job); err != nil {
 		return err
 	}

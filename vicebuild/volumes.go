@@ -82,11 +82,11 @@ func (c *Config) sharedPathMapping() IRODSFSPathMapping {
 	}
 }
 
-// persistentVolumes builds the CSI data PersistentVolume (when CSI is enabled).
-// Returns nil when CSI is disabled — the cluster's own storage provisions the
-// working-dir PVC.
+// persistentVolumes builds the CSI data PersistentVolume when the cluster
+// supports CSI and the analysis requests data-store mounts. Returns nil
+// otherwise — porklock handles data transfer on the non-CSI path.
 func (c *Config) persistentVolumes(spec *operatorclient.VICESpec) ([]*apiv1.PersistentVolume, error) {
-	if !c.UseCSIDriver {
+	if !c.UseCSIDriver || !spec.MountDataStore {
 		return nil, nil
 	}
 
@@ -187,7 +187,7 @@ func (c *Config) volumeClaims(spec *operatorclient.VICESpec) []*apiv1.Persistent
 	}
 	claims := []*apiv1.PersistentVolumeClaim{workingDir}
 
-	if c.UseCSIDriver {
+	if c.UseCSIDriver && spec.MountDataStore {
 		storageClass := constants.CSIDriverStorageClassName
 		claims = append(claims, &apiv1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
@@ -240,7 +240,7 @@ func (c *Config) podVolumeMounts(spec *operatorclient.VICESpec) []apiv1.VolumeMo
 			ReadOnly:  false,
 		},
 	}
-	if c.UseCSIDriver {
+	if c.UseCSIDriver && spec.MountDataStore {
 		mounts = append(mounts, apiv1.VolumeMount{
 			Name:      csiDataVolumeClaimName(spec),
 			MountPath: constants.CSIDriverLocalMountPath,
@@ -260,7 +260,9 @@ func (c *Config) podVolumeMounts(spec *operatorclient.VICESpec) []apiv1.VolumeMo
 func (c *Config) podVolumes(spec *operatorclient.VICESpec) []apiv1.Volume {
 	volumes := []apiv1.Volume{}
 
-	if hasTicketlessInputs(spec) {
+	useCSI := c.UseCSIDriver && spec.MountDataStore
+
+	if !useCSI && hasTicketlessInputs(spec) {
 		volumes = append(volumes, apiv1.Volume{
 			Name: constants.InputPathListVolumeName,
 			VolumeSource: apiv1.VolumeSource{
@@ -277,7 +279,7 @@ func (c *Config) podVolumes(spec *operatorclient.VICESpec) []apiv1.Volume {
 			PersistentVolumeClaim: &apiv1.PersistentVolumeClaimVolumeSource{ClaimName: workingDirVolumeName(spec)},
 		},
 	})
-	if c.UseCSIDriver {
+	if useCSI {
 		volumes = append(volumes, apiv1.Volume{
 			Name: csiDataVolumeClaimName(spec),
 			VolumeSource: apiv1.VolumeSource{
