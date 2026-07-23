@@ -53,24 +53,25 @@ type VICESpec struct {
 	Resources ResourceSpec `json:"resources"`
 	GPU       *GPUSpec     `json:"gpu,omitempty"`
 
-	// Data movement. Inputs is the full input list used to build CSI input
-	// volume mappings; InputPathListPaths is the resolved ticketless subset
-	// used to build the input-path-list ConfigMap. Ticket status never crosses
-	// the wire — it is an iRODS access-control concern handled by porklock/CSI
-	// at transfer time, not in any k8s object.
-	//
-	// MountDataStore controls whether the operator creates iRODS data-store
-	// mounts via the CSI driver. When true (and the cluster supports CSI),
-	// a CSI PersistentVolume is created. When false (or the cluster lacks
-	// CSI support), porklock handles input staging and output transfer
-	// instead. The working-dir PVC is always created regardless of this flag.
-	MountDataStore     bool          `json:"mountDataStore"`
-	UserHome           string        `json:"userHome"`                     // resolved iRODS home directory for user
-	OutputDirectory    string        `json:"outputDirectory"`              // resolved model.Job.OutputDirectory()
-	ExcludeArguments   []string      `json:"excludeArguments,omitempty"`   // resolved model.Job.ExcludeArguments()
-	Inputs             []InputSpec   `json:"inputs,omitempty"`             // all inputs — CSI volume mappings
-	InputPathListPaths []string      `json:"inputPathListPaths,omitempty"` // resolved ticketless subset
-	FileMetadata       []MetadataAVU `json:"fileMetadata,omitempty"`       // porklock upload metadata triples
+	// MountDataStore specifies whether the operator should create iRODS
+	// mounts with the CSI driver, when supported, or if the user prefers
+	// data transfer to be handled by separate data staging and archiving
+	// steps.
+	MountDataStore bool `json:"mountDataStore"`
+	// UserHome is the resolved iRODS home directory for the user
+	UserHome string `json:"userHome"`
+	// OutputDirectory is the resolved model.Job.OutputDirectory() for the job
+	OutputDirectory string `json:"outputDirectory"`
+	// ExcludeArguments is the resolved model.Job.ExcludeArguments() for the job
+	ExcludeArguments []string `json:"excludeArguments,omitempty"`
+	// Inputs is the full input list used to build CSI volume mappings
+	Inputs []InputSpec `json:"inputs,omitempty"`
+	// InputPathListPaths is the ticketless subset of the input list used
+	// to build the input-path-list ConfigMap
+	InputPathListPaths []string `json:"inputPathListPaths,omitempty"`
+	// FileMetadata is the list of metadata triples to be added to uploaded
+	// files by porklock
+	FileMetadata []MetadataAVU `json:"fileMetadata,omitempty"`
 }
 
 // ContainerSpec describes the interactive analysis container. All values are

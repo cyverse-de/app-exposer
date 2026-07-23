@@ -1627,7 +1627,7 @@ const docTemplateoperator = `{
                     }
                 },
                 "excludeArguments": {
-                    "description": "resolved model.Job.ExcludeArguments()",
+                    "description": "ExcludeArguments is the resolved model.Job.ExcludeArguments() for the job",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -1638,7 +1638,7 @@ const docTemplateoperator = `{
                     "type": "string"
                 },
                 "fileMetadata": {
-                    "description": "porklock upload metadata triples",
+                    "description": "FileMetadata is the list of metadata triples to be added to uploaded\nfiles by porklock",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/operatorclient.MetadataAVU"
@@ -1648,14 +1648,14 @@ const docTemplateoperator = `{
                     "$ref": "#/definitions/operatorclient.GPUSpec"
                 },
                 "inputPathListPaths": {
-                    "description": "resolved ticketless subset",
+                    "description": "InputPathListPaths is the ticketless subset of the input list used\nto build the input-path-list ConfigMap",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
                 "inputs": {
-                    "description": "all inputs — CSI volume mappings",
+                    "description": "Inputs is the full input list used to build CSI volume mappings",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/operatorclient.InputSpec"
@@ -1666,11 +1666,11 @@ const docTemplateoperator = `{
                     "type": "string"
                 },
                 "mountDataStore": {
-                    "description": "Data movement. Inputs is the full input list used to build CSI input\nvolume mappings; InputPathListPaths is the resolved ticketless subset\nused to build the input-path-list ConfigMap. Ticket status never crosses\nthe wire — it is an iRODS access-control concern handled by porklock/CSI\nat transfer time, not in any k8s object.\n\nMountDataStore controls whether the operator creates iRODS data-store\nmounts via the CSI driver. When true (and the cluster supports CSI),\na CSI PersistentVolume is created. When false (or the cluster lacks\nCSI support), porklock handles input staging and output transfer\ninstead. The working-dir PVC is always created regardless of this flag.",
+                    "description": "MountDataStore specifies whether the operator should create iRODS\nmounts with the CSI driver, when supported, or if the user prefers\ndata transfer to be handled by separate data staging and archiving\nsteps.",
                     "type": "boolean"
                 },
                 "outputDirectory": {
-                    "description": "resolved model.Job.OutputDirectory()",
+                    "description": "OutputDirectory is the resolved model.Job.OutputDirectory() for the job",
                     "type": "string"
                 },
                 "resources": {
@@ -1690,7 +1690,7 @@ const docTemplateoperator = `{
                     "type": "string"
                 },
                 "userHome": {
-                    "description": "resolved iRODS home directory for user",
+                    "description": "UserHome is the resolved iRODS home directory for the user",
                     "type": "string"
                 },
                 "userID": {
