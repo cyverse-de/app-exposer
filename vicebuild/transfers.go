@@ -13,7 +13,7 @@ import (
 // -m args, matching model.FileMetadata.Argument().
 func fileTransferCommand(spec *operatorclient.VICESpec) []string {
 	cmd := []string{
-		"/vice-file-transfers",
+		"/bin/vice-file-transfers",
 		"--listen-port", "60001",
 		"--user", spec.Submitter,
 		"--excludes-file", path.Join(constants.ExcludesMountPath, constants.ExcludesFileName),

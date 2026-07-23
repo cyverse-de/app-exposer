@@ -49,7 +49,7 @@ type transferResponse struct {
 // fileTransferCommand returns a []string containing the command to fire up the vice-file-transfers service.
 func fileTransferCommand(job *model.Job) []string {
 	retval := []string{
-		"/vice-file-transfers",
+		"/bin/vice-file-transfers",
 		"--listen-port", "60001",
 		"--user", job.Submitter,
 		"--excludes-file", path.Join(constants.ExcludesMountPath, constants.ExcludesFileName),
