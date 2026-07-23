@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/cyverse-de/app-exposer/constants"
@@ -67,8 +68,8 @@ func newListingServer(t *testing.T, status int, body []byte) *httptest.Server {
 }
 
 // newTestEnforcer wires an Enforcer with the supplied scheduler and fake
-// analysis-status lookup. The DB/NATS fields are left nil because
-// countJobsForUser doesn't touch them.
+// analysis-status lookup. The DB and subscriptions fields are left nil
+// because countJobsForUser doesn't touch them.
 func newTestEnforcer(t *testing.T, scheduler *operatorclient.Scheduler, lookup *fakeAnalysisStatusLookup) *Enforcer {
 	t.Helper()
 	return &Enforcer{
@@ -218,6 +219,146 @@ func TestCountJobsForUserCountSurvivingBelowLimit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, count)
 	assert.Equal(t, []string{"op-down"}, degraded)
+}
+
+// newOveragesServer serves /users/{username}/overages with the supplied
+// status and body, recording the request path for assertions.
+func newOveragesServer(t *testing.T, status int, body string, gotPath *string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestGetResourceOveragesForUser(t *testing.T) {
+	tests := []struct {
+		name            string
+		status          int
+		body            string
+		closeServer     bool
+		wantErrContains string
+		wantOverages    int
+	}{
+		{
+			name:         "cpu.hours overage returned",
+			status:       http.StatusOK,
+			body:         `{"header":null,"error":null,"overages":[{"resource_name":"cpu.hours","quota":1000,"usage":1200.5}]}`,
+			wantOverages: 1,
+		},
+		{
+			name:         "empty list for unknown user or no overages",
+			status:       http.StatusOK,
+			body:         `{"header":null,"error":null,"overages":[]}`,
+			wantOverages: 0,
+		},
+		{
+			name:            "error envelope in 200 body",
+			status:          http.StatusOK,
+			body:            `{"header":null,"error":{"error_code":"INTERNAL","status_code":500,"message":"db exploded"},"overages":[]}`,
+			wantErrContains: "db exploded",
+		},
+		{
+			name:            "http 500",
+			status:          http.StatusInternalServerError,
+			body:            "internal error",
+			wantErrContains: "status 500",
+		},
+		{
+			name:            "malformed json",
+			status:          http.StatusOK,
+			body:            "{not json",
+			wantErrContains: "parsing overages response",
+		},
+		{
+			name:            "unreachable server",
+			closeServer:     true,
+			wantErrContains: "unreachable",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotPath string
+			srv := newOveragesServer(t, tc.status, tc.body, &gotPath)
+			if tc.closeServer {
+				srv.Close()
+			}
+
+			base, err := url.Parse(srv.URL)
+			require.NoError(t, err)
+			e := &Enforcer{subscriptionsBase: base, userDomain: "@iplantcollaborative.org"}
+
+			overages, err := e.getResourceOveragesForUser(context.Background(), "testuser")
+			if tc.wantErrContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErrContains)
+				return
+			}
+			require.NoError(t, err)
+			assert.Len(t, overages.Overages, tc.wantOverages)
+			assert.Equal(t, "/users/testuser@iplantcollaborative.org/overages", gotPath,
+				"bare usernames should be suffixed with the user domain in the request path")
+		})
+	}
+}
+
+func TestCheckOverages(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+		wantErr    bool
+	}{
+		{
+			name:       "cpu.hours at quota blocks the launch",
+			body:       `{"overages":[{"resource_name":"cpu.hours","quota":1000,"usage":1000}]}`,
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name:       "cpu.hours under quota is allowed",
+			body:       `{"overages":[{"resource_name":"cpu.hours","quota":1000,"usage":999}]}`,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "non-cpu.hours overage is ignored",
+			body:       `{"overages":[{"resource_name":"data.size","quota":10,"usage":100}]}`,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "no overages",
+			body:       `{"overages":[]}`,
+			wantStatus: http.StatusOK,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotPath string
+			srv := newOveragesServer(t, http.StatusOK, tc.body, &gotPath)
+
+			base, err := url.Parse(srv.URL)
+			require.NoError(t, err)
+			e := &Enforcer{subscriptionsBase: base, userDomain: "@iplantcollaborative.org"}
+
+			overages, err := e.getResourceOveragesForUser(context.Background(), "testuser")
+			require.NoError(t, err)
+
+			status, err := checkOverages("testuser", overages)
+			assert.Equal(t, tc.wantStatus, status)
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "resource overages")
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestShouldCountStatus(t *testing.T) {

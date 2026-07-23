@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/cyverse-de/app-exposer/adapter"
@@ -14,7 +15,6 @@ import (
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/outcluster"
 	"github.com/knadh/koanf"
-	"github.com/nats-io/nats.go"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"k8s.io/client-go/kubernetes"
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/typed/apis/v1"
@@ -56,6 +56,7 @@ type ExposerAppInit struct {
 	ImagePullSecretName     string
 	ClusterConfigSecretName string
 	BypassUsers             []string
+	SubscriptionsURL        *url.URL
 }
 
 //	@title			app-exposer
@@ -69,7 +70,7 @@ type ExposerAppInit struct {
 //	@BasePath		/
 //
 // NewExposerApp creates and returns a newly instantiated *ExposerApp.
-func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn, c *koanf.Koanf) *ExposerApp {
+func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, c *koanf.Koanf) *ExposerApp {
 	jobStatusURL := c.String("vice.job-status.base")
 	if jobStatusURL == "" {
 		jobStatusURL = "http://job-status-listener"
@@ -125,7 +126,7 @@ func NewExposerApp(init *ExposerAppInit, apps *apps.Apps, conn *nats.EncodedConn
 		IRODSZone:                     init.IRODSZone,
 		GatewayProvider:               c.String("vice.gateway_provider"),
 		ClusterConfigSecretName:       init.ClusterConfigSecretName,
-		NATSEncodedConn:               conn,
+		SubscriptionsURL:              init.SubscriptionsURL,
 		BypassUsers:                   init.BypassUsers,
 		TimeLimitExtensionSeconds:     timeLimitExtensionSeconds,
 	}

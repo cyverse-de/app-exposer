@@ -22,12 +22,10 @@ import (
 	"github.com/cyverse-de/app-exposer/httphandlers"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
-	"github.com/cyverse-de/app-exposer/natsconn"
 	"github.com/cyverse-de/app-exposer/quota"
 	"github.com/cyverse-de/app-exposer/reconciler"
 	"github.com/cyverse-de/app-exposer/resourcing"
 	"github.com/cyverse-de/go-mod/cfg"
-	"github.com/cyverse-de/go-mod/gotelnats"
 	"github.com/cyverse-de/go-mod/logging"
 	"github.com/cyverse-de/go-mod/otelutils"
 	"github.com/pkg/errors"
@@ -76,10 +74,6 @@ func main() {
 
 		configPath                           = flag.String("config", cfg.DefaultConfigPath, "Path to the config file")
 		dotEnvPath                           = flag.String("dotenv-path", cfg.DefaultDotEnvPath, "Path to the dotenv file")
-		tlsCert                              = flag.String("tlscert", gotelnats.DefaultTLSCertPath, "Path to the NATS TLS cert file")
-		tlsKey                               = flag.String("tlskey", gotelnats.DefaultTLSKeyPath, "Path to the NATS TLS key file")
-		caCert                               = flag.String("tlsca", gotelnats.DefaultTLSCAPath, "Path to the NATS TLS CA file")
-		credsPath                            = flag.String("creds", gotelnats.DefaultCredsPath, "Path to the NATS creds file")
 		envPrefix                            = flag.String("env-prefix", cfg.DefaultEnvPrefix, "The prefix for environment variables")
 		namespace                            = flag.String("namespace", "default", "The namespace scope this process operates on for non-VICE calls")
 		viceNamespace                        = flag.String("vice-namespace", "vice-apps", "The namespace that VICE apps are launched within")
@@ -234,10 +228,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	natsCluster := c.String("nats.cluster")
-	if natsCluster == "" {
-		log.Fatalf("The %s_NATS_CLUSTER environment variable or nats.cluster configuration value must be set", *envPrefix)
+	subscriptionsBase := c.String("subscriptions.base")
+	if subscriptionsBase == "" {
+		subscriptionsBase = "http://subscriptions"
 	}
+	subscriptionsURL, err := url.Parse(subscriptionsBase)
+	if err != nil {
+		log.Fatal(errors.Wrapf(err, "error parsing subscriptions.base URL %s", subscriptionsBase))
+	}
+	log.Infof("subscriptions base URL is %s", subscriptionsURL.String())
 
 	// Print error and exit if *kubeconfig is not empty and doesn't actually
 	// exist. If *kubeconfig is blank, then the app may be running inside the
@@ -295,26 +294,6 @@ func main() {
 	dbconn = otelsqlx.MustConnect("postgres", dbURI,
 		otelsql.WithAttributes(semconv.DBSystemPostgreSQL))
 
-	log.Infof("NATS TLS cert file is %s", *tlsCert)
-	log.Infof("NATS TLS key file is %s", *tlsKey)
-	log.Infof("NATS CA cert file is %s", *caCert)
-	log.Infof("NATS creds file is %s", *credsPath)
-
-	necInit := &natsconn.Init{
-		NATSCluster:       natsCluster,
-		NATSTLSKey:        *tlsKey,
-		NATSTLSCert:       *tlsCert,
-		NATSTLSCA:         *caCert,
-		NATSCredsFilePath: *credsPath,
-		NATSMaxReconnects: gotelnats.DefaultMaxReconnects,
-		NATSReconnectWait: gotelnats.DefaultReconnectWait,
-	}
-
-	nec, err := natsconn.New(necInit)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	a := apps.NewApps(dbconn, *userSuffix)
 	go a.Run()
 	defer a.Finish()
@@ -360,7 +339,7 @@ func main() {
 		BypassUsers:            bypassUsers,
 		UserSuffix:             *userSuffix,
 	}
-	enforcer := quota.NewEnforcer(clientset, dbconn, a, nec, *userSuffix)
+	enforcer := quota.NewEnforcer(clientset, dbconn, a, subscriptionsURL, *userSuffix)
 	jexAdapter := adapter.New(jexAdapterInit, a, detector, infoGetter, enforcer, clientset)
 
 	exposerInit := &ExposerAppInit{
@@ -378,13 +357,13 @@ func main() {
 		ClusterConfigSecretName: *clusterConfigSecret,
 		BypassUsers:             bypassUsers,
 		MaxConcurrentLaunches:   *maxConcurrentLaunches,
+		SubscriptionsURL:        subscriptionsURL,
 	}
 
 	// app is the base app-exposer functionality.
 	app := NewExposerApp(
 		exposerInit,
 		a,
-		nec,
 		c,
 	)
 
