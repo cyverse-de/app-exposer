@@ -473,14 +473,19 @@ func (i *Incluster) GetDeployment(ctx context.Context, job *model.Job) (*appsv1.
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
 				},
-				Spec: apiv1.PodSpec{
-					Hostname:                     common.Subdomain(job.UserID, job.InvocationID),
-					RestartPolicy:                apiv1.RestartPolicy("Always"),
-					Volumes:                      podVolumes,
-					InitContainers:               i.initContainers(job),
-					Containers:                   i.deploymentContainers(job),
-					ImagePullSecrets:             i.imagePullSecrets(job),
-					AutomountServiceAccountToken: &autoMount,
+			Spec: apiv1.PodSpec{
+				Hostname:                     common.Subdomain(job.UserID, job.InvocationID),
+				RestartPolicy:                apiv1.RestartPolicy("Always"),
+				Volumes:                      podVolumes,
+				InitContainers:               i.initContainers(job),
+				Containers:                   i.deploymentContainers(job),
+				ImagePullSecrets:             i.imagePullSecrets(job),
+				AutomountServiceAccountToken: &autoMount,
+				DNSConfig: &apiv1.PodDNSConfig{
+					Options: []apiv1.PodDNSConfigOption{
+						{Name: "single-request-reopen"},
+					},
+				},
 					SecurityContext: &apiv1.PodSecurityContext{
 						RunAsUser:  constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),
 						RunAsGroup: constants.Int64Ptr(int64(job.Steps[0].Component.Container.UID)),

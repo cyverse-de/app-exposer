@@ -352,14 +352,19 @@ func (c *Config) Deployment(spec *operatorclient.VICESpec) *appsv1.Deployment {
 			},
 			Template: apiv1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
-				Spec: apiv1.PodSpec{
-					Hostname:                     common.Subdomain(spec.UserID, string(spec.ExternalID)),
-					RestartPolicy:                apiv1.RestartPolicyAlways,
-					Volumes:                      c.podVolumes(spec),
-					InitContainers:               c.initContainers(spec),
-					Containers:                   c.containers(spec),
-					ImagePullSecrets:             c.imagePullSecrets(),
-					AutomountServiceAccountToken: &autoMount,
+			Spec: apiv1.PodSpec{
+				Hostname:                     common.Subdomain(spec.UserID, string(spec.ExternalID)),
+				RestartPolicy:                apiv1.RestartPolicyAlways,
+				Volumes:                      c.podVolumes(spec),
+				InitContainers:               c.initContainers(spec),
+				Containers:                   c.containers(spec),
+				ImagePullSecrets:             c.imagePullSecrets(),
+				AutomountServiceAccountToken: &autoMount,
+				DNSConfig: &apiv1.PodDNSConfig{
+					Options: []apiv1.PodDNSConfigOption{
+						{Name: "single-request-reopen"},
+					},
+				},
 					SecurityContext: &apiv1.PodSecurityContext{
 						RunAsUser:  uidPtr(spec),
 						RunAsGroup: uidPtr(spec),
