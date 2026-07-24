@@ -147,3 +147,7 @@ func Int32Ptr(i int32) *int32 { return &i }
 // Int64Ptr returns a pointer to the given int64 value. Useful when a K8s
 // struct field requires a *int64 (e.g. SecurityContext.RunAsUser).
 func Int64Ptr(i int64) *int64 { return &i }
+
+// StringPtr returns a pointer to the given string value. Useful when a K8s
+// struct field requires a *string (e.g. PodDNSConfigOption.Value).
+func StringPtr(s string) *string { return &s }

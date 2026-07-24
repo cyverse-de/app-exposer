@@ -362,7 +362,7 @@ func (c *Config) Deployment(spec *operatorclient.VICESpec) *appsv1.Deployment {
 				AutomountServiceAccountToken: &autoMount,
 				DNSConfig: &apiv1.PodDNSConfig{
 					Options: []apiv1.PodDNSConfigOption{
-						{Name: "single-request-reopen"},
+						{Name: "ndots", Value: constants.StringPtr("1")},
 					},
 				},
 					SecurityContext: &apiv1.PodSecurityContext{
