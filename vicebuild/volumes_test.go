@@ -95,7 +95,7 @@ func TestPersistentVolumesCSIMappings(t *testing.T) {
 	assert.Equal(t, "someuser", attrs["clientUser"], "CSI proxy user is the bare username")
 
 	var mappings []IRODSFSPathMapping
-	require.NoError(t, json.Unmarshal([]byte(attrs["path_mapping_json"]), &mappings))
+	require.NoError(t, json.Unmarshal([]byte(attrs["pathMappings"]), &mappings))
 	// 2 inputs + output + home + shared = 5
 	require.Len(t, mappings, 5)
 	assert.Equal(t, "file", mappings[0].ResourceType)

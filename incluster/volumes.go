@@ -207,9 +207,8 @@ func (i *Incluster) getPersistentVolumes(ctx context.Context, job *model.Job) ([
 					Driver:       constants.CSIDriverName,
 					VolumeHandle: i.getCSIDataVolumeHandle(job),
 					VolumeAttributes: map[string]string{
-						"client":              "irodsfuse",
-						"path_mapping_json":   string(dataPathMappingsJSONBytes),
-						"no_permission_check": "true",
+						"client":       "irodsfuse",
+						"pathMappings": string(dataPathMappingsJSONBytes),
 						// use proxy access — iRODS expects the short username
 						// without the domain suffix (e.g. "wregglej" not
 						// "wregglej@iplantcollaborative.org").
