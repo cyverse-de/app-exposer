@@ -139,9 +139,8 @@ func (c *Config) persistentVolumes(spec *operatorclient.VICESpec) ([]*apiv1.Pers
 					Driver:       constants.CSIDriverName,
 					VolumeHandle: csiDataVolumeHandle(spec),
 					VolumeAttributes: map[string]string{
-						"client":              "irodsfuse",
-						"path_mapping_json":   string(mappingsJSON),
-						"no_permission_check": "true",
+						"client":       "irodsfuse",
+						"pathMappings": string(mappingsJSON),
 						// iRODS proxy access expects the bare username without the
 						// domain suffix (e.g. "someuser", not the @-qualified form).
 						"clientUser": strings.SplitN(spec.Submitter, "@", 2)[0],
