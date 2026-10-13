@@ -135,6 +135,8 @@ github.com/cyverse-de/p/go/ptypes v0.1.0 h1:NkrnU/YiSO+hwytMuq+jSV7DBkkVlk0pIvpx
 github.com/cyverse-de/p/go/ptypes v0.1.0/go.mod h1:yMJeyQ4AEuhcKrTpjqCEhMV0KDtvuQSUdIa+RA7xim4=
 github.com/cyverse-de/p/go/qms v0.3.0 h1:j0Ezd0n8cz4tGh/y0oF2XEYd1WVhOot7mlLkKjodOsM=
 github.com/cyverse-de/p/go/qms v0.3.0/go.mod h1:NrweTu/8mduuaG/Be60UhKybCAnFs3SwqzGNvDhihVw=
+github.com/cyverse-de/p/go/qms v0.3.1 h1:IGmxija5a0W/DWcdEnSH8TlJo4bYAs6pqZBwteM3n+Q=
+github.com/cyverse-de/p/go/qms v0.3.1/go.mod h1:NrweTu/8mduuaG/Be60UhKybCAnFs3SwqzGNvDhihVw=
 github.com/cyverse-de/p/go/svcerror v0.1.0 h1:anzQiDoCbObeFkmvTBoaEkpE03srfajagsEWlK1rYpY=
 github.com/cyverse-de/p/go/svcerror v0.1.0/go.mod h1:RZH1gMjvGGDlmDL82SaBrQmgTDE8OXHVSJANKhwsj3Q=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

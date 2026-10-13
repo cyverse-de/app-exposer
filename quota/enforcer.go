@@ -280,15 +280,26 @@ func buildLimitError(code, msg string, defaultJobLimit, jobCount int, jobLimit *
 	}
 }
 
-func checkOverages(user string, overages *qms.OverageList) (int, error) {
+func checkOverages(user string, overages *qms.OverageList, gpusRequested int64) (int, error) {
 	var inOverage bool
 	code := "ERR_RESOURCE_OVERAGE"
 	details := make(map[string]interface{})
 
 	for _, ov := range overages.Overages {
-		if ov.Usage >= ov.Quota && ov.ResourceName == "cpu.hours" {
+		if ov.Usage < ov.Quota {
+			continue
+		}
+		switch ov.ResourceName {
+		case qms.ResourceTypeCPUHours:
+			// cpu.hours overage blocks all launches (existing behavior).
 			inOverage = true
 			details[ov.ResourceName] = fmt.Sprintf("quota: %f, usage: %f", ov.Quota, ov.Usage)
+		case qms.ResourceTypeGPUHours:
+			// gpu.hours overage only blocks launches that request GPUs.
+			if gpusRequested > 0 {
+				inOverage = true
+				details[ov.ResourceName] = fmt.Sprintf("quota: %f, usage: %f", ov.Quota, ov.Usage)
+			}
 		}
 	}
 
@@ -304,7 +315,7 @@ func checkOverages(user string, overages *qms.OverageList) (int, error) {
 	return http.StatusOK, nil
 }
 
-func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int, overages *qms.OverageList) (int, error) {
+func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int, overages *qms.OverageList, gpusRequested int64) (int, error) {
 	switch {
 
 	// Jobs are disabled by default and the user has not been granted permission yet.
@@ -332,7 +343,7 @@ func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int
 		return http.StatusBadRequest, buildLimitError(code, msg, defaultJobLimit, jobCount, jobLimit)
 
 	case overages != nil && len(overages.Overages) != 0:
-		return checkOverages(user, overages)
+		return checkOverages(user, overages, gpusRequested)
 
 	// In every other case, we can permit the job to be launched.
 	default:
@@ -347,7 +358,11 @@ func validateJobLimits(user string, defaultJobLimit, jobCount int, jobLimit *int
 // to the client — 200 means "permitted", 400 means "rejected by
 // policy" (quota exceeded, overages pending), and 500 means the
 // check could not complete because of a dependency failure.
-func (e *Enforcer) ValidateJob(ctx context.Context, job *model.Job, namespace string) (int, error) {
+//
+// gpusRequested is the number of GPUs the job requests; it is used to
+// scope gpu.hours overage enforcement — only jobs requesting GPUs are
+// blocked by a GPU overage.
+func (e *Enforcer) ValidateJob(ctx context.Context, job *model.Job, namespace string, gpusRequested int64) (int, error) {
 	// Get the username
 	usernameLabelValue := common.LabelValueString(job.Submitter)
 	user := job.Submitter
@@ -377,7 +392,7 @@ func (e *Enforcer) ValidateJob(ctx context.Context, job *model.Job, namespace st
 		return http.StatusInternalServerError, errors.Wrapf(err, "unable to get list of resource overages for user %s", user)
 	}
 
-	return validateJobLimits(user, defaultJobLimit, jobCount, jobLimit, overages)
+	return validateJobLimits(user, defaultJobLimit, jobCount, jobLimit, overages, gpusRequested)
 }
 
 // ValidateBatchJob determines whether the given batch job is allowed
@@ -386,7 +401,11 @@ func (e *Enforcer) ValidateJob(ctx context.Context, job *model.Job, namespace st
 // only checks for pending resource overages. Return semantics match
 // ValidateJob: the int is the HTTP status code to propagate to the
 // client.
-func (e *Enforcer) ValidateBatchJob(ctx context.Context, job *model.Job, namespace string) (int, error) {
+//
+// gpusRequested is the number of GPUs the job requests; it is used to
+// scope gpu.hours overage enforcement — only jobs requesting GPUs are
+// blocked by a GPU overage.
+func (e *Enforcer) ValidateBatchJob(ctx context.Context, job *model.Job, namespace string, gpusRequested int64) (int, error) {
 	user := job.Submitter
 
 	overages, err := e.getResourceOveragesForUser(ctx, user)
@@ -395,7 +414,7 @@ func (e *Enforcer) ValidateBatchJob(ctx context.Context, job *model.Job, namespa
 	}
 
 	if overages != nil && len(overages.Overages) != 0 {
-		return checkOverages(user, overages)
+		return checkOverages(user, overages, gpusRequested)
 	}
 
 	return http.StatusOK, nil
