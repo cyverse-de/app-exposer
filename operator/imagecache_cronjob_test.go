@@ -11,6 +11,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -19,7 +20,7 @@ const testCronSchedule = "0 2 * * *"
 func TestBuildCacheCronJob(t *testing.T) {
 	mgr := NewCronJobImageCacheManager(nil, "vice-apps", "vice-image-pull-secret", testCronSchedule)
 	image := "harbor.cyverse.org/de/vice-proxy:latest"
-	slug := slugifyImage(image)
+	slug := cronSlugifyImage(image)
 
 	cj := mgr.buildCacheCronJob(image, slug)
 
@@ -56,7 +57,7 @@ func TestBuildCacheCronJob(t *testing.T) {
 
 func TestBuildCacheCronJobOmitsPullSecretWhenEmpty(t *testing.T) {
 	mgr := NewCronJobImageCacheManager(nil, "vice-apps", "", testCronSchedule)
-	cj := mgr.buildCacheCronJob("nginx:1.27", slugifyImage("nginx:1.27"))
+	cj := mgr.buildCacheCronJob("nginx:1.27", cronSlugifyImage("nginx:1.27"))
 	assert.Empty(t, cj.Spec.JobTemplate.Spec.Template.Spec.ImagePullSecrets)
 }
 
@@ -66,7 +67,7 @@ func TestCronEnsureImageCached(t *testing.T) {
 		secret = "vice-image-pull-secret"
 		image  = "harbor.cyverse.org/de/vice-proxy:latest"
 	)
-	slug := slugifyImage(image)
+	slug := cronSlugifyImage(image)
 	cjName := cacheNamePrefix + slug
 
 	tests := []struct {
@@ -126,7 +127,7 @@ func TestCronRefreshCachedImageCreatesJob(t *testing.T) {
 		secret = "vice-image-pull-secret"
 		image  = "harbor.cyverse.org/de/vice-proxy:latest"
 	)
-	slug := slugifyImage(image)
+	slug := cronSlugifyImage(image)
 	existing := NewCronJobImageCacheManager(nil, ns, secret, testCronSchedule).buildCacheCronJob(image, slug)
 	// Fake clientset doesn't set a UID; give one so we can assert the
 	// OwnerReference round-trips correctly.
@@ -189,7 +190,7 @@ func TestCronRemoveCachedImage(t *testing.T) {
 			var cs *fake.Clientset
 			mgr := NewCronJobImageCacheManager(nil, ns, secret, testCronSchedule)
 			if tt.existing {
-				cj := mgr.buildCacheCronJob(image, slugifyImage(image))
+				cj := mgr.buildCacheCronJob(image, cronSlugifyImage(image))
 				cs = fake.NewSimpleClientset(cj)
 			} else {
 				cs = fake.NewSimpleClientset()
@@ -219,8 +220,8 @@ func TestCronListCachedImages(t *testing.T) {
 	mgr := NewCronJobImageCacheManager(nil, ns, secret, testCronSchedule)
 	image1 := "harbor.cyverse.org/de/vice-proxy:latest"
 	image2 := "harbor.cyverse.org/de/porklock:latest"
-	cj1 := mgr.buildCacheCronJob(image1, slugifyImage(image1))
-	cj2 := mgr.buildCacheCronJob(image2, slugifyImage(image2))
+	cj1 := mgr.buildCacheCronJob(image1, cronSlugifyImage(image1))
+	cj2 := mgr.buildCacheCronJob(image2, cronSlugifyImage(image2))
 
 	// Mark cj1 as successfully run; leave cj2 as never-run.
 	now := metav1.Now()
@@ -260,7 +261,7 @@ func TestCronGetCachedImageStatus(t *testing.T) {
 		image  = "harbor.cyverse.org/de/vice-proxy:latest"
 	)
 	mgr := NewCronJobImageCacheManager(nil, ns, secret, testCronSchedule)
-	slug := slugifyImage(image)
+	slug := cronSlugifyImage(image)
 	cj := mgr.buildCacheCronJob(image, slug)
 	now := metav1.Now()
 	cj.Status = batchv1.CronJobStatus{
@@ -356,13 +357,42 @@ func TestDeriveCronJobCacheStatus(t *testing.T) {
 }
 
 func TestRefreshJobGeneratePrefixTruncation(t *testing.T) {
-	// Construct a slug that, with cacheNamePrefix and "-r-", exceeds
-	// the K8s name limit minus 5. The truncated prefix must stay
-	// within bounds so the random suffix appended by the API server
-	// won't push the name over 253 chars.
+	// The random 5-char suffix appended by the API server must not push the
+	// Job name past the job-name label limit.
 	long := strings.Repeat("a", 300)
 	prefix := refreshJobGeneratePrefix(long)
-	assert.LessOrEqual(t, len(prefix), k8sMaxNameLen-5)
+	assert.LessOrEqual(t, len(prefix), validation.LabelValueMaxLength-5)
+}
+
+func TestCronSlugifyImage(t *testing.T) {
+	tests := []struct {
+		name  string
+		image string
+	}{
+		{name: "short ref", image: "nginx:1.25"},
+		{name: "full registry path with tag", image: "harbor.cyverse.org/de/ollama-webui-demo:2026-10-13"},
+		{name: "ECR mirror ref", image: "735791927850.dkr.ecr.us-east-1.amazonaws.com/de/ollama-webui-demo:2026-10-13"},
+		{name: "max length ref", image: "registry.example.com/" + strings.Repeat("a", maxImageRefLen-len("registry.example.com/"))},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			slug := cronSlugifyImage(tt.image)
+			cjName := cacheNamePrefix + slug
+
+			assert.LessOrEqual(t, len(cjName), cronJobMaxNameLen, "CronJob name must fit the CronJob limit")
+			assert.Empty(t, validation.IsDNS1123Subdomain(cjName), "CronJob name must be a valid object name")
+			assert.Empty(t, validation.IsValidLabelValue(slug), "slug must be a valid label value")
+			assert.True(t, imageCacheIDPattern.MatchString(slug), "slug must pass ID validation")
+			assert.Empty(t, validation.IsValidLabelValue(refreshJobGeneratePrefix(slug)+"xxxxx"), "refresh Job name must fit the job-name label")
+		})
+	}
+}
+
+func TestCronSlugifyImageMatchesSlugifyForShortRefs(t *testing.T) {
+	// Refs short enough for either cap get the same ID in every mode.
+	image := "nginx:1.25"
+	assert.Equal(t, slugifyImage(image), cronSlugifyImage(image))
 }
 
 // trueP returns a pointer to true, used for Suspend field tests.

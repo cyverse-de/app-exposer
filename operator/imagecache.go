@@ -25,15 +25,12 @@ const (
 	valuePurpose   = "image-cache"
 
 	// cacheNamePrefix is prepended to every cache resource name (DaemonSet
-	// or CronJob), keeping the slug ID the same across modes.
+	// or CronJob).
 	cacheNamePrefix = "image-cache-"
 
 	// slugHashLen is the number of hex characters from the SHA-256 hash
 	// appended to slugs for uniqueness (12 hex chars = 48 bits).
 	slugHashLen = 12
-
-	// k8sMaxNameLen is the maximum length of a Kubernetes object name.
-	k8sMaxNameLen = 253
 
 	// pauseImage is the minimal container that runs as the main container
 	// in cache DaemonSets. Cron mode uses a Job and does not need it.
@@ -200,6 +197,12 @@ func validateImageCacheID(id string) error {
 // image-cache-id label), and appends a 12-char SHA-256 hash suffix for
 // uniqueness.
 func slugifyImage(image string) string {
+	return slugifyImageMaxLen(image, validation.LabelValueMaxLength)
+}
+
+// slugifyImageMaxLen is slugifyImage with the slug capped at maxLen chars,
+// hash suffix included. Refs that already fit produce the same slug at any cap.
+func slugifyImageMaxLen(image string, maxLen int) string {
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(image)))[:slugHashLen]
 
 	slug := strings.ToLower(image)
@@ -210,8 +213,8 @@ func slugifyImage(image string) string {
 	slug = collapseRuns(slug, '-')
 	slug = strings.Trim(slug, "-")
 
-	// Truncate so slug + "-" + hash fits within a label value.
-	maxSlugLen := validation.LabelValueMaxLength - 1 - slugHashLen
+	// Truncate so slug + "-" + hash fits within maxLen.
+	maxSlugLen := maxLen - 1 - slugHashLen
 	if len(slug) > maxSlugLen {
 		slug = slug[:maxSlugLen]
 		slug = strings.TrimRight(slug, "-")
