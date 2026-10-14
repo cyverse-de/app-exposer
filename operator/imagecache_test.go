@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 func TestSlugifyImage(t *testing.T) {
@@ -22,20 +24,30 @@ func TestSlugifyImage(t *testing.T) {
 		{name: "simple image with tag", image: "nginx:1.25"},
 		{name: "image with digest", image: "harbor.cyverse.org/de/app@sha256:abc123"},
 		{name: "deeply nested path", image: "registry.example.com/org/team/project/image:v1.2.3"},
+		{name: "scheme prefixed ref", image: "https://harbor.cyverse.org/de/ollama-webui-demo:2026-10-13"},
+		{name: "ECR mirror ref", image: "735791927850.dkr.ecr.us-east-1.amazonaws.com/de/ollama-webui-demo:2026-10-13"},
+		{name: "tag and digest", image: "registry.k8s.io/pause:3.10@sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a"},
+		{name: "max length ref", image: "registry.example.com/" + strings.Repeat("a", maxImageRefLen-len("registry.example.com/"))},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			slug := slugifyImage(tt.image)
 
-			// Must be a valid K8s name component (lowercase, no special chars except -).
-			assert.Regexp(t, `^[a-z0-9][a-z0-9-]*[a-z0-9]$`, slug, "slug must be a valid K8s name")
-
-			// Total cache resource name must fit K8s 253-char limit.
-			fullName := cacheNamePrefix + slug
-			assert.LessOrEqual(t, len(fullName), 253, "full cache resource name must fit K8s limit")
+			// The slug is used as the image-cache-id label value.
+			assert.Empty(t, validation.IsValidLabelValue(slug), "slug must be a valid label value")
+			assert.True(t, imageCacheIDPattern.MatchString(slug), "slug must pass ID validation")
+			assert.Empty(t, validation.IsDNS1123Subdomain(cacheNamePrefix+slug), "cache resource name must be a valid object name")
 		})
 	}
+}
+
+func TestSlugifyImageStableForShortRefs(t *testing.T) {
+	// Refs that already fit must keep their existing IDs so live cache resources aren't orphaned.
+	assert.Equal(t,
+		"harbor-cyverse-org-de-ollama-webui-demo-2026-10-13-76c8e4965b51",
+		slugifyImage("harbor.cyverse.org/de/ollama-webui-demo:2026-10-13"),
+	)
 }
 
 func TestSlugifyImageDeterminism(t *testing.T) {

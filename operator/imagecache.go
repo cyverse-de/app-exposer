@@ -10,6 +10,7 @@ import (
 
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 const (
@@ -45,8 +46,8 @@ var imageRefPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$`)
 
 // imageCacheIDPattern matches the slug IDs produced by slugifyImage so
 // the path-parameter handlers can reject obvious garbage before forwarding
-// it to the K8s API server. Bound is k8sMaxNameLen minus cacheNamePrefix.
-var imageCacheIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,240}$`)
+// it to the K8s API server. Bound is the K8s label value limit (63 chars).
+var imageCacheIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // maxImageRefLen caps the image reference length so a caller can't park a
 // huge string in CronJob/DaemonSet annotations (each annotation value can
@@ -195,8 +196,9 @@ func validateImageCacheID(id string) error {
 
 // slugifyImage produces a deterministic, K8s-safe name component from an image
 // reference. It lowercases, replaces special characters with dashes, truncates
-// to fit the K8s 253-char name limit, and appends a 12-char SHA-256 hash suffix
-// for uniqueness.
+// to fit the K8s 63-char label value limit (the slug is used as the
+// image-cache-id label), and appends a 12-char SHA-256 hash suffix for
+// uniqueness.
 func slugifyImage(image string) string {
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(image)))[:slugHashLen]
 
@@ -208,8 +210,8 @@ func slugifyImage(image string) string {
 	slug = collapseRuns(slug, '-')
 	slug = strings.Trim(slug, "-")
 
-	// Truncate so cacheNamePrefix + slug + "-" + hash fits within k8sMaxNameLen.
-	maxSlugLen := k8sMaxNameLen - len(cacheNamePrefix) - 1 - slugHashLen
+	// Truncate so slug + "-" + hash fits within a label value.
+	maxSlugLen := validation.LabelValueMaxLength - 1 - slugHashLen
 	if len(slug) > maxSlugLen {
 		slug = slug[:maxSlugLen]
 		slug = strings.TrimRight(slug, "-")
