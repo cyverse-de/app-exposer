@@ -19,9 +19,13 @@ const (
 	// Jobs so they self-clean a few minutes after completing.
 	refreshJobTTLSeconds int32 = 300
 
-	// cronJobMaxNameLen is the API server's CronJob name limit: the 63-char
-	// job-name label minus the 11-char suffix the controller adds per Job.
-	cronJobMaxNameLen = 52
+	// cronJobNameSuffixLen is the length of the suffix the CronJob controller
+	// appends to each Job name it creates.
+	cronJobNameSuffixLen = 11
+
+	// cronJobMaxNameLen is the API server's CronJob name limit, which leaves
+	// room for the per-Job suffix within the 63-char job-name label.
+	cronJobMaxNameLen = validation.LabelValueMaxLength - cronJobNameSuffixLen
 )
 
 // cronSlugifyImage is slugifyImage capped so cacheNamePrefix + slug fits
@@ -196,8 +200,7 @@ func (m *CronJobImageCacheManager) RefreshCachedImage(ctx context.Context, image
 	jobLabels := cacheResourceLabels(slug)
 
 	// generateName lets the API server append a 5-char suffix so the name is
-	// unique even across rapid back-to-back refreshes. The prefix is
-	// truncated if needed to stay under the K8s name length limit.
+	// unique even across rapid back-to-back refreshes.
 	generatePrefix := refreshJobGeneratePrefix(slug)
 
 	job := &batchv1.Job{
@@ -224,16 +227,11 @@ func (m *CronJobImageCacheManager) RefreshCachedImage(ctx context.Context, image
 	return nil
 }
 
-// refreshJobGeneratePrefix returns a generateName prefix for a refresh Job,
-// truncated so the full name, including the API server's 5-char random
-// suffix, fits the job-name label the Job controller puts on its pods.
+// refreshJobGeneratePrefix returns a generateName prefix for a refresh Job.
+// The cron slug cap keeps the full name, including the API server's 5-char
+// random suffix, within the job-name label the Job controller adds to pods.
 func refreshJobGeneratePrefix(slug string) string {
-	prefix := cacheNamePrefix + slug + "-r-"
-	const maxPrefix = validation.LabelValueMaxLength - 5
-	if len(prefix) > maxPrefix {
-		prefix = prefix[:maxPrefix]
-	}
-	return prefix
+	return cacheNamePrefix + slug + "-r-"
 }
 
 // RemoveCachedImage deletes the cache CronJob for the given image.

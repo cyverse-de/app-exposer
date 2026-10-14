@@ -44,7 +44,7 @@ var imageRefPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$`)
 // imageCacheIDPattern matches the slug IDs produced by slugifyImage so
 // the path-parameter handlers can reject obvious garbage before forwarding
 // it to the K8s API server. Bound is the K8s label value limit (63 chars).
-var imageCacheIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+var imageCacheIDPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
 // maxImageRefLen caps the image reference length so a caller can't park a
 // huge string in CronJob/DaemonSet annotations (each annotation value can
@@ -201,12 +201,12 @@ func slugifyImage(image string) string {
 }
 
 // slugifyImageMaxLen is slugifyImage with the slug capped at maxLen chars,
-// hash suffix included. Refs that already fit produce the same slug at any cap.
+// hash suffix included. A ref's slug is the same under every cap it fits.
 func slugifyImageMaxLen(image string, maxLen int) string {
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(image)))[:slugHashLen]
 
 	slug := strings.ToLower(image)
-	replacer := strings.NewReplacer("/", "-", ":", "-", ".", "-", "@", "-")
+	replacer := strings.NewReplacer("/", "-", ":", "-", ".", "-", "@", "-", "_", "-")
 	slug = replacer.Replace(slug)
 
 	// Remove leading/trailing dashes and collapse consecutive dashes.

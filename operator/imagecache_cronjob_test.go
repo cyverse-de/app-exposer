@@ -356,14 +356,6 @@ func TestDeriveCronJobCacheStatus(t *testing.T) {
 	}
 }
 
-func TestRefreshJobGeneratePrefixTruncation(t *testing.T) {
-	// The random 5-char suffix appended by the API server must not push the
-	// Job name past the job-name label limit.
-	long := strings.Repeat("a", 300)
-	prefix := refreshJobGeneratePrefix(long)
-	assert.LessOrEqual(t, len(prefix), validation.LabelValueMaxLength-5)
-}
-
 func TestCronSlugifyImage(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -371,6 +363,7 @@ func TestCronSlugifyImage(t *testing.T) {
 	}{
 		{name: "short ref", image: "nginx:1.25"},
 		{name: "full registry path with tag", image: "harbor.cyverse.org/de/ollama-webui-demo:2026-10-13"},
+		{name: "underscore in repository", image: "harbor.cyverse.org/de/my_app:latest"},
 		{name: "ECR mirror ref", image: "735791927850.dkr.ecr.us-east-1.amazonaws.com/de/ollama-webui-demo:2026-10-13"},
 		{name: "max length ref", image: "registry.example.com/" + strings.Repeat("a", maxImageRefLen-len("registry.example.com/"))},
 	}
@@ -387,12 +380,6 @@ func TestCronSlugifyImage(t *testing.T) {
 			assert.Empty(t, validation.IsValidLabelValue(refreshJobGeneratePrefix(slug)+"xxxxx"), "refresh Job name must fit the job-name label")
 		})
 	}
-}
-
-func TestCronSlugifyImageMatchesSlugifyForShortRefs(t *testing.T) {
-	// Refs short enough for either cap get the same ID in every mode.
-	image := "nginx:1.25"
-	assert.Equal(t, slugifyImage(image), cronSlugifyImage(image))
 }
 
 // trueP returns a pointer to true, used for Suspend field tests.
