@@ -309,11 +309,12 @@ func (i *Incluster) isUserInBypassWhitelist(username string) bool {
 // ValidateJob checks that the analysis does not exceed quota limits,
 // bypassing the check for users in the configured bypass whitelist.
 // Returns an HTTP status code and error when validation fails.
-func (i *Incluster) ValidateJob(ctx context.Context, job *model.Job) (int, error) {
+// gpusRequested scopes gpu.hours enforcement to GPU-requesting jobs.
+func (i *Incluster) ValidateJob(ctx context.Context, job *model.Job, gpusRequested int64) (int, error) {
 	if i.isUserInBypassWhitelist(job.Submitter) {
 		log.Infof("Resource tracking disabled for user %s (in bypass whitelist), skipping validation for job %s", job.Submitter, job.InvocationID)
 		return http.StatusOK, nil
 	}
 	log.Infof("Resource tracking enabled for user %s, validating job %s", job.Submitter, job.InvocationID)
-	return i.quotaEnforcer.ValidateJob(ctx, job, i.ViceNamespace)
+	return i.quotaEnforcer.ValidateJob(ctx, job, i.ViceNamespace, gpusRequested)
 }

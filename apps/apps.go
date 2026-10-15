@@ -22,17 +22,18 @@ const otelName = "github.com/cyverse-de/app-exposer/apps"
 
 var log = common.Log.WithFields(logrus.Fields{"package": "apps"})
 
-type millicoresJob struct {
+type resourceJob struct {
 	ID                 uuid.UUID
 	Job                model.Job
 	MillicoresReserved *apd.Decimal
+	GPUsReserved       int64
 }
 
 // Apps provides an API for accessing information about apps.
 type Apps struct {
 	DB         *sqlx.DB
 	UserSuffix string
-	addJob     chan millicoresJob
+	addJob     chan resourceJob
 	jobDone    chan uuid.UUID
 	exit       chan bool
 	jobs       map[string]bool
@@ -43,33 +44,41 @@ func NewApps(db *sqlx.DB, userSuffix string) *Apps {
 	return &Apps{
 		DB:         db,
 		UserSuffix: userSuffix,
-		addJob:     make(chan millicoresJob),
+		addJob:     make(chan resourceJob),
 		jobDone:    make(chan uuid.UUID),
 		exit:       make(chan bool),
 		jobs:       map[string]bool{},
 	}
 }
 
-// Run runs the goroutine for storing millicores reserved for new jobs.
+// Run runs the goroutine for storing resource reservations (millicores and GPUs) for new jobs.
 func (a *Apps) Run() {
 GoroutineLoop:
 	for {
 		select {
-		case mj := <-a.addJob:
-			a.jobs[mj.ID.String()] = true
-			go func(mj millicoresJob) {
-				ctx, span := otel.Tracer(otelName).Start(context.Background(), "job millicores goroutine")
+		case rj := <-a.addJob:
+			a.jobs[rj.ID.String()] = true
+			go func(rj resourceJob) {
+				ctx, span := otel.Tracer(otelName).Start(context.Background(), "job resources goroutine")
 				defer span.End()
-				var err error
 
-				log.Debugf("storing %s millicores reserved for %s", mj.MillicoresReserved.String(), mj.Job.InvocationID)
-				if err = a.storeMillicoresInternal(ctx, &mj.Job, mj.MillicoresReserved); err != nil {
-					log.Error(err)
+				if rj.GPUsReserved > 0 {
+					// Write both columns in a single UPDATE when GPUs are requested.
+					log.Debugf("storing %s millicores and %d GPUs reserved for %s", rj.MillicoresReserved.String(), rj.GPUsReserved, rj.Job.InvocationID)
+					if err := a.storeResourcesInternal(ctx, &rj.Job, rj.MillicoresReserved, rj.GPUsReserved); err != nil {
+						log.Error(err)
+					}
+				} else {
+					// CPU-only job — use the original millicores-only path.
+					log.Debugf("storing %s millicores reserved for %s", rj.MillicoresReserved.String(), rj.Job.InvocationID)
+					if err := a.storeMillicoresInternal(ctx, &rj.Job, rj.MillicoresReserved); err != nil {
+						log.Error(err)
+					}
 				}
-				log.Debugf("done storing %s millicores reserved for %s", mj.MillicoresReserved.String(), mj.Job.InvocationID)
+				log.Debugf("done storing resources for %s", rj.Job.InvocationID)
 
-				a.jobDone <- mj.ID
-			}(mj)
+				a.jobDone <- rj.ID
+			}(rj)
 
 		case doneJobID := <-a.jobDone:
 			delete(a.jobs, doneJobID.String())
@@ -80,7 +89,7 @@ GoroutineLoop:
 	}
 }
 
-// Finish exits the goroutine for storing millicores reserved for new jobs.
+// Finish exits the goroutine for storing resource reservations for new jobs.
 func (a *Apps) Finish() {
 	a.exit <- true
 }
@@ -218,31 +227,67 @@ func (a *Apps) tryForAnalysisID(ctx context.Context, job *model.Job, maxAttempts
 	return "", fmt.Errorf("failed to find analysis ID after %d attempts", maxAttempts)
 }
 
-func (a *Apps) storeMillicoresInternal(ctx context.Context, job *model.Job, millicores *apd.Decimal) error {
-	var analysisID constants.AnalysisID
-
-	// Prefer job.ID if available (new vice-proxy provides this directly).
+// resolveAnalysisID returns the analysis ID for a job, preferring job.ID
+// when available and falling back to lookup by external ID for backward
+// compatibility.
+func (a *Apps) resolveAnalysisID(ctx context.Context, job *model.Job) (constants.AnalysisID, error) {
 	if job.ID != "" {
-		analysisID = constants.AnalysisID(job.ID)
-	} else {
-		// Fallback to lookup by external ID for backward compatibility.
-		var err error
-		analysisID, err = a.tryForAnalysisID(ctx, job, 30)
-		if err != nil {
-			return err
-		}
+		return constants.AnalysisID(job.ID), nil
 	}
+	return a.tryForAnalysisID(ctx, job, 30)
+}
 
+func (a *Apps) storeMillicoresInternal(ctx context.Context, job *model.Job, millicores *apd.Decimal) error {
+	analysisID, err := a.resolveAnalysisID(ctx, job)
+	if err != nil {
+		return err
+	}
 	return a.setMillicoresReserved(ctx, analysisID, millicores)
 }
 
+const setResourcesReservedStmt = `
+	UPDATE jobs
+	SET millicores_reserved = $2::int,
+	    gpus_reserved = $3::int
+	WHERE id = $1;
+`
+
+// storeResourcesInternal writes both millicores and GPUs reserved in a single
+// SQL UPDATE, resolving the analysis ID once for both columns.
+func (a *Apps) storeResourcesInternal(ctx context.Context, job *model.Job, millicores *apd.Decimal, gpus int64) error {
+	analysisID, err := a.resolveAnalysisID(ctx, job)
+	if err != nil {
+		return err
+	}
+	milliInt, err := millicores.Int64()
+	if err != nil {
+		return err
+	}
+	_, err = a.DB.ExecContext(ctx, setResourcesReservedStmt, analysisID, milliInt, gpus)
+	return err
+}
+
 // SetMillicoresReserved enqueues a job to asynchronously update the millicores
-// reserved for the given analysis.
+// reserved for the given analysis. GPUs reserved defaults to 0.
 func (a *Apps) SetMillicoresReserved(job *model.Job, millicores *apd.Decimal) error {
-	a.addJob <- millicoresJob{
+	a.addJob <- resourceJob{
 		ID:                 uuid.New(),
 		Job:                *job,
 		MillicoresReserved: millicores,
+		GPUsReserved:       0,
+	}
+	return nil
+}
+
+// SetResourcesReserved enqueues a job to asynchronously update both millicores
+// and GPUs reserved for the given analysis. Both writes happen in the same
+// background goroutine dispatch.
+func (a *Apps) SetResourcesReserved(job *model.Job, millicores *apd.Decimal, gpus int64) error {
+	a.addJob <- resourceJob{
+		ID:                 uuid.New(),
+		Job:                *job,
+		MillicoresReserved: millicores,
+		GPUsReserved:       gpus,
 	}
 	return nil
 }

@@ -2,11 +2,13 @@ package adapter
 
 import (
 	"context"
+	"slices"
 
 	"github.com/cyverse-de/app-exposer/apps"
 	"github.com/cyverse-de/app-exposer/batch"
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/app-exposer/gpus"
 	"github.com/cyverse-de/app-exposer/imageinfo"
 	"github.com/cyverse-de/app-exposer/millicores"
 	"github.com/cyverse-de/app-exposer/quota"
@@ -71,20 +73,19 @@ func (j *JEXAdapter) StopWorkflow(ctx context.Context, externalID string) error 
 // isUserInBypassWhitelist checks if the given username is in the resource tracking bypass whitelist.
 func (j *JEXAdapter) isUserInBypassWhitelist(username string) bool {
 	normalizedUser := common.FixUsername(username, j.UserSuffix)
-	for _, allowedUser := range j.BypassUsers {
-		if normalizedUser == allowedUser {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(j.BypassUsers, normalizedUser)
 }
 
 func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysis) error {
+	// Detect GPUs requested by this analysis for scoped enforcement.
+	gpuDetector := gpus.New()
+	gpusRequested := gpuDetector.NumberReserved(analysis)
+
 	if j.isUserInBypassWhitelist(analysis.Submitter) {
 		log.Infof("Resource tracking disabled for user %s (in bypass whitelist), skipping validation for batch job %s", analysis.Submitter, analysis.InvocationID)
 	} else {
 		log.Infof("Resource tracking enabled for user %s, validating batch job %s", analysis.Submitter, analysis.InvocationID)
-		if status, err := j.quotaEnforcer.ValidateBatchJob(ctx, analysis, j.Namespace); err != nil {
+		if status, err := j.quotaEnforcer.ValidateBatchJob(ctx, analysis, j.Namespace, gpusRequested); err != nil {
 			if validationErr, ok := err.(common.ErrorResponse); ok {
 				log.Error(validationErr)
 				return validationErr
@@ -95,24 +96,24 @@ func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysi
 		log.Info("Validation successful for batch job")
 	}
 
-	log = log.WithFields(logrus.Fields{
+	wfLog := log.WithFields(logrus.Fields{
 		"external_id": analysis.InvocationID,
 	})
 
-	log.Debug("finding number of millicores reserved")
+	wfLog.Debug("finding number of millicores reserved")
 	millicoresReserved, err := j.detector.NumberReserved(analysis)
 	if err != nil {
-		log.Error(err)
+		wfLog.Error(err)
 		return err
 	}
-	log.Debug("done finding number of millicores reserved")
+	wfLog.Debug("done finding number of millicores reserved")
 
-	log.Infof("storing %s millicores reserved for %s", millicoresReserved.String(), analysis.InvocationID)
-	if err = j.apps.SetMillicoresReserved(analysis, millicoresReserved); err != nil {
-		log.Error(err)
+	wfLog.Infof("storing %s millicores and %d GPUs reserved for %s", millicoresReserved.String(), gpusRequested, analysis.InvocationID)
+	if err = j.apps.SetResourcesReserved(analysis, millicoresReserved, gpusRequested); err != nil {
+		wfLog.Error(err)
 		return err
 	}
-	log.Infof("done storing %s millicores reserved for %s", millicoresReserved.String(), analysis.InvocationID)
+	wfLog.Infof("done storing resources reserved for %s", analysis.InvocationID)
 
 	opts := &batch.BatchSubmissionOpts{
 		FileTransferImage:      j.FileTransferImage,
@@ -140,7 +141,7 @@ func (j *JEXAdapter) LaunchWorkflow(ctx context.Context, analysis *model.Analysi
 		return err
 	}
 
-	log.Infof("launched with %f millicores reserved", millicoresReserved)
+	wfLog.Infof("launched with %f millicores reserved", millicoresReserved)
 
 	return nil
 }

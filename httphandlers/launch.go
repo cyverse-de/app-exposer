@@ -11,6 +11,7 @@ import (
 
 	"github.com/cyverse-de/app-exposer/common"
 	"github.com/cyverse-de/app-exposer/constants"
+	"github.com/cyverse-de/app-exposer/gpus"
 	"github.com/cyverse-de/app-exposer/incluster"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/permissions"
@@ -69,7 +70,11 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 		}
 	}
 
-	if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
+	// Detect GPUs requested by this job for scoped enforcement.
+	gpuDetector := gpus.New()
+	gpusRequested := gpuDetector.NumberReserved(job)
+
+	if status, err := h.incluster.ValidateJob(ctx, job, gpusRequested); err != nil {
 		if validationErr, ok := err.(common.ErrorResponse); ok {
 			return validationErr
 		}
@@ -92,7 +97,7 @@ func (h *HTTPHandlers) LaunchAppHandler(c echo.Context) error {
 	}
 	go func() {
 		defer release()
-		h.launchAsync(job)
+		h.launchAsync(job, gpusRequested)
 	}()
 
 	return c.NoContent(http.StatusOK)
@@ -120,14 +125,17 @@ func (h *HTTPHandlers) acquireLaunchSlot() (release func(), ok bool) {
 }
 
 // launchAsync performs the resource-intensive parts of a VICE launch in
-// the background: builds the deployment spec, reserves millicores, assembles
-// the analysis bundle, schedules it on an operator, and records the operator
-// assignment. Uses a background context with a timeout since the originating
-// HTTP request has already completed.
+// the background: builds the deployment spec, reserves millicores and GPUs,
+// assembles the analysis bundle, schedules it on an operator, and records
+// the operator assignment. Uses a background context with a timeout since
+// the originating HTTP request has already completed.
+//
+// gpusReserved is pre-computed by the caller to avoid re-detecting GPU
+// reservations from the job.
 //
 // On failure, publishes a failure status update so the analysis transitions
 // to "Failed" instead of staying stuck in "Submitted" indefinitely.
-func (h *HTTPHandlers) launchAsync(job *model.Job) {
+func (h *HTTPHandlers) launchAsync(job *model.Job, gpusReserved int64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
@@ -151,9 +159,9 @@ func (h *HTTPHandlers) launchAsync(job *model.Job) {
 		return
 	}
 
-	if err = h.apps.SetMillicoresReserved(job, millicores); err != nil {
-		log.Errorf("async launch %s: failed to set millicores reserved: %v", job.ID, err)
-		h.failLaunch(ctx, job, fmt.Sprintf("failed to reserve millicores: %v", err))
+	if err = h.apps.SetResourcesReserved(job, millicores, gpusReserved); err != nil {
+		log.Errorf("async launch %s: failed to set resources reserved: %v", job.ID, err)
+		h.failLaunch(ctx, job, fmt.Sprintf("failed to reserve resources: %v", err))
 		return
 	}
 
@@ -247,7 +255,9 @@ func (h *HTTPHandlers) DryRunBundleHandler(c echo.Context) error {
 
 	// Opt-in validation via query parameter.
 	if c.QueryParam("validate") == "true" {
-		if status, err := h.incluster.ValidateJob(ctx, job); err != nil {
+		gpuDetector := gpus.New()
+		gpusRequested := gpuDetector.NumberReserved(job)
+		if status, err := h.incluster.ValidateJob(ctx, job, gpusRequested); err != nil {
 			if validationErr, ok := err.(common.ErrorResponse); ok {
 				return validationErr
 			}

@@ -13,6 +13,7 @@ import (
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/operatorclient"
 	"github.com/cyverse-de/app-exposer/reporting"
+	"github.com/cyverse-de/p/go/qms"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -322,10 +323,11 @@ func TestGetResourceOveragesForUser(t *testing.T) {
 
 func TestCheckOverages(t *testing.T) {
 	tests := []struct {
-		name       string
-		body       string
-		wantStatus int
-		wantErr    bool
+		name          string
+		body          string
+		gpusRequested int64
+		wantStatus    int
+		wantErr       bool
 	}{
 		{
 			name:       "cpu.hours at quota blocks the launch",
@@ -339,7 +341,7 @@ func TestCheckOverages(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "non-cpu.hours overage is ignored",
+			name:       "non-cpu.hours non-gpu.hours overage is ignored",
 			body:       `{"overages":[{"resource_name":"data.size","quota":10,"usage":100}]}`,
 			wantStatus: http.StatusOK,
 		},
@@ -348,21 +350,43 @@ func TestCheckOverages(t *testing.T) {
 			body:       `{"overages":[]}`,
 			wantStatus: http.StatusOK,
 		},
+		{
+			name:          "gpu.hours overage blocks GPU job",
+			body:          `{"overages":[{"resource_name":"gpu.hours","quota":100,"usage":150}]}`,
+			gpusRequested: 2,
+			wantStatus:    http.StatusBadRequest,
+			wantErr:       true,
+		},
+		{
+			name:          "gpu.hours overage does NOT block CPU-only job",
+			body:          `{"overages":[{"resource_name":"gpu.hours","quota":100,"usage":150}]}`,
+			gpusRequested: 0,
+			wantStatus:    http.StatusOK,
+		},
+		{
+			name:          "cpu.hours and gpu.hours both in overage blocks GPU job with both details",
+			body:          `{"overages":[{"resource_name":"cpu.hours","quota":100,"usage":200},{"resource_name":"gpu.hours","quota":50,"usage":80}]}`,
+			gpusRequested: 1,
+			wantStatus:    http.StatusBadRequest,
+			wantErr:       true,
+		},
+		{
+			name:          "cpu.hours overage blocks even a CPU-only job",
+			body:          `{"overages":[{"resource_name":"cpu.hours","quota":100,"usage":200}]}`,
+			gpusRequested: 0,
+			wantStatus:    http.StatusBadRequest,
+			wantErr:       true,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var gotPath string
-			srv := newOveragesServer(t, http.StatusOK, tc.body, &gotPath)
+			// Unmarshal directly — checkOverages is a pure function that
+			// doesn't need an HTTP round trip.
+			var overages qms.OverageList
+			require.NoError(t, json.Unmarshal([]byte(tc.body), &overages))
 
-			base, err := url.Parse(srv.URL)
-			require.NoError(t, err)
-			e := &Enforcer{subscriptionsBase: base, httpClient: srv.Client(), userDomain: "@iplantcollaborative.org"}
-
-			overages, err := e.getResourceOveragesForUser(context.Background(), "testuser")
-			require.NoError(t, err)
-
-			status, err := checkOverages("testuser", overages)
+			status, err := checkOverages("testuser", &overages, tc.gpusRequested)
 			assert.Equal(t, tc.wantStatus, status)
 			if tc.wantErr {
 				require.Error(t, err)
