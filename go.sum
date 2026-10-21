@@ -133,8 +133,6 @@ github.com/cyverse-de/p/go/header v0.1.0 h1:GA3VBQGLXqmFld4ANAQ8p5xaiJq2mWNoG3Pv
 github.com/cyverse-de/p/go/header v0.1.0/go.mod h1:8rcTyi4NIQOKo7JnqAEK13ABiDdni0eYpkDConf2ypQ=
 github.com/cyverse-de/p/go/ptypes v0.1.0 h1:NkrnU/YiSO+hwytMuq+jSV7DBkkVlk0pIvpxyizwySs=
 github.com/cyverse-de/p/go/ptypes v0.1.0/go.mod h1:yMJeyQ4AEuhcKrTpjqCEhMV0KDtvuQSUdIa+RA7xim4=
-github.com/cyverse-de/p/go/qms v0.3.0 h1:j0Ezd0n8cz4tGh/y0oF2XEYd1WVhOot7mlLkKjodOsM=
-github.com/cyverse-de/p/go/qms v0.3.0/go.mod h1:NrweTu/8mduuaG/Be60UhKybCAnFs3SwqzGNvDhihVw=
 github.com/cyverse-de/p/go/qms v0.3.1 h1:IGmxija5a0W/DWcdEnSH8TlJo4bYAs6pqZBwteM3n+Q=
 github.com/cyverse-de/p/go/qms v0.3.1/go.mod h1:NrweTu/8mduuaG/Be60UhKybCAnFs3SwqzGNvDhihVw=
 github.com/cyverse-de/p/go/svcerror v0.1.0 h1:anzQiDoCbObeFkmvTBoaEkpE03srfajagsEWlK1rYpY=
@@ -455,8 +453,8 @@ github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7V
 github.com/julienschmidt/httprouter v1.3.0/go.mod h1:JR6WtHb+2LUe8TCKY3cZOxFyyO8IZAc4RVcycCCAKdM=
 github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
-github.com/klauspost/compress v1.18.4 h1:RPhnKRAQ4Fh8zU2FY/6ZFDwTVTxgJ/EMydqSTzE9a2c=
-github.com/klauspost/compress v1.18.4/go.mod h1:R0h/fSBs8DE4ENlcrlib3PsXS61voFxhIs2DeRhCvJ4=
+github.com/klauspost/compress v1.18.7 h1:aUyZsS4kH3QTKurYhAOwAHxllVPnOthb3vPfnF1Ehjw=
+github.com/klauspost/compress v1.18.7/go.mod h1:cwPg85FWrGar70rWktvGQj8/hthj3wpl0PGDogxkrSQ=
 github.com/klauspost/pgzip v1.2.6 h1:8RXeL5crjEUFnR2/Sn6GJNWtSQ3Dk8pq4CL3jvdDyjU=
 github.com/klauspost/pgzip v1.2.6/go.mod h1:Ch1tH69qFZu15pkjo5kYi6mth2Zzwzt50oCQKQE9RUs=
 github.com/knadh/koanf v1.5.0 h1:q2TSd/3Pyc/5yP9ldIrSdIz26MCcyNQzW0pEAugLPNs=
