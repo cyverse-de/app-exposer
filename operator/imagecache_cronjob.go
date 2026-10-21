@@ -10,12 +10,29 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes"
 )
 
-// refreshJobTTLSeconds is the TTLSecondsAfterFinished applied to refresh
-// Jobs so they self-clean a few minutes after completing.
-const refreshJobTTLSeconds int32 = 300
+const (
+	// refreshJobTTLSeconds is the TTLSecondsAfterFinished applied to refresh
+	// Jobs so they self-clean a few minutes after completing.
+	refreshJobTTLSeconds int32 = 300
+
+	// cronJobNameSuffixLen is the length of the suffix the CronJob controller
+	// appends to each Job name it creates.
+	cronJobNameSuffixLen = 11
+
+	// cronJobMaxNameLen is the API server's CronJob name limit, which leaves
+	// room for the per-Job suffix within the 63-char job-name label.
+	cronJobMaxNameLen = validation.LabelValueMaxLength - cronJobNameSuffixLen
+)
+
+// cronSlugifyImage is slugifyImage capped so cacheNamePrefix + slug fits
+// within cronJobMaxNameLen.
+func cronSlugifyImage(image string) string {
+	return slugifyImageMaxLen(image, cronJobMaxNameLen-len(cacheNamePrefix))
+}
 
 // CronJobImageCacheManager manages image cache CronJobs in a namespace. One
 // CronJob per cached image; each scheduled Job pulls the target image,
@@ -125,7 +142,7 @@ func (m *CronJobImageCacheManager) EnsureImageCached(ctx context.Context, image 
 		return err
 	}
 
-	slug := slugifyImage(image)
+	slug := cronSlugifyImage(image)
 	cjName := cacheNamePrefix + slug
 	client := m.clientset.BatchV1().CronJobs(m.namespace)
 
@@ -165,7 +182,7 @@ func (m *CronJobImageCacheManager) RefreshCachedImage(ctx context.Context, image
 		return err
 	}
 
-	slug := slugifyImage(image)
+	slug := cronSlugifyImage(image)
 	cjName := cacheNamePrefix + slug
 	cjClient := m.clientset.BatchV1().CronJobs(m.namespace)
 
@@ -183,8 +200,7 @@ func (m *CronJobImageCacheManager) RefreshCachedImage(ctx context.Context, image
 	jobLabels := cacheResourceLabels(slug)
 
 	// generateName lets the API server append a 5-char suffix so the name is
-	// unique even across rapid back-to-back refreshes. The prefix is
-	// truncated if needed to stay under the K8s name length limit.
+	// unique even across rapid back-to-back refreshes.
 	generatePrefix := refreshJobGeneratePrefix(slug)
 
 	job := &batchv1.Job{
@@ -211,16 +227,11 @@ func (m *CronJobImageCacheManager) RefreshCachedImage(ctx context.Context, image
 	return nil
 }
 
-// refreshJobGeneratePrefix returns a generateName prefix for a refresh Job,
-// truncated so the API server's 5-char random suffix fits within the K8s
-// name limit.
+// refreshJobGeneratePrefix returns a generateName prefix for a refresh Job.
+// The cron slug cap keeps the full name, including the API server's 5-char
+// random suffix, within the job-name label the Job controller adds to pods.
 func refreshJobGeneratePrefix(slug string) string {
-	prefix := cacheNamePrefix + slug + "-r-"
-	const maxPrefix = k8sMaxNameLen - 5
-	if len(prefix) > maxPrefix {
-		prefix = prefix[:maxPrefix]
-	}
-	return prefix
+	return cacheNamePrefix + slug + "-r-"
 }
 
 // RemoveCachedImage deletes the cache CronJob for the given image.
@@ -232,7 +243,7 @@ func (m *CronJobImageCacheManager) RemoveCachedImage(ctx context.Context, image 
 	if err := validateImageRef(image); err != nil {
 		return err
 	}
-	return m.RemoveCachedImageByID(ctx, slugifyImage(image))
+	return m.RemoveCachedImageByID(ctx, cronSlugifyImage(image))
 }
 
 // RemoveCachedImageByID deletes the cache CronJob with the given slug ID.
