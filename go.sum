@@ -133,8 +133,6 @@ github.com/cyverse-de/p/go/header v0.1.0 h1:GA3VBQGLXqmFld4ANAQ8p5xaiJq2mWNoG3Pv
 github.com/cyverse-de/p/go/header v0.1.0/go.mod h1:8rcTyi4NIQOKo7JnqAEK13ABiDdni0eYpkDConf2ypQ=
 github.com/cyverse-de/p/go/ptypes v0.1.0 h1:NkrnU/YiSO+hwytMuq+jSV7DBkkVlk0pIvpxyizwySs=
 github.com/cyverse-de/p/go/ptypes v0.1.0/go.mod h1:yMJeyQ4AEuhcKrTpjqCEhMV0KDtvuQSUdIa+RA7xim4=
-github.com/cyverse-de/p/go/qms v0.3.0 h1:j0Ezd0n8cz4tGh/y0oF2XEYd1WVhOot7mlLkKjodOsM=
-github.com/cyverse-de/p/go/qms v0.3.0/go.mod h1:NrweTu/8mduuaG/Be60UhKybCAnFs3SwqzGNvDhihVw=
 github.com/cyverse-de/p/go/qms v0.3.1 h1:IGmxija5a0W/DWcdEnSH8TlJo4bYAs6pqZBwteM3n+Q=
 github.com/cyverse-de/p/go/qms v0.3.1/go.mod h1:NrweTu/8mduuaG/Be60UhKybCAnFs3SwqzGNvDhihVw=
 github.com/cyverse-de/p/go/svcerror v0.1.0 h1:anzQiDoCbObeFkmvTBoaEkpE03srfajagsEWlK1rYpY=
@@ -181,8 +179,8 @@ github.com/go-gl/glfw/v3.3/glfw v0.0.0-20191125211704-12ad95a8df72/go.mod h1:tQ2
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20200222043503-6f7a984d4dc4/go.mod h1:tQ2UAYgL5IevRw8kRxooKSPJfGvJ9fJQFa0TUsXzTg8=
 github.com/go-jose/go-jose/v3 v3.0.5 h1:BLLJWbC4nMZOfuPVxoZIxeYsn6Nl2r1fITaJ78UQlVQ=
 github.com/go-jose/go-jose/v3 v3.0.5/go.mod h1:5b+7YgP7ZICgJDBdfjZaIt+H/9L9T/YQrVfLAMboGkQ=
-github.com/go-jose/go-jose/v4 v4.1.4 h1:moDMcTHmvE6Groj34emNPLs/qtYXRVcd6S7NHbHz3kA=
-github.com/go-jose/go-jose/v4 v4.1.4/go.mod h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08=
+github.com/go-jose/go-jose/v4 v4.1.6 h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4=
+github.com/go-jose/go-jose/v4 v4.1.6/go.mod h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08=
 github.com/go-kit/kit v0.8.0/go.mod h1:xBxKIO96dXMWWy0MnWVtmwkA9/13aqxPnvrjFYMA2as=
 github.com/go-kit/kit v0.9.0/go.mod h1:xBxKIO96dXMWWy0MnWVtmwkA9/13aqxPnvrjFYMA2as=
 github.com/go-kit/log v0.1.0/go.mod h1:zbhenjAZHb184qTLMA9ZjW7ThYL0H2mk7Q6pNt4vbaY=
