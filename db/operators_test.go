@@ -187,7 +187,7 @@ func TestUpdateOperatorByID(t *testing.T) {
 				require.Error(t, err)
 				var pqErr *pq.Error
 				assert.True(t, errors.As(err, &pqErr), "error should be a *pq.Error")
-				assert.Equal(t, pq.ErrorCode("23505"), pqErr.Code)
+				assert.Equal(t, "23505", string(pqErr.Code))
 				assert.Nil(t, got)
 			default:
 				require.NoError(t, err)
