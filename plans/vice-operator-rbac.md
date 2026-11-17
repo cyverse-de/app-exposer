@@ -32,7 +32,7 @@ via a ClusterRoleBinding and a RoleBinding respectively.
 | `""` (core) | `pods/log` | get | `HandleLogs` streams container logs via `Pods(ns).GetLogs(name)`. See `operator/handlers_status.go:319`. |
 | `""` (core) | `services` | get, list, create, update, delete | Bundle Services are upserted on launch and deleted on exit; status/permissions/loading handlers list them by analysis-id label; the file-transfer code resolves the sidecar's in-cluster DNS name through them. See `operator/resources.go:135-139, 199-208`, `operator/transfers.go:177`. |
 | `""` (core) | `configmaps` | get, list, update, create, delete | Bundle ConfigMaps are upserted/deleted with the analysis; `handlers_permissions.go` lists and updates the per-analysis allowed-users ConfigMap that vice-proxy watches for ACL changes. See `operator/handlers_permissions.go:30,132`, `operator/resources.go:102-109, 247-256`. |
-| `""` (core) | `secrets` | get, create, update | `EnsureClusterConfigSecret` provisions/refreshes the per-cluster Secret consumed by vice-proxy via `envFrom` (Keycloak URLs, VICE_BASE_URL, state HMAC, etc.). See `operator/secrets.go:48-120`. Delete is not required and not used. |
+| `""` (core) | `secrets` | get, list, create, update, delete | `EnsureClusterConfigSecret` provisions/refreshes the per-cluster Secret consumed by vice-proxy via `envFrom` (Keycloak URLs, VICE_BASE_URL, state HMAC, etc.) — get/create/update only. `applyBundle`/`deleteAnalysisResources` additionally upsert/list/delete the per-analysis sensitive-environment Secret (`vicebuild.SensitiveEnvSecret`, present only when the analysis has `VICESpec.SensitiveEnvironment`) — this is what uses `list` and `delete`, previously granted but idle. See `operator/secrets.go:48-120`, `operator/resources.go` (Secret upsert/delete alongside ConfigMaps). |
 | `""` (core) | `persistentvolumeclaims` | get, list, create, update, delete | Bundle PVCs (per-analysis working-dir PVC and iRODS CSI claim) upserted on launch, deleted on exit. See `operator/resources.go:120-127, 223-232`. |
 | `apps` | `deployments` | get, list, watch, create, update, delete | The analysis itself is a Deployment, upserted by `applyBundle` and deleted by `deleteAnalysisResources`. The status-publisher informer (PR #148) watches Deployments with `app-type=interactive` to detect Available→Running transitions. List drives capacity, status, loading, and the new file-transfer sidecar check added during the save-and-exit fix. See `operator/statusinformer.go:164`, `operator/resources.go:129-133, 211-220`, `operator/transfers.go:281`. |
 | `apps` | `daemonsets` | get, list, create, update, delete | `ImageCacheManager` creates per-image DaemonSets to pre-pull container images onto vice-labeled nodes so analysis pods start without an `ImagePullBackOff`. See `operator/imagecache.go:262,305,344,396,412`. |
@@ -51,7 +51,7 @@ The current Ansible RBAC (`deployments/ansible/roles/vice-operator/tasks/main.ym
 |---|---|
 | ClusterRole `persistentvolumes` | `watch` |
 | ClusterRole `nodes` | `get`, `watch` (only `list` is called) |
-| Role `secrets` | `list`, `watch`, `delete` |
+| Role `secrets` | `watch` (`list`/`delete` are now used by the sensitive-environment Secret) |
 | Role `gateways` | `update`, `delete`, `list`, `watch` |
 | Role `middlewares` | `update`, `delete`, `list`, `watch` |
 | Role `leases` | (no `watch` declared and none needed — the leader-election library polls via Get rather than Watch) |

@@ -45,6 +45,8 @@ const (
 	PermissionsMountPath       = "/etc/vice-permissions"
 	PermissionsFileName        = "allowed-users"
 
+	SensitiveEnvSecretPrefix = "sensitive-env"
+
 	// The CA bundle vice-proxy trusts when the DE's certificates chain to a
 	// private CA. Matches the mount path the DE services use.
 	CABundleVolumeName = "de-ca"

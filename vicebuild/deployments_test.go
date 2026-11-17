@@ -165,6 +165,34 @@ func TestDeploymentNoGPU(t *testing.T) {
 		constants.GPUAffinityKey)
 }
 
+// TestAnalysisContainerSensitiveEnvFrom confirms SensitiveEnvironment reaches
+// the analysis container only via envFrom (never Env), and that a non-nil
+// Secret name follows the same ExternalID-derived naming vicebuild.SensitiveEnvSecret uses.
+func TestAnalysisContainerSensitiveEnvFrom(t *testing.T) {
+	t.Run("absent: no envFrom on the analysis container", func(t *testing.T) {
+		dep := testConfig().Deployment(testSpec())
+		analysis := findContainer(t, dep.Spec.Template.Spec.Containers, constants.AnalysisContainerName)
+		assert.Empty(t, analysis.EnvFrom)
+	})
+
+	t.Run("present: envFrom points at the sensitive-env Secret, not Env", func(t *testing.T) {
+		spec := testSpec()
+		spec.SensitiveEnvironment = map[string]string{"OPENAI_API_KEY": "sk-not-a-real-key"}
+
+		dep := testConfig().Deployment(spec)
+		analysis := findContainer(t, dep.Spec.Template.Spec.Containers, constants.AnalysisContainerName)
+
+		require.Len(t, analysis.EnvFrom, 1)
+		require.NotNil(t, analysis.EnvFrom[0].SecretRef)
+		assert.Equal(t, "sensitive-env-external-1", analysis.EnvFrom[0].SecretRef.Name)
+
+		for _, e := range analysis.Env {
+			assert.NotEqual(t, "OPENAI_API_KEY", e.Name,
+				"sensitive key must never be inlined on Env; it leaks into Deployment reads otherwise")
+		}
+	})
+}
+
 // TestViceProxyArgsFolded confirms TransformViceProxyArgs is folded in: the
 // vice-proxy container carries per-analysis args, the cluster-config envFrom,
 // and the permissions mount, all at construction time.

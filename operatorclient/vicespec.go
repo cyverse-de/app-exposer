@@ -48,6 +48,12 @@ type VICESpec struct {
 	// Environment for the analysis container (model.Step.Environment).
 	Environment map[string]string `json:"environment,omitempty"`
 
+	// SensitiveEnvironment carries environment variables that must be
+	// injected via a Kubernetes Secret rather than inlined as plain Env on
+	// the container spec, and must never be written to any place a plain
+	// environment variable is
+	SensitiveEnvironment map[string]string `json:"sensitiveEnvironment,omitempty"`
+
 	// Resource asks (raw; the operator applies its own default/clamp policy)
 	// and GPU request. GPU is nil when the analysis requests no GPU.
 	Resources ResourceSpec `json:"resources"`
@@ -166,6 +172,11 @@ func (s *VICESpec) Validate() error {
 	// backend both target the first container port, so at least one is required.
 	if len(s.Container.Ports) == 0 {
 		return fmt.Errorf("container must expose at least one port")
+	}
+	for k := range s.SensitiveEnvironment {
+		if _, ok := s.Environment[k]; ok {
+			return fmt.Errorf("environment variable %q set in both Environment and SensitiveEnvironment", k)
+		}
 	}
 	return nil
 }

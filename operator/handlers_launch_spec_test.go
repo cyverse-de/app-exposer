@@ -115,6 +115,56 @@ func TestHandleLaunchSpecCreatesResources(t *testing.T) {
 	np, err := clientset.NetworkingV1().NetworkPolicies(ns).Get(ctx, "vice-egress-spec-analysis-1", metav1.GetOptions{})
 	require.NoError(t, err, "per-analysis egress NetworkPolicy should exist")
 	assert.Equal(t, "spec-analysis-1", np.Labels[constants.AnalysisIDLabel])
+
+	// No SensitiveEnvironment on this spec, so no sensitive-env Secret.
+	secrets, err := clientset.CoreV1().Secrets(ns).List(ctx, metav1.ListOptions{})
+	require.NoError(t, err)
+	assert.Empty(t, secrets.Items, "no Secret should be created when the spec has no SensitiveEnvironment")
+}
+
+// TestHandleLaunchSpecCreatesSensitiveEnvSecret confirms a spec carrying
+// SensitiveEnvironment gets its own Secret, that the analysis container
+// consumes it via envFrom rather than Env, and that the value never appears
+// anywhere in the Deployment object a "kubectl get deployment -o yaml" or an
+// admin describe endpoint would read.
+func TestHandleLaunchSpecCreatesSensitiveEnvSecret(t *testing.T) {
+	op, clientset, _ := newTestOperator(t, 10)
+	configureBuild(op)
+
+	spec := specTestSpec()
+	spec.SensitiveEnvironment = map[string]string{"OPENAI_API_KEY": "sk-not-a-real-key"}
+
+	rec, err := postSpec(t, op, spec)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	ctx := context.Background()
+	ns := "vice-apps"
+
+	secret, err := clientset.CoreV1().Secrets(ns).Get(ctx, "sensitive-env-spec-external-1", metav1.GetOptions{})
+	require.NoError(t, err, "sensitive-env secret should exist")
+	assert.Equal(t, "spec-analysis-1", secret.Labels[constants.AnalysisIDLabel])
+	assert.Equal(t, []byte("sk-not-a-real-key"), secret.Data["OPENAI_API_KEY"])
+
+	dep, err := clientset.AppsV1().Deployments(ns).Get(ctx, "spec-external-1", metav1.GetOptions{})
+	require.NoError(t, err)
+
+	var analysis apiv1.Container
+	for _, c := range dep.Spec.Template.Spec.Containers {
+		if c.Name == constants.AnalysisContainerName {
+			analysis = c
+		}
+	}
+	require.NotEmpty(t, analysis.Name, "analysis container should exist")
+
+	require.Len(t, analysis.EnvFrom, 1)
+	require.NotNil(t, analysis.EnvFrom[0].SecretRef)
+	assert.Equal(t, "sensitive-env-spec-external-1", analysis.EnvFrom[0].SecretRef.Name)
+
+	for _, e := range analysis.Env {
+		assert.NotEqual(t, "OPENAI_API_KEY", e.Name,
+			"the sensitive key must never appear on Env — that's exactly what a saved-launch/admin-describe view can read back")
+	}
 }
 
 func TestHandleLaunchSpecValidation(t *testing.T) {

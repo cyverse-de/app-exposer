@@ -42,6 +42,14 @@ func TestVICESpecValidate(t *testing.T) {
 		{name: "missing submitter", mutate: func(s *VICESpec) { s.Submitter = "" }, wantErr: "submitter is required"},
 		{name: "missing image", mutate: func(s *VICESpec) { s.Container.Image = "" }, wantErr: "container image is required"},
 		{name: "no ports", mutate: func(s *VICESpec) { s.Container.Ports = nil }, wantErr: "container must expose at least one port"},
+		{
+			name: "key in both Environment and SensitiveEnvironment",
+			mutate: func(s *VICESpec) {
+				s.Environment = map[string]string{"FOO": "bar"}
+				s.SensitiveEnvironment = map[string]string{"FOO": "shh"}
+			},
+			wantErr: `environment variable "FOO" set in both Environment and SensitiveEnvironment`,
+		},
 	}
 
 	for _, tt := range tests {

@@ -83,12 +83,15 @@ func (o *Operator) normalizeNamespaces(bundle *operatorclient.AnalysisBundle) {
 	if bundle.PodDisruptionBudget != nil {
 		bundle.PodDisruptionBudget.Namespace = o.namespace
 	}
+	if bundle.Secret != nil {
+		bundle.Secret.Namespace = o.namespace
+	}
 }
 
 // applyBundle creates or updates all K8s resources in the bundle.
 func (o *Operator) applyBundle(ctx context.Context, bundle *operatorclient.AnalysisBundle) error {
-	log.Infof("applying bundle for analysis %s (%d configmaps, %d pvs, %d pvcs)",
-		bundle.AnalysisID, len(bundle.ConfigMaps), len(bundle.PersistentVolumes), len(bundle.PersistentVolumeClaims))
+	log.Infof("applying bundle for analysis %s (%d configmaps, %d pvs, %d pvcs, hasSecret=%t)",
+		bundle.AnalysisID, len(bundle.ConfigMaps), len(bundle.PersistentVolumes), len(bundle.PersistentVolumeClaims), bundle.Secret != nil)
 
 	// Resources arrive with namespaces that may not match this cluster; align
 	// them with the operator's namespace before any Create/Update call.
@@ -105,6 +108,12 @@ func (o *Operator) applyBundle(ctx context.Context, bundle *operatorclient.Analy
 		}
 		if err := upsert(ctx, o.clientset.CoreV1().ConfigMaps(o.namespace), "ConfigMap", cm.Name, cm); err != nil {
 			return fmt.Errorf("configmap %s: %w", cm.Name, err)
+		}
+	}
+
+	if bundle.Secret != nil {
+		if err := upsert(ctx, o.clientset.CoreV1().Secrets(o.namespace), "Secret", bundle.Secret.Name, bundle.Secret); err != nil {
+			return fmt.Errorf("secret %s: %w", bundle.Secret.Name, err)
 		}
 	}
 
@@ -251,6 +260,18 @@ func (o *Operator) deleteAnalysisResources(ctx context.Context, analysisID strin
 		for _, cm := range cmList.Items {
 			deleteItem(cm.Name, func(name string) error {
 				return cmClient.Delete(ctx, name, metav1.DeleteOptions{})
+			})
+		}
+	}
+
+	// Delete the sensitive-environment Secret, if any
+	secretClient := o.clientset.CoreV1().Secrets(o.namespace)
+	if secretList, err := secretClient.List(ctx, opts); err != nil {
+		errs = append(errs, fmt.Errorf("listing Secrets: %w", err))
+	} else {
+		for _, secret := range secretList.Items {
+			deleteItem(secret.Name, func(name string) error {
+				return secretClient.Delete(ctx, name, metav1.DeleteOptions{})
 			})
 		}
 	}
