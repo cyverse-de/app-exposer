@@ -8,7 +8,14 @@ import "fmt"
 // treats "operator too old for this spec version" as "skip this operator,"
 // the same way it treats a capacity miss. Bump this whenever VICESpec changes
 // in a way an older operator could not faithfully build.
-const CurrentVICESpecVersion = 1
+const CurrentVICESpecVersion = 2
+
+// SensitiveEnvMinSpecVersion is the first VICESpec version that carries
+// SensitiveEnvironment. A spec with sensitive environment variables can only be
+// built by an operator supporting at least this version: older spec-aware
+// operators would silently drop the field, and the legacy bundle path refuses
+// it (see incluster.BuildAnalysisBundle).
+const SensitiveEnvMinSpecVersion = 2
 
 // VICESpec is the cluster-agnostic description of a VICE analysis that
 // app-exposer sends to a vice-operator. It carries *what the analysis is*; the
@@ -205,4 +212,12 @@ func (s *VICESpec) RequestedGPUModels() []string {
 		return nil
 	}
 	return s.GPU.Models
+}
+
+// RequiresSpecPath reports whether the analysis can only be launched through
+// the spec path, i.e. the scheduler must not fall back to a legacy
+// AnalysisBundle for it. True when the spec carries SensitiveEnvironment, which
+// the legacy bundle path cannot deliver without inlining it as plain Env.
+func (s *VICESpec) RequiresSpecPath() bool {
+	return len(s.SensitiveEnvironment) > 0
 }

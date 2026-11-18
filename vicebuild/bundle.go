@@ -30,7 +30,7 @@ func (c *Config) BuildBundle(spec *operatorclient.VICESpec) (*operatorclient.Ana
 			c.PermissionsConfigMap(spec),
 			c.InputPathListConfigMap(spec),
 		},
-		Secret:                 c.SensitiveEnvSecret(spec),
+		SensitiveEnvSecret:     c.SensitiveEnvSecret(spec),
 		PersistentVolumes:      pvs,
 		PersistentVolumeClaims: c.volumeClaims(spec),
 		PodDisruptionBudget:    c.PodDisruptionBudget(spec),

@@ -14,7 +14,7 @@ func TestBuildBundleSensitiveEnvSecret(t *testing.T) {
 	t.Run("absent", func(t *testing.T) {
 		bundle, err := testConfig().BuildBundle(testSpec())
 		require.NoError(t, err)
-		assert.Nil(t, bundle.Secret)
+		assert.Nil(t, bundle.SensitiveEnvSecret)
 	})
 
 	t.Run("present", func(t *testing.T) {
@@ -23,7 +23,7 @@ func TestBuildBundleSensitiveEnvSecret(t *testing.T) {
 
 		bundle, err := testConfig().BuildBundle(spec)
 		require.NoError(t, err)
-		require.NotNil(t, bundle.Secret)
-		assert.Equal(t, "sensitive-env-external-1", bundle.Secret.Name)
+		require.NotNil(t, bundle.SensitiveEnvSecret)
+		assert.Equal(t, "sensitive-env-external-1", bundle.SensitiveEnvSecret.Name)
 	})
 }

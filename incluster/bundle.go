@@ -17,7 +17,7 @@ func (i *Incluster) BuildAnalysisBundle(ctx context.Context, job *model.Job, ana
 		return nil, fmt.Errorf(
 			"analysis %s requests sensitive environment variables, which the legacy (spec-unaware) "+
 				"bundle path cannot deliver safely; this analysis requires an operator that supports "+
-				"VICESpec version %d or later", analysisID, operatorclient.CurrentVICESpecVersion)
+				"VICESpec version %d or later", analysisID, operatorclient.SensitiveEnvMinSpecVersion)
 	}
 
 	bundle := &operatorclient.AnalysisBundle{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -83,15 +84,15 @@ func (o *Operator) normalizeNamespaces(bundle *operatorclient.AnalysisBundle) {
 	if bundle.PodDisruptionBudget != nil {
 		bundle.PodDisruptionBudget.Namespace = o.namespace
 	}
-	if bundle.Secret != nil {
-		bundle.Secret.Namespace = o.namespace
+	if bundle.SensitiveEnvSecret != nil {
+		bundle.SensitiveEnvSecret.Namespace = o.namespace
 	}
 }
 
 // applyBundle creates or updates all K8s resources in the bundle.
 func (o *Operator) applyBundle(ctx context.Context, bundle *operatorclient.AnalysisBundle) error {
-	log.Infof("applying bundle for analysis %s (%d configmaps, %d pvs, %d pvcs, hasSecret=%t)",
-		bundle.AnalysisID, len(bundle.ConfigMaps), len(bundle.PersistentVolumes), len(bundle.PersistentVolumeClaims), bundle.Secret != nil)
+	log.Infof("applying bundle for analysis %s (%d configmaps, %d pvs, %d pvcs, hasSensitiveEnvSecret=%t)",
+		bundle.AnalysisID, len(bundle.ConfigMaps), len(bundle.PersistentVolumes), len(bundle.PersistentVolumeClaims), bundle.SensitiveEnvSecret != nil)
 
 	// Resources arrive with namespaces that may not match this cluster; align
 	// them with the operator's namespace before any Create/Update call.
@@ -111,9 +112,9 @@ func (o *Operator) applyBundle(ctx context.Context, bundle *operatorclient.Analy
 		}
 	}
 
-	if bundle.Secret != nil {
-		if err := upsert(ctx, o.clientset.CoreV1().Secrets(o.namespace), "Secret", bundle.Secret.Name, bundle.Secret); err != nil {
-			return fmt.Errorf("secret %s: %w", bundle.Secret.Name, err)
+	if bundle.SensitiveEnvSecret != nil {
+		if err := upsert(ctx, o.clientset.CoreV1().Secrets(o.namespace), "Secret", bundle.SensitiveEnvSecret.Name, bundle.SensitiveEnvSecret); err != nil {
+			return fmt.Errorf("secret %s: %w", bundle.SensitiveEnvSecret.Name, err)
 		}
 	}
 
@@ -294,4 +295,25 @@ func (o *Operator) deleteAnalysisResources(ctx context.Context, analysisID strin
 
 	log.Infof("resources deleted for analysis %s", analysisID)
 	return nil
+}
+
+// sensitiveEnvSecretCleanupTimeout bounds the best-effort delete in
+// cleanupSensitiveEnvSecret.
+const sensitiveEnvSecretCleanupTimeout = 30 * time.Second
+
+// cleanupSensitiveEnvSecret best-effort deletes the bundle's sensitive-env
+// Secret after a failed apply, so sensitive values don't sit in the namespace
+// for an analysis that never started. Other partially-applied resources are
+// left for the normal exit cleanup. Runs detached from ctx's cancellation so a
+// cancelled launch request still cleans up.
+func (o *Operator) cleanupSensitiveEnvSecret(ctx context.Context, bundle *operatorclient.AnalysisBundle) {
+	if bundle.SensitiveEnvSecret == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sensitiveEnvSecretCleanupTimeout)
+	defer cancel()
+	name := bundle.SensitiveEnvSecret.Name
+	if err := o.clientset.CoreV1().Secrets(o.namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		log.Errorf("analysis %s: failed to clean up sensitive-env Secret %s after failed launch: %v", bundle.AnalysisID, name, err)
+	}
 }

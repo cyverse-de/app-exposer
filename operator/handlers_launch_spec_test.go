@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,7 +16,10 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	ktesting "k8s.io/client-go/testing"
 )
 
 func specTestSpec() operatorclient.VICESpec {
@@ -125,8 +129,7 @@ func TestHandleLaunchSpecCreatesResources(t *testing.T) {
 // TestHandleLaunchSpecCreatesSensitiveEnvSecret confirms a spec carrying
 // SensitiveEnvironment gets its own Secret, that the analysis container
 // consumes it via envFrom rather than Env, and that the value never appears
-// anywhere in the Deployment object a "kubectl get deployment -o yaml" or an
-// admin describe endpoint would read.
+// anywhere in the Deployment object (e.g. "kubectl get deployment -o yaml").
 func TestHandleLaunchSpecCreatesSensitiveEnvSecret(t *testing.T) {
 	op, clientset, _ := newTestOperator(t, 10)
 	configureBuild(op)
@@ -163,8 +166,31 @@ func TestHandleLaunchSpecCreatesSensitiveEnvSecret(t *testing.T) {
 
 	for _, e := range analysis.Env {
 		assert.NotEqual(t, "OPENAI_API_KEY", e.Name,
-			"the sensitive key must never appear on Env — that's exactly what a saved-launch/admin-describe view can read back")
+			"the sensitive key must never appear on Env, where any read of the Deployment exposes it")
 	}
+}
+
+// TestHandleLaunchSpecFailedApplyRemovesSensitiveEnvSecret confirms that when
+// applying a bundle fails after the sensitive-env Secret has been created, the
+// Secret is deleted rather than left in the namespace for an analysis that
+// never started.
+func TestHandleLaunchSpecFailedApplyRemovesSensitiveEnvSecret(t *testing.T) {
+	op, clientset, _ := newTestOperator(t, 10)
+	configureBuild(op)
+
+	// Fail the Deployment create, which applyBundle runs after the Secret.
+	clientset.PrependReactor("create", "deployments", func(_ ktesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("deployment create borked")
+	})
+
+	spec := specTestSpec()
+	spec.SensitiveEnvironment = map[string]string{"OPENAI_API_KEY": "***"}
+
+	rec, err := postSpec(t, op, spec)
+	assert.Equal(t, http.StatusInternalServerError, statusFromResult(t, rec, err))
+
+	_, err = clientset.CoreV1().Secrets("vice-apps").Get(context.Background(), "sensitive-env-spec-external-1", metav1.GetOptions{})
+	assert.True(t, apierrors.IsNotFound(err), "sensitive-env Secret should be removed after a failed launch, got err=%v", err)
 }
 
 func TestHandleLaunchSpecValidation(t *testing.T) {

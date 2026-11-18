@@ -426,8 +426,15 @@ func (o *Operator) HandleLaunch(c echo.Context) error {
 // produced. The egress policy is built operator-side because only the operator
 // knows the cluster environment (blocked CIDRs, Keycloak IPs, internet-access
 // setting); it keys on the deployment's analysis-id label, which
-// deleteAnalysisResources also uses for cleanup.
-func (o *Operator) applyBundleAndEgress(ctx context.Context, bundle *operatorclient.AnalysisBundle) error {
+// deleteAnalysisResources also uses for cleanup. On failure, the sensitive-env
+// Secret (if any) is removed immediately; see cleanupSensitiveEnvSecret.
+func (o *Operator) applyBundleAndEgress(ctx context.Context, bundle *operatorclient.AnalysisBundle) (err error) {
+	defer func() {
+		if err != nil {
+			o.cleanupSensitiveEnvSecret(ctx, bundle)
+		}
+	}()
+
 	if err := o.applyBundle(ctx, bundle); err != nil {
 		return err
 	}

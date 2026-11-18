@@ -166,8 +166,8 @@ func TestDeploymentNoGPU(t *testing.T) {
 }
 
 // TestAnalysisContainerSensitiveEnvFrom confirms SensitiveEnvironment reaches
-// the analysis container only via envFrom (never Env), and that a non-nil
-// Secret name follows the same ExternalID-derived naming vicebuild.SensitiveEnvSecret uses.
+// the analysis container only via envFrom (never Env), and that the envFrom
+// reference names the Secret that SensitiveEnvSecret builds.
 func TestAnalysisContainerSensitiveEnvFrom(t *testing.T) {
 	t.Run("absent: no envFrom on the analysis container", func(t *testing.T) {
 		dep := testConfig().Deployment(testSpec())

@@ -117,3 +117,59 @@ func TestSchedulerLaunchAnalysisSpecMixedFleet(t *testing.T) {
 	assert.Equal(t, int32(1), specAware.specHits.Load())
 	assert.Equal(t, int32(0), legacy.bundleHits.Load())
 }
+
+// TestSchedulerLaunchAnalysisSpecRequiresSpecPath verifies that a spec with
+// SensitiveEnvironment skips operators that can't build its spec version
+// instead of falling back to (and failing on) the legacy bundle, and that the
+// skip doesn't abort the search for a capable operator further down the list.
+func TestSchedulerLaunchAnalysisSpecRequiresSpecPath(t *testing.T) {
+	sensitiveSpec := func() *VICESpec {
+		return &VICESpec{
+			SpecVersion:          CurrentVICESpecVersion,
+			AnalysisID:           "a-1",
+			SensitiveEnvironment: map[string]string{"API_KEY": "sekrit"},
+		}
+	}
+	noLegacy := func() (*AnalysisBundle, error) {
+		return nil, fmt.Errorf("legacy bundle must not be built for a spec-path-only analysis")
+	}
+
+	t.Run("skips older operators to reach a capable one", func(t *testing.T) {
+		legacy := newSpecRoutingServer(5, 0)
+		v1 := newSpecRoutingServer(5, SensitiveEnvMinSpecVersion-1)
+		capable := newSpecRoutingServer(5, CurrentVICESpecVersion)
+		defer legacy.server.Close()
+		defer v1.server.Close()
+		defer capable.server.Close()
+
+		scheduler := schedulerWithConfigs(t, []OperatorConfig{
+			{Name: "legacy", URL: legacy.server.URL},
+			{Name: "v1", URL: v1.server.URL},
+			{Name: "capable", URL: capable.server.URL},
+		})
+
+		_, name, err := scheduler.LaunchAnalysisSpec(context.Background(), sensitiveSpec(), noLegacy)
+		require.NoError(t, err)
+		assert.Equal(t, "capable", name)
+		assert.Equal(t, int32(1), capable.specHits.Load())
+		assert.Equal(t, int32(0), legacy.bundleHits.Load()+legacy.specHits.Load())
+		assert.Equal(t, int32(0), v1.bundleHits.Load()+v1.specHits.Load())
+	})
+
+	t.Run("no capable operator yields ErrNoSpecCapableOperator", func(t *testing.T) {
+		legacy := newSpecRoutingServer(5, 0)
+		v1 := newSpecRoutingServer(5, SensitiveEnvMinSpecVersion-1)
+		defer legacy.server.Close()
+		defer v1.server.Close()
+
+		scheduler := schedulerWithConfigs(t, []OperatorConfig{
+			{Name: "legacy", URL: legacy.server.URL},
+			{Name: "v1", URL: v1.server.URL},
+		})
+
+		_, _, err := scheduler.LaunchAnalysisSpec(context.Background(), sensitiveSpec(), noLegacy)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrNoSpecCapableOperator)
+		assert.Equal(t, int32(0), legacy.bundleHits.Load()+v1.bundleHits.Load()+v1.specHits.Load())
+	})
+}

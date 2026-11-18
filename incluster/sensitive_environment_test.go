@@ -28,10 +28,13 @@ func TestBuildVICESpecCarriesSensitiveEnvironment(t *testing.T) {
 }
 
 // TestBuildAnalysisBundleRefusesSensitiveEnvironment confirms the legacy
-// (spec-unaware) bundle path refuses to build rather than silently leak a
-// sensitive value into a plain container Env var — see the comment on
-// BuildAnalysisBundle for why this is a hard refusal rather than a silent
-// drop or best-effort inclusion.
+// (spec-unaware) bundle path refuses to build a job with sensitive environment
+// variables. The legacy bundle has no Secret/envFrom support, so its only ways
+// to handle them would be to inline them as plain container Env (readable by
+// anyone who can read the Deployment, and persisted in it) or to silently drop
+// them (launching an analysis missing configuration it needs). Both are worse
+// than failing loudly. The scheduler skips spec-unaware operators for these
+// analyses (VICESpec.RequiresSpecPath), so this refusal is only a backstop.
 func TestBuildAnalysisBundleRefusesSensitiveEnvironment(t *testing.T) {
 	job := goldenJob(false)
 	job.Steps[0].SensitiveEnvironment = map[string]string{"API_KEY": "sekrit"}

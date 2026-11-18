@@ -35,8 +35,8 @@ type AnalysisBundle struct {
 	HTTPRoute *gatewayv1.HTTPRoute `json:"httpRoute"`
 	// ConfigMaps is a list of Kubernetes ConfigMap objects for the analysis.
 	ConfigMaps []*apiv1.ConfigMap `json:"configMaps"`
-	// Secret carries the analysis's sensitive environment variables, or nil
-	Secret *apiv1.Secret `json:"secret,omitempty"`
+	// SensitiveEnvSecret carries the analysis's sensitive environment variables, or nil.
+	SensitiveEnvSecret *apiv1.Secret `json:"sensitiveEnvSecret,omitempty"`
 	// PersistentVolumes is a list of Kubernetes PersistentVolume objects for the analysis.
 	PersistentVolumes []*apiv1.PersistentVolume `json:"persistentVolumes"`
 	// PersistentVolumeClaims is a list of Kubernetes PersistentVolumeClaim objects for the analysis.
@@ -241,6 +241,11 @@ func (b *AnalysisBundle) Validate() error {
 	}
 	if b.PodDisruptionBudget != nil {
 		if err := checkAnalysisIDLabel("podDisruptionBudget", b.PodDisruptionBudget.Labels, b.AnalysisID); err != nil {
+			return err
+		}
+	}
+	if b.SensitiveEnvSecret != nil {
+		if err := checkAnalysisIDLabel("sensitiveEnvSecret", b.SensitiveEnvSecret.Labels, b.AnalysisID); err != nil {
 			return err
 		}
 	}
