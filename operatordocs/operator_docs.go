@@ -1360,6 +1360,14 @@ const docTemplateoperator = `{
                         }
                     ]
                 },
+                "sensitiveEnvSecret": {
+                    "description": "SensitiveEnvSecret carries the analysis's sensitive environment variables, or nil.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Secret"
+                        }
+                    ]
+                },
                 "service": {
                     "description": "Service is the Kubernetes Service object for the analysis.",
                     "allOf": [
@@ -1680,6 +1688,13 @@ const docTemplateoperator = `{
                             "$ref": "#/definitions/operatorclient.ResourceSpec"
                         }
                     ]
+                },
+                "sensitiveEnvironment": {
+                    "description": "SensitiveEnvironment carries environment variables that must be\ninjected via a Kubernetes Secret rather than inlined as plain Env on\nthe container spec, and must never be written to any place a plain\nenvironment variable is",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
                 "specVersion": {
                     "description": "SpecVersion identifies the wire-contract version. See\nCurrentVICESpecVersion. The operator rejects versions it cannot build.",
@@ -7839,6 +7854,57 @@ const docTemplateoperator = `{
                 "SeccompProfileTypeLocalhost"
             ]
         },
+        "v1.Secret": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
+                    "type": "string"
+                },
+                "data": {
+                    "description": "Data contains the secret data. Each key must consist of alphanumeric\ncharacters, '-', '_' or '.'. The serialized form of the secret data is a\nbase64 encoded string, representing the arbitrary (possibly non-string)\ndata value here. Described in https://tools.ietf.org/html/rfc4648#section-4\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    }
+                },
+                "immutable": {
+                    "description": "Immutable, if set to true, ensures that data stored in the Secret cannot\nbe updated (only object metadata can be modified).\nIf not set to true, the field can be modified at any time.\nDefaulted to nil.\n+optional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectMeta"
+                        }
+                    ]
+                },
+                "stringData": {
+                    "description": "stringData allows specifying non-binary secret data in string form.\nIt is provided as a write-only input field for convenience.\nAll keys and values are merged into the data field on write, overwriting any existing values.\nThe stringData field is never output when reading from the API.\n+k8s:conversion-gen=false\n+optional",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "type": {
+                    "description": "Used to facilitate programmatic handling of secret data.\nMore info: https://kubernetes.io/docs/concepts/configuration/secret/#secret-types\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.SecretType"
+                        }
+                    ]
+                }
+            }
+        },
         "v1.SecretEnvSource": {
             "type": "object",
             "properties": {
@@ -7901,6 +7967,29 @@ const docTemplateoperator = `{
                     "type": "string"
                 }
             }
+        },
+        "v1.SecretType": {
+            "type": "string",
+            "enum": [
+                "Opaque",
+                "kubernetes.io/service-account-token",
+                "kubernetes.io/dockercfg",
+                "kubernetes.io/dockerconfigjson",
+                "kubernetes.io/basic-auth",
+                "kubernetes.io/ssh-auth",
+                "kubernetes.io/tls",
+                "bootstrap.kubernetes.io/token"
+            ],
+            "x-enum-varnames": [
+                "SecretTypeOpaque",
+                "SecretTypeServiceAccountToken",
+                "SecretTypeDockercfg",
+                "SecretTypeDockerConfigJson",
+                "SecretTypeBasicAuth",
+                "SecretTypeSSHAuth",
+                "SecretTypeTLS",
+                "SecretTypeBootstrapToken"
+            ]
         },
         "v1.SecretVolumeSource": {
             "type": "object",
