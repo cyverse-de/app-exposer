@@ -108,12 +108,22 @@ func (c *Config) analysisContainer(spec *operatorclient.VICESpec) apiv1.Containe
 		apiv1.EnvVar{Name: "IPLANT_EXECUTION_ID", Value: string(spec.ExternalID)},
 	)
 
+	var envFrom []apiv1.EnvFromSource
+	if len(spec.SensitiveEnvironment) > 0 {
+		envFrom = []apiv1.EnvFromSource{
+			{SecretRef: &apiv1.SecretEnvSource{
+				LocalObjectReference: apiv1.LocalObjectReference{Name: sensitiveEnvSecretName(spec)},
+			}},
+		}
+	}
+
 	resources := c.analysisRequirements(spec)
 	container := apiv1.Container{
 		Name:            constants.AnalysisContainerName,
 		Image:           c.rewriteImage(fmt.Sprintf("%s:%s", spec.Container.Image, spec.Container.Tag)),
 		ImagePullPolicy: apiv1.PullAlways,
 		Env:             env,
+		EnvFrom:         envFrom,
 		Resources:       resources,
 		VolumeMounts:    c.podVolumeMounts(spec),
 		Ports:           analysisPorts(spec),

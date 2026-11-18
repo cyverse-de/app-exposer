@@ -49,6 +49,7 @@ lives) so the operator receives primitives and needs no `model.Job` dependency.
 | `UserLoginIP` | `Apps.GetUserIP(ctx, job.UserID)` | **the one DB-derived input**; resolved once app-exposer-side |
 | `Container.*` | `job.Steps[0].Component.Container` | image/tag/uid/ports/entrypoint/workdir; `Arguments` is resolved `Step.Arguments()` |
 | `Environment` | `job.Steps[0].Environment` | |
+| `SensitiveEnvironment` | `job.Steps[0].SensitiveEnvironment` | delivered via a per-analysis Secret + `envFrom`, never plain `Env`; requires spec version ≥ `SensitiveEnvMinSpecVersion` (2) and has no legacy-bundle fallback |
 | `Resources.*` | container resource asks | **raw, not clamped** — see Versioning note on policy ownership |
 | `GPU` | `MinGPUs`/`MaxGPUs`/`GPUModels` (or legacy `/dev/nvidia*`) | `nil` ⇒ no GPU; vendor-neutral (see open item) |
 | `UserHome` | `job.UserHome` | |
@@ -89,7 +90,7 @@ The bundle stops being self-describing k8s objects and becomes an explicit
 app-exposer↔operator contract, so it must version.
 
 - `VICESpec.SpecVersion` carries the wire-contract version.
-  `operatorclient.CurrentVICESpecVersion` (currently **1**) is what this build
+  `operatorclient.CurrentVICESpecVersion` (currently **2**) is what this build
   emits and understands.
 - **Bump `CurrentVICESpecVersion`** whenever `VICESpec` changes in a way an
   older operator could not faithfully build (new required field, changed

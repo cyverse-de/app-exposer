@@ -59,6 +59,11 @@ func seedAnalysisResources(t *testing.T, op *Operator, analysisID string) {
 		ObjectMeta: metav1.ObjectMeta{Name: "route-" + analysisID, Namespace: op.namespace, Labels: labels},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
+
+	_, err = op.clientset.CoreV1().Secrets(op.namespace).Create(ctx, &apiv1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "sensitive-env-" + analysisID, Namespace: op.namespace, Labels: labels},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
 }
 
 func TestDeleteAnalysisResourcesHappyPath(t *testing.T) {
@@ -89,6 +94,10 @@ func TestDeleteAnalysisResourcesHappyPath(t *testing.T) {
 	routes, err := gwClientset.GatewayV1().HTTPRoutes(op.namespace).List(ctx, selector)
 	require.NoError(t, err)
 	assert.Empty(t, routes.Items, "httproutes should be deleted")
+
+	secrets, err := clientset.CoreV1().Secrets(op.namespace).List(ctx, selector)
+	require.NoError(t, err)
+	assert.Empty(t, secrets.Items, "sensitive-env secrets should be deleted")
 }
 
 func TestDeleteAnalysisResourcesMissingIsNotAnError(t *testing.T) {

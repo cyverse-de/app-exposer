@@ -142,6 +142,22 @@ func TestAnalysisBundleValidate(t *testing.T) {
 			},
 			wantSub: "podDisruptionBudget has analysis-id label",
 		},
+		{
+			name: "sensitiveEnvSecret label mismatch",
+			mutate: func(b *AnalysisBundle) {
+				b.SensitiveEnvSecret = &apiv1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "sensitive-env-" + validID, Labels: wrongLabels}}
+			},
+			wantSub: "sensitiveEnvSecret has analysis-id label",
+		},
+		{
+			name: "sensitiveEnvSecret with correct label is fine",
+			mutate: func(b *AnalysisBundle) {
+				b.SensitiveEnvSecret = &apiv1.Secret{ObjectMeta: metav1.ObjectMeta{
+					Name: "sensitive-env-" + validID, Labels: map[string]string{constants.AnalysisIDLabel: validID},
+				}}
+			},
+			wantSub: "",
+		},
 		// Optional fields (HTTPRoute, PDB) should be skippable entirely.
 		{
 			name:    "optional httpRoute absent is fine",

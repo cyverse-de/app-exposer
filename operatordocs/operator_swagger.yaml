@@ -281,6 +281,11 @@ definitions:
         - $ref: '#/definitions/v1.PodDisruptionBudget'
         description: PodDisruptionBudget is the Kubernetes PodDisruptionBudget object
           for the analysis.
+      sensitiveEnvSecret:
+        allOf:
+        - $ref: '#/definitions/v1.Secret'
+        description: SensitiveEnvSecret carries the analysis's sensitive environment
+          variables, or nil.
       service:
         allOf:
         - $ref: '#/definitions/v1.Service'
@@ -518,6 +523,15 @@ definitions:
         description: |-
           Resource asks (raw; the operator applies its own default/clamp policy)
           and GPU request. GPU is nil when the analysis requests no GPU.
+      sensitiveEnvironment:
+        additionalProperties:
+          type: string
+        description: |-
+          SensitiveEnvironment carries environment variables that must be
+          injected via a Kubernetes Secret rather than inlined as plain Env on
+          the container spec, and must never be written to any place a plain
+          environment variable is
+        type: object
       specVersion:
         description: |-
           SpecVersion identifies the wire-contract version. See
@@ -9012,6 +9026,72 @@ definitions:
     - SeccompProfileTypeUnconfined
     - SeccompProfileTypeRuntimeDefault
     - SeccompProfileTypeLocalhost
+  v1.Secret:
+    properties:
+      apiVersion:
+        description: |-
+          APIVersion defines the versioned schema of this representation of an object.
+          Servers should convert recognized schemas to the latest internal value, and
+          may reject unrecognized values.
+          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+          +optional
+        type: string
+      data:
+        additionalProperties:
+          items:
+            format: int32
+            type: integer
+          type: array
+        description: |-
+          Data contains the secret data. Each key must consist of alphanumeric
+          characters, '-', '_' or '.'. The serialized form of the secret data is a
+          base64 encoded string, representing the arbitrary (possibly non-string)
+          data value here. Described in https://tools.ietf.org/html/rfc4648#section-4
+          +optional
+        type: object
+      immutable:
+        description: |-
+          Immutable, if set to true, ensures that data stored in the Secret cannot
+          be updated (only object metadata can be modified).
+          If not set to true, the field can be modified at any time.
+          Defaulted to nil.
+          +optional
+        type: boolean
+      kind:
+        description: |-
+          Kind is a string value representing the REST resource this object represents.
+          Servers may infer this from the endpoint the client submits requests to.
+          Cannot be updated.
+          In CamelCase.
+          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+          +optional
+        type: string
+      metadata:
+        allOf:
+        - $ref: '#/definitions/v1.ObjectMeta'
+        description: |-
+          Standard object's metadata.
+          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+          +optional
+      stringData:
+        additionalProperties:
+          type: string
+        description: |-
+          stringData allows specifying non-binary secret data in string form.
+          It is provided as a write-only input field for convenience.
+          All keys and values are merged into the data field on write, overwriting any existing values.
+          The stringData field is never output when reading from the API.
+          +k8s:conversion-gen=false
+          +optional
+        type: object
+      type:
+        allOf:
+        - $ref: '#/definitions/v1.SecretType'
+        description: |-
+          Used to facilitate programmatic handling of secret data.
+          More info: https://kubernetes.io/docs/concepts/configuration/secret/#secret-types
+          +optional
+    type: object
   v1.SecretEnvSource:
     properties:
       name:
@@ -9103,6 +9183,26 @@ definitions:
           +optional
         type: string
     type: object
+  v1.SecretType:
+    enum:
+    - Opaque
+    - kubernetes.io/service-account-token
+    - kubernetes.io/dockercfg
+    - kubernetes.io/dockerconfigjson
+    - kubernetes.io/basic-auth
+    - kubernetes.io/ssh-auth
+    - kubernetes.io/tls
+    - bootstrap.kubernetes.io/token
+    type: string
+    x-enum-varnames:
+    - SecretTypeOpaque
+    - SecretTypeServiceAccountToken
+    - SecretTypeDockercfg
+    - SecretTypeDockerConfigJson
+    - SecretTypeBasicAuth
+    - SecretTypeSSHAuth
+    - SecretTypeTLS
+    - SecretTypeBootstrapToken
   v1.SecretVolumeSource:
     properties:
       defaultMode:

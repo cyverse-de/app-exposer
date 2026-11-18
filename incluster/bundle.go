@@ -2,6 +2,7 @@ package incluster
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cyverse-de/app-exposer/constants"
 	"github.com/cyverse-de/app-exposer/incluster/httproutes"
@@ -12,6 +13,13 @@ import (
 // BuildAnalysisBundle assembles all K8s resource objects for a VICE analysis
 // into a serializable bundle ready to be sent to an operator.
 func (i *Incluster) BuildAnalysisBundle(ctx context.Context, job *model.Job, analysisID constants.AnalysisID) (*operatorclient.AnalysisBundle, error) {
+	if len(job.Steps) > 0 && len(job.Steps[0].SensitiveEnvironment) > 0 {
+		return nil, fmt.Errorf(
+			"analysis %s requests sensitive environment variables, which the legacy (spec-unaware) "+
+				"bundle path cannot deliver safely; this analysis requires an operator that supports "+
+				"VICESpec version %d or later", analysisID, operatorclient.SensitiveEnvMinSpecVersion)
+	}
+
 	bundle := &operatorclient.AnalysisBundle{
 		AnalysisID: analysisID,
 	}

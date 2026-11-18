@@ -76,6 +76,11 @@ var (
 	// could run it. Distinct from ErrNoCompatibleOperator so the caller can
 	// tell "wrong vendor" apart from "right vendor, wrong model".
 	ErrNoCompatibleModel = errors.New("no operator advertises a compatible GPU model")
+
+	// ErrNoSpecCapableOperator means the analysis requires the spec path (see
+	// VICESpec.RequiresSpecPath), at least one operator was skipped for not
+	// supporting the spec's version, and no operator could run it.
+	ErrNoSpecCapableOperator = errors.New("no operator supports the required spec version")
 )
 
 // vendorCompatible reports whether an operator advertising vendor `have`
@@ -174,7 +179,7 @@ func (s *Scheduler) Sync(summaries []OperatorAdminSummary) error {
 // The first operator with available capacity gets the analysis. This
 // minimizes usage of later (potentially more expensive) clusters.
 func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) (uuid.UUID, string, error) {
-	return s.launchOnFirstCapable(ctx, bundle.AnalysisID, bundle.RequestedGPUVendor(), bundle.RequestedGPUModels(),
+	return s.launchOnFirstCapable(ctx, bundle.AnalysisID, bundle.RequestedGPUVendor(), bundle.RequestedGPUModels(), 0,
 		func(ctx context.Context, op *Client, _ *CapacityResponse) error {
 			return op.Launch(ctx, bundle)
 		})
@@ -187,9 +192,15 @@ func (s *Scheduler) LaunchAnalysis(ctx context.Context, bundle *AnalysisBundle) 
 // builds that bundle on demand and is only called when a spec-unaware operator
 // is actually selected, so the common all-spec-aware path never pays to build
 // it. GPU vendor/model matching reads the spec directly rather than parsing a
-// built Deployment.
+// built Deployment. A spec that RequiresSpecPath has no legacy fallback, so
+// operators that don't support its version are skipped like any other
+// incompatible operator.
 func (s *Scheduler) LaunchAnalysisSpec(ctx context.Context, spec *VICESpec, legacyBundle func() (*AnalysisBundle, error)) (uuid.UUID, string, error) {
-	return s.launchOnFirstCapable(ctx, spec.AnalysisID, spec.RequestedGPUVendor(), spec.RequestedGPUModels(),
+	requiredSpecVersion := 0
+	if spec.RequiresSpecPath() {
+		requiredSpecVersion = spec.SpecVersion
+	}
+	return s.launchOnFirstCapable(ctx, spec.AnalysisID, spec.RequestedGPUVendor(), spec.RequestedGPUModels(), requiredSpecVersion,
 		func(ctx context.Context, op *Client, capResp *CapacityResponse) error {
 			if capResp.SupportsSpecVersion(spec.SpecVersion) {
 				return op.LaunchSpec(ctx, spec)
@@ -205,15 +216,18 @@ func (s *Scheduler) LaunchAnalysisSpec(ctx context.Context, spec *VICESpec, lega
 }
 
 // launchOnFirstCapable tries operators in priority order and invokes launch on
-// the first one that passes the draining/capacity/GPU-vendor/GPU-model gates,
+// the first one that passes the draining/capacity/GPU-vendor/GPU-model/spec-version gates,
 // falling through on capacity races and transient failures. It is the shared
 // core of LaunchAnalysis (legacy bundle) and LaunchAnalysisSpec (spec); the two
 // differ only in how GPU requirements are sourced and what launch does.
+// requiredSpecVersion > 0 skips operators that don't support that spec version;
+// 0 means any operator is acceptable.
 func (s *Scheduler) launchOnFirstCapable(
 	ctx context.Context,
 	analysisID AnalysisID,
 	wantVendor string,
 	wantModels []string,
+	requiredSpecVersion int,
 	launch func(context.Context, *Client, *CapacityResponse) error,
 ) (uuid.UUID, string, error) {
 	s.mu.RLock()
@@ -234,6 +248,7 @@ func (s *Scheduler) launchOnFirstCapable(
 		transientErrors  int
 		vendorMismatches int
 		modelMismatches  int
+		specSkips        int
 		drainingSkips    int
 		lastTransient    error
 	)
@@ -280,6 +295,14 @@ func (s *Scheduler) launchOnFirstCapable(
 			modelMismatches++
 			log.Infof("operator %s model mismatch (analysis needs %v, operator supports %v); skipping",
 				op.Name(), wantModels, cap.SupportedGPUModels)
+			continue
+		}
+
+		// Skip operators that can't build a spec-path-only analysis.
+		if requiredSpecVersion > 0 && !cap.SupportsSpecVersion(requiredSpecVersion) {
+			specSkips++
+			log.Infof("operator %s does not support spec version %d (reports %d) and analysis %s has no legacy fallback; skipping",
+				op.Name(), requiredSpecVersion, cap.SpecVersion, analysisID)
 			continue
 		}
 
@@ -338,13 +361,19 @@ func (s *Scheduler) launchOnFirstCapable(
 			wantModels, analysisID, ErrNoCompatibleModel)
 	}
 
+	// No operator supported the spec version a spec-path-only analysis needs.
+	if specSkips > 0 && capacityErrors+vendorMismatches+modelMismatches+specSkips+drainingSkips == len(clients) {
+		return uuid.Nil, "", fmt.Errorf("no operator supports spec version %d for analysis %s: %w",
+			requiredSpecVersion, analysisID, ErrNoSpecCapableOperator)
+	}
+
 	// At least one operator passed capacity check then failed the launch for
 	// transient reasons, and every operator is now accounted for by some
 	// skip/failure bucket. Surface the last transient error so the caller can
 	// distinguish it from a real "all at capacity" situation. The message says
 	// "could not accept" rather than "unhealthy" because the accounted-for set
 	// may also include draining or at-capacity operators, which aren't unhealthy.
-	if transientErrors > 0 && capacityErrors+transientErrors+vendorMismatches+modelMismatches+drainingSkips == len(clients) {
+	if transientErrors > 0 && capacityErrors+transientErrors+vendorMismatches+modelMismatches+specSkips+drainingSkips == len(clients) {
 		return uuid.Nil, "", fmt.Errorf("no operator could accept analysis %s (%d operators, last transient error): %w",
 			analysisID, len(clients), lastTransient)
 	}

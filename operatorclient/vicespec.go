@@ -8,7 +8,14 @@ import "fmt"
 // treats "operator too old for this spec version" as "skip this operator,"
 // the same way it treats a capacity miss. Bump this whenever VICESpec changes
 // in a way an older operator could not faithfully build.
-const CurrentVICESpecVersion = 1
+const CurrentVICESpecVersion = 2
+
+// SensitiveEnvMinSpecVersion is the first VICESpec version that carries
+// SensitiveEnvironment. A spec with sensitive environment variables can only be
+// built by an operator supporting at least this version: older spec-aware
+// operators would silently drop the field, and the legacy bundle path refuses
+// it (see incluster.BuildAnalysisBundle).
+const SensitiveEnvMinSpecVersion = 2
 
 // VICESpec is the cluster-agnostic description of a VICE analysis that
 // app-exposer sends to a vice-operator. It carries *what the analysis is*; the
@@ -47,6 +54,12 @@ type VICESpec struct {
 
 	// Environment for the analysis container (model.Step.Environment).
 	Environment map[string]string `json:"environment,omitempty"`
+
+	// SensitiveEnvironment carries environment variables that must be
+	// injected via a Kubernetes Secret rather than inlined as plain Env on
+	// the container spec, and must never be written to any place a plain
+	// environment variable is
+	SensitiveEnvironment map[string]string `json:"sensitiveEnvironment,omitempty"`
 
 	// Resource asks (raw; the operator applies its own default/clamp policy)
 	// and GPU request. GPU is nil when the analysis requests no GPU.
@@ -167,6 +180,11 @@ func (s *VICESpec) Validate() error {
 	if len(s.Container.Ports) == 0 {
 		return fmt.Errorf("container must expose at least one port")
 	}
+	for k := range s.SensitiveEnvironment {
+		if _, ok := s.Environment[k]; ok {
+			return fmt.Errorf("environment variable %q set in both Environment and SensitiveEnvironment", k)
+		}
+	}
 	return nil
 }
 
@@ -194,4 +212,12 @@ func (s *VICESpec) RequestedGPUModels() []string {
 		return nil
 	}
 	return s.GPU.Models
+}
+
+// RequiresSpecPath reports whether the analysis can only be launched through
+// the spec path, i.e. the scheduler must not fall back to a legacy
+// AnalysisBundle for it. True when the spec carries SensitiveEnvironment, which
+// the legacy bundle path cannot deliver without inlining it as plain Env.
+func (s *VICESpec) RequiresSpecPath() bool {
+	return len(s.SensitiveEnvironment) > 0
 }

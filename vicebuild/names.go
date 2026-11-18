@@ -26,6 +26,9 @@ func permissionsConfigMapName(spec *operatorclient.VICESpec) string {
 func inputPathListConfigMapName(spec *operatorclient.VICESpec) string {
 	return fmt.Sprintf("%s-%s", constants.InputPathListFileName, spec.ExternalID)
 }
+func sensitiveEnvSecretName(spec *operatorclient.VICESpec) string {
+	return fmt.Sprintf("%s-%s", constants.SensitiveEnvSecretPrefix, spec.ExternalID)
+}
 func workingDirVolumeName(spec *operatorclient.VICESpec) string {
 	return fmt.Sprintf("%s-%s", constants.WorkingDirVolumeName, spec.ExternalID)
 }

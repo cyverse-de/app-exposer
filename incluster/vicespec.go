@@ -63,6 +63,8 @@ func buildVICESpec(job *model.Job, analysisID constants.AnalysisID, loginIP stri
 		},
 		Environment: step.Environment,
 
+		SensitiveEnvironment: step.SensitiveEnvironment,
+
 		Resources: buildResourceSpec(job),
 		GPU:       buildGPUSpec(job),
 
