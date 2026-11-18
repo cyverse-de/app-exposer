@@ -20,13 +20,13 @@ require (
 	github.com/argoproj/argo-workflows/v3 v3.7.18
 	github.com/cockroachdb/apd v1.1.0
 	github.com/coreos/go-oidc/v3 v3.21.0
-	github.com/cyverse-de/go-mod/cfg v0.0.3
-	github.com/cyverse-de/go-mod/logging v0.0.4
-	github.com/cyverse-de/go-mod/otelutils v0.0.6
-	github.com/cyverse-de/go-mod/viceauth v1.0.0
-	github.com/cyverse-de/messaging/v12 v12.0.2
-	github.com/cyverse-de/model/v10 v10.0.2
-	github.com/cyverse-de/p/go/qms v0.3.2
+	github.com/cyverse-de/go-mod/cfg v0.0.4
+	github.com/cyverse-de/go-mod/logging v0.0.5
+	github.com/cyverse-de/go-mod/otelutils v0.0.7
+	github.com/cyverse-de/go-mod/viceauth v1.0.1
+	github.com/cyverse-de/messaging/v12 v12.0.3
+	github.com/cyverse-de/model/v10 v10.0.4
+	github.com/cyverse-de/p/go/qms v0.3.4
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/gosimple/slug v1.15.0
@@ -35,7 +35,7 @@ require (
 	github.com/labstack/echo/v4 v4.16.5
 	github.com/lib/pq v1.12.3
 	github.com/pkg/errors v0.9.1
-	github.com/rabbitmq/amqp091-go v1.16.0
+	github.com/rabbitmq/amqp091-go v1.17.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
@@ -70,10 +70,9 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/colinmarc/hdfs/v2 v2.4.0 // indirect
-	github.com/cyverse-de/configurate v0.0.0-20210914212501-fc18b48e00a9 // indirect
-	github.com/cyverse-de/p/go/header v0.1.0 // indirect
-	github.com/cyverse-de/p/go/ptypes v0.1.0 // indirect
-	github.com/cyverse-de/p/go/svcerror v0.1.0 // indirect
+	github.com/cyverse-de/p/go/header v0.1.1 // indirect
+	github.com/cyverse-de/p/go/ptypes v0.1.1 // indirect
+	github.com/cyverse-de/p/go/svcerror v0.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/doublerebel/bellows v0.0.0-20160303004610-f177d92a03d3 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
@@ -110,7 +109,7 @@ require (
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.33.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.34.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.4 // indirect
 	github.com/huandu/xstrings v1.6.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -153,6 +152,7 @@ require (
 	github.com/prometheus/otlptranslator v1.0.0 // indirect
 	github.com/prometheus/procfs v0.23.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
 	github.com/segmentio/fasthash v1.0.3 // indirect
 	github.com/sethvargo/go-limiter v1.2.0 // indirect
@@ -187,7 +187,7 @@ require (
 	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/exp v0.0.0-20261113113407-e3970619a1a4 // indirect
 	golang.org/x/mod v0.43.0 // indirect
-	golang.org/x/net v0.62.0 // indirect
+	golang.org/x/net v0.63.0 // indirect
 	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/term v0.48.0 // indirect
